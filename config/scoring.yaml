@@ -1,0 +1,85 @@
+thresholds:
+  P0: 80
+  P1: 70
+  P2: 60
+
+positive_keywords:
+  - backend
+  - platform
+  - distributed systems
+  - python
+  - java
+  - fastapi
+  - api
+  - microservices
+  - postgres
+  - docker
+  - kubernetes
+  - aws
+  - data pipeline
+  - payments
+  - fintech
+  - infrastructure
+  - applied ai
+  - llm
+  - senior software engineer
+  - software engineer ii
+  - sde ii
+  - sde2
+
+negative_keywords:
+  - frontend only
+  - react only
+  - angular only
+  - qa
+  - testing only
+  - support engineer
+  - wordpress
+  - php only
+  - intern
+  - fresher
+  - staff
+  - principal
+  - 10+ years required
+
+location_boosts:
+  bengaluru: 10
+  bangalore: 10
+  hyderabad: 10
+  india: 6
+  remote: 8
+
+domain_boosts:
+  fintech: 5
+  payments: 5
+  platform: 4
+  infrastructure: 4
+  distributed: 4
+  applied ai: 3
+
+company_boosts:
+  amazon: 3
+  google: 3
+  razorpay: 4
+  phonepe: 4
+  rippling: 3
+  flipkart: 3
+
+source_quality_boosts:
+  greenhouse: 3
+  ashby: 3
+  lever: 3
+  manual: 2
+  remotive: 1
+
+# Pick a resume variant if matched_skills contain specific signals.
+# Evaluated top-to-bottom; first rule that fires wins.
+resume_variant_rules:
+  - variant: applied_ai
+    any: [llm, applied ai, prompt engineering]
+  - variant: data_backend
+    any: [pandas, data pipeline, spark, airflow]
+  - variant: backend_platform
+    any: [platform, kubernetes, infrastructure, distributed systems]
+  - variant: master
+    any: [python, java, fastapi, backend]

@@ -1,0 +1,120 @@
+# Target companies. `ats_type` drives which source pulls them:
+#   greenhouse  → needs `board_token`
+#   ashby       → needs `org_slug`
+#   lever       → needs `company_slug`
+#   workday     → not yet supported (treated as manual)
+#   manual      → paste jobs into config/manual_jobs.yaml
+#   unknown     → skipped by source pipeline; still used for company_boost scoring
+
+companies:
+  - name: Amazon
+    ats_type: unknown
+    priority: P0
+    preferred_locations: [Bengaluru, Hyderabad]
+
+  - name: Google
+    ats_type: unknown
+    priority: P0
+    preferred_locations: [Bengaluru, Hyderabad]
+
+  - name: Microsoft
+    ats_type: unknown
+    priority: P0
+    preferred_locations: [Bengaluru, Hyderabad]
+
+  - name: Apple
+    ats_type: unknown
+    priority: P0
+    preferred_locations: [Bengaluru, Hyderabad]
+
+  - name: Uber
+    ats_type: unknown
+    priority: P0
+    preferred_locations: [Bengaluru, Hyderabad]
+
+  - name: Atlassian
+    ats_type: unknown
+    priority: P1
+    preferred_locations: [Bengaluru, Remote India]
+
+  - name: Walmart
+    ats_type: unknown
+    priority: P1
+    preferred_locations: [Bengaluru]
+
+  - name: Rippling
+    ats_type: ashby
+    org_slug: rippling
+    priority: P0
+    preferred_locations: [Bengaluru, Remote India]
+
+  - name: Rubrik
+    ats_type: greenhouse
+    board_token: rubrik
+    priority: P1
+
+  - name: PhonePe
+    ats_type: unknown
+    priority: P0
+    preferred_locations: [Bengaluru]
+
+  - name: Razorpay
+    ats_type: lever
+    company_slug: razorpay
+    priority: P0
+    preferred_locations: [Bengaluru]
+
+  - name: Swiggy
+    ats_type: unknown
+    priority: P1
+    preferred_locations: [Bengaluru]
+
+  - name: Zepto
+    ats_type: unknown
+    priority: P1
+    preferred_locations: [Bengaluru]
+
+  - name: Coinbase
+    ats_type: greenhouse
+    board_token: coinbase
+    priority: P1
+
+  - name: DE Shaw
+    ats_type: unknown
+    priority: P1
+    preferred_locations: [Hyderabad]
+
+  - name: Arcesium
+    ats_type: unknown
+    priority: P1
+    preferred_locations: [Hyderabad, Bengaluru]
+
+  - name: Goldman Sachs
+    ats_type: unknown
+    priority: P1
+    preferred_locations: [Bengaluru, Hyderabad]
+
+  - name: JP Morgan
+    ats_type: unknown
+    priority: P1
+    preferred_locations: [Bengaluru, Hyderabad]
+
+  - name: Morgan Stanley
+    ats_type: unknown
+    priority: P1
+    preferred_locations: [Bengaluru, Mumbai]
+
+  - name: Navi
+    ats_type: unknown
+    priority: P1
+    preferred_locations: [Bengaluru]
+
+  - name: Meesho
+    ats_type: unknown
+    priority: P1
+    preferred_locations: [Bengaluru]
+
+  - name: Flipkart
+    ats_type: unknown
+    priority: P0
+    preferred_locations: [Bengaluru]

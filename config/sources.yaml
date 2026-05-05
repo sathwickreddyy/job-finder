@@ -1,0 +1,19 @@
+remotive:
+  enabled: true
+  categories: [software-dev, devops, data]
+  limit: 100
+
+greenhouse:
+  enabled: true
+  # companies with ats_type=greenhouse are auto-injected from companies.yaml
+
+ashby:
+  enabled: true
+  # companies with ats_type=ashby are auto-injected from companies.yaml
+
+lever:
+  enabled: true
+  # companies with ats_type=lever are auto-injected from companies.yaml
+
+manual:
+  enabled: true

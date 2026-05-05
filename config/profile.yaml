@@ -1,0 +1,95 @@
+name: Sathwick
+years_of_experience: 5
+
+target_roles:
+  - SDE2
+  - SDE II
+  - Senior Software Engineer
+  - Senior Backend Engineer
+  - Senior Platform Engineer
+  - Backend Engineer
+  - Applied AI Engineer
+  - Data-heavy Backend Engineer
+
+target_levels:
+  - sde2
+  - senior
+  - mid
+
+preferred_locations:
+  - Bengaluru
+  - Bangalore
+  - Hyderabad
+  - Remote India
+  - India
+
+remote_preferences:
+  - remote
+  - hybrid
+
+min_compensation_lpa: 35
+
+strong_skills:
+  - python
+  - java
+  - fastapi
+  - rest apis
+  - microservices
+  - postgres
+  - docker
+  - system design
+  - low level design
+  - lld
+  - pandas
+  - backend
+  - platform engineering
+
+secondary_skills:
+  - kubernetes
+  - aws
+  - kafka
+  - redis
+  - celery
+  - airflow
+  - spark
+  - terraform
+  - ci/cd
+  - llm
+  - prompt engineering
+  - applied ai
+
+avoid_skills:
+  - frontend only
+  - react only
+  - angular only
+  - qa
+  - testing only
+  - support engineer
+  - wordpress
+  - php only
+
+preferred_domains:
+  - fintech
+  - payments
+  - infrastructure
+  - platform
+  - distributed systems
+  - data pipeline
+  - applied ai
+  - developer tools
+  - trading
+
+avoid_domains:
+  - adtech
+  - gambling
+  - crypto gambling
+
+resume_variants:
+  - name: master
+    path: resumes/master.md
+  - name: backend_platform
+    path: resumes/backend_platform.md
+  - name: applied_ai
+    path: resumes/applied_ai.md
+  - name: data_backend
+    path: resumes/data_backend.md
