@@ -51,13 +51,15 @@ Backend is FastAPI (`app/api`, served on :47131 via `python -m app.api.main`) + 
 
 `data/`, `config/`, `resumes/` are bind-mounted into both containers, and `../sathwick-portfolio/public/pdfs` is bind-mounted read-only at `/portfolio/pdfs` so the resume editor can surface the canonical resume without a copy step.
 
-### Config has two layers — the resolver is the seam
+### Config is SQLite-only; YAML is a one-time seed
 
-`config/*.yaml` is the **seed**. `ConfigStore` (SQLite tables `settings`, `companies_cfg`, `scoring_cfg`, `sources_cfg` in `app/storage/config_store.py`) is the **runtime source of truth**. The Settings UI writes to ConfigStore.
+`ConfigStore` (SQLite tables `settings`, `companies_cfg`, `scoring_cfg`, `sources_cfg` in `app/storage/config_store.py`) is the **only runtime source of truth**. The Settings UI writes to it and the pipelines read from it.
 
-The CLI pipeline (`collect`, `score`, `run-daily`) and `/api/search` read through `app/storage/config_resolver.py`, which picks ConfigStore if the relevant table has any rows, else falls back to YAML via `ConfigRepository`. Presence is checked via `has_profile()` / `has_companies()` / `has_scoring()` / `has_sources()` — **not** truthiness — so "user disabled every company in the UI" doesn't accidentally resurrect the YAML seed.
+`config/*.yaml` is read exactly once — by `init-db`, via `ConfigStore.seed_from_yaml_if_empty(repo)` — to seed any surface that has no rows yet. After that first run, editing `config/*.yaml` has **zero effect** on the running app; do runtime edits in the Settings UI. The seed helper uses the `has_*()` presence checks (not truthiness), so "user disabled every company in the UI" isn't mistaken for "never seeded" and YAML doesn't get re-applied.
 
-If you add a new config surface: add a table to ConfigStore, a `has_*` presence check, a resolver function, and wire any pipeline reader through the resolver (never directly off the YAML repo).
+`app/storage/config_resolver.py` still prefers ConfigStore with a YAML fallback, but the fallback branch is unreachable in normal operation (kept as defence-in-depth). The CLI pipeline (`collect`, `score`, `run-daily`) and `/api/search` read through the resolver.
+
+If you add a new config surface: add a table to ConfigStore, a `has_*` presence check, a resolver function, extend `seed_from_yaml_if_empty`, and wire any pipeline reader through the resolver (never directly off the YAML repo). There is **no** `import-config` CLI and no `/api/settings/import-yaml` route — don't re-add either; YAML-overwrites-SQLite was the footgun this refactor removed.
 
 ### Error envelope is centralized on both sides
 

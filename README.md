@@ -12,7 +12,7 @@ A **local-first** job-search control tower. Not an auto-apply bot — a CRM that
 
 ## Design principles
 
-- **SQLite is the source of truth.** Config (profile / companies / scoring / sources) lives in SQLite tables, seeded once from `config/*.yaml` via `import-config`. Notion is an optional dashboard, not the DB.
+- **SQLite is the source of truth.** Config (profile / companies / scoring / sources) lives in SQLite tables, seeded once from `config/*.yaml` by `init-db`. After seed, YAML is inert — runtime edits happen in the Settings UI. Notion is an optional dashboard, not the DB.
 - **LLM is optional.** No key set → rule-based scoring. Key set → LLM refiner with a bounded delta on top of the rule score.
 - **LinkedIn / Naukri are manual inputs.** Paste the JD into `config/manual_jobs.yaml` or the UI's Manual Jobs page.
 - **Every integration degrades gracefully.** Missing Notion creds → skip. Missing API key → rule only. Missing Outlook/Gmail creds → skeleton returns `[]`.
@@ -26,9 +26,8 @@ docker compose build
 # 2. Copy env template (optional — app starts without it)
 cp .env.example .env
 
-# 3. Initialize DB + import YAML config + seed resume (one-time)
+# 3. Initialize DB (seeds config/*.yaml into SQLite) + seed resume (one-time)
 docker compose run --rm cli python -m app.main init-db
-docker compose run --rm cli python -m app.main import-config
 docker compose run --rm cli python -m app.main seed-resume
 
 # 4. Launch the stack
@@ -63,8 +62,7 @@ pytest
 
 | Command | What it does |
 |---|---|
-| `python -m app.main init-db` | Create the SQLite schema at `data/job_search.db`. |
-| `python -m app.main import-config` | Import `config/*.yaml` into SQLite tables (one-time / re-import). |
+| `python -m app.main init-db` | Create the SQLite schema at `data/job_search.db` and seed empty config surfaces from `config/*.yaml` (idempotent — already-populated surfaces are left alone). |
 | `python -m app.main seed-resume` | Seed `resumes/master.md` from the portfolio bind-mount if still scaffold. |
 | `python -m app.main collect` | Fetch + dedupe + upsert jobs from all enabled sources. |
 | `python -m app.main score` | Re-score every stored job. `--no-llm` forces rule-only. |
@@ -81,13 +79,13 @@ pytest
 2. **Tracker** — status-aware sortable job table with inline status + interview edits
 3. **Search** — on-demand collect+score with per-source stats and a cancelable elapsed timer
 4. **Resume** — split markdown preview / editor, source origin badge (portfolio vs. local)
-5. **Settings** — Profile / Companies / Scoring / Sources with inline CRUD and YAML re-import
+5. **Settings** — Profile / Companies / Scoring / Sources with inline CRUD (SQLite is the only runtime source; edit here, not the YAML)
 
 All routes are typed against the live OpenAPI schema (`web/src/lib/api-types.ts`), fetched via TanStack Query v5.
 
 ## Tuning scoring
 
-`config/scoring.yaml` (imported into the `scoring` SQLite table) drives everything:
+`config/scoring.yaml` is the one-time seed `init-db` reads into the `scoring` SQLite table. Runtime edits happen in the Settings → Scoring page; editing the YAML after the first `init-db` has no effect on the running app.
 
 - **Thresholds** map score → priority: `P0=80, P1=70, P2=60` by default.
 - **Positive keywords** add small points on top of strong/secondary-skill matches.
@@ -95,11 +93,9 @@ All routes are typed against the live OpenAPI schema (`web/src/lib/api-types.ts`
 - **Location / domain / company / source boosts** are additive.
 - **`resume_variant_rules`** let you recommend a specific resume variant when matched skills contain certain signals (e.g., `llm` / `applied ai` → `applied_ai.md`).
 
-Edit live from the Settings → Scoring page in the UI, or edit `config/scoring.yaml` and re-run `import-config`.
-
 ## Adding companies
 
-Edit `config/companies.yaml` (or Settings → Companies in the UI). For each target company:
+Edit Settings → Companies in the UI (runtime edits live in SQLite). `config/companies.yaml` is only read by `init-db` to seed a fresh database. For each target company:
 
 - `ats_type: greenhouse` → set `board_token`
 - `ats_type: ashby` → set `org_slug`
@@ -153,7 +149,7 @@ If your schema is different, the app prints the required property list and exits
 `.github/workflows/daily.yml` runs at 02:30 UTC (08:00 IST) and on manual dispatch. It:
 
 - installs dependencies,
-- runs `init-db` + `import-config` + `run-daily`,
+- runs `init-db` (creates the schema + seeds config from YAML) + `run-daily`,
 - uploads `data/shortlist.md` as a workflow artifact (14-day retention).
 
 `.github/workflows/ci.yml` runs on every push / PR:
@@ -213,7 +209,7 @@ cd web && npx openapi-typescript http://localhost:47131/openapi.json -o src/lib/
 
 ```
 app/
-  main.py              # typer CLI (init-db, import-config, seed-resume, collect, score, run-daily, ...)
+  main.py              # typer CLI (init-db, seed-resume, collect, score, run-daily, ...)
   config.py            # Settings dataclass (env)
   models.py            # Job, ScoredJob, Priority, ApplicationStatus, EmailEvent
   utils.py             # stable_job_id, logger, text helpers
