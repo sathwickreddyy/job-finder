@@ -3,9 +3,21 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card } from "../../components/ui/Card";
 import { Input } from "../../components/ui/Input";
 import { Button } from "../../components/ui/Button";
+import { CsvInput } from "../../components/ui/CsvInput";
 import { LoadingState } from "../../components/shared/LoadingState";
 import { ErrorState } from "../../components/shared/ErrorState";
 import { api, apiErrorMessage } from "../../lib/api-client";
+
+type ProfileDraft = {
+  name?: string;
+  years_of_experience?: number;
+  target_roles?: string[];
+  preferred_locations?: string[];
+  strong_skills?: string[];
+  avoid_skills?: string[];
+  exclude_locations?: string[];
+  [k: string]: unknown;
+};
 
 export default function Profile() {
   const qc = useQueryClient();
@@ -18,10 +30,9 @@ export default function Profile() {
     },
   });
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [draft, setDraft] = useState<any>({});
+  const [draft, setDraft] = useState<ProfileDraft>({});
   useEffect(() => {
-    if (q.data) setDraft(q.data);
+    if (q.data) setDraft(q.data as ProfileDraft);
   }, [q.data]);
 
   const save = useMutation({
@@ -38,18 +49,11 @@ export default function Profile() {
   if (q.isLoading) return <LoadingState />;
   if (q.isError) return <ErrorState message={(q.error as Error).message} />;
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  function setField(key: string, value: any) {
+  function setField<K extends keyof ProfileDraft>(
+    key: K,
+    value: ProfileDraft[K],
+  ) {
     setDraft({ ...draft, [key]: value });
-  }
-  function setList(key: string, csv: string) {
-    setDraft({
-      ...draft,
-      [key]: csv
-        .split(",")
-        .map((s) => s.trim())
-        .filter(Boolean),
-    });
   }
 
   return (
@@ -76,37 +80,37 @@ export default function Profile() {
         <label className="block text-xs text-text-muted">
           Target roles (comma-separated)
         </label>
-        <Input
-          value={(draft.target_roles ?? []).join(", ")}
-          onChange={(e) => setList("target_roles", e.target.value)}
+        <CsvInput
+          value={draft.target_roles ?? []}
+          onCommit={(v) => setField("target_roles", v)}
         />
 
         <label className="block text-xs text-text-muted">
           Preferred locations
         </label>
-        <Input
-          value={(draft.preferred_locations ?? []).join(", ")}
-          onChange={(e) => setList("preferred_locations", e.target.value)}
+        <CsvInput
+          value={draft.preferred_locations ?? []}
+          onCommit={(v) => setField("preferred_locations", v)}
         />
 
         <label className="block text-xs text-text-muted">Strong skills</label>
-        <Input
-          value={(draft.strong_skills ?? []).join(", ")}
-          onChange={(e) => setList("strong_skills", e.target.value)}
+        <CsvInput
+          value={draft.strong_skills ?? []}
+          onCommit={(v) => setField("strong_skills", v)}
         />
 
         <label className="block text-xs text-text-muted">Avoid skills</label>
-        <Input
-          value={(draft.avoid_skills ?? []).join(", ")}
-          onChange={(e) => setList("avoid_skills", e.target.value)}
+        <CsvInput
+          value={draft.avoid_skills ?? []}
+          onCommit={(v) => setField("avoid_skills", v)}
         />
 
         <label className="block text-xs text-text-muted">
           Exclude locations (forces Ignore)
         </label>
-        <Input
-          value={(draft.exclude_locations ?? []).join(", ")}
-          onChange={(e) => setList("exclude_locations", e.target.value)}
+        <CsvInput
+          value={draft.exclude_locations ?? []}
+          onCommit={(v) => setField("exclude_locations", v)}
         />
 
         <div className="flex justify-end">

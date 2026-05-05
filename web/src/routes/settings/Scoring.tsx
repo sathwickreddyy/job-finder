@@ -3,9 +3,17 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card } from "../../components/ui/Card";
 import { Input } from "../../components/ui/Input";
 import { Button } from "../../components/ui/Button";
+import { CsvInput } from "../../components/ui/CsvInput";
 import { LoadingState } from "../../components/shared/LoadingState";
 import { ErrorState } from "../../components/shared/ErrorState";
 import { api, apiErrorMessage } from "../../lib/api-client";
+
+type ScoringDraft = {
+  thresholds?: { P0?: number; P1?: number; P2?: number };
+  positive_keywords?: string[];
+  negative_keywords?: string[];
+  [k: string]: unknown;
+};
 
 export default function Scoring() {
   const qc = useQueryClient();
@@ -18,10 +26,9 @@ export default function Scoring() {
     },
   });
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [draft, setDraft] = useState<any>({});
+  const [draft, setDraft] = useState<ScoringDraft>({});
   useEffect(() => {
-    if (q.data) setDraft(q.data);
+    if (q.data) setDraft(q.data as ScoringDraft);
   }, [q.data]);
 
   const save = useMutation({
@@ -39,16 +46,7 @@ export default function Scoring() {
   if (q.isError) return <ErrorState message={(q.error as Error).message} />;
 
   function setThreshold(key: "P0" | "P1" | "P2", v: number) {
-    setDraft({ ...draft, thresholds: { ...draft.thresholds, [key]: v } });
-  }
-  function setList(key: string, csv: string) {
-    setDraft({
-      ...draft,
-      [key]: csv
-        .split(",")
-        .map((s) => s.trim())
-        .filter(Boolean),
-    });
+    setDraft({ ...draft, thresholds: { ...(draft.thresholds ?? {}), [key]: v } });
   }
 
   return (
@@ -74,16 +72,16 @@ export default function Scoring() {
         <label className="block text-xs text-text-muted">
           Positive keywords
         </label>
-        <Input
-          value={(draft.positive_keywords ?? []).join(", ")}
-          onChange={(e) => setList("positive_keywords", e.target.value)}
+        <CsvInput
+          value={draft.positive_keywords ?? []}
+          onCommit={(v) => setDraft({ ...draft, positive_keywords: v })}
         />
         <label className="block text-xs text-text-muted">
           Negative keywords (forces Ignore)
         </label>
-        <Input
-          value={(draft.negative_keywords ?? []).join(", ")}
-          onChange={(e) => setList("negative_keywords", e.target.value)}
+        <CsvInput
+          value={draft.negative_keywords ?? []}
+          onCommit={(v) => setDraft({ ...draft, negative_keywords: v })}
         />
       </Card>
 
