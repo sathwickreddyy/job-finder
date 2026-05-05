@@ -25,6 +25,17 @@ class ResumeBundle:
 
 
 def read_resume(settings: Settings) -> ResumeBundle:
+    """Resolve the active resume markdown + binary paths.
+
+    Order:
+      1. ``RESUME_MD_PATH`` env or ``settings.resume_md_path`` → portfolio.
+      2. ``{settings.resume_dir}/master.md`` → local.
+      3. Nothing found → ``source="none"``.
+
+    The local path respects ``RESUME_DIR`` so docker-compose bind mounts
+    and custom per-environment layouts both work; it no longer hard-codes
+    ``resumes/master.md``.
+    """
     import os
 
     md_env = os.environ.get("RESUME_MD_PATH") or getattr(settings, "resume_md_path", "")
@@ -40,7 +51,7 @@ def read_resume(settings: Settings) -> ResumeBundle:
             source="portfolio",
         )
 
-    local = Path("resumes/master.md")
+    local = local_resume_path(settings)
     if local.is_file():
         return ResumeBundle(
             markdown=local.read_text(encoding="utf-8"),
@@ -50,6 +61,15 @@ def read_resume(settings: Settings) -> ResumeBundle:
         )
 
     return ResumeBundle(markdown=None, pdf_path=None, docx_path=None, source="none")
+
+
+def local_resume_path(settings: Settings) -> Path:
+    """Return the path the app uses for the local (editable) resume.md.
+
+    Lives at ``{settings.resume_dir}/master.md``. This function exists so
+    the API PUT route and read path can never drift — both call this
+    instead of hardcoding the filename."""
+    return Path(settings.resume_dir) / "master.md"
 
 
 def _path_if_exists(raw: str) -> Optional[Path]:

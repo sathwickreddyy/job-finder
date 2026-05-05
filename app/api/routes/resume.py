@@ -12,13 +12,11 @@ fallback → none. This module exposes it over HTTP and adds:
 """
 from __future__ import annotations
 
-from pathlib import Path
-
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
 
 from ...config import Settings
-from ...resume.source import read_resume
+from ...resume.source import local_resume_path, read_resume
 from ..deps import get_settings
 from ..schemas import ResumeIn, ResumeResponse
 
@@ -51,7 +49,7 @@ def put_resume(body: ResumeIn, settings: Settings = Depends(get_settings)) -> Re
                 "local copy."
             ),
         )
-    local = Path("resumes/master.md")
+    local = local_resume_path(settings)
     local.parent.mkdir(parents=True, exist_ok=True)
     local.write_text(body.markdown, encoding="utf-8")
     bundle = read_resume(settings)

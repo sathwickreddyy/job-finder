@@ -25,6 +25,32 @@ def test_put_resume_writes_local(client: TestClient, tmp_path: Path, monkeypatch
     assert (tmp_path / "resumes" / "master.md").read_text().startswith("# New Resume")
 
 
+def test_put_resume_respects_RESUME_DIR_env(tmp_path: Path, monkeypatch) -> None:
+    """BDD: PUT writes to {RESUME_DIR}/master.md, not a hardcoded
+    resumes/master.md relative to cwd. Proves that moving a deployment's
+    resume dir (e.g. /var/lib/job-finder/resumes) actually works."""
+    custom_dir = tmp_path / "custom_resumes"
+    # Deliberately do NOT create custom_dir — the PUT handler should mkdir.
+
+    monkeypatch.setenv("SQLITE_DB_PATH", str(tmp_path / "t.db"))
+    monkeypatch.setenv("CONFIG_DIR", str(tmp_path / "config"))
+    monkeypatch.setenv("RESUME_DIR", str(custom_dir))
+    monkeypatch.delenv("RESUME_MD_PATH", raising=False)
+    # Deliberately do NOT chdir tmp_path — we want to prove the route
+    # honors RESUME_DIR, not cwd.
+
+    from app.api.deps import get_settings
+    get_settings.cache_clear()
+    from app.api import create_app
+    c = TestClient(create_app())
+
+    r = c.put("/api/resume", json={"markdown": "# Saved to custom dir"})
+    assert r.status_code == 200
+    assert (custom_dir / "master.md").read_text(encoding="utf-8").startswith(
+        "# Saved to custom dir"
+    )
+
+
 # ── BDD additions ──────────────────────────────────────────────────────
 def test_put_resume_rejects_save_when_source_is_portfolio(tmp_path: Path, monkeypatch) -> None:
     """BDD: PUT /api/resume is rejected with 409 when the active source is

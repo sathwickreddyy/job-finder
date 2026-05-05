@@ -278,24 +278,27 @@ def import_config() -> None:
 SCAFFOLD_MARKER = "Replace this scaffold with your real master resume."
 
 
-@app.command("seed-resume", help="Seed resumes/master.md from portfolio if still scaffold.")
+@app.command("seed-resume", help="Seed {RESUME_DIR}/master.md from portfolio if still scaffold.")
 def seed_resume() -> None:
     import os
     from pathlib import Path
 
-    local = Path("resumes/master.md")
+    from .resume.source import local_resume_path
+
+    settings = load_settings()
+    local = local_resume_path(settings)
     if not local.exists():
         local.parent.mkdir(parents=True, exist_ok=True)
     else:
         if SCAFFOLD_MARKER not in local.read_text(encoding="utf-8"):
-            typer.echo("resumes/master.md is not the scaffold — leaving untouched")
+            typer.echo(f"{local} is not the scaffold — leaving untouched")
             return
 
     portfolio_md = os.environ.get("RESUME_MD_PATH", "")
     portfolio_path = Path(portfolio_md) if portfolio_md else None
     if portfolio_path and portfolio_path.is_file():
         local.write_text(portfolio_path.read_text(encoding="utf-8"), encoding="utf-8")
-        typer.echo(f"seeded from portfolio: {portfolio_path}")
+        typer.echo(f"seeded from portfolio: {portfolio_path} → {local}")
         return
 
     typer.echo("no portfolio resume.md found at RESUME_MD_PATH — leaving scaffold in place")
