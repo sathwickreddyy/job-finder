@@ -21,4 +21,10 @@ describe("Dialog", () => {
     await user.keyboard("{Escape}");
     expect(closed).toBe(true);
   });
+
+  it("has role=dialog and aria-modal=true for assistive tech", () => {
+    render(<Dialog open={true} onClose={() => {}}><p>x</p></Dialog>);
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).toHaveAttribute("aria-modal", "true");
+  });
 });

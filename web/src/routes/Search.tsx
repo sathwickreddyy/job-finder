@@ -109,6 +109,24 @@ export default function Search() {
 
       {cancelError && <ErrorState message={cancelError} />}
 
+      {!result && !run.isPending && !cancelError && (
+        <Card>
+          <p className="text-sm text-text-muted">
+            Enter an optional location or keyword above, then{" "}
+            <span className="text-text">Run search</span> to fetch from
+            enabled sources. You can also{" "}
+            <button
+              type="button"
+              className="text-accent underline-offset-2 hover:underline"
+              onClick={() => setManualOpen(true)}
+            >
+              add a manual job
+            </button>{" "}
+            (LinkedIn / Naukri / recruiter DM) instead.
+          </p>
+        </Card>
+      )}
+
       {result && (
         <>
           <SourceStatsBar stats={result.source_stats} />

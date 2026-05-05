@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { cn } from "./utils";
 
 export function Dialog({
@@ -12,12 +12,39 @@ export function Dialog({
   children: React.ReactNode;
   className?: string;
 }) {
+  const contentRef = useRef<HTMLDivElement | null>(null);
+
+  // ESC closes, Tab cycles focus inside the modal (simple forward-only
+  // trap — enough for the short forms this dialog wraps).
   useEffect(() => {
-    function onEsc(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
+    if (!open) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        onClose();
+        return;
+      }
+      if (e.key === "Tab" && contentRef.current) {
+        const focusable = contentRef.current.querySelectorAll<HTMLElement>(
+          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+        );
+        if (focusable.length === 0) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        const active = document.activeElement as HTMLElement | null;
+        if (e.shiftKey && active === first) {
+          last.focus();
+          e.preventDefault();
+        } else if (!e.shiftKey && active === last) {
+          first.focus();
+          e.preventDefault();
+        }
+      }
     }
-    if (open) window.addEventListener("keydown", onEsc);
-    return () => window.removeEventListener("keydown", onEsc);
+    window.addEventListener("keydown", onKey);
+    // Move focus into the modal on open so keyboard users are inside the
+    // trap boundary.
+    contentRef.current?.focus();
+    return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
   if (!open) return null;
@@ -30,9 +57,14 @@ export function Dialog({
       }}
     >
       <div
+        ref={contentRef}
+        role="dialog"
+        aria-modal="true"
+        tabIndex={-1}
         className={cn(
           "bg-[var(--bg)] border border-border-strong rounded-xl shadow-2xl",
           "w-full max-w-2xl max-h-[85vh] overflow-auto p-5",
+          "focus:outline-none",
           className,
         )}
       >
