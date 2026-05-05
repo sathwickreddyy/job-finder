@@ -118,3 +118,52 @@ companies:
     ats_type: unknown
     priority: P0
     preferred_locations: [Bengaluru]
+
+  - name: CRED
+    ats_type: unknown
+    priority: P0
+    preferred_locations: [Bengaluru]
+
+  - name: Groww
+    ats_type: unknown
+    priority: P0
+    preferred_locations: [Bengaluru]
+
+  - name: Zerodha
+    ats_type: unknown
+    priority: P1
+    preferred_locations: [Bengaluru]
+
+  - name: Dream11
+    ats_type: unknown
+    priority: P1
+    preferred_locations: [Mumbai]
+
+  - name: Pine Labs
+    ats_type: unknown
+    priority: P1
+
+  - name: Setu
+    ats_type: unknown
+    priority: P1
+    preferred_locations: [Bengaluru]
+
+  - name: Juspay
+    ats_type: unknown
+    priority: P1
+    preferred_locations: [Bengaluru]
+
+  - name: PostmanLabs
+    ats_type: unknown
+    priority: P1
+    preferred_locations: [Bengaluru, Remote India]
+
+  - name: Hasura
+    ats_type: unknown
+    priority: P1
+    preferred_locations: [Bengaluru, Remote India]
+
+  - name: Freshworks
+    ats_type: unknown
+    priority: P1
+    preferred_locations: [Chennai, Bengaluru]

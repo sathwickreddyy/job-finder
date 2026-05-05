@@ -1,0 +1,58 @@
+name: ci
+
+on:
+  push: { branches: [main] }
+  pull_request: {}
+  workflow_dispatch: {}
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Lint
+        run: ruff check app tests
+      - name: Tests
+        run: pytest -q
+
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: web/package-lock.json
+      - name: Install python deps (for OpenAPI regen)
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Install web deps
+        working-directory: web
+        run: npm install
+      - name: Regenerate types from live API
+        run: |
+          python -m app.api.main &
+          APIPID=$!
+          for i in 1 2 3 4 5 6 7 8 9 10; do
+            curl -fsS http://localhost:47131/api/health && break || sleep 1
+          done
+          cd web && npx openapi-typescript http://localhost:47131/openapi.json -o src/lib/api-types.ts
+          kill $APIPID || true
+      - name: Typecheck + build
+        working-directory: web
+        run: npm run build
+      - name: Frontend tests
+        working-directory: web
+        run: npm test

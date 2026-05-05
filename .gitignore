@@ -26,3 +26,7 @@ data/exports/*.json
 
 # Visual brainstorming scratch
 .superpowers/
+
+# Web frontend (Task 15+)
+web/node_modules
+web/dist

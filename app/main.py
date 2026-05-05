@@ -8,12 +8,9 @@
     export-json → snapshot of scored_jobs to data/exports/
     check-email → classify recent emails (skeleton)
     tailor      → print a tailor markdown for a single job
-    ui          → spawn streamlit on streamlit_app.py
 """
 from __future__ import annotations
 
-import subprocess
-import sys
 from pathlib import Path
 from typing import Annotated, Optional
 
@@ -235,24 +232,47 @@ def run_daily(
 
 
 # ---------------------------------------------------------------------------
-# ui
+# import-config
 # ---------------------------------------------------------------------------
-@app.command("ui", help="Launch the Streamlit control panel.")
-def ui(
-    port: int = typer.Option(8501, help="Port for streamlit."),
-) -> None:
-    ui_path = Path(__file__).parent / "ui" / "streamlit_app.py"
-    cmd = [
-        sys.executable,
-        "-m",
-        "streamlit",
-        "run",
-        str(ui_path),
-        "--server.port",
-        str(port),
-    ]
-    typer.echo(f"$ {' '.join(cmd)}")
-    raise typer.Exit(code=subprocess.call(cmd))
+@app.command("import-config", help="Import config/*.yaml into SQLite tables.")
+def import_config() -> None:
+    from .api.routes.settings import import_yaml as _impl
+    from .storage.config_store import ConfigStore
+    settings = load_settings()
+    cstore = ConfigStore(settings.sqlite_db_path)
+    cstore.init_schema()
+    repo = build_config_repository(settings)
+    result = _impl(cstore=cstore, repo=repo)  # type: ignore[arg-type]
+    typer.echo(f"imported: {result.imported} at {result.imported_at}")
+
+
+# ---------------------------------------------------------------------------
+# seed-resume
+# ---------------------------------------------------------------------------
+SCAFFOLD_MARKER = "Replace this scaffold with your real master resume."
+
+
+@app.command("seed-resume", help="Seed resumes/master.md from portfolio if still scaffold.")
+def seed_resume() -> None:
+    import os
+    from pathlib import Path
+
+    local = Path("resumes/master.md")
+    if not local.exists():
+        local.parent.mkdir(parents=True, exist_ok=True)
+    else:
+        if SCAFFOLD_MARKER not in local.read_text(encoding="utf-8"):
+            typer.echo("resumes/master.md is not the scaffold — leaving untouched")
+            return
+
+    portfolio_md = os.environ.get("RESUME_MD_PATH", "")
+    portfolio_path = Path(portfolio_md) if portfolio_md else None
+    if portfolio_path and portfolio_path.is_file():
+        local.write_text(portfolio_path.read_text(encoding="utf-8"), encoding="utf-8")
+        typer.echo(f"seeded from portfolio: {portfolio_path}")
+        return
+
+    typer.echo("no portfolio resume.md found at RESUME_MD_PATH — leaving scaffold in place")
 
 
 if __name__ == "__main__":

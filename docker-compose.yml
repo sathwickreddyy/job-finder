@@ -1,65 +1,68 @@
 # Usage
-#   Build once:           docker compose build
-#   Launch UI (default):  docker compose up -d ui
-#                         → http://localhost:8501
-#   Initialize SQLite:    docker compose run --rm cli python -m app.main init-db
-#   Run daily pipeline:   docker compose run --rm daily
-#   Any one-off CLI cmd:  docker compose run --rm cli python -m app.main <cmd>
-#   Tail UI logs:         docker compose logs -f ui
-#   Stop everything:      docker compose down
+#   docker compose build
+#   docker compose up -d api web               # UI + API
+#   docker compose run --rm cli python -m app.main init-db
+#   docker compose run --rm cli python -m app.main import-config
+#   docker compose run --rm cli python -m app.main seed-resume
+#   docker compose logs -f web api
+#   docker compose down
 
-x-common: &common
+x-api: &api-base
   build:
     context: .
-    dockerfile: Dockerfile
-  image: job-finder:latest
-  # .env is optional — fresh clones work without it. Copy .env.example → .env
-  # to wire Notion / LLM / Outlook / Gmail credentials later.
+    dockerfile: Dockerfile.api
+  image: job-finder-api:latest
   env_file:
     - path: .env
       required: false
   environment:
-    # Inside the container, config/resumes/data live at these paths (via bind
-    # mounts below). They match the app defaults, listed here so the values
-    # aren't a mystery if someone overrides them.
     CONFIG_DIR: /app/config
     RESUME_DIR: /app/resumes
     SQLITE_DB_PATH: /app/data/job_search.db
+    RESUME_MD_PATH: /portfolio/pdfs/resume.md
+    RESUME_PDF_PATH: /portfolio/pdfs/resume.pdf
+    RESUME_DOCX_PATH: /portfolio/pdfs/resume.docx
   volumes:
-    # Source-of-truth state lives on the host: inspect with `sqlite3`, edit
-    # YAML in your IDE, and nothing is lost on `docker compose down`.
     - ./data:/app/data
     - ./config:/app/config
     - ./resumes:/app/resumes
+    - ../sathwick-portfolio/public/pdfs:/portfolio/pdfs:ro
 
 services:
-  ui:
-    <<: *common
-    container_name: job-finder-ui
+  api:
+    <<: *api-base
+    container_name: job-finder-api
     ports:
-      - "8501:8501"
+      - "47131:47131"
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8501/_stcore/health', timeout=3)\" || exit 1"]
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:47131/api/health', timeout=3)\" || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 3
-      start_period: 20s
+      start_period: 15s
 
-  # One-shot pipeline. `profiles: [tasks]` keeps it out of `up` by default;
-  # invoke explicitly with `docker compose run --rm daily`.
-  daily:
-    <<: *common
-    profiles: ["tasks"]
-    container_name: job-finder-daily
-    command: ["python", "-m", "app.main", "run-daily"]
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    image: job-finder-web:latest
+    container_name: job-finder-web
+    ports:
+      - "47130:47130"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:47130/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
-  # Interactive scratchpad for any CLI command. `--rm` is best-practice:
-  #   docker compose run --rm cli python -m app.main init-db
-  #   docker compose run --rm cli python -m app.main collect
-  #   docker compose run --rm cli python -m app.main tailor --job-id <id>
   cli:
-    <<: *common
+    <<: *api-base
     profiles: ["tasks"]
     container_name: job-finder-cli
     entrypoint: ["/usr/bin/tini", "--"]

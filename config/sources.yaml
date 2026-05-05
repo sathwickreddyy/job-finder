@@ -17,3 +17,6 @@ lever:
 
 manual:
   enabled: true
+
+ycombinator:
+  enabled: true

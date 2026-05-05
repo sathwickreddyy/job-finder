@@ -2,4 +2,6 @@
 - [Prefer Docker Compose over host services](feedback/prefer_docker_compose.md) — default to `docker compose …` for UI/daily/CLI; reserve host venv for pytest
 - [Memory lives in project .claude with typed subdirectories](feedback/memory_location_and_layout.md) — write memories under .claude/memory/{feedback,user,project,reference}/, keep MEMORY.md as the index
 - [Canonical resume lives in the portfolio sister project](reference/resume_source_in_portfolio.md) — read resume .md/.docx/.pdf from sathwick-portfolio/public/pdfs/ via absolute paths
+- [Frontend API error extraction pattern](reference/api_error_extraction.md) — use `error.detail?.[0]?.msg || fallback`, NOT the plan's `error.error?.message` (openapi-typescript types the error as HTTPValidationError)
 - [Subagent execution style for this project](feedback/subagent_execution_style.md) — opus model, sequential, TDD+BDD, defer commits to end-of-plan per-feature bundles
+- [Auto-approve plan execution](feedback/auto_approve_plan_execution.md) — don't pause between tasks; run whole plan end-to-end, user reviews functionality at the end
