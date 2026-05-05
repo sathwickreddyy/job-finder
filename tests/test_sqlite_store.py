@@ -76,7 +76,7 @@ def test_upsert_scored_jobs_roundtrip(store: SQLiteStore) -> None:
         missing_skills=["kubernetes"],
         reasons=["matches backend stack"],
         risks=[],
-        recommended_resume_variant="backend_platform",
+        recommended_resume_variant="applied_ai",
         next_action="Apply today",
     )
     store.upsert_scored_jobs([s])
@@ -85,7 +85,7 @@ def test_upsert_scored_jobs_roundtrip(store: SQLiteStore) -> None:
     assert len(got) == 1
     assert got[0].fit_score == 85
     assert got[0].matched_skills == ["python", "fastapi"]
-    assert got[0].recommended_resume_variant == "backend_platform"
+    assert got[0].recommended_resume_variant == "applied_ai"
 
 
 def test_application_status_upsert(store: SQLiteStore) -> None:

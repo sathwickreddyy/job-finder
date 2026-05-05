@@ -5,8 +5,78 @@
 #   workday     → not yet supported (treated as manual)
 #   manual      → paste jobs into config/manual_jobs.yaml
 #   unknown     → skipped by source pipeline; still used for company_boost scoring
+#
+# Morgan Stanley is the current employer (see resumes/master.md) and is
+# intentionally omitted — MS job postings should not be surfaced.
 
 companies:
+  # ─── AI-first companies (Ashby/Greenhouse, reliably fetchable) ──────
+  - name: Anthropic
+    ats_type: ashby
+    org_slug: anthropic
+    priority: P0
+    preferred_locations: [Remote India, Remote]
+
+  - name: OpenAI
+    ats_type: ashby
+    org_slug: openai
+    priority: P0
+    preferred_locations: [Remote India, Remote]
+
+  - name: Perplexity
+    ats_type: ashby
+    org_slug: perplexity
+    priority: P0
+    preferred_locations: [Remote India, Remote, Bengaluru]
+
+  - name: Databricks
+    ats_type: greenhouse
+    board_token: databricks
+    priority: P0
+    preferred_locations: [Bengaluru, Remote India]
+
+  - name: Vercel
+    ats_type: greenhouse
+    board_token: vercel
+    priority: P0
+    preferred_locations: [Remote India, Remote]
+
+  # ─── Fintech / payments (strong fit per resume) ─────────────────────
+  - name: Stripe
+    ats_type: greenhouse
+    board_token: stripe
+    priority: P0
+    preferred_locations: [Bengaluru, Remote India]
+
+  - name: Plaid
+    ats_type: ashby
+    org_slug: plaid
+    priority: P1
+    preferred_locations: [Remote India, Remote]
+
+  - name: Razorpay
+    ats_type: lever
+    company_slug: razorpay
+    priority: P0
+    preferred_locations: [Bengaluru]
+
+  - name: Rippling
+    ats_type: ashby
+    org_slug: rippling
+    priority: P0
+    preferred_locations: [Bengaluru, Remote India]
+
+  - name: Coinbase
+    ats_type: greenhouse
+    board_token: coinbase
+    priority: P1
+
+  - name: Rubrik
+    ats_type: greenhouse
+    board_token: rubrik
+    priority: P1
+
+  # ─── FAANG + large-cap (unknown ATS; covered by company_boost + manual) ───
   - name: Amazon
     ats_type: unknown
     priority: P0
@@ -42,76 +112,10 @@ companies:
     priority: P1
     preferred_locations: [Bengaluru]
 
-  - name: Rippling
-    ats_type: ashby
-    org_slug: rippling
-    priority: P0
-    preferred_locations: [Bengaluru, Remote India]
-
-  - name: Rubrik
-    ats_type: greenhouse
-    board_token: rubrik
-    priority: P1
-
+  # ─── Indian product + fintech ───────────────────────────────────────
   - name: PhonePe
     ats_type: unknown
     priority: P0
-    preferred_locations: [Bengaluru]
-
-  - name: Razorpay
-    ats_type: lever
-    company_slug: razorpay
-    priority: P0
-    preferred_locations: [Bengaluru]
-
-  - name: Swiggy
-    ats_type: unknown
-    priority: P1
-    preferred_locations: [Bengaluru]
-
-  - name: Zepto
-    ats_type: unknown
-    priority: P1
-    preferred_locations: [Bengaluru]
-
-  - name: Coinbase
-    ats_type: greenhouse
-    board_token: coinbase
-    priority: P1
-
-  - name: DE Shaw
-    ats_type: unknown
-    priority: P1
-    preferred_locations: [Hyderabad]
-
-  - name: Arcesium
-    ats_type: unknown
-    priority: P1
-    preferred_locations: [Hyderabad, Bengaluru]
-
-  - name: Goldman Sachs
-    ats_type: unknown
-    priority: P1
-    preferred_locations: [Bengaluru, Hyderabad]
-
-  - name: JP Morgan
-    ats_type: unknown
-    priority: P1
-    preferred_locations: [Bengaluru, Hyderabad]
-
-  - name: Morgan Stanley
-    ats_type: unknown
-    priority: P1
-    preferred_locations: [Bengaluru, Mumbai]
-
-  - name: Navi
-    ats_type: unknown
-    priority: P1
-    preferred_locations: [Bengaluru]
-
-  - name: Meesho
-    ats_type: unknown
-    priority: P1
     preferred_locations: [Bengaluru]
 
   - name: Flipkart
@@ -130,6 +134,26 @@ companies:
     preferred_locations: [Bengaluru]
 
   - name: Zerodha
+    ats_type: unknown
+    priority: P1
+    preferred_locations: [Bengaluru]
+
+  - name: Swiggy
+    ats_type: unknown
+    priority: P1
+    preferred_locations: [Bengaluru]
+
+  - name: Zepto
+    ats_type: unknown
+    priority: P1
+    preferred_locations: [Bengaluru]
+
+  - name: Navi
+    ats_type: unknown
+    priority: P1
+    preferred_locations: [Bengaluru]
+
+  - name: Meesho
     ats_type: unknown
     priority: P1
     preferred_locations: [Bengaluru]
@@ -153,6 +177,7 @@ companies:
     priority: P1
     preferred_locations: [Bengaluru]
 
+  # ─── Developer-tools / devtools-adjacent ────────────────────────────
   - name: PostmanLabs
     ats_type: unknown
     priority: P1
@@ -167,3 +192,24 @@ companies:
     ats_type: unknown
     priority: P1
     preferred_locations: [Chennai, Bengaluru]
+
+  # ─── Finance / trading (resume has Morgan Stanley background) ───────
+  - name: DE Shaw
+    ats_type: unknown
+    priority: P1
+    preferred_locations: [Hyderabad]
+
+  - name: Arcesium
+    ats_type: unknown
+    priority: P1
+    preferred_locations: [Hyderabad, Bengaluru]
+
+  - name: Goldman Sachs
+    ats_type: unknown
+    priority: P1
+    preferred_locations: [Bengaluru, Hyderabad]
+
+  - name: JP Morgan
+    ats_type: unknown
+    priority: P1
+    preferred_locations: [Bengaluru, Hyderabad]

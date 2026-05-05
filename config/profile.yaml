@@ -1,15 +1,18 @@
-name: Sathwick
+name: Sathwick Reddy Yalla
 years_of_experience: 5
 
 target_roles:
-  - SDE2
-  - SDE II
   - Senior Software Engineer
   - Senior Backend Engineer
   - Senior Platform Engineer
+  - SDE2
+  - SDE II
+  - Software Engineer II
   - Backend Engineer
   - Applied AI Engineer
-  - Data-heavy Backend Engineer
+  - AI Engineer
+  - LLM Engineer
+  - Platform Engineer
 
 target_levels:
   - sde2
@@ -29,40 +32,70 @@ remote_preferences:
 
 min_compensation_lpa: 35
 
+# Reflects the resume's actual core stack + AI-engineering toolchain.
 strong_skills:
   - python
   - java
+  - typescript
   - fastapi
+  - spring boot
   - rest apis
   - microservices
+  - event-driven
+  - async workflows
+  - aws
+  - aws cdk
+  - step functions
   - postgres
-  - docker
+  - postgresql
+  - dynamodb
+  - pandas
+  - polars
   - system design
   - low level design
   - lld
-  - pandas
+  - hld
   - backend
   - platform engineering
+  - distributed systems
+  - docker
 
 secondary_skills:
   - kubernetes
-  - aws
-  - kafka
-  - redis
-  - celery
-  - airflow
-  - spark
   - terraform
+  - jenkins
   - ci/cd
+  - s3
+  - sqs
+  - sns
+  - eventbridge
+  - cloudformation
+  - redis
+  - sql
+  - react
+  - next.js
+  # AI-engineering subset — gated as secondary so it complements, not replaces,
+  # the backend signal.
   - llm
-  - prompt engineering
   - applied ai
+  - prompt engineering
+  - spec-driven development
+  - multi-agent
+  - subagent
+  - litellm
+  - vercel ai sdk
+  - amazon bedrock
+  - bedrock
+  - claude
+  - codex
+  - copilot
+  - cursor
 
 avoid_skills:
   - frontend only
   - react only
   - angular only
-  - qa
+  - qa only
   - testing only
   - support engineer
   - wordpress
@@ -76,7 +109,9 @@ preferred_domains:
   - distributed systems
   - data pipeline
   - applied ai
+  - ai
   - developer tools
+  - devtools
   - trading
 
 avoid_domains:
@@ -84,12 +119,10 @@ avoid_domains:
   - gambling
   - crypto gambling
 
+# Only two variants now. Scoring picks `applied_ai` when the JD leans
+# LLM/agent/AI-platform; everything else falls through to `master`.
 resume_variants:
   - name: master
     path: resumes/master.md
-  - name: backend_platform
-    path: resumes/backend_platform.md
   - name: applied_ai
     path: resumes/applied_ai.md
-  - name: data_backend
-    path: resumes/data_backend.md

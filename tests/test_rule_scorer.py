@@ -16,7 +16,7 @@ PROFILE = {
     "remote_preferences": ["remote"],
     "preferred_domains": ["fintech", "platform"],
     "avoid_domains": [],
-    "resume_variants": [{"name": "master"}, {"name": "backend_platform"}],
+    "resume_variants": [{"name": "master"}, {"name": "applied_ai"}],
 }
 
 SCORING = {
@@ -34,7 +34,7 @@ SCORING = {
     "company_boosts": {"razorpay": 4, "amazon": 3},
     "source_quality_boosts": {"greenhouse": 3, "manual": 2},
     "resume_variant_rules": [
-        {"variant": "backend_platform", "any": ["platform", "kubernetes"]},
+        {"variant": "applied_ai", "any": ["llm", "applied ai"]},
         {"variant": "master", "any": ["python", "fastapi"]},
     ],
 }
@@ -113,7 +113,7 @@ def test_priority_comes_from_thresholds() -> None:
     s = score_job(high, PROFILE, SCORING, COMPANIES)
     assert s.priority in {Priority.P0, Priority.P1}
     assert "python" in s.matched_skills
-    assert s.recommended_resume_variant in {"master", "backend_platform"}
+    assert s.recommended_resume_variant in {"master", "applied_ai"}
 
 
 def test_target_company_floor_for_sparse_jd() -> None:

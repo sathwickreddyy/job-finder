@@ -4,43 +4,77 @@ thresholds:
   P2: 60
 
 positive_keywords:
+  # Core backend signal
   - backend
   - platform
   - distributed systems
+  - microservices
+  - event-driven
+  - async
   - python
   - java
+  - typescript
   - fastapi
+  - spring boot
+  - rest api
   - api
-  - microservices
   - postgres
+  - postgresql
+  - dynamodb
+  # AWS + infra
+  - aws
+  - aws cdk
+  - step functions
+  - eventbridge
   - docker
   - kubernetes
-  - aws
+  - terraform
+  - ci/cd
+  # Data-adjacent
+  - pandas
+  - polars
   - data pipeline
-  - payments
+  # Domain
   - fintech
+  - payments
   - infrastructure
+  # AI engineering
   - applied ai
+  - ai engineer
   - llm
+  - llm engineer
+  - litellm
+  - bedrock
+  - vercel ai sdk
+  - agent
+  - agentic
+  - rag
+  - prompt engineering
+  - spec-driven
+  # Seniority signal
   - senior software engineer
+  - senior backend
   - software engineer ii
   - sde ii
   - sde2
 
+# `staff` / `principal` removed on purpose: the level scorer already demotes
+# above-band roles (_level_points → 2 pts + risk), so hard-ignoring them
+# threw away otherwise-fit roles. Let the rubric express the penalty.
 negative_keywords:
   - frontend only
   - react only
   - angular only
-  - qa
+  - qa only
   - testing only
   - support engineer
   - wordpress
   - php only
   - intern
   - fresher
-  - staff
-  - principal
   - 10+ years required
+  - 12+ years required
+  - 15+ years required
 
 location_boosts:
   bengaluru: 10
@@ -55,14 +89,31 @@ domain_boosts:
   platform: 4
   infrastructure: 4
   distributed: 4
-  applied ai: 3
+  applied ai: 4
+  ai: 3
+  developer tools: 3
+  devtools: 3
+  trading: 3
 
+# Companies the user actively wants to hear from. Values are additive points
+# (max 15 total after the rule-scorer clamp). Current employer Morgan Stanley
+# is deliberately absent — see companies.yaml.
 company_boosts:
-  amazon: 3
-  google: 3
+  anthropic: 5
+  openai: 5
+  perplexity: 5
+  databricks: 4
+  stripe: 4
+  plaid: 4
+  vercel: 4
   razorpay: 4
   phonepe: 4
+  cred: 4
+  groww: 4
   rippling: 3
+  coinbase: 3
+  amazon: 3
+  google: 3
   flipkart: 3
 
 source_quality_boosts:
@@ -72,14 +123,26 @@ source_quality_boosts:
   manual: 2
   remotive: 1
 
-# Pick a resume variant if matched_skills contain specific signals.
-# Evaluated top-to-bottom; first rule that fires wins.
+# Two-variant model. First rule that fires wins, so `applied_ai` is evaluated
+# first: if the JD has any LLM/agent/AI-platform signal, use the AI variant;
+# otherwise default to the master resume.
 resume_variant_rules:
   - variant: applied_ai
-    any: [llm, applied ai, prompt engineering]
-  - variant: data_backend
-    any: [pandas, data pipeline, spark, airflow]
-  - variant: backend_platform
-    any: [platform, kubernetes, infrastructure, distributed systems]
+    any:
+      - llm
+      - applied ai
+      - prompt engineering
+      - agent
+      - litellm
+      - vercel ai sdk
+      - amazon bedrock
+      - bedrock
+      - spec-driven development
   - variant: master
-    any: [python, java, fastapi, backend]
+    any:
+      - python
+      - java
+      - fastapi
+      - spring boot
+      - backend
+      - aws
