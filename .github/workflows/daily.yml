@@ -38,7 +38,7 @@ jobs:
           echo "Remote config URL configured — CONFIG_BACKEND=http will be used."
           echo "CONFIG_BACKEND=http" >> $GITHUB_ENV
 
-      - name: Init DB + import config + run daily
+      - name: Init DB (seeds config from YAML) + run daily
         env:
           CONFIG_BACKEND: ${{ secrets.CONFIG_SOURCE_URL != '' && 'http' || 'local' }}
           CONFIG_SOURCE_URL: ${{ secrets.CONFIG_SOURCE_URL }}
@@ -50,7 +50,6 @@ jobs:
           LLM_MODEL: ${{ secrets.LLM_MODEL }}
         run: |
           python -m app.main init-db
-          python -m app.main import-config
           python -m app.main run-daily
 
       - name: Upload shortlist artifact

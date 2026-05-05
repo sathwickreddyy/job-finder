@@ -182,17 +182,22 @@ def test_import_yaml_updates_existing_company(tmp_path: Path, monkeypatch) -> No
     assert acmes[0]["priority"] == "P0"
 
 
-def test_import_config_cli_command_runs(tmp_path: Path, monkeypatch) -> None:
-    """BDD: the `import-config` Typer command reuses the HTTP handler and
-    prints `imported: {...}` on success."""
+def test_init_db_cli_seeds_config_from_yaml(tmp_path: Path, monkeypatch) -> None:
+    """BDD: the `init-db` Typer command creates the schema and seeds empty
+    config surfaces from config/*.yaml in one shot."""
     cfg_dir = tmp_path / "config"
     cfg_dir.mkdir()
     (cfg_dir / "profile.yaml").write_text(
         yaml.safe_dump({"name": "CLI Sathwick", "years_of_experience": 6}),
         encoding="utf-8",
     )
+    (cfg_dir / "companies.yaml").write_text(
+        yaml.safe_dump({"companies": [{"name": "Acme", "priority": "P0"}]}),
+        encoding="utf-8",
+    )
 
-    monkeypatch.setenv("SQLITE_DB_PATH", str(tmp_path / "cli.db"))
+    db_path = tmp_path / "cli.db"
+    monkeypatch.setenv("SQLITE_DB_PATH", str(db_path))
     monkeypatch.setenv("CONFIG_DIR", str(cfg_dir))
     monkeypatch.setenv("RESUME_DIR", str(tmp_path / "resumes"))
 
@@ -202,6 +207,12 @@ def test_import_config_cli_command_runs(tmp_path: Path, monkeypatch) -> None:
     from app.main import app as cli_app
 
     runner = CliRunner()
-    result = runner.invoke(cli_app, ["import-config"])
+    result = runner.invoke(cli_app, ["init-db"])
     assert result.exit_code == 0, result.output
-    assert "imported:" in result.output
+    assert "seeded:" in result.output
+
+    from app.storage.config_store import ConfigStore
+
+    cs = ConfigStore(db_path)
+    assert cs.get_profile()["name"] == "CLI Sathwick"
+    assert {c["name"] for c in cs.list_companies()} == {"Acme"}

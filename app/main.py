@@ -47,9 +47,10 @@ log = get_logger("cli")
 def _load_all_config(settings: Settings):
     """Resolve runtime config for the CLI pipeline.
 
-    Prefers ConfigStore (SQLite, written by the Settings UI) and falls back to
-    YAML via ConfigRepository when a table is empty. This is what makes
-    ``import-config`` + UI edits actually show up in ``run-daily``/``collect``.
+    ConfigStore (SQLite) is the runtime source of truth — it's seeded once from
+    ``config/*.yaml`` by ``init-db`` and edited thereafter via the Settings UI.
+    The YAML fallback in ``config_resolver`` is defence-in-depth for surfaces
+    that somehow weren't seeded and should be unreachable in normal operation.
     """
     repo = build_config_repository(settings)
     cstore = ConfigStore(settings.sqlite_db_path)
@@ -65,12 +66,20 @@ def _load_all_config(settings: Settings):
 # ---------------------------------------------------------------------------
 # init-db
 # ---------------------------------------------------------------------------
-@app.command("init-db", help="Create the SQLite schema.")
+@app.command(
+    "init-db",
+    help="Create the SQLite schema and seed empty config surfaces from config/*.yaml.",
+)
 def init_db() -> None:
     settings = load_settings()
     store = build_store(settings)
     store.init_schema()
+    cstore = ConfigStore(settings.sqlite_db_path)
+    cstore.init_schema()
+    repo = build_config_repository(settings)
+    counts = cstore.seed_from_yaml_if_empty(repo)
     typer.echo(f"initialized SQLite at {settings.sqlite_db_path}")
+    typer.echo(f"seeded: {counts}")
 
 
 # ---------------------------------------------------------------------------
@@ -255,21 +264,6 @@ def run_daily(
         raise typer.Exit(code=2)
     if notion_result.get("failed", 0) > 0:
         raise typer.Exit(code=1)
-
-
-# ---------------------------------------------------------------------------
-# import-config
-# ---------------------------------------------------------------------------
-@app.command("import-config", help="Import config/*.yaml into SQLite tables.")
-def import_config() -> None:
-    from .api.routes.settings import import_yaml as _impl
-    from .storage.config_store import ConfigStore
-    settings = load_settings()
-    cstore = ConfigStore(settings.sqlite_db_path)
-    cstore.init_schema()
-    repo = build_config_repository(settings)
-    result = _impl(cstore=cstore, repo=repo)  # type: ignore[arg-type]
-    typer.echo(f"imported: {result.imported} at {result.imported_at}")
 
 
 # ---------------------------------------------------------------------------

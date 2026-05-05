@@ -12,9 +12,12 @@ import json
 import sqlite3
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Iterator
+from typing import TYPE_CHECKING, Any, Iterator
 
 from ..utils import utcnow_iso
+
+if TYPE_CHECKING:
+    from ..config_repo import ConfigRepository
 
 
 SCHEMA_SQL = """
@@ -75,6 +78,70 @@ class ConfigStore:
     def init_schema(self) -> None:
         with self._conn() as c:
             c.executescript(SCHEMA_SQL)
+
+    def seed_from_yaml_if_empty(self, repo: "ConfigRepository") -> dict[str, int]:
+        """Seed any empty config surface from YAML. Idempotent.
+
+        For each surface (profile/companies/scoring/sources) that has no rows
+        in SQLite, read the YAML via ``repo`` and write it in. Leave populated
+        surfaces untouched so user edits in the Settings UI survive re-runs.
+        Returns the count written per surface (0 if skipped)."""
+        from ..config_repo import (
+            COMPANIES_YAML,
+            PROFILE_YAML,
+            SCORING_YAML,
+            SOURCES_YAML,
+        )
+
+        counts: dict[str, int] = {
+            PROFILE_YAML: 0,
+            SCORING_YAML: 0,
+            SOURCES_YAML: 0,
+            COMPANIES_YAML: 0,
+        }
+
+        if not self.has_profile():
+            profile = repo.load_yaml(PROFILE_YAML)
+            if profile:
+                self.set_profile(profile)
+                counts[PROFILE_YAML] = 1
+
+        if not self.has_scoring():
+            scoring = repo.load_yaml(SCORING_YAML)
+            if scoring:
+                self.put_scoring(scoring)
+                counts[SCORING_YAML] = 1
+
+        if not self.has_sources():
+            sources = repo.load_yaml(SOURCES_YAML)
+            if sources:
+                self.put_sources(sources)
+                counts[SOURCES_YAML] = 1
+
+        if not self.has_companies():
+            rows = (repo.load_yaml(COMPANIES_YAML) or {}).get("companies") or []
+            n = 0
+            for row in rows:
+                try:
+                    self.add_company(row)
+                    n += 1
+                except sqlite3.IntegrityError:
+                    # Shouldn't happen on a fresh surface, but be defensive:
+                    # if a collision occurs mid-seed, update the existing row.
+                    existing = next(
+                        (
+                            x
+                            for x in self.list_companies(include_disabled=True)
+                            if x["name"].lower() == row["name"].lower()
+                        ),
+                        None,
+                    )
+                    if existing:
+                        self.update_company(existing["id"], row)
+                        n += 1
+            counts[COMPANIES_YAML] = n
+
+        return counts
 
     # ── has_* presence helpers (source-of-truth semantics) ───────────────
     # The resolver needs to distinguish "user hasn't seeded this config

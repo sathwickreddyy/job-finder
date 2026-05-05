@@ -4,7 +4,9 @@ import sqlite3
 from pathlib import Path
 
 import pytest
+import yaml
 
+from app.config_repo.local_repo import LocalConfigRepository
 from app.storage.config_store import ConfigStore
 from app.storage.sqlite_store import SQLiteStore
 
@@ -146,6 +148,102 @@ def test_latest_per_source_picks_most_recent_per_source(cstore: ConfigStore) -> 
     # The most recent remotive row is the one with kept=3.
     assert latest["remotive"]["kept"] == 3
     assert latest["greenhouse"]["kept"] == 1
+
+
+# ── seed_from_yaml_if_empty ─────────────────────────────────────────────────
+
+def _write_seed_yaml(cfg_dir: Path) -> None:
+    (cfg_dir / "profile.yaml").write_text(
+        yaml.safe_dump({"name": "Sathwick", "years_of_experience": 5}),
+        encoding="utf-8",
+    )
+    (cfg_dir / "scoring.yaml").write_text(
+        yaml.safe_dump({"thresholds": {"P0": 80, "P1": 70, "P2": 60}}),
+        encoding="utf-8",
+    )
+    (cfg_dir / "sources.yaml").write_text(
+        yaml.safe_dump({"ycombinator": {"enabled": True}}),
+        encoding="utf-8",
+    )
+    (cfg_dir / "companies.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "companies": [
+                    {"name": "Acme", "priority": "P0"},
+                    {"name": "Globex", "priority": "P1"},
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
+def test_seed_from_yaml_if_empty_populates_all_surfaces(
+    tmp_path: Path, cstore: ConfigStore
+) -> None:
+    """On a fresh ConfigStore, seed_from_yaml_if_empty writes every surface
+    from YAML and reports positive counts."""
+    cfg_dir = tmp_path / "config"
+    cfg_dir.mkdir()
+    _write_seed_yaml(cfg_dir)
+    repo = LocalConfigRepository(cfg_dir, tmp_path / "resumes")
+
+    assert not cstore.has_profile()
+    assert not cstore.has_companies()
+    assert not cstore.has_scoring()
+    assert not cstore.has_sources()
+
+    counts = cstore.seed_from_yaml_if_empty(repo)
+
+    assert counts["profile.yaml"] == 1
+    assert counts["scoring.yaml"] == 1
+    assert counts["sources.yaml"] == 1
+    assert counts["companies.yaml"] == 2
+
+    assert cstore.has_profile()
+    assert cstore.has_companies()
+    assert cstore.has_scoring()
+    assert cstore.has_sources()
+    assert cstore.get_profile()["name"] == "Sathwick"
+    names = {r["name"] for r in cstore.list_companies()}
+    assert names == {"Acme", "Globex"}
+
+
+def test_seed_from_yaml_if_empty_is_idempotent(
+    tmp_path: Path, cstore: ConfigStore
+) -> None:
+    """Once a surface is populated, a second seed call must NOT overwrite
+    user edits made through the UI-facing mutators."""
+    cfg_dir = tmp_path / "config"
+    cfg_dir.mkdir()
+    _write_seed_yaml(cfg_dir)
+    repo = LocalConfigRepository(cfg_dir, tmp_path / "resumes")
+
+    cstore.seed_from_yaml_if_empty(repo)
+
+    # User disables a company via the UI mutator.
+    [acme] = [c for c in cstore.list_companies() if c["name"] == "Acme"]
+    cstore.soft_delete_company(acme["id"])
+    # User edits profile.
+    cstore.set_profile({"name": "Edited", "years_of_experience": 9})
+
+    counts = cstore.seed_from_yaml_if_empty(repo)
+
+    # Every surface was already populated, so nothing re-seeded.
+    assert counts == {
+        "profile.yaml": 0,
+        "scoring.yaml": 0,
+        "sources.yaml": 0,
+        "companies.yaml": 0,
+    }
+    # User edits survived.
+    assert cstore.get_profile()["name"] == "Edited"
+    enabled_names = {c["name"] for c in cstore.list_companies()}
+    assert enabled_names == {"Globex"}
+    all_names = {
+        c["name"] for c in cstore.list_companies(include_disabled=True)
+    }
+    assert all_names == {"Acme", "Globex"}
 
 
 def test_latest_per_source_breaks_ties_by_id(
