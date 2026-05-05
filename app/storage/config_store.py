@@ -76,6 +76,36 @@ class ConfigStore:
         with self._conn() as c:
             c.executescript(SCHEMA_SQL)
 
+    # ── has_* presence helpers (source-of-truth semantics) ───────────────
+    # The resolver needs to distinguish "user hasn't seeded this config
+    # table" (fall back to YAML) from "user seeded it and chose to disable
+    # everything" (trust the empty state). get_* returning {} is ambiguous,
+    # so these presence helpers look at the raw rows.
+    def has_profile(self) -> bool:
+        with self._conn() as c:
+            row = c.execute(
+                "SELECT 1 FROM settings WHERE key = 'profile' LIMIT 1"
+            ).fetchone()
+        return row is not None
+
+    def has_scoring(self) -> bool:
+        with self._conn() as c:
+            row = c.execute("SELECT 1 FROM scoring_cfg LIMIT 1").fetchone()
+        return row is not None
+
+    def has_sources(self) -> bool:
+        with self._conn() as c:
+            row = c.execute("SELECT 1 FROM sources_cfg LIMIT 1").fetchone()
+        return row is not None
+
+    def has_companies(self) -> bool:
+        """True if the companies table has *any* row — including disabled.
+        Lets ``resolve_companies`` treat 'user disabled everything' as an
+        intentional empty list instead of resurrecting the YAML seed."""
+        with self._conn() as c:
+            row = c.execute("SELECT 1 FROM companies_cfg LIMIT 1").fetchone()
+        return row is not None
+
     # ── settings (profile etc.) ─────────────────────────────────────────
     def _set_kv(self, key: str, value: dict) -> None:
         with self._conn() as c:

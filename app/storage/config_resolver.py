@@ -24,32 +24,32 @@ from .config_store import ConfigStore
 
 
 def resolve_profile(cstore: ConfigStore, repo: ConfigRepository) -> dict[str, Any]:
-    db = cstore.get_profile()
-    if db:
-        return db
+    # has_profile() distinguishes "user saved an empty profile" (trust the
+    # empty state) from "profile has never been seeded" (fall back to YAML).
+    if cstore.has_profile():
+        return cstore.get_profile()
     return repo.load_yaml(PROFILE_YAML)
 
 
 def resolve_scoring(cstore: ConfigStore, repo: ConfigRepository) -> dict[str, Any]:
-    db = cstore.get_scoring()
-    if db:
-        return db
+    if cstore.has_scoring():
+        return cstore.get_scoring()
     return repo.load_yaml(SCORING_YAML)
 
 
 def resolve_sources(cstore: ConfigStore, repo: ConfigRepository) -> dict[str, Any]:
-    db = cstore.get_sources()
-    if db:
-        return db
+    if cstore.has_sources():
+        return cstore.get_sources()
     return repo.load_yaml(SOURCES_YAML)
 
 
 def resolve_companies(cstore: ConfigStore, repo: ConfigRepository) -> dict[str, Any]:
     """Return {"companies": [...]} — matches YAML shape.
 
-    Disabled rows are excluded at the ConfigStore layer so the pipeline never
-    fetches from companies the user has soft-deleted in the UI."""
-    rows = cstore.list_companies(include_disabled=False)
-    if rows:
-        return {"companies": rows}
+    If the store has ANY row (even all disabled), that's an explicit user
+    choice — return the enabled subset (possibly empty). Only fall back to
+    YAML when the store has never been seeded. This prevents the "disable
+    all companies in UI → run-daily resurrects them from YAML" bug."""
+    if cstore.has_companies():
+        return {"companies": cstore.list_companies(include_disabled=False)}
     return repo.load_yaml(COMPANIES_YAML)

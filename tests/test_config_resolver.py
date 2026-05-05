@@ -108,3 +108,65 @@ def test_companies_falls_back_to_yaml_when_store_empty(cstore: ConfigStore) -> N
     )
     out = resolve_companies(cstore, repo)
     assert out["companies"][0]["name"] == "YamlCorp"
+
+
+# ─── Regression: disable/delete-all does NOT resurrect YAML seed ───────────
+def test_companies_all_disabled_returns_empty_not_yaml(cstore: ConfigStore) -> None:
+    """Bug scenario: user adds a company in UI, disables it via the toggle
+    (soft_delete). On next search run, the pipeline MUST see an empty list,
+    not resurrect the YAML seed. That would pull in companies the user just
+    removed."""
+    repo = _FakeRepo(
+        {
+            "companies.yaml": {
+                "companies": [
+                    {"name": "YamlGhost1", "priority": "P2"},
+                    {"name": "YamlGhost2", "priority": "P1"},
+                ],
+            }
+        }
+    )
+    cid = cstore.add_company({"name": "OnceWanted", "priority": "P0"})
+    cstore.soft_delete_company(cid)
+
+    out = resolve_companies(cstore, repo)
+    # Store has a row → store wins, even though the enabled subset is empty.
+    assert out == {"companies": []}
+    assert "YamlGhost1" not in [c.get("name", "") for c in out["companies"]]
+
+
+def test_profile_empty_dict_persists_does_not_fall_back(cstore: ConfigStore) -> None:
+    """If the user clears their profile to {} in the UI, we must honor that
+    (return {}), not fall back to YAML."""
+    repo = _FakeRepo(
+        {"profile.yaml": {"name": "SeedShouldNotAppear", "years_of_experience": 99}}
+    )
+    cstore.set_profile({})
+    out = resolve_profile(cstore, repo)
+    assert out == {}
+    assert "SeedShouldNotAppear" not in str(out)
+
+
+def test_sources_all_disabled_persists_does_not_fall_back(cstore: ConfigStore) -> None:
+    """User disabled every source via the UI → search runs should skip them
+    all, not silently turn them back on via YAML fallback."""
+    repo = _FakeRepo({"sources.yaml": {"remotive": {"enabled": True}}})
+    cstore.put_sources({"remotive": {"enabled": False}, "ycombinator": {"enabled": False}})
+    out = resolve_sources(cstore, repo)
+    assert out["remotive"]["enabled"] is False
+    assert out["ycombinator"]["enabled"] is False
+
+
+def test_scoring_empty_dict_honored(cstore: ConfigStore) -> None:
+    """Writing an empty scoring dict via ConfigStore should be returned as
+    empty, not fall back to the YAML seed's thresholds."""
+    repo = _FakeRepo(
+        {"scoring.yaml": {"thresholds": {"P0": 80, "P1": 70, "P2": 60}}}
+    )
+    cstore.put_scoring({})  # writes nothing because put_scoring only iterates SCORING_KEYS
+    # Note: put_scoring({}) doesn't write any row, so this is the "unseeded"
+    # case. Verify that the TRUE empty-but-seeded case (one of the keys set
+    # to an empty mapping) still returns that empty value rather than seeding.
+    cstore.put_scoring({"thresholds": {}})
+    out = resolve_scoring(cstore, repo)
+    assert out == {"thresholds": {}}
