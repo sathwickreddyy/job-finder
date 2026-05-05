@@ -6,7 +6,7 @@ import { JobTable } from "../components/job/JobTable";
 import { LoadingState } from "../components/shared/LoadingState";
 import { ErrorState } from "../components/shared/ErrorState";
 import { api, apiErrorMessage } from "../lib/api-client";
-import { formatDate } from "../lib/format";
+import { formatDateTime } from "../lib/format";
 import type { operations } from "../lib/api-types";
 
 type JobsQuery = NonNullable<
@@ -53,7 +53,7 @@ export default function Tracker() {
                   <span className="font-medium">{u.company}</span>{" "}
                   <span className="text-text-muted">· {u.role}</span>
                 </span>
-                <span className="text-accent tabular-nums">{formatDate(u.next_interview_at)}</span>
+                <span className="text-accent tabular-nums">{formatDateTime(u.next_interview_at)}</span>
               </li>
             ))}
           </ul>

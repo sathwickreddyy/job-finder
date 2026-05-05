@@ -9,6 +9,25 @@ export function formatDate(iso: string | null | undefined): string {
   }
 }
 
+/**
+ * Render an ISO datetime with time-of-day when present; silently fall back
+ * to formatDate if the string is date-only (no "T..."). Used for interview
+ * slots where losing the hour would cause real scheduling confusion.
+ */
+export function formatDateTime(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  try {
+    const parsed = parseISO(iso);
+    // If the original string had a time component, include it.
+    if (iso.includes("T")) {
+      return format(parsed, "MMM d, yyyy h:mm a");
+    }
+    return format(parsed, "MMM d, yyyy");
+  } catch {
+    return iso;
+  }
+}
+
 export function formatRelative(iso: string | null | undefined): string {
   if (!iso) return "—";
   try {

@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { formatDate, formatRelative, fitScoreTone } from "./format";
+import {
+  formatDate,
+  formatDateTime,
+  formatRelative,
+  fitScoreTone,
+} from "./format";
 
 describe("format helpers", () => {
   it("formatDate returns em-dash for null/undefined", () => {
@@ -10,6 +15,22 @@ describe("format helpers", () => {
 
   it("formatDate parses ISO", () => {
     expect(formatDate("2026-05-05")).toMatch(/May 5, 2026/);
+  });
+
+  it("formatDateTime preserves time-of-day when ISO has T component", () => {
+    const out = formatDateTime("2026-05-10T15:30:00Z");
+    expect(out).toMatch(/May 10, 2026/);
+    // Allow any tz-shifted hour/minute rendering; the point is time is shown.
+    expect(out).toMatch(/\d{1,2}:\d{2}\s?(AM|PM)/i);
+  });
+
+  it("formatDateTime falls back to date-only for bare YYYY-MM-DD", () => {
+    expect(formatDateTime("2026-05-10")).toBe("May 10, 2026");
+  });
+
+  it("formatDateTime returns em-dash for null/undefined", () => {
+    expect(formatDateTime(null)).toBe("—");
+    expect(formatDateTime(undefined)).toBe("—");
   });
 
   it("formatRelative returns em-dash for null", () => {
