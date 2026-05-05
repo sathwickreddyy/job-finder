@@ -1,0 +1,68 @@
+# Usage
+#   Build once:           docker compose build
+#   Launch UI (default):  docker compose up -d ui
+#                         → http://localhost:8501
+#   Initialize SQLite:    docker compose run --rm cli python -m app.main init-db
+#   Run daily pipeline:   docker compose run --rm daily
+#   Any one-off CLI cmd:  docker compose run --rm cli python -m app.main <cmd>
+#   Tail UI logs:         docker compose logs -f ui
+#   Stop everything:      docker compose down
+
+x-common: &common
+  build:
+    context: .
+    dockerfile: Dockerfile
+  image: job-finder:latest
+  # .env is optional — fresh clones work without it. Copy .env.example → .env
+  # to wire Notion / LLM / Outlook / Gmail credentials later.
+  env_file:
+    - path: .env
+      required: false
+  environment:
+    # Inside the container, config/resumes/data live at these paths (via bind
+    # mounts below). They match the app defaults, listed here so the values
+    # aren't a mystery if someone overrides them.
+    CONFIG_DIR: /app/config
+    RESUME_DIR: /app/resumes
+    SQLITE_DB_PATH: /app/data/job_search.db
+  volumes:
+    # Source-of-truth state lives on the host: inspect with `sqlite3`, edit
+    # YAML in your IDE, and nothing is lost on `docker compose down`.
+    - ./data:/app/data
+    - ./config:/app/config
+    - ./resumes:/app/resumes
+
+services:
+  ui:
+    <<: *common
+    container_name: job-finder-ui
+    ports:
+      - "8501:8501"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8501/_stcore/health', timeout=3)\" || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  # One-shot pipeline. `profiles: [tasks]` keeps it out of `up` by default;
+  # invoke explicitly with `docker compose run --rm daily`.
+  daily:
+    <<: *common
+    profiles: ["tasks"]
+    container_name: job-finder-daily
+    command: ["python", "-m", "app.main", "run-daily"]
+
+  # Interactive scratchpad for any CLI command. `--rm` is best-practice:
+  #   docker compose run --rm cli python -m app.main init-db
+  #   docker compose run --rm cli python -m app.main collect
+  #   docker compose run --rm cli python -m app.main tailor --job-id <id>
+  cli:
+    <<: *common
+    profiles: ["tasks"]
+    container_name: job-finder-cli
+    entrypoint: ["/usr/bin/tini", "--"]
+    command: ["bash"]
+    stdin_open: true
+    tty: true

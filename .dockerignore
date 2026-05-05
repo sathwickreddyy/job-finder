@@ -1,0 +1,25 @@
+# Do not ship the local venv or caches into the image
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+
+# Tests and CI config are not needed at runtime
+tests/
+.github/
+
+# Personal data — bind-mounted at runtime anyway, keep image slim
+data/
+.env
+.env.local
+
+# IDE + OS
+.vscode/
+.idea/
+.DS_Store
+
+# Git internals (build context only needs tracked files)
+.git/
+.gitignore

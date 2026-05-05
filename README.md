@@ -15,32 +15,54 @@ A **local-first** Python tool that manages your job search like a CRM / control 
 - **LinkedIn / Naukri are manual inputs.** Paste the JD into `config/manual_jobs.yaml` or the UI's Manual Jobs page.
 - **Every integration degrades gracefully.** Missing Notion creds → skip. Missing API key → rule only. Missing Outlook/Gmail creds → skeleton returns `[]`.
 
-## Setup
+## Setup (Docker — recommended)
 
 ```bash
-# 1. Create a venv (uses the newest Python on your machine)
-python3.13 -m venv .venv
-source .venv/bin/activate
+# 1. Build the image
+docker compose build
 
-# 2. Install dependencies
-pip install -r requirements.txt
-
-# 3. Copy env template
+# 2. Copy env template (optional — app starts without it)
 cp .env.example .env
 
-# 4. Edit config/profile.yaml — update name, skills, locations, compensation
-# 5. Edit resumes/master.md — replace the scaffold with your real resume
-# 6. (Optional) Paste initial jobs into config/manual_jobs.yaml
+# 3. Edit config/profile.yaml — update name, skills, locations, compensation
+# 4. Edit resumes/master.md — replace the scaffold with your real resume
+# 5. (Optional) Paste initial jobs into config/manual_jobs.yaml
 
-# 7. Initialize the SQLite DB
-python -m app.main init-db
+# 6. Initialize the SQLite DB
+docker compose run --rm cli python -m app.main init-db
 
-# 8. Run the full daily pipeline (collect → score → shortlist → optional notion)
-python -m app.main run-daily
+# 7. Run the full daily pipeline (collect → score → shortlist → optional notion)
+docker compose run --rm daily
 
-# 9. Open the UI
-python -m app.main ui
+# 8. Launch the UI
+docker compose up -d ui
 # → http://localhost:8501
+
+# Tail UI logs / check health / stop
+docker compose logs -f ui
+docker compose ps
+docker compose down
+```
+
+### How the containers are organized
+
+| Service | Purpose | How to invoke |
+|---|---|---|
+| `ui` | Long-running Streamlit dashboard on :8501 | `docker compose up -d ui` |
+| `daily` | One-shot `run-daily` pipeline | `docker compose run --rm daily` |
+| `cli` | Interactive scratchpad for any CLI command | `docker compose run --rm cli python -m app.main <cmd>` |
+
+`data/`, `config/`, `resumes/` are **bind-mounted** into the containers, so the SQLite DB, YAML edits, and markdown resumes live on the host — inspect them with `sqlite3 data/job_search.db`, edit YAML in your IDE, and nothing is lost on `docker compose down`.
+
+`daily` and `cli` are behind the `tasks` profile, so `docker compose up` only starts `ui`.
+
+### Setup (native Python — for tests only)
+
+```bash
+python3.13 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+pytest
 ```
 
 ## CLI commands
