@@ -1,6 +1,8 @@
 import { useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
+import { CalendarClock, SlidersHorizontal } from "lucide-react";
 import { Card } from "../components/ui/Card";
+import { PageHeader } from "../components/layout/PageHeader";
 import { FilterBar } from "../components/job/FilterBar";
 import { JobTable } from "../components/job/JobTable";
 import { LoadingState } from "../components/shared/LoadingState";
@@ -41,19 +43,35 @@ export default function Tracker() {
 
   return (
     <div className="space-y-6">
-      <h2 className="text-2xl font-semibold tracking-tight">Tracker</h2>
+      <PageHeader
+        eyebrow="Application pipeline"
+        title="Tracker"
+        description="Filter saved jobs, update statuses, and schedule interviews without losing context from the scoring model."
+        meta={
+          <div className="inline-flex items-center gap-2 rounded-full border border-border bg-black/15 px-3 py-1 text-xs text-text-muted">
+            <SlidersHorizontal className="h-3.5 w-3.5 text-accent" />
+            Filters update the URL, so views are shareable and reload-safe.
+          </div>
+        }
+      />
 
       {(upcoming.data?.length ?? 0) > 0 && (
         <Card>
-          <h3 className="text-sm font-semibold mb-3">Upcoming interviews</h3>
-          <ul className="space-y-2 text-sm">
+          <div className="mb-4 flex items-center gap-3">
+            <CalendarClock className="h-5 w-5 text-accent" />
+            <div>
+              <h3 className="text-sm font-semibold">Upcoming interviews</h3>
+              <p className="text-xs text-text-muted">Keep these visible while updating status.</p>
+            </div>
+          </div>
+          <ul className="grid gap-3 text-sm md:grid-cols-2 xl:grid-cols-3">
             {upcoming.data!.map((u) => (
-              <li key={u.job_id} className="flex justify-between">
-                <span>
-                  <span className="font-medium">{u.company}</span>{" "}
-                  <span className="text-text-muted">· {u.role}</span>
-                </span>
-                <span className="text-accent tabular-nums">{formatDateTime(u.next_interview_at)}</span>
+              <li key={u.job_id} className="rounded-2xl border border-border bg-black/15 p-3">
+                <div className="font-medium">{u.company}</div>
+                <div className="mt-1 text-xs text-text-muted">{u.role}</div>
+                <div className="mt-3 text-xs font-semibold tabular-nums text-accent">
+                  {formatDateTime(u.next_interview_at)}
+                </div>
               </li>
             ))}
           </ul>

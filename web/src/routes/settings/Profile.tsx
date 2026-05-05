@@ -4,6 +4,7 @@ import { Card } from "../../components/ui/Card";
 import { Input } from "../../components/ui/Input";
 import { Button } from "../../components/ui/Button";
 import { CsvInput } from "../../components/ui/CsvInput";
+import { PageHeader } from "../../components/layout/PageHeader";
 import { LoadingState } from "../../components/shared/LoadingState";
 import { ErrorState } from "../../components/shared/ErrorState";
 import { api, apiErrorMessage } from "../../lib/api-client";
@@ -30,7 +31,7 @@ export default function Profile() {
     },
   });
 
-  const [draft, setDraft] = useState<ProfileDraft>({});
+  const [draft, setDraft] = useState<ProfileDraft | null>(null);
   useEffect(() => {
     if (q.data) setDraft(q.data as ProfileDraft);
   }, [q.data]);
@@ -38,7 +39,7 @@ export default function Profile() {
   const save = useMutation({
     mutationFn: async () => {
       const { error } = await api.PUT("/api/settings/profile", {
-        body: draft,
+        body: draft ?? (q.data as ProfileDraft),
       });
       if (error) throw new Error(apiErrorMessage(error, "save failed"));
     },
@@ -48,70 +49,103 @@ export default function Profile() {
 
   if (q.isLoading) return <LoadingState />;
   if (q.isError) return <ErrorState message={(q.error as Error).message} />;
+  const activeDraft = draft ?? (q.data as ProfileDraft);
 
   function setField<K extends keyof ProfileDraft>(
     key: K,
     value: ProfileDraft[K],
   ) {
-    setDraft({ ...draft, [key]: value });
+    setDraft({ ...activeDraft, [key]: value });
   }
 
   return (
-    <div className="space-y-4 max-w-2xl">
-      <h2 className="text-xl font-semibold tracking-tight">Profile</h2>
-      <Card className="space-y-3">
-        <label className="block text-xs text-text-muted">Name</label>
-        <Input
-          value={draft.name ?? ""}
-          onChange={(e) => setField("name", e.target.value)}
-        />
+    <div className="space-y-6">
+      <PageHeader
+        eyebrow="Candidate profile"
+        title="Profile"
+        description="These defaults seed search filters and scoring. Keep them specific enough to remove noisy jobs."
+      />
+      <Card className="space-y-5">
+        <div className="grid gap-4 md:grid-cols-2">
+          <label className="space-y-1 text-xs text-text-muted">
+            <span className="font-semibold uppercase tracking-widest text-text-faint">Name</span>
+            <Input
+              value={activeDraft.name ?? ""}
+              onChange={(e) => setField("name", e.target.value)}
+            />
+          </label>
 
-        <label className="block text-xs text-text-muted">
-          Years of experience
+          <label className="space-y-1 text-xs text-text-muted">
+            <span className="font-semibold uppercase tracking-widest text-text-faint">
+              Years of experience
+            </span>
+            <Input
+              type="number"
+              value={activeDraft.years_of_experience ?? 0}
+              onChange={(e) =>
+                setField("years_of_experience", Number(e.target.value))
+              }
+            />
+          </label>
+        </div>
+
+        <div className="grid gap-4 xl:grid-cols-2">
+          <label className="space-y-1 text-xs text-text-muted">
+            <span className="font-semibold uppercase tracking-widest text-text-faint">
+              Target roles
+            </span>
+            <CsvInput
+              value={activeDraft.target_roles ?? []}
+              onCommit={(v) => setField("target_roles", v)}
+              placeholder="Backend Engineer, Platform Engineer"
+            />
+          </label>
+
+          <label className="space-y-1 text-xs text-text-muted">
+            <span className="font-semibold uppercase tracking-widest text-text-faint">
+              Preferred locations
+            </span>
+            <CsvInput
+              value={activeDraft.preferred_locations ?? []}
+              onCommit={(v) => setField("preferred_locations", v)}
+              placeholder="Bengaluru, Remote"
+            />
+          </label>
+
+          <label className="space-y-1 text-xs text-text-muted">
+            <span className="font-semibold uppercase tracking-widest text-text-faint">
+              Strong skills
+            </span>
+            <CsvInput
+              value={activeDraft.strong_skills ?? []}
+              onCommit={(v) => setField("strong_skills", v)}
+              placeholder="Python, FastAPI, Kafka"
+            />
+          </label>
+
+          <label className="space-y-1 text-xs text-text-muted">
+            <span className="font-semibold uppercase tracking-widest text-text-faint">
+              Avoid skills
+            </span>
+            <CsvInput
+              value={activeDraft.avoid_skills ?? []}
+              onCommit={(v) => setField("avoid_skills", v)}
+              placeholder="frontend only, PHP"
+            />
+          </label>
+        </div>
+
+        <label className="block space-y-1 text-xs text-text-muted">
+          <span className="font-semibold uppercase tracking-widest text-text-faint">
+            Exclude locations
+          </span>
+          <CsvInput
+            value={activeDraft.exclude_locations ?? []}
+            onCommit={(v) => setField("exclude_locations", v)}
+            placeholder="US only, onsite only"
+          />
+          <span className="block text-text-faint">Matches here are forced to Ignore.</span>
         </label>
-        <Input
-          type="number"
-          value={draft.years_of_experience ?? 0}
-          onChange={(e) =>
-            setField("years_of_experience", Number(e.target.value))
-          }
-        />
-
-        <label className="block text-xs text-text-muted">
-          Target roles (comma-separated)
-        </label>
-        <CsvInput
-          value={draft.target_roles ?? []}
-          onCommit={(v) => setField("target_roles", v)}
-        />
-
-        <label className="block text-xs text-text-muted">
-          Preferred locations
-        </label>
-        <CsvInput
-          value={draft.preferred_locations ?? []}
-          onCommit={(v) => setField("preferred_locations", v)}
-        />
-
-        <label className="block text-xs text-text-muted">Strong skills</label>
-        <CsvInput
-          value={draft.strong_skills ?? []}
-          onCommit={(v) => setField("strong_skills", v)}
-        />
-
-        <label className="block text-xs text-text-muted">Avoid skills</label>
-        <CsvInput
-          value={draft.avoid_skills ?? []}
-          onCommit={(v) => setField("avoid_skills", v)}
-        />
-
-        <label className="block text-xs text-text-muted">
-          Exclude locations (forces Ignore)
-        </label>
-        <CsvInput
-          value={draft.exclude_locations ?? []}
-          onCommit={(v) => setField("exclude_locations", v)}
-        />
 
         <div className="flex justify-end">
           <Button

@@ -29,33 +29,37 @@ export function JobTableExpandedRow({ scored }: { scored: Scored }) {
   });
 
   return (
-    <div className="bg-surface border-l-2 border-accent/40 px-5 py-4 text-sm space-y-3">
-      <div className="flex flex-wrap gap-x-6 gap-y-2">
-        <div>
-          <span className="text-success font-medium">Fits:</span>{" "}
-          <span className="text-text-muted">{matchedSkills.join(", ") || "—"}</span>
+    <div className="space-y-4 border-l-4 border-accent/50 bg-black/15 px-5 py-5 text-sm">
+      <div className="grid gap-3 lg:grid-cols-3">
+        <div className="rounded-2xl border border-success/20 bg-success/10 p-3">
+          <span className="text-xs font-semibold uppercase tracking-widest text-success">Fits</span>
+          <div className="mt-1 text-text-muted">{matchedSkills.join(", ") || "—"}</div>
         </div>
-        <div>
-          <span className="text-danger font-medium">Gaps:</span>{" "}
-          <span className="text-text-muted">{missingSkills.join(", ") || "—"}</span>
+        <div className="rounded-2xl border border-danger/20 bg-danger/10 p-3">
+          <span className="text-xs font-semibold uppercase tracking-widest text-danger">Gaps</span>
+          <div className="mt-1 text-text-muted">{missingSkills.join(", ") || "—"}</div>
         </div>
-        {scored.recommended_resume_variant && (
-          <div>
-            <span className="font-medium">Resume variant:</span>{" "}
-            <code className="text-accent">{scored.recommended_resume_variant}</code>
+        <div className="rounded-2xl border border-border bg-surface p-3">
+          <span className="text-xs font-semibold uppercase tracking-widest text-text-muted">
+            Resume variant
+          </span>
+          <div className="mt-1 font-mono text-accent">
+            {scored.recommended_resume_variant || "default"}
           </div>
-        )}
+        </div>
       </div>
       {reasons.length > 0 && (
-        <p className="text-text-muted text-xs">{reasons.join(" · ")}</p>
+        <p className="rounded-2xl border border-border bg-surface p-3 text-xs leading-5 text-text-muted">
+          {reasons.join(" · ")}
+        </p>
       )}
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <Button size="sm" variant="primary" onClick={() => run.mutate()} disabled={run.isPending}>
-          <Sparkles className="w-3 h-3" />
+          <Sparkles className="h-3.5 w-3.5" />
           {run.isPending ? "Tailoring…" : "Tailor Resume"}
         </Button>
         <Button size="sm" variant="secondary" onClick={() => window.open(scored.job.url, "_blank")}>
-          <ExternalLink className="w-3 h-3" />
+          <ExternalLink className="h-3.5 w-3.5" />
           Open JD
         </Button>
       </div>
@@ -66,9 +70,9 @@ export function JobTableExpandedRow({ scored }: { scored: Scored }) {
             <AiPendingBadge pending={tailor.ai_pending} />
           </div>
           {tailor.ai_pending && (
-            <div className="bg-accent-amber/10 border border-accent-amber/40 rounded-md p-3 text-xs text-accent-amber mb-3">
-              AI integration pending — add <code>OPENAI_API_KEY</code> or <code>ANTHROPIC_API_KEY</code> to <code>.env</code> for AI-drafted rewrites. Deterministic template shown below.
-            </div>
+          <div className="mb-3 rounded-2xl border border-accent-amber/40 bg-accent-amber/10 p-3 text-xs text-accent-amber">
+            AI integration pending — add <code>OPENAI_API_KEY</code> or <code>ANTHROPIC_API_KEY</code> to <code>.env</code> for AI-drafted rewrites. Deterministic template shown below.
+          </div>
           )}
           <article className="prose prose-invert prose-sm max-w-none">
             <ReactMarkdown remarkPlugins={[remarkGfm]}>{tailor.markdown}</ReactMarkdown>

@@ -19,20 +19,27 @@ export function InterviewSchedulePopover({
 
   return (
     <Dialog open={true} onClose={onCancel} className="max-w-md">
-      <h3 className="text-lg font-semibold mb-4">Schedule interview</h3>
-      <label className="block text-xs text-text-muted mb-1">Date & time</label>
+      <h3 className="mb-1 text-lg font-semibold">Schedule interview</h3>
+      <p className="mb-5 text-xs text-text-muted">
+        Store the exact next step so it appears on Dashboard and Tracker.
+      </p>
+      <label className="mb-1 block text-xs font-semibold uppercase tracking-widest text-text-faint">
+        Date & time
+      </label>
       <Input
         type="datetime-local"
         value={when}
         onChange={(e) => setWhen(e.target.value)}
       />
-      <label className="block text-xs text-text-muted mb-1 mt-4">Notes (optional)</label>
+      <label className="mb-1 mt-4 block text-xs font-semibold uppercase tracking-widest text-text-faint">
+        Notes
+      </label>
       <Input
         placeholder="e.g. phone screen with Priya"
         value={notes}
         onChange={(e) => setNotes(e.target.value)}
       />
-      <div className="flex justify-end gap-2 mt-5">
+      <div className="mt-5 flex justify-end gap-2">
         <Button variant="ghost" onClick={onCancel}>
           Cancel
         </Button>

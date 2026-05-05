@@ -58,7 +58,11 @@ export function StatusCell({
 
   return (
     <div className="flex items-center gap-2">
-      <Select value={local} onChange={(e) => onChange(e.target.value as ApplicationStatus)}>
+      <Select
+        value={local}
+        onChange={(e) => onChange(e.target.value as ApplicationStatus)}
+        className="min-w-36"
+      >
         {ALL_STATUSES.map((s) => (
           <option key={s} value={s}>
             {s}

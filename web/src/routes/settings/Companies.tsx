@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Trash2, Plus, ChevronDown, ChevronRight } from "lucide-react";
 import { Card } from "../../components/ui/Card";
 import { Input } from "../../components/ui/Input";
 import { Select } from "../../components/ui/Select";
 import { Button } from "../../components/ui/Button";
+import { PageHeader } from "../../components/layout/PageHeader";
 import { LoadingState } from "../../components/shared/LoadingState";
 import { ErrorState } from "../../components/shared/ErrorState";
 import { api, apiErrorMessage } from "../../lib/api-client";
@@ -20,7 +21,14 @@ type CompanyRow = CompanyIn & {
   enabled?: boolean;
 };
 
-const ATS = ["greenhouse", "ashby", "lever", "workday", "manual", "unknown"] as const;
+const ATS = [
+  "greenhouse",
+  "ashby",
+  "lever",
+  "workday",
+  "manual",
+  "unknown",
+] as const;
 const PRIORITIES = ["P0", "P1", "P2"] as const;
 
 type TokenField = "board_token" | "org_slug" | "company_slug";
@@ -78,7 +86,12 @@ export default function Companies() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["settings", "companies"] });
-      setNewRow({ name: "", ats_type: "unknown", priority: "P2", enabled: true });
+      setNewRow({
+        name: "",
+        ats_type: "unknown",
+        priority: "P2",
+        enabled: true,
+      });
     },
   });
 
@@ -90,7 +103,8 @@ export default function Companies() {
       });
       if (error) throw new Error(apiErrorMessage(error, "update failed"));
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["settings", "companies"] }),
+    onSuccess: () =>
+      qc.invalidateQueries({ queryKey: ["settings", "companies"] }),
   });
 
   const remove = useMutation({
@@ -100,74 +114,97 @@ export default function Companies() {
       });
       if (error) throw new Error(apiErrorMessage(error, "delete failed"));
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["settings", "companies"] }),
+    onSuccess: () =>
+      qc.invalidateQueries({ queryKey: ["settings", "companies"] }),
   });
 
   if (q.isLoading) return <LoadingState />;
   if (q.isError) return <ErrorState message={(q.error as Error).message} />;
 
   return (
-    <div className="space-y-4">
-      <h2 className="text-xl font-semibold tracking-tight">Companies</h2>
+    <div className="space-y-6">
+      <PageHeader
+        eyebrow="Target companies"
+        title="Companies"
+        description="Manage ATS slugs, priorities, and company-specific notes. Enabled rows are used by source fetches and scoring."
+      />
 
-      <Card className="flex flex-wrap gap-2 items-end">
-        <Input
-          placeholder="Name"
-          value={newRow.name}
-          onChange={(e) => setNewRow({ ...newRow, name: e.target.value })}
-        />
-        <Select
-          value={newRow.ats_type ?? "unknown"}
-          onChange={(e) => setNewRow({ ...newRow, ats_type: e.target.value })}
-        >
-          {ATS.map((a) => (
-            <option key={a} value={a}>
-              {a}
-            </option>
-          ))}
-        </Select>
-        <Select
-          value={newRow.priority ?? "P2"}
-          onChange={(e) => setNewRow({ ...newRow, priority: e.target.value })}
-        >
-          {PRIORITIES.map((p) => (
-            <option key={p} value={p}>
-              {p}
-            </option>
-          ))}
-        </Select>
-        <Button
-          variant="primary"
-          disabled={!newRow.name || add.isPending}
-          onClick={() => add.mutate()}
-        >
-          <Plus className="w-3 h-3" /> Add
-        </Button>
+      <Card>
+        <div className="mb-4">
+          <h3 className="text-sm font-semibold">Add target company</h3>
+          <p className="mt-1 text-xs text-text-muted">
+            Start with the company name, then expand the row to add ATS tokens and notes.
+          </p>
+        </div>
+        <div className="grid gap-3 md:grid-cols-[minmax(220px,1fr)_auto_auto_auto]">
+          <Input
+            placeholder="Name"
+            value={newRow.name}
+            onChange={(e) => setNewRow({ ...newRow, name: e.target.value })}
+          />
+          <Select
+            value={newRow.ats_type ?? "unknown"}
+            onChange={(e) => setNewRow({ ...newRow, ats_type: e.target.value })}
+          >
+            {ATS.map((a) => (
+              <option key={a} value={a}>
+                {a}
+              </option>
+            ))}
+          </Select>
+          <Select
+            value={newRow.priority ?? "P2"}
+            onChange={(e) => setNewRow({ ...newRow, priority: e.target.value })}
+          >
+            {PRIORITIES.map((p) => (
+              <option key={p} value={p}>
+                {p}
+              </option>
+            ))}
+          </Select>
+          <Button
+            variant="primary"
+            disabled={!newRow.name || add.isPending}
+            onClick={() => add.mutate()}
+          >
+            <Plus className="h-4 w-4" /> Add
+          </Button>
+        </div>
       </Card>
 
-      <Card className="p-0">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="text-[10px] uppercase tracking-widest text-text-muted">
-              <th className="text-left px-4 py-3 font-medium w-8"></th>
-              <th className="text-left px-4 py-3 font-medium">Name</th>
-              <th className="text-left px-4 py-3 font-medium">ATS</th>
-              <th className="text-left px-4 py-3 font-medium">Token / slug</th>
-              <th className="text-left px-4 py-3 font-medium">Priority</th>
-              <th />
-            </tr>
-          </thead>
-          <tbody>
-            {q.data!.map((c) => (
-              <CompanyRowView
-                key={c.id}
-                row={c}
-                onPatch={(body) => patch.mutate({ id: c.id, body })}
-                onRemove={() => remove.mutate(c.id)}
-              />
-            ))}
-          </tbody>
-        </table>
+      <Card className="overflow-hidden p-0">
+        <div className="border-b border-border px-5 py-4">
+          <h3 className="text-sm font-semibold">Configured companies</h3>
+          <p className="mt-1 text-xs text-text-muted">
+            Expand a row to edit ATS identifiers, location preferences, and notes.
+          </p>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[820px] text-sm">
+            <thead>
+              <tr className="bg-black/10 text-[10px] uppercase tracking-[0.22em] text-text-muted">
+                <th className="w-8 px-4 py-3 text-left font-semibold"></th>
+                <th className="px-4 py-3 text-left font-semibold">Name</th>
+                <th className="px-4 py-3 text-left font-semibold">ATS</th>
+                <th className="px-4 py-3 text-left font-semibold">
+                  Token / slug
+                </th>
+                <th className="px-4 py-3 text-left font-semibold">Priority</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {q.data!.map((c) => (
+                <CompanyRowView
+                  key={c.id}
+                  row={c}
+                  onPatch={(body) => patch.mutate({ id: c.id, body })}
+                  onRemove={() => remove.mutate(c.id)}
+                />
+              ))}
+            </tbody>
+          </table>
+        </div>
       </Card>
     </div>
   );
@@ -186,33 +223,38 @@ function CompanyRowView({
   const tokenField = tokenFieldFor(row.ats_type);
   const rawToken = tokenField ? row[tokenField] : null;
   const currentToken = typeof rawToken === "string" ? rawToken : "";
+  const locationsValue = (row.preferred_locations ?? []).join(", ");
 
   // Local draft for the expanded editors — flush to server on blur so the
   // user can type a multi-word comma-separated list without mid-keystroke
   // re-renders triggering PATCH per character.
   const [tokenDraft, setTokenDraft] = useState(currentToken);
-  const [locationsDraft, setLocationsDraft] = useState(
-    (row.preferred_locations ?? []).join(", "),
-  );
+  const [locationsDraft, setLocationsDraft] = useState(locationsValue);
   const [notesDraft, setNotesDraft] = useState(row.notes ?? "");
+
+  useEffect(() => {
+    setTokenDraft(currentToken);
+    setLocationsDraft(locationsValue);
+    setNotesDraft(row.notes ?? "");
+  }, [currentToken, locationsValue, row.id, row.notes]);
 
   const Chev = expanded ? ChevronDown : ChevronRight;
 
   return (
     <>
-      <tr className="border-t border-border">
-        <td className="px-2 py-2 w-8">
+      <tr className="border-t border-border transition-colors hover:bg-surface-hover">
+        <td className="w-8 px-4 py-3">
           <button
             type="button"
             aria-label={expanded ? "Collapse" : "Expand"}
             onClick={() => setExpanded((v) => !v)}
-            className="text-text-faint hover:text-text"
+            className="flex h-8 w-8 items-center justify-center rounded-full bg-black/15 text-text-faint hover:text-text"
           >
-            <Chev className="w-3 h-3" />
+            <Chev className="h-3.5 w-3.5" />
           </button>
         </td>
-        <td className="px-4 py-2 font-medium">{row.name}</td>
-        <td className="px-4 py-2 text-text-muted">
+        <td className="px-4 py-3 font-medium">{row.name}</td>
+        <td className="px-4 py-3 text-text-muted">
           <Select
             value={row.ats_type ?? "unknown"}
             onChange={(e) => onPatch({ ats_type: e.target.value })}
@@ -224,10 +266,10 @@ function CompanyRowView({
             ))}
           </Select>
         </td>
-        <td className="px-4 py-2 text-text-muted text-xs font-mono">
+        <td className="px-4 py-3 font-mono text-xs text-text-muted">
           {currentToken || "—"}
         </td>
-        <td className="px-4 py-2">
+        <td className="px-4 py-3">
           <Select
             value={row.priority ?? "P2"}
             onChange={(e) => onPatch({ priority: e.target.value })}
@@ -239,19 +281,21 @@ function CompanyRowView({
             ))}
           </Select>
         </td>
-        <td className="px-4 py-2 text-right">
+        <td className="px-4 py-3 text-right">
           <Button size="sm" variant="danger" onClick={onRemove}>
-            <Trash2 className="w-3 h-3" />
+            <Trash2 className="h-3.5 w-3.5" />
           </Button>
         </td>
       </tr>
       {expanded && (
-        <tr className="border-t border-border/60 bg-surface/50">
-          <td colSpan={6} className="px-4 py-4">
-            <div className="grid grid-cols-2 gap-4">
+        <tr className="border-t border-border/60 bg-black/15">
+          <td colSpan={6} className="px-5 py-5">
+            <div className="grid gap-4 lg:grid-cols-2">
               {tokenField ? (
-                <label className="space-y-1 text-xs text-text-muted">
-                  <div>{tokenLabelFor(row.ats_type)}</div>
+                <label className="space-y-1 rounded-2xl border border-border bg-surface p-3 text-xs text-text-muted">
+                  <div className="font-semibold uppercase tracking-widest text-text-faint">
+                    {tokenLabelFor(row.ats_type)}
+                  </div>
                   <Input
                     value={tokenDraft}
                     placeholder={tokenField}
@@ -264,13 +308,15 @@ function CompanyRowView({
                   />
                 </label>
               ) : (
-                <div className="text-xs text-text-faint">
+                <div className="rounded-2xl border border-dashed border-border p-3 text-xs text-text-faint">
                   {tokenLabelFor(row.ats_type)} — switch ATS to enable fetching.
                 </div>
               )}
 
-              <label className="space-y-1 text-xs text-text-muted">
-                <div>Preferred locations (comma-separated)</div>
+              <label className="space-y-1 rounded-2xl border border-border bg-surface p-3 text-xs text-text-muted">
+                <div className="font-semibold uppercase tracking-widest text-text-faint">
+                  Preferred locations
+                </div>
                 <Input
                   value={locationsDraft}
                   onChange={(e) => setLocationsDraft(e.target.value)}
@@ -287,8 +333,8 @@ function CompanyRowView({
                 />
               </label>
 
-              <label className="col-span-2 space-y-1 text-xs text-text-muted">
-                <div>Notes</div>
+              <label className="space-y-1 rounded-2xl border border-border bg-surface p-3 text-xs text-text-muted lg:col-span-2">
+                <div className="font-semibold uppercase tracking-widest text-text-faint">Notes</div>
                 <Input
                   value={notesDraft}
                   onChange={(e) => setNotesDraft(e.target.value)}

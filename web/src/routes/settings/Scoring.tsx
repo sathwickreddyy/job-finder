@@ -4,6 +4,7 @@ import { Card } from "../../components/ui/Card";
 import { Input } from "../../components/ui/Input";
 import { Button } from "../../components/ui/Button";
 import { CsvInput } from "../../components/ui/CsvInput";
+import { PageHeader } from "../../components/layout/PageHeader";
 import { LoadingState } from "../../components/shared/LoadingState";
 import { ErrorState } from "../../components/shared/ErrorState";
 import { api, apiErrorMessage } from "../../lib/api-client";
@@ -50,39 +51,62 @@ export default function Scoring() {
   }
 
   return (
-    <div className="space-y-4 max-w-2xl">
-      <h2 className="text-xl font-semibold tracking-tight">Scoring</h2>
+    <div className="space-y-6">
+      <PageHeader
+        eyebrow="Ranking model"
+        title="Scoring"
+        description="Tune the deterministic scorer before the optional LLM refinement runs. Higher thresholds make the shortlist stricter."
+      />
 
-      <Card className="space-y-3">
-        <h3 className="text-sm font-semibold">Thresholds</h3>
-        {(["P0", "P1", "P2"] as const).map((p) => (
-          <div key={p} className="flex items-center gap-3">
-            <label className="w-10 text-xs text-text-muted">{p}</label>
-            <Input
-              type="number"
-              value={draft.thresholds?.[p] ?? 0}
-              onChange={(e) => setThreshold(p, Number(e.target.value))}
-            />
-          </div>
-        ))}
+      <Card className="space-y-4">
+        <div>
+          <h3 className="text-sm font-semibold">Priority thresholds</h3>
+          <p className="mt-1 text-xs text-text-muted">
+            Scores at or above each value receive that priority.
+          </p>
+        </div>
+        <div className="grid gap-3 md:grid-cols-3">
+          {(["P0", "P1", "P2"] as const).map((p) => (
+            <label key={p} className="space-y-1 text-xs text-text-muted">
+              <span className="font-semibold uppercase tracking-widest text-text-faint">{p}</span>
+              <Input
+                type="number"
+                value={draft.thresholds?.[p] ?? 0}
+                onChange={(e) => setThreshold(p, Number(e.target.value))}
+              />
+            </label>
+          ))}
+        </div>
       </Card>
 
-      <Card className="space-y-3">
-        <h3 className="text-sm font-semibold">Keyword lists</h3>
-        <label className="block text-xs text-text-muted">
-          Positive keywords
+      <Card className="space-y-4">
+        <div>
+          <h3 className="text-sm font-semibold">Keyword lists</h3>
+          <p className="mt-1 text-xs text-text-muted">
+            Use keywords for strong deterministic nudges before semantic review.
+          </p>
+        </div>
+        <label className="block space-y-1 text-xs text-text-muted">
+          <span className="font-semibold uppercase tracking-widest text-text-faint">
+            Positive keywords
+          </span>
+          <CsvInput
+            value={draft.positive_keywords ?? []}
+            onCommit={(v) => setDraft({ ...draft, positive_keywords: v })}
+            placeholder="distributed systems, Python, platform"
+          />
         </label>
-        <CsvInput
-          value={draft.positive_keywords ?? []}
-          onCommit={(v) => setDraft({ ...draft, positive_keywords: v })}
-        />
-        <label className="block text-xs text-text-muted">
-          Negative keywords (forces Ignore)
+        <label className="block space-y-1 text-xs text-text-muted">
+          <span className="font-semibold uppercase tracking-widest text-text-faint">
+            Negative keywords
+          </span>
+          <CsvInput
+            value={draft.negative_keywords ?? []}
+            onCommit={(v) => setDraft({ ...draft, negative_keywords: v })}
+            placeholder="frontend only, unpaid, US only"
+          />
+          <span className="block text-text-faint">Matches here are forced to Ignore.</span>
         </label>
-        <CsvInput
-          value={draft.negative_keywords ?? []}
-          onCommit={(v) => setDraft({ ...draft, negative_keywords: v })}
-        />
       </Card>
 
       <div className="flex justify-end">

@@ -9,7 +9,7 @@ const COLOR = {
 
 export function FitScoreCell({ score }: { score: number }) {
   return (
-    <span className={`font-semibold tabular-nums ${COLOR[fitScoreTone(score)]}`}>
+    <span className={`inline-flex min-w-12 items-center justify-center rounded-full bg-black/20 px-2.5 py-1 font-bold tabular-nums ${COLOR[fitScoreTone(score)]}`}>
       {score}
     </span>
   );

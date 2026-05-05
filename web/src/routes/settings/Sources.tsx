@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Upload } from "lucide-react";
 import { Card } from "../../components/ui/Card";
 import { Button } from "../../components/ui/Button";
+import { PageHeader } from "../../components/layout/PageHeader";
 import { LoadingState } from "../../components/shared/LoadingState";
 import { ErrorState } from "../../components/shared/ErrorState";
 import { api, apiErrorMessage } from "../../lib/api-client";
@@ -47,24 +48,30 @@ export default function Sources() {
   if (q.isError) return <ErrorState message={(q.error as Error).message} />;
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-baseline justify-between">
-        <h2 className="text-xl font-semibold tracking-tight">Sources</h2>
-        <Button
-          variant="secondary"
-          size="sm"
-          onClick={() => reimport.mutate()}
-          disabled={reimport.isPending}
-        >
-          <Upload className="w-3 h-3" />
-          {reimport.isPending ? "Importing…" : "Re-import YAML"}
-        </Button>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        eyebrow="Fetch pipeline"
+        title="Sources"
+        description="Enable only the providers you actually want in daily search. Disabled sources are skipped entirely."
+        actions={
+          <Button
+            variant="secondary"
+            onClick={() => reimport.mutate()}
+            disabled={reimport.isPending}
+          >
+            <Upload className="h-4 w-4" />
+            {reimport.isPending ? "Importing…" : "Re-import YAML"}
+          </Button>
+        }
+      />
 
-      <Card className="space-y-3">
+      <Card className="grid gap-3">
         {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
         {Object.entries(draft).map(([source, cfg]: [string, any]) => (
-          <div key={source} className="flex items-center justify-between">
+          <div
+            key={source}
+            className="flex items-center justify-between gap-4 rounded-2xl border border-border bg-black/15 p-4"
+          >
             <div>
               <div className="font-medium">{source}</div>
               <div className="text-xs text-text-muted">
@@ -75,7 +82,7 @@ export default function Sources() {
                     : "Public jobs feed"}
               </div>
             </div>
-            <label className="text-xs flex items-center gap-2">
+            <label className="flex items-center gap-2 rounded-full border border-border bg-surface px-3 py-2 text-xs">
               <input
                 type="checkbox"
                 checked={!!cfg.enabled}

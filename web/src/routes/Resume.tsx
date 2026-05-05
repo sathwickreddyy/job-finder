@@ -2,10 +2,11 @@ import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { Download, Save } from "lucide-react";
+import { Download, FileText, Save } from "lucide-react";
 import { Card } from "../components/ui/Card";
 import { Button } from "../components/ui/Button";
 import { Badge } from "../components/ui/Badge";
+import { PageHeader } from "../components/layout/PageHeader";
 import { LoadingState } from "../components/shared/LoadingState";
 import { ErrorState } from "../components/shared/ErrorState";
 import { api, apiErrorMessage } from "../lib/api-client";
@@ -49,79 +50,92 @@ export default function Resume() {
   const readOnly = d.md_source === "portfolio";
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-3 justify-between">
-        <div className="flex items-center gap-3">
-          <h2 className="text-2xl font-semibold tracking-tight">Resume</h2>
-          <Badge tone={sourceTone}>{d.md_source}</Badge>
-        </div>
-        <div className="flex gap-2">
-          {d.has_pdf && (
+    <div className="space-y-6">
+      <PageHeader
+        eyebrow="Candidate asset"
+        title="Resume"
+        description="Preview the active markdown resume, make local edits when enabled, and download portfolio-backed PDF or DOCX versions."
+        meta={
+          <div className="inline-flex items-center gap-2">
+            <Badge tone={sourceTone}>{d.md_source}</Badge>
+            <span className="text-xs text-text-muted">
+              {readOnly ? "Portfolio source is read-only here" : "Local edits can be saved"}
+            </span>
+          </div>
+        }
+        actions={
+          <>
+            {d.has_pdf && (
+              <Button
+                variant="secondary"
+                onClick={() => window.open("/api/resume/pdf", "_blank")}
+              >
+                <Download className="h-4 w-4" /> PDF
+              </Button>
+            )}
+            {d.has_docx && (
+              <Button
+                variant="secondary"
+                onClick={() => window.open("/api/resume/docx", "_blank")}
+              >
+                <Download className="h-4 w-4" /> DOCX
+              </Button>
+            )}
             <Button
-              size="sm"
-              variant="secondary"
-              onClick={() => window.open("/api/resume/pdf", "_blank")}
+              variant="primary"
+              onClick={() => save.mutate()}
+              disabled={save.isPending || draft === d.markdown || readOnly}
+              title={
+                readOnly
+                  ? "Resume source is portfolio (read-only) — edit the portfolio repo to make changes."
+                  : undefined
+              }
             >
-              <Download className="w-3 h-3" /> PDF
+              <Save className="h-4 w-4" /> {save.isPending ? "Saving…" : "Save"}
             </Button>
-          )}
-          {d.has_docx && (
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={() => window.open("/api/resume/docx", "_blank")}
-            >
-              <Download className="w-3 h-3" /> DOCX
-            </Button>
-          )}
-          <Button
-            size="sm"
-            variant="primary"
-            onClick={() => save.mutate()}
-            disabled={save.isPending || draft === d.markdown || readOnly}
-            title={
-              readOnly
-                ? "Resume source is portfolio (read-only) — edit the portfolio repo to make changes."
-                : undefined
-            }
-          >
-            <Save className="w-3 h-3" /> {save.isPending ? "Saving…" : "Save"}
-          </Button>
-        </div>
-      </div>
+          </>
+        }
+      />
 
       {readOnly && (
-        <div className="bg-accent/10 border border-accent/30 rounded-md p-3 text-xs text-accent">
+        <div className="rounded-3xl border border-accent/30 bg-accent/10 p-4 text-sm text-accent">
           Read-only: the active resume is served from the portfolio repo.
           Edit the markdown there (or unset <code>RESUME_MD_PATH</code>) to
           enable in-app saves.
         </div>
       )}
       {save.isError && (
-        <div className="bg-danger/10 border border-danger/30 rounded-md p-3 text-xs text-danger">
+        <div className="rounded-3xl border border-danger/30 bg-danger/10 p-4 text-sm text-danger">
           {(save.error as Error).message}
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-4">
-        <Card className="p-4">
-          <div className="text-[10px] uppercase tracking-widest text-text-muted font-semibold mb-3">
-            Preview
+      <div className="grid gap-4 xl:grid-cols-2">
+        <Card className="min-h-[70vh] p-0">
+          <div className="flex items-center gap-3 border-b border-border px-5 py-4">
+            <FileText className="h-5 w-5 text-accent" />
+            <div>
+              <div className="text-sm font-semibold">Preview</div>
+              <div className="text-xs text-text-muted">Rendered markdown exactly as the app sees it.</div>
+            </div>
           </div>
-          <article className="prose prose-invert prose-sm max-w-none">
+          <article className="prose prose-invert prose-sm max-w-none p-5">
             <ReactMarkdown remarkPlugins={[remarkGfm]}>
               {draft || "_(empty)_"}
             </ReactMarkdown>
           </article>
         </Card>
         <Card className="p-0">
-          <div className="text-[10px] uppercase tracking-widest text-text-muted font-semibold px-4 pt-4 mb-2">
-            Edit
+          <div className="border-b border-border px-5 py-4">
+            <div className="text-sm font-semibold">Edit markdown</div>
+            <div className="text-xs text-text-muted">
+              Saves are disabled when the portfolio repo is the active source.
+            </div>
           </div>
           <textarea
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
-            className="w-full min-h-[70vh] font-mono text-xs p-4 bg-transparent border-0 resize-none focus:outline-none text-text"
+            className="min-h-[70vh] w-full resize-none border-0 bg-transparent p-5 font-mono text-xs leading-5 text-text focus:outline-none"
           />
         </Card>
       </div>
