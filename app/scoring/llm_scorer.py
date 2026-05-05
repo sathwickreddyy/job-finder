@@ -155,7 +155,17 @@ def refine_scored_job(
         log.warning("LLM refine failed for %s (%s): %s", scored.job.role, scored.job.company, e)
         return scored
 
-    delta = int(verdict.get("score_delta", 0))
+    # Coerce score_delta defensively — the LLM sometimes returns a string or
+    # None even when prompted for an int, and a raised exception here would
+    # kill the whole refine_all batch instead of just skipping this row.
+    try:
+        delta = int(verdict.get("score_delta", 0) or 0)
+    except (TypeError, ValueError) as e:
+        log.warning(
+            "LLM returned non-int score_delta for %s @ %s (%r): %s — keeping rule score",
+            scored.job.role, scored.job.company, verdict.get("score_delta"), e,
+        )
+        return scored
     delta = max(-15, min(15, delta))
     new_score = max(0, min(100, scored.fit_score + delta))
 
