@@ -52,6 +52,11 @@ class Settings:
         default_factory=lambda: _env("GMAIL_CREDENTIALS_PATH")
     )
 
+    # Resume source (absolute host paths; portfolio sister repo)
+    resume_md_path: str = field(default_factory=lambda: _env("RESUME_MD_PATH"))
+    resume_pdf_path: str = field(default_factory=lambda: _env("RESUME_PDF_PATH"))
+    resume_docx_path: str = field(default_factory=lambda: _env("RESUME_DOCX_PATH"))
+
     # Capability flags (derived, cheap to recompute)
     @property
     def config_is_read_only(self) -> bool:

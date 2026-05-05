@@ -14,6 +14,7 @@ Then:
 """
 from __future__ import annotations
 
+import re
 from datetime import date, datetime
 from typing import Any
 
@@ -87,15 +88,22 @@ def _level_points(desc: str, role: str, profile: dict) -> tuple[int, str, list[s
 
 def _location_points(job: Job, profile: dict, cfg: dict) -> tuple[int, list[str]]:
     preferred = [normalize_text(l) for l in profile.get("preferred_locations", [])]
-    remote_prefs = profile.get("remote_preferences", []) or []
-    remote_prefs = [normalize_text(r) for r in remote_prefs]
+    remote_prefs = [normalize_text(r) for r in (profile.get("remote_preferences") or [])]
     location_boosts: dict = cfg.get("location_boosts") or {}
     reasons: list[str] = []
 
     loc = normalize_text(job.location or "")
     remote_type = normalize_text(job.remote_type or "")
 
-    # Remote match
+    # Harshen onsite non-India roles (spec §8.2)
+    onsite_non_india = re.search(
+        r"\b(usa|united states|europe|uk|london|germany|canada|australia)\b", loc
+    )
+    if onsite_non_india and remote_type != "remote":
+        reasons.append(f"Onsite non-India location ({loc[:30]}); −15 penalty.")
+        return -15, reasons
+
+    # Remote match — bumped to +10 from +8
     if remote_type == "remote" and "remote" in " ".join(remote_prefs):
         reasons.append("Remote role matches preference.")
         return 10, reasons
@@ -105,7 +113,6 @@ def _location_points(job: Job, profile: dict, cfg: dict) -> tuple[int, list[str]
             reasons.append(f"Location matches preferred: {p}.")
             return 10, reasons
 
-    # Config-provided fuzzy boosts (e.g. "india" → 6)
     for key, bump in location_boosts.items():
         if normalize_text(key) in loc:
             reasons.append(f"Location boost via '{key}' (+{bump}).")
@@ -205,14 +212,19 @@ _NEGATIVE_DEFAULT = [
 
 def _hard_negatives(job: Job, profile: dict, cfg: dict) -> list[str]:
     haystack = normalize_text(f"{job.role} {job.description or ''}")
+    loc_hay = normalize_text(job.location or "")
     hits: list[str] = []
     for n in cfg.get("negative_keywords") or _NEGATIVE_DEFAULT:
         if normalize_text(n) in haystack:
             hits.append(n)
-    # Also honor profile.avoid_skills (e.g., "frontend only", "QA only")
     for n in profile.get("avoid_skills") or []:
         if normalize_text(n) in haystack and n not in hits:
             hits.append(n)
+    # Spec §8.2: exclude_locations force-ignore same as negative keywords
+    for n in profile.get("exclude_locations") or []:
+        if normalize_text(n) in loc_hay or normalize_text(n) in haystack:
+            if n not in hits:
+                hits.append(n)
     return hits
 
 

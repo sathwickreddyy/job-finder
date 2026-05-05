@@ -121,3 +121,107 @@ def test_target_company_floor_for_sparse_jd() -> None:
     thin = _mk("Software Engineer", "Razorpay", "Join us.")
     s = score_job(thin, PROFILE, SCORING, COMPANIES)
     assert s.priority != Priority.IGNORE
+
+
+def test_onsite_usa_penalty() -> None:
+    usa = _mk(
+        "Senior Backend Engineer",
+        "Acme",
+        "Python FastAPI Postgres Docker backend platform.",
+        location="San Francisco, USA",
+        remote_type=None,
+    )
+    india = _mk(
+        "Senior Backend Engineer",
+        "Acme",
+        "Python FastAPI Postgres Docker backend platform.",
+        location="Bengaluru",
+    )
+    s_usa = score_job(usa, PROFILE, SCORING, COMPANIES)
+    s_india = score_job(india, PROFILE, SCORING, COMPANIES)
+    assert s_india.fit_score > s_usa.fit_score
+    assert s_usa.fit_score + 10 <= s_india.fit_score  # at least 10-point gap
+
+
+def test_exclude_locations_forces_ignore() -> None:
+    profile = dict(PROFILE)
+    profile["exclude_locations"] = ["europe onsite"]
+    job = _mk(
+        "Senior Backend Engineer",
+        "Acme",
+        "Europe onsite required. Python FastAPI.",
+        location="Berlin, Germany",
+        remote_type=None,
+    )
+    s = score_job(job, profile, SCORING, COMPANIES)
+    assert s.priority == Priority.IGNORE
+
+
+def test_remote_boost_bumped_to_10() -> None:
+    job = _mk(
+        "Senior Backend Engineer",
+        "Acme",
+        "Remote-first backend role. Python FastAPI.",
+        location="Anywhere",
+        remote_type="remote",
+    )
+    s = score_job(job, PROFILE, SCORING, COMPANIES)
+    assert any("remote" in r.lower() for r in s.reasons)
+
+
+def test_onsite_uk_london_penalty_applied() -> None:
+    # Exercises the `london` branch of the regex — a London-onsite job
+    # should be penalised even when the loc string does not say "uk".
+    london = _mk(
+        "Senior Backend Engineer",
+        "Acme",
+        "Python FastAPI Postgres Docker backend platform.",
+        location="London",
+        remote_type=None,
+    )
+    india = _mk(
+        "Senior Backend Engineer",
+        "Acme",
+        "Python FastAPI Postgres Docker backend platform.",
+        location="Bengaluru",
+    )
+    s_london = score_job(london, PROFILE, SCORING, COMPANIES)
+    s_india = score_job(india, PROFILE, SCORING, COMPANIES)
+    assert s_india.fit_score > s_london.fit_score
+    # Penalty reason should be explicit.
+    assert any("onsite" in r.lower() and "penalty" in r.lower() for r in s_london.reasons)
+
+
+def test_remote_overrides_usa_penalty() -> None:
+    # Remote short-circuits before the onsite-non-India regex fires.
+    # A USA-listed role with remote_type="remote" should NOT be penalised.
+    usa_remote = _mk(
+        "Senior Backend Engineer",
+        "Acme",
+        "Remote-first backend role. Python FastAPI.",
+        location="San Francisco, USA",
+        remote_type="remote",
+    )
+    s = score_job(usa_remote, PROFILE, SCORING, COMPANIES)
+    # Must include the remote-match reason.
+    assert any("remote role matches preference" in r.lower() for r in s.reasons)
+    # Must NOT include the onsite-penalty reason.
+    assert not any(
+        "onsite" in r.lower() and "penalty" in r.lower() for r in s.reasons
+    )
+
+
+def test_exclude_location_in_description_forces_ignore() -> None:
+    # Proves _hard_negatives checks BOTH job.location AND description.
+    # Location field is India, but description says "onsite USA".
+    profile = dict(PROFILE)
+    profile["exclude_locations"] = ["onsite usa"]
+    job = _mk(
+        "Senior Backend Engineer",
+        "Acme",
+        "This role requires onsite USA presence. Python FastAPI.",
+        location="Bengaluru",
+        remote_type=None,
+    )
+    s = score_job(job, profile, SCORING, COMPANIES)
+    assert s.priority == Priority.IGNORE

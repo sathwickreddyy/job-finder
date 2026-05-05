@@ -1,0 +1,12 @@
+[
+  {"id": 20, "title": "Good 1", "company_name": "C1", "location": "Bengaluru", "remote": false, "url": "https://x/20", "description": "x"},
+  {"id": 21, "title": "Good 2", "company_name": "C2", "location": "Hyderabad", "remote": false, "url": "https://x/21", "description": "x"},
+  {"id": 22, "title": "Good 3", "company_name": "C3", "location": "Mumbai", "remote": false, "url": "https://x/22", "description": "x"},
+  {"id": 23, "title": "Good 4", "company_name": "C4", "remote": true, "url": "https://x/23", "description": "x"},
+  {"id": 24, "title": "Good 5", "company_name": "C5", "location": "Delhi", "remote": false, "url": "https://x/24", "description": "x"},
+  {"id": 25, "title": "Good 6", "company_name": "C6", "location": "Pune", "remote": false, "url": "https://x/25", "description": "x"},
+  {"id": 26, "title": "Good 7", "company_name": "C7", "location": "India", "remote": false, "url": "https://x/26", "description": "x"},
+  {"id": 27, "company_name": "BadNoTitle", "location": "Bengaluru", "remote": false},
+  {"id": 28, "title": "BadNoCompany", "location": "Bengaluru", "remote": false},
+  {"id": 29, "title": "BadRejectedLondon", "company_name": "UK Co", "location": "London, UK", "remote": false, "url": "https://x/29", "description": "x"}
+]
