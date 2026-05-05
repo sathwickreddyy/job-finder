@@ -1,6 +1,6 @@
 export function ErrorState({ message }: { message: string }) {
   return (
-    <div className="bg-danger/10 border border-danger/40 rounded-lg p-4 text-sm text-danger">
+    <div className="rounded-3xl border border-danger/35 bg-danger/10 p-5 text-sm font-medium text-danger shadow-xl shadow-danger/5">
       {message}
     </div>
   );

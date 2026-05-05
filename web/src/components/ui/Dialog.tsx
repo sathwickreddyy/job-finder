@@ -62,8 +62,8 @@ export function Dialog({
         aria-modal="true"
         tabIndex={-1}
         className={cn(
-          "bg-[var(--bg)] border border-border-strong rounded-xl shadow-2xl",
-          "w-full max-w-2xl max-h-[85vh] overflow-auto p-5",
+          "rounded-[2rem] border border-border-strong bg-[rgba(10,15,28,0.96)] shadow-2xl shadow-black/30 backdrop-blur-xl",
+          "max-h-[85vh] w-full max-w-2xl overflow-auto p-5",
           "focus:outline-none",
           className,
         )}

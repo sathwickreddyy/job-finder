@@ -8,6 +8,7 @@ export default {
         bg: "var(--bg)",
         surface: "var(--surface)",
         "surface-hover": "var(--surface-hover)",
+        "surface-strong": "var(--surface-strong)",
         border: "var(--border)",
         "border-strong": "var(--border-strong)",
         text: "var(--text)",
@@ -20,7 +21,7 @@ export default {
         success: "var(--success)",
       },
       fontFamily: {
-        sans: ["Inter", "-apple-system", "system-ui", "sans-serif"],
+        sans: ["Aptos", "Space Grotesk", "SF Pro Display", "Segoe UI", "sans-serif"],
         mono: ["Geist Mono", "JetBrains Mono", "ui-monospace", "monospace"],
       },
     },
