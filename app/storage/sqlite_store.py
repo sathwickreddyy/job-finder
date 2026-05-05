@@ -20,6 +20,32 @@ from .base import Store
 log = get_logger("storage.sqlite")
 
 
+STATUS_RANK: dict[str, int] = {
+    "Interviewing":       0,
+    "Assessment Pending": 1,
+    "Recruiter Reply":    2,
+    "Applied":            3,
+    "Tailoring Resume":   4,
+    "Need Referral":      5,
+    "Shortlisted":        6,
+    "Found":              7,
+    "Rejected":           8,
+    "Archived":           9,
+}
+
+
+def _status_rank_case_sql() -> str:
+    """Render STATUS_RANK as a SQL CASE expression.
+
+    Values are compile-time constants (no user input), so direct
+    interpolation is safe. Fallback bucket is 99 — unknown statuses
+    sink below Archived."""
+    branches = "\n    ".join(
+        f"WHEN '{status}' THEN {rank}" for status, rank in STATUS_RANK.items()
+    )
+    return f"CASE COALESCE(applications.status, 'Found')\n    {branches}\n    ELSE 99\n  END"
+
+
 SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS jobs (
     id           TEXT PRIMARY KEY,
@@ -85,6 +111,17 @@ CREATE TABLE IF NOT EXISTS runs (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
     ran_at     TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS search_stats (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    ran_at        TEXT NOT NULL,
+    source        TEXT NOT NULL,
+    fetched       INTEGER NOT NULL DEFAULT 0,
+    kept          INTEGER NOT NULL DEFAULT 0,
+    duration_ms   INTEGER NOT NULL DEFAULT 0,
+    error         TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_search_stats_ran_at ON search_stats(ran_at);
 """
 
 
@@ -111,7 +148,27 @@ class SQLiteStore(Store):
     def init_schema(self) -> None:
         with self._conn() as c:
             c.executescript(SCHEMA_SQL)
+        self._migrate_applications_columns()
         log.info("sqlite schema initialized at %s", self.db_path)
+
+    def _migrate_applications_columns(self) -> None:
+        """Idempotent ALTER — add interview + lifecycle columns if missing."""
+        needed = {
+            "next_interview_at": "TEXT",
+            "interview_notes":   "TEXT",
+            "applied_at":        "TEXT",
+            "rejected_at":       "TEXT",
+        }
+        with self._conn() as c:
+            existing = {
+                row["name"]
+                for row in c.execute("PRAGMA table_info(applications)").fetchall()
+            }
+            for col, coltype in needed.items():
+                if col not in existing:
+                    c.execute(
+                        f"ALTER TABLE applications ADD COLUMN {col} {coltype}"
+                    )
 
     # -- jobs ---------------------------------------------------------------
     def upsert_jobs(self, jobs: Iterable[Job]) -> int:
@@ -241,6 +298,179 @@ class SQLiteStore(Store):
         with self._conn() as c:
             c.execute(sql, (job_id, str(status), notes, now))
 
+    # -- rich query + application setters (Task 9) -------------------------
+    def list_scored_with_filters(
+        self,
+        *,
+        priorities: Optional[list[str]] = None,
+        statuses: Optional[list[str]] = None,
+        company: Optional[str] = None,
+        source: Optional[str] = None,
+        remote_type: Optional[str] = None,
+        location_contains: Optional[str] = None,
+        q: Optional[str] = None,
+        sort: str = "status_rank",
+        limit: int = 500,
+        offset: int = 0,
+    ) -> list[tuple[ScoredJob, Optional[dict]]]:
+        """JOIN scored_jobs + jobs LEFT JOIN applications with filters.
+
+        Default sort pins Interviewing/Recruiter-reply rows to the top via
+        the STATUS_RANK CASE expression, then sorts by upcoming-interview
+        ascending (NULLs last), then by fit_score desc, then found_at desc.
+        """
+        status_case = _status_rank_case_sql()
+        sql = f"""
+        SELECT j.*,
+               s.fit_score, s.priority, s.level_match,
+               s.matched_skills_json, s.missing_skills_json, s.reasons_json, s.risks_json,
+               s.recommended_resume_variant, s.next_action,
+               applications.status AS app_status, applications.notes AS app_notes,
+               applications.next_interview_at, applications.interview_notes,
+               applications.applied_at, applications.rejected_at,
+               applications.updated_at AS app_updated_at,
+               ({status_case}) AS status_rank
+        FROM scored_jobs s
+        JOIN jobs j ON j.id = s.job_id
+        LEFT JOIN applications ON applications.job_id = s.job_id
+        WHERE 1=1
+        """
+        params: list = []
+        if priorities:
+            sql += f" AND s.priority IN ({','.join(['?'] * len(priorities))})"
+            params += priorities
+        if statuses:
+            sql += (
+                f" AND COALESCE(applications.status, 'Found') IN"
+                f" ({','.join(['?'] * len(statuses))})"
+            )
+            params += statuses
+        if company:
+            sql += " AND LOWER(j.company) LIKE ?"
+            params.append(f"%{company.lower()}%")
+        if source:
+            sql += " AND j.source = ?"
+            params.append(source)
+        if remote_type:
+            sql += " AND j.remote_type = ?"
+            params.append(remote_type)
+        if location_contains:
+            sql += " AND LOWER(j.location) LIKE ?"
+            params.append(f"%{location_contains.lower()}%")
+        if q:
+            sql += (
+                " AND (LOWER(j.role) LIKE ? OR LOWER(j.company) LIKE ?"
+                " OR LOWER(j.description) LIKE ?)"
+            )
+            needle = f"%{q.lower()}%"
+            params += [needle, needle, needle]
+
+        if sort == "fit":
+            sql += " ORDER BY s.fit_score DESC, j.found_at DESC"
+        elif sort == "found_at":
+            sql += " ORDER BY j.found_at DESC"
+        else:
+            sql += (
+                " ORDER BY status_rank ASC,"
+                " applications.next_interview_at ASC NULLS LAST,"
+                " s.fit_score DESC, j.found_at DESC"
+            )
+        sql += " LIMIT ? OFFSET ?"
+        params += [limit, offset]
+
+        with self._conn() as c:
+            rows = c.execute(sql, params).fetchall()
+
+        out: list[tuple[ScoredJob, Optional[dict]]] = []
+        for r in rows:
+            scored = _row_to_scored(r)
+            app = None
+            if r["app_status"]:
+                app = {
+                    "status": r["app_status"],
+                    "notes": r["app_notes"],
+                    "next_interview_at": r["next_interview_at"],
+                    "interview_notes": r["interview_notes"],
+                    "applied_at": r["applied_at"],
+                    "rejected_at": r["rejected_at"],
+                    "updated_at": r["app_updated_at"],
+                }
+            out.append((scored, app))
+        return out
+
+    def get_application(self, job_id: str) -> Optional[dict]:
+        with self._conn() as c:
+            row = c.execute(
+                "SELECT * FROM applications WHERE job_id = ?", (job_id,)
+            ).fetchone()
+        return dict(row) if row else None
+
+    def get_scored_by_id(self, job_id: str) -> Optional[ScoredJob]:
+        """Return the ScoredJob for one job_id, or None if not scored.
+
+        O(1) lookup by primary key; use this instead of filtering the full list
+        when you only need one row."""
+        sql = """
+        SELECT j.*,
+               s.fit_score, s.priority, s.level_match,
+               s.matched_skills_json, s.missing_skills_json, s.reasons_json, s.risks_json,
+               s.recommended_resume_variant, s.next_action
+        FROM scored_jobs s
+        JOIN jobs j ON j.id = s.job_id
+        WHERE s.job_id = ?
+        """
+        with self._conn() as c:
+            row = c.execute(sql, (job_id,)).fetchone()
+        return _row_to_scored(row) if row else None
+
+    def set_application_status_rich(
+        self,
+        job_id: str,
+        status: ApplicationStatus,
+        *,
+        notes: Optional[str] = None,
+        next_interview_at: Optional[str] = None,
+        interview_notes: Optional[str] = None,
+    ) -> None:
+        """UPSERT applications row with lifecycle-timestamp stamping.
+
+        `applied_at` is stamped when the transition lands on "Applied";
+        `rejected_at` on "Rejected". Both use COALESCE so once stamped
+        they persist across subsequent PATCHes."""
+        now = utcnow_iso()
+        status_str = str(status)
+        applied_at = now if status_str == "Applied" else None
+        rejected_at = now if status_str == "Rejected" else None
+
+        sql = """
+        INSERT INTO applications
+            (job_id, status, notes, next_interview_at, interview_notes,
+             applied_at, rejected_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(job_id) DO UPDATE SET
+            status             = excluded.status,
+            notes              = COALESCE(excluded.notes, applications.notes),
+            next_interview_at  = COALESCE(excluded.next_interview_at, applications.next_interview_at),
+            interview_notes    = COALESCE(excluded.interview_notes, applications.interview_notes),
+            applied_at         = COALESCE(excluded.applied_at, applications.applied_at),
+            rejected_at        = COALESCE(excluded.rejected_at, applications.rejected_at),
+            updated_at         = excluded.updated_at;
+        """
+        with self._conn() as c:
+            c.execute(
+                sql,
+                (
+                    job_id,
+                    status_str,
+                    notes,
+                    next_interview_at,
+                    interview_notes,
+                    applied_at,
+                    rejected_at,
+                    now,
+                ),
+            )
+
     # -- email events -------------------------------------------------------
     def record_email_event(self, event: EmailEvent) -> None:
         sql = """
@@ -308,6 +538,19 @@ class SQLiteStore(Store):
         with self._conn() as c:
             row = c.execute("SELECT COUNT(*) AS n FROM jobs").fetchone()
         return int(row["n"]) if row else 0
+
+    def upcoming_interviews(self, limit: int = 10) -> list[dict]:
+        sql = """
+        SELECT j.id AS job_id, j.role, j.company, a.next_interview_at
+        FROM applications a
+        JOIN jobs j ON j.id = a.job_id
+        WHERE a.status = 'Interviewing' AND a.next_interview_at IS NOT NULL
+        ORDER BY a.next_interview_at ASC
+        LIMIT ?
+        """
+        with self._conn() as c:
+            rows = c.execute(sql, (limit,)).fetchall()
+        return [dict(r) for r in rows]
 
 
 # ---------------------------------------------------------------------------
