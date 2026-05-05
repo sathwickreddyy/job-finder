@@ -1,0 +1,3 @@
+- [Incremental commits and latest Python](feedback/incremental_commits_and_python.md) — commit per logical unit; use python3.13 for .venv
+- [Prefer Docker Compose over host services](feedback/prefer_docker_compose.md) — default to `docker compose …` for UI/daily/CLI; reserve host venv for pytest
+- [Memory lives in project .claude with typed subdirectories](feedback/memory_location_and_layout.md) — write memories under .claude/memory/{feedback,user,project,reference}/, keep MEMORY.md as the index
