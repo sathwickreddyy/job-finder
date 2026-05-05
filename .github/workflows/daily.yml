@@ -1,0 +1,68 @@
+name: job-search-daily
+
+on:
+  schedule:
+    # 02:30 UTC = 08:00 IST daily
+    - cron: "30 2 * * *"
+  workflow_dispatch: {}
+
+jobs:
+  run-daily:
+    runs-on: ubuntu-latest
+    # Keep the run stateless wrt user data — we only upload shortlist as an artifact.
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Pull private config (optional)
+        if: ${{ env.CONFIG_SOURCE_URL != '' }}
+        env:
+          CONFIG_SOURCE_URL: ${{ secrets.CONFIG_SOURCE_URL }}
+          RESUME_SOURCE_URL: ${{ secrets.RESUME_SOURCE_URL }}
+        run: |
+          echo "Remote config URL configured — CONFIG_BACKEND=http will be used."
+          echo "CONFIG_BACKEND=http" >> $GITHUB_ENV
+
+      - name: Run daily pipeline
+        env:
+          # Optional: mirror secrets into env for the run. Missing ones will be
+          # gracefully skipped by the app (Notion / LLM / email integrations).
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          NOTION_JOBS_DATABASE_ID: ${{ secrets.NOTION_JOBS_DATABASE_ID }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          LLM_MODEL: ${{ secrets.LLM_MODEL }}
+          CONFIG_BACKEND: ${{ env.CONFIG_BACKEND }}
+          CONFIG_SOURCE_URL: ${{ secrets.CONFIG_SOURCE_URL }}
+          RESUME_SOURCE_URL: ${{ secrets.RESUME_SOURCE_URL }}
+        run: |
+          python -m app.main init-db
+          python -m app.main run-daily
+
+      - name: Upload shortlist artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: shortlist
+          path: data/shortlist.md
+          if-no-files-found: ignore
+          retention-days: 14
+      # Intentionally does NOT commit generated personal data back to the repo.
+      # Durable state should live in Notion (idempotent sync) or a private
+      # config repo referenced via CONFIG_SOURCE_URL / RESUME_SOURCE_URL.
