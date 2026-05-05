@@ -64,15 +64,6 @@ describe("Sources settings", () => {
     );
   });
 
-  it("renders Re-import YAML button", async () => {
-    render(wrap(<Sources />));
-    await waitFor(() =>
-      expect(
-        screen.getByRole("button", { name: /Re-import YAML/ }),
-      ).toBeInTheDocument(),
-    );
-  });
-
   it("clicking a checkbox toggles draft state (no error, no crash)", async () => {
     const user = userEvent.setup();
     render(wrap(<Sources />));

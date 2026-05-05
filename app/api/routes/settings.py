@@ -1,29 +1,19 @@
-"""Task 14 — /api/settings/* routes + YAML import.
+"""/api/settings/* routes.
 
 Profile/scoring/sources use bulk PUT. Companies has full CRUD with soft-delete
-via enabled=0 so notion_page_id references survive. POST /settings/import-yaml
-is the escape hatch — also exposed as the `import-config` CLI command for
-scripted seeding."""
+via enabled=0 so notion_page_id references survive. SQLite is the runtime
+source of truth — YAML under config/ is a one-time seed read by init-db."""
 from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 
-from ...config_repo import (
-    COMPANIES_YAML,
-    PROFILE_YAML,
-    SCORING_YAML,
-    SOURCES_YAML,
-    ConfigRepository,
-)
 from ...storage.config_store import ConfigStore
-from ...utils import utcnow_iso
-from ..deps import get_config_repo, get_config_store
+from ..deps import get_config_store
 from ..schemas import (
     CompanyIn,
     CompanyPatch,
-    ImportYamlResponse,
     ProfileIn,
     ScoringIn,
 )
@@ -92,53 +82,3 @@ def put_sources(
 ) -> dict:
     cstore.put_sources(body)
     return cstore.get_sources()
-
-
-# -- import from YAML --------------------------------------------------------
-@router.post("/import-yaml", response_model=ImportYamlResponse)
-def import_yaml(
-    cstore: ConfigStore = Depends(get_config_store),
-    repo: ConfigRepository = Depends(get_config_repo),
-) -> ImportYamlResponse:
-    counts: dict[str, int] = {}
-
-    try:
-        profile = repo.load_yaml(PROFILE_YAML)
-        if profile:
-            cstore.set_profile(profile)
-        counts[PROFILE_YAML] = 1 if profile else 0
-    except Exception as e:  # noqa: BLE001
-        raise HTTPException(400, detail=f"profile import failed: {e}")
-
-    scoring = repo.load_yaml(SCORING_YAML)
-    if scoring:
-        cstore.put_scoring(scoring)
-    counts[SCORING_YAML] = 1 if scoring else 0
-
-    sources = repo.load_yaml(SOURCES_YAML)
-    if sources:
-        cstore.put_sources(sources)
-    counts[SOURCES_YAML] = 1 if sources else 0
-
-    companies = (repo.load_yaml(COMPANIES_YAML) or {}).get("companies") or []
-    n = 0
-    for c in companies:
-        try:
-            cstore.add_company(c)
-            n += 1
-        except Exception:
-            # Company already exists via UNIQUE(name) -- update instead
-            existing = next(
-                (
-                    x
-                    for x in cstore.list_companies(include_disabled=True)
-                    if x["name"].lower() == c["name"].lower()
-                ),
-                None,
-            )
-            if existing:
-                cstore.update_company(existing["id"], c)
-                n += 1
-    counts[COMPANIES_YAML] = n
-
-    return ImportYamlResponse(imported=counts, imported_at=utcnow_iso())

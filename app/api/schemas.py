@@ -202,10 +202,5 @@ class SourcesIn(BaseModel):
     # Pydantic would over-constrain; keep permissive.
 
 
-class ImportYamlResponse(BaseModel):
-    imported: dict[str, int]  # filename → rows-imported count
-    imported_at: str
-
-
 # Silence unused import warnings
 _ = datetime

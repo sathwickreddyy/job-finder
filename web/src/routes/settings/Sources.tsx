@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Upload } from "lucide-react";
 import { Card } from "../../components/ui/Card";
 import { Button } from "../../components/ui/Button";
 import { PageHeader } from "../../components/layout/PageHeader";
@@ -34,16 +33,6 @@ export default function Sources() {
       qc.invalidateQueries({ queryKey: ["settings", "sources"] }),
   });
 
-  const reimport = useMutation({
-    mutationFn: async () => {
-      const { error } = await api.POST("/api/settings/import-yaml");
-      if (error) throw new Error(apiErrorMessage(error, "reimport failed"));
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["settings"] });
-    },
-  });
-
   if (q.isLoading) return <LoadingState />;
   if (q.isError) return <ErrorState message={(q.error as Error).message} />;
 
@@ -53,16 +42,6 @@ export default function Sources() {
         eyebrow="Fetch pipeline"
         title="Sources"
         description="Enable only the providers you actually want in daily search. Disabled sources are skipped entirely."
-        actions={
-          <Button
-            variant="secondary"
-            onClick={() => reimport.mutate()}
-            disabled={reimport.isPending}
-          >
-            <Upload className="h-4 w-4" />
-            {reimport.isPending ? "Importing…" : "Re-import YAML"}
-          </Button>
-        }
       />
 
       <Card className="grid gap-3">
