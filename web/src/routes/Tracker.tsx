@@ -5,8 +5,13 @@ import { FilterBar } from "../components/job/FilterBar";
 import { JobTable } from "../components/job/JobTable";
 import { LoadingState } from "../components/shared/LoadingState";
 import { ErrorState } from "../components/shared/ErrorState";
-import { api } from "../lib/api-client";
+import { api, apiErrorMessage } from "../lib/api-client";
 import { formatDate } from "../lib/format";
+import type { operations } from "../lib/api-types";
+
+type JobsQuery = NonNullable<
+  operations["list_jobs_api_jobs_get"]["parameters"]["query"]
+>;
 
 export default function Tracker() {
   const [params] = useSearchParams();
@@ -14,17 +19,13 @@ export default function Tracker() {
   const q = useQuery({
     queryKey: ["jobs", params.toString()],
     queryFn: async () => {
-      const query: Record<string, any> = {};
+      const query: JobsQuery = {};
       if (params.get("q")) query.q = params.get("q");
       if (params.get("status")) query.status = [params.get("status")!];
       if (params.get("priority")) query.priority = [params.get("priority")!];
       if (params.get("location_contains")) query.location_contains = params.get("location_contains");
       const { data, error } = await api.GET("/api/jobs", { params: { query } });
-      if (error) {
-        throw new Error(
-          (error as { detail?: { msg?: string }[] }).detail?.[0]?.msg || "load failed",
-        );
-      }
+      if (error) throw new Error(apiErrorMessage(error, "load failed"));
       return data!;
     },
   });
@@ -33,11 +34,7 @@ export default function Tracker() {
     queryKey: ["dashboard-upcoming-only"],
     queryFn: async () => {
       const { data, error } = await api.GET("/api/dashboard");
-      if (error) {
-        throw new Error(
-          (error as { detail?: { msg?: string }[] }).detail?.[0]?.msg || "load failed",
-        );
-      }
+      if (error) throw new Error(apiErrorMessage(error, "load failed"));
       return data!.upcoming_interviews;
     },
   });
@@ -67,7 +64,7 @@ export default function Tracker() {
 
       {q.isLoading && <LoadingState />}
       {q.isError && <ErrorState message={(q.error as Error).message} />}
-      {q.data && <JobTable rows={q.data as any} />}
+      {q.data && <JobTable rows={q.data} />}
     </div>
   );
 }

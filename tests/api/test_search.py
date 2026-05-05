@@ -109,6 +109,135 @@ def test_search_filters_sources_when_body_specifies(
     assert set(captured["sources_cfg"].keys()) == {"ycombinator"}
 
 
+def test_search_uses_config_store_companies_when_populated(
+    client: TestClient, monkeypatch
+) -> None:
+    """ConfigStore is source of truth: if the user added a company via the
+    Settings UI, /api/search must see that list rather than the YAML seed."""
+    from app.api.deps import get_config_store
+    from app.api.routes import search as search_module
+
+    captured: dict = {}
+
+    def fake_fetch(_repo, _sources_cfg, companies_cfg):
+        captured["companies_cfg"] = companies_cfg
+        return [], {
+            "ycombinator": {"fetched": 0, "kept": 0, "duration_ms": 1, "error": None},
+        }
+
+    monkeypatch.setattr(search_module, "_fetch_with_stats", fake_fetch)
+
+    cstore = get_config_store()
+    cstore.add_company({"name": "AcmeFromUI", "ats_type": "greenhouse", "priority": "P0"})
+
+    r = client.post("/api/search", json={"use_llm": False})
+    assert r.status_code == 200
+    names = {c["name"] for c in captured["companies_cfg"].get("companies", [])}
+    assert "AcmeFromUI" in names
+
+
+def test_search_uses_config_store_profile_when_populated(
+    client: TestClient, monkeypatch
+) -> None:
+    """Setting the profile via ConfigStore must propagate to scoring — we
+    verify the scorer sees profile.strong_skills by monkeypatching score_all
+    to capture its profile argument."""
+    from app.api.deps import get_config_store
+    from app.api.routes import search as search_module
+
+    captured: dict = {}
+
+    def fake_fetch(*_args, **_kwargs):
+        return [], {
+            "ycombinator": {"fetched": 0, "kept": 0, "duration_ms": 1, "error": None},
+        }
+
+    def fake_score_all(_jobs, profile, _scoring_cfg, _companies_cfg):
+        captured["profile"] = profile
+        return []
+
+    monkeypatch.setattr(search_module, "_fetch_with_stats", fake_fetch)
+    monkeypatch.setattr(search_module, "score_all", fake_score_all)
+
+    cstore = get_config_store()
+    cstore.set_profile(
+        {"name": "UI User", "strong_skills": ["rust"], "years_of_experience": 5}
+    )
+
+    r = client.post("/api/search", json={"use_llm": False})
+    assert r.status_code == 200
+    assert captured["profile"]["strong_skills"] == ["rust"]
+    assert captured["profile"]["name"] == "UI User"
+
+
+def test_search_applies_location_filter_to_response(
+    client: TestClient, monkeypatch
+) -> None:
+    """body.location narrows the response rows via location_contains — two
+    jobs in different cities, filter='bengaluru' returns only one."""
+    from app.api.routes import search as search_module
+    from app.models import Job
+    from app.utils import stable_job_id
+
+    def fake_fetch(*_args, **_kwargs):
+        j1 = Job(
+            id=stable_job_id("A", "R1", "https://x/1"),
+            role="R1", company="A", url="https://x/1",
+            source="ycombinator", location="Bengaluru, India",
+            description="Python",
+        )
+        j2 = Job(
+            id=stable_job_id("B", "R2", "https://x/2"),
+            role="R2", company="B", url="https://x/2",
+            source="ycombinator", location="San Francisco, USA",
+            description="Python",
+        )
+        return [j1, j2], {
+            "ycombinator": {"fetched": 2, "kept": 2, "duration_ms": 1, "error": None},
+        }
+
+    monkeypatch.setattr(search_module, "_fetch_with_stats", fake_fetch)
+
+    r = client.post("/api/search", json={"location": "bengaluru", "use_llm": False})
+    assert r.status_code == 200
+    body = r.json()
+    locs = [row["job"]["location"] for row in body["jobs"]]
+    assert all("bengaluru" in (loc or "").lower() for loc in locs)
+    assert len(body["jobs"]) == 1
+
+
+def test_search_applies_keyword_filter_to_response(
+    client: TestClient, monkeypatch
+) -> None:
+    """body.keyword narrows via the q parameter (role/company/description)."""
+    from app.api.routes import search as search_module
+    from app.models import Job
+    from app.utils import stable_job_id
+
+    def fake_fetch(*_args, **_kwargs):
+        j1 = Job(
+            id=stable_job_id("A", "Backend Engineer", "https://x/1"),
+            role="Backend Engineer", company="A", url="https://x/1",
+            source="ycombinator", description="Python",
+        )
+        j2 = Job(
+            id=stable_job_id("B", "Frontend Engineer", "https://x/2"),
+            role="Frontend Engineer", company="B", url="https://x/2",
+            source="ycombinator", description="React",
+        )
+        return [j1, j2], {
+            "ycombinator": {"fetched": 2, "kept": 2, "duration_ms": 1, "error": None},
+        }
+
+    monkeypatch.setattr(search_module, "_fetch_with_stats", fake_fetch)
+
+    r = client.post("/api/search", json={"keyword": "backend", "use_llm": False})
+    assert r.status_code == 200
+    body = r.json()
+    assert len(body["jobs"]) == 1
+    assert "backend" in body["jobs"][0]["job"]["role"].lower()
+
+
 def test_search_sets_last_run_timestamp(client: TestClient, monkeypatch) -> None:
     """BDD: store.mark_run() was invoked — store.last_run_at() returns a
     non-null ISO timestamp after a search."""

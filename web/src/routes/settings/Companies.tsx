@@ -7,7 +7,7 @@ import { Select } from "../../components/ui/Select";
 import { Button } from "../../components/ui/Button";
 import { LoadingState } from "../../components/shared/LoadingState";
 import { ErrorState } from "../../components/shared/ErrorState";
-import { api } from "../../lib/api-client";
+import { api, apiErrorMessage } from "../../lib/api-client";
 
 const ATS = ["greenhouse", "ashby", "lever", "workday", "manual", "unknown"];
 const PRIORITIES = ["P0", "P1", "P2"];
@@ -18,11 +18,7 @@ export default function Companies() {
     queryKey: ["settings", "companies"],
     queryFn: async () => {
       const { data, error } = await api.GET("/api/settings/companies");
-      if (error)
-        throw new Error(
-          (error as { detail?: { msg?: string }[] }).detail?.[0]?.msg ||
-            "load failed",
-        );
+      if (error) throw new Error(apiErrorMessage(error, "load failed"));
       return data!;
     },
   });
@@ -38,11 +34,7 @@ export default function Companies() {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         body: newRow as any,
       });
-      if (error)
-        throw new Error(
-          (error as { detail?: { msg?: string }[] }).detail?.[0]?.msg ||
-            "add failed",
-        );
+      if (error) throw new Error(apiErrorMessage(error, "add failed"));
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["settings", "companies"] });
@@ -63,11 +55,7 @@ export default function Companies() {
         params: { path: { cid: id } },
         body,
       });
-      if (error)
-        throw new Error(
-          (error as { detail?: { msg?: string }[] }).detail?.[0]?.msg ||
-            "update failed",
-        );
+      if (error) throw new Error(apiErrorMessage(error, "update failed"));
     },
     onSuccess: () =>
       qc.invalidateQueries({ queryKey: ["settings", "companies"] }),
@@ -78,11 +66,7 @@ export default function Companies() {
       const { error } = await api.DELETE("/api/settings/companies/{cid}", {
         params: { path: { cid: id } },
       });
-      if (error)
-        throw new Error(
-          (error as { detail?: { msg?: string }[] }).detail?.[0]?.msg ||
-            "delete failed",
-        );
+      if (error) throw new Error(apiErrorMessage(error, "delete failed"));
     },
     onSuccess: () =>
       qc.invalidateQueries({ queryKey: ["settings", "companies"] }),

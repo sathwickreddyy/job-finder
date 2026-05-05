@@ -56,6 +56,8 @@ class ScoredJobOut(BaseModel):
     risks: list[str] = Field(default_factory=list)
     recommended_resume_variant: Optional[str] = None
     next_action: str = ""
+    # Joined application state — null when the user has not tracked the job yet.
+    application: Optional["ApplicationOut"] = None
 
 
 class ApplicationOut(BaseModel):

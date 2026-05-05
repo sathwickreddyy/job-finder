@@ -57,6 +57,7 @@ CREATE TABLE IF NOT EXISTS sources_cfg (
 class ConfigStore:
     def __init__(self, db_path: Path) -> None:
         self.db_path = Path(db_path)
+        self.db_path.parent.mkdir(parents=True, exist_ok=True)
 
     @contextmanager
     def _conn(self) -> Iterator[sqlite3.Connection]:

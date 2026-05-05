@@ -5,7 +5,7 @@ import { Card } from "../../components/ui/Card";
 import { Button } from "../../components/ui/Button";
 import { LoadingState } from "../../components/shared/LoadingState";
 import { ErrorState } from "../../components/shared/ErrorState";
-import { api } from "../../lib/api-client";
+import { api, apiErrorMessage } from "../../lib/api-client";
 
 export default function Sources() {
   const qc = useQueryClient();
@@ -13,11 +13,7 @@ export default function Sources() {
     queryKey: ["settings", "sources"],
     queryFn: async () => {
       const { data, error } = await api.GET("/api/settings/sources");
-      if (error)
-        throw new Error(
-          (error as { detail?: { msg?: string }[] }).detail?.[0]?.msg ||
-            "load failed",
-        );
+      if (error) throw new Error(apiErrorMessage(error, "load failed"));
       return data!;
     },
   });
@@ -31,11 +27,7 @@ export default function Sources() {
   const save = useMutation({
     mutationFn: async () => {
       const { error } = await api.PUT("/api/settings/sources", { body: draft });
-      if (error)
-        throw new Error(
-          (error as { detail?: { msg?: string }[] }).detail?.[0]?.msg ||
-            "save failed",
-        );
+      if (error) throw new Error(apiErrorMessage(error, "save failed"));
     },
     onSuccess: () =>
       qc.invalidateQueries({ queryKey: ["settings", "sources"] }),
@@ -44,11 +36,7 @@ export default function Sources() {
   const reimport = useMutation({
     mutationFn: async () => {
       const { error } = await api.POST("/api/settings/import-yaml");
-      if (error)
-        throw new Error(
-          (error as { detail?: { msg?: string }[] }).detail?.[0]?.msg ||
-            "reimport failed",
-        );
+      if (error) throw new Error(apiErrorMessage(error, "reimport failed"));
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["settings"] });

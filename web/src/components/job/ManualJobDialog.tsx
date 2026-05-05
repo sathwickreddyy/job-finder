@@ -4,7 +4,7 @@ import { Dialog } from "../ui/Dialog";
 import { Input } from "../ui/Input";
 import { Button } from "../ui/Button";
 import { AiPendingBadge } from "./AiPendingBadge";
-import { api } from "../../lib/api-client";
+import { api, apiErrorMessage } from "../../lib/api-client";
 
 export function ManualJobDialog({
   open,
@@ -24,10 +24,7 @@ export function ManualJobDialog({
       const { error } = await api.POST("/api/jobs/manual", {
         body: { role, company, url, notes: notes || null },
       });
-      if (error) {
-        const e = error as { detail?: { msg?: string }[] };
-        throw new Error(e.detail?.[0]?.msg || "add failed");
-      }
+      if (error) throw new Error(apiErrorMessage(error, "add failed"));
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["jobs"] });

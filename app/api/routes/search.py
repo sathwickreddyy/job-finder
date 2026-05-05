@@ -23,16 +23,16 @@ from typing import Any
 from fastapi import APIRouter, Depends
 
 from ...config import Settings
-from ...config_repo import (
-    COMPANIES_YAML,
-    PROFILE_YAML,
-    SCORING_YAML,
-    SOURCES_YAML,
-    ConfigRepository,
-)
+from ...config_repo import ConfigRepository
 from ...dedupe import dedupe_jobs
 from ...scoring import refine_all, score_all
 from ...sources import fetch_all_with_stats
+from ...storage.config_resolver import (
+    resolve_companies,
+    resolve_profile,
+    resolve_scoring,
+    resolve_sources,
+)
 from ...storage.config_store import ConfigStore
 from ...storage.sqlite_store import SQLiteStore
 from ...utils import utcnow_iso
@@ -57,10 +57,10 @@ def search(
     settings: Settings = Depends(get_settings),
 ) -> SearchResponse:
     started = time.monotonic()
-    sources_cfg: dict[str, Any] = repo.load_yaml(SOURCES_YAML)
-    companies_cfg = repo.load_yaml(COMPANIES_YAML)
-    profile = repo.load_yaml(PROFILE_YAML)
-    scoring_cfg = repo.load_yaml(SCORING_YAML)
+    sources_cfg: dict[str, Any] = resolve_sources(cstore, repo)
+    companies_cfg = resolve_companies(cstore, repo)
+    profile = resolve_profile(cstore, repo)
+    scoring_cfg = resolve_scoring(cstore, repo)
 
     if body.sources:
         sources_cfg = {k: v for k, v in sources_cfg.items() if k in set(body.sources)}
@@ -82,7 +82,17 @@ def search(
 
     store.mark_run()
 
-    rows = store.list_scored_with_filters(sort="status_rank", limit=1000, offset=0)
+    # Apply user-supplied location/keyword filters on top of the full scored set.
+    # Collection/scoring stays broad on the backend; the response reflects what
+    # the user actually asked for. (Remote jobs are surfaced for Indian location
+    # filters since source normalizers mark them as location="Remote".)
+    rows = store.list_scored_with_filters(
+        location_contains=body.location or None,
+        q=body.keyword or None,
+        sort="status_rank",
+        limit=1000,
+        offset=0,
+    )
     return SearchResponse(
         jobs=[_to_scored_out(s, a) for s, a in rows],
         source_stats={k: SourceStat(**v) for k, v in stats.items()},

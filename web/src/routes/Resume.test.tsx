@@ -21,6 +21,13 @@ const RESUME_PORTFOLIO = {
   has_docx: false,
 };
 
+const RESUME_LOCAL = {
+  md_source: "local",
+  markdown: "# Sathwick\n\nSenior Backend Engineer",
+  has_pdf: false,
+  has_docx: false,
+};
+
 const RESUME_NONE = {
   md_source: "none",
   markdown: "",
@@ -86,7 +93,26 @@ describe("Resume", () => {
     expect(saveBtn).toBeDisabled();
   });
 
-  it("Save button is enabled after user edits the textarea", async () => {
+  it("Save stays disabled in portfolio mode even after edits (read-only)", async () => {
+    const user = userEvent.setup();
+    render(wrap(<Resume />));
+    const textarea = await screen.findByRole("textbox");
+    await user.click(textarea);
+    await user.keyboard(" edited");
+    const saveBtn = screen.getByRole("button", { name: /^Save$/ });
+    expect(saveBtn).toBeDisabled();
+    expect(screen.getByText(/Read-only/)).toBeInTheDocument();
+  });
+
+  it("Save becomes enabled after user edits in local mode", async () => {
+    vi.stubGlobal(
+      "fetch",
+      async () =>
+        new Response(JSON.stringify(RESUME_LOCAL), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+    );
     const user = userEvent.setup();
     render(wrap(<Resume />));
     const textarea = await screen.findByRole("textbox");

@@ -26,10 +26,11 @@ def test_put_resume_writes_local(client: TestClient, tmp_path: Path, monkeypatch
 
 
 # ── BDD additions ──────────────────────────────────────────────────────
-def test_put_resume_never_writes_to_portfolio_path(tmp_path: Path, monkeypatch) -> None:
-    """BDD: PUT /api/resume must write only to the local resumes/master.md path,
-    never to the portfolio RESUME_MD_PATH. Proves the one-way read contract."""
-    # Seed a portfolio-style resume file and point RESUME_MD_PATH at it.
+def test_put_resume_rejects_save_when_source_is_portfolio(tmp_path: Path, monkeypatch) -> None:
+    """BDD: PUT /api/resume is rejected with 409 when the active source is
+    portfolio — otherwise a successful save would silently no-op (GET keeps
+    reading the unchanged portfolio file). Portfolio path must stay
+    untouched, and no local file is created."""
     portfolio = tmp_path / "portfolio_resume.md"
     original_content = "# Portfolio Resume\n\nuntouched"
     portfolio.write_text(original_content, encoding="utf-8")
@@ -38,7 +39,6 @@ def test_put_resume_never_writes_to_portfolio_path(tmp_path: Path, monkeypatch) 
     monkeypatch.setenv("CONFIG_DIR", str(tmp_path / "config"))
     monkeypatch.setenv("RESUME_DIR", str(tmp_path / "resumes"))
     monkeypatch.setenv("RESUME_MD_PATH", str(portfolio))
-    # chdir into tmp_path so the PUT writes to tmp_path/resumes/master.md, not the real repo.
     monkeypatch.chdir(tmp_path)
 
     from app.api.deps import get_settings
@@ -47,12 +47,13 @@ def test_put_resume_never_writes_to_portfolio_path(tmp_path: Path, monkeypatch) 
     c = TestClient(create_app())
 
     r = c.put("/api/resume", json={"markdown": "# Overwrite attempt"})
-    assert r.status_code == 200
+    assert r.status_code == 409
 
-    # Portfolio path must be untouched.
+    # Portfolio path untouched.
     assert portfolio.read_text(encoding="utf-8") == original_content
-    # Local write must have happened.
-    assert (tmp_path / "resumes" / "master.md").read_text(encoding="utf-8").startswith("# Overwrite attempt")
+    # Local should not be created since write was rejected.
+    local = tmp_path / "resumes" / "master.md"
+    assert not local.exists() or local.read_text() != "# Overwrite attempt"
 
 
 def test_resume_get_reports_portfolio_source_when_env_set(tmp_path: Path, monkeypatch) -> None:
@@ -75,6 +76,73 @@ def test_resume_get_reports_portfolio_source_when_env_set(tmp_path: Path, monkey
     body = c.get("/api/resume").json()
     assert body["md_source"] == "portfolio"
     assert body["markdown"] == "# Portfolio\n\nHello"
+
+
+def test_resume_pdf_download_streams_file(tmp_path: Path, monkeypatch) -> None:
+    """BDD: /api/resume/pdf streams the resolved file with application/pdf
+    when RESUME_PDF_PATH points at a real file."""
+    md = tmp_path / "resume.md"
+    md.write_text("# Resume", encoding="utf-8")
+    pdf = tmp_path / "resume.pdf"
+    pdf.write_bytes(b"%PDF-1.4 fake\n")
+
+    monkeypatch.setenv("SQLITE_DB_PATH", str(tmp_path / "t.db"))
+    monkeypatch.setenv("CONFIG_DIR", str(tmp_path / "config"))
+    monkeypatch.setenv("RESUME_DIR", str(tmp_path / "resumes"))
+    monkeypatch.setenv("RESUME_MD_PATH", str(md))
+    monkeypatch.setenv("RESUME_PDF_PATH", str(pdf))
+    monkeypatch.chdir(tmp_path)
+
+    from app.api.deps import get_settings
+    get_settings.cache_clear()
+    from app.api import create_app
+    c = TestClient(create_app())
+
+    r = c.get("/api/resume/pdf")
+    assert r.status_code == 200
+    assert r.headers["content-type"] == "application/pdf"
+    assert r.content.startswith(b"%PDF")
+
+
+def test_resume_pdf_404_when_missing(tmp_path: Path, monkeypatch) -> None:
+    """BDD: /api/resume/pdf returns 404 when the file is not configured or
+    does not exist, so the UI can disable the button cleanly."""
+    monkeypatch.setenv("SQLITE_DB_PATH", str(tmp_path / "t.db"))
+    monkeypatch.setenv("CONFIG_DIR", str(tmp_path / "config"))
+    monkeypatch.setenv("RESUME_DIR", str(tmp_path / "resumes"))
+    monkeypatch.delenv("RESUME_PDF_PATH", raising=False)
+    monkeypatch.chdir(tmp_path)
+
+    from app.api.deps import get_settings
+    get_settings.cache_clear()
+    from app.api import create_app
+    c = TestClient(create_app())
+
+    r = c.get("/api/resume/pdf")
+    assert r.status_code == 404
+
+
+def test_resume_docx_download_streams_file(tmp_path: Path, monkeypatch) -> None:
+    md = tmp_path / "resume.md"
+    md.write_text("# Resume", encoding="utf-8")
+    docx = tmp_path / "resume.docx"
+    docx.write_bytes(b"PKfake-docx\n")
+
+    monkeypatch.setenv("SQLITE_DB_PATH", str(tmp_path / "t.db"))
+    monkeypatch.setenv("CONFIG_DIR", str(tmp_path / "config"))
+    monkeypatch.setenv("RESUME_DIR", str(tmp_path / "resumes"))
+    monkeypatch.setenv("RESUME_MD_PATH", str(md))
+    monkeypatch.setenv("RESUME_DOCX_PATH", str(docx))
+    monkeypatch.chdir(tmp_path)
+
+    from app.api.deps import get_settings
+    get_settings.cache_clear()
+    from app.api import create_app
+    c = TestClient(create_app())
+
+    r = c.get("/api/resume/docx")
+    assert r.status_code == 200
+    assert "wordprocessingml" in r.headers["content-type"]
 
 
 def test_resume_has_pdf_flag_reflects_file_presence(tmp_path: Path, monkeypatch) -> None:

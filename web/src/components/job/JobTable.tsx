@@ -1,17 +1,8 @@
 import { useState } from "react";
-import { JobTableRow } from "./JobTableRow";
+import { JobTableRow, type ScoredJobRow } from "./JobTableRow";
 import { EmptyState } from "../shared/EmptyState";
 
-type Row = Parameters<typeof JobTableRow>[0]["scored"];
-type App = Parameters<typeof JobTableRow>[0]["application"];
-
-export function JobTable({
-  rows,
-  applicationsByJobId = {},
-}: {
-  rows: Row[];
-  applicationsByJobId?: Record<string, App>;
-}) {
+export function JobTable({ rows }: { rows: ScoredJobRow[] }) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   if (rows.length === 0) {
@@ -45,7 +36,6 @@ export function JobTable({
             <JobTableRow
               key={scored.job.id}
               scored={scored}
-              application={applicationsByJobId[scored.job.id] || null}
               expanded={expanded.has(scored.job.id)}
               onToggle={() => toggle(scored.job.id)}
             />

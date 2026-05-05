@@ -12,19 +12,12 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Annotated, Optional
+from typing import Annotated
 
 import typer
 
 from .config import Settings, load_settings
-from .config_repo import (
-    COMPANIES_YAML,
-    MANUAL_JOBS_YAML,
-    PROFILE_YAML,
-    SCORING_YAML,
-    SOURCES_YAML,
-    build_config_repository,
-)
+from .config_repo import build_config_repository
 from .dedupe import dedupe_jobs
 from .integrations import notion as notion_int
 from .integrations import outlook as outlook_int
@@ -35,6 +28,13 @@ from .resume import tailor as tailor_fn
 from .scoring import refine_all, score_all
 from .sources import fetch_all
 from .storage import build_store, export_all
+from .storage.config_resolver import (
+    resolve_companies,
+    resolve_profile,
+    resolve_scoring,
+    resolve_sources,
+)
+from .storage.config_store import ConfigStore
 from .utils import get_logger
 
 app = typer.Typer(add_completion=False, no_args_is_help=True, help="job-search-agent CLI")
@@ -45,11 +45,19 @@ log = get_logger("cli")
 # Shared helpers
 # ---------------------------------------------------------------------------
 def _load_all_config(settings: Settings):
+    """Resolve runtime config for the CLI pipeline.
+
+    Prefers ConfigStore (SQLite, written by the Settings UI) and falls back to
+    YAML via ConfigRepository when a table is empty. This is what makes
+    ``import-config`` + UI edits actually show up in ``run-daily``/``collect``.
+    """
     repo = build_config_repository(settings)
-    profile = repo.load_yaml(PROFILE_YAML)
-    companies = repo.load_yaml(COMPANIES_YAML)
-    scoring = repo.load_yaml(SCORING_YAML)
-    sources = repo.load_yaml(SOURCES_YAML)
+    cstore = ConfigStore(settings.sqlite_db_path)
+    cstore.init_schema()
+    profile = resolve_profile(cstore, repo)
+    companies = resolve_companies(cstore, repo)
+    scoring = resolve_scoring(cstore, repo)
+    sources = resolve_sources(cstore, repo)
     # manual_jobs is loaded inside ManualSource on demand
     return repo, profile, companies, scoring, sources
 

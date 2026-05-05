@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from app.config import Settings
-from app.resume.source import ResumeBundle, read_resume
+from app.resume.source import read_resume
 
 
 @pytest.fixture

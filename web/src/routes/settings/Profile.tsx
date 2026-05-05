@@ -5,7 +5,7 @@ import { Input } from "../../components/ui/Input";
 import { Button } from "../../components/ui/Button";
 import { LoadingState } from "../../components/shared/LoadingState";
 import { ErrorState } from "../../components/shared/ErrorState";
-import { api } from "../../lib/api-client";
+import { api, apiErrorMessage } from "../../lib/api-client";
 
 export default function Profile() {
   const qc = useQueryClient();
@@ -13,11 +13,7 @@ export default function Profile() {
     queryKey: ["settings", "profile"],
     queryFn: async () => {
       const { data, error } = await api.GET("/api/settings/profile");
-      if (error)
-        throw new Error(
-          (error as { detail?: { msg?: string }[] }).detail?.[0]?.msg ||
-            "load failed",
-        );
+      if (error) throw new Error(apiErrorMessage(error, "load failed"));
       return data!;
     },
   });
@@ -33,11 +29,7 @@ export default function Profile() {
       const { error } = await api.PUT("/api/settings/profile", {
         body: draft,
       });
-      if (error)
-        throw new Error(
-          (error as { detail?: { msg?: string }[] }).detail?.[0]?.msg ||
-            "save failed",
-        );
+      if (error) throw new Error(apiErrorMessage(error, "save failed"));
     },
     onSuccess: () =>
       qc.invalidateQueries({ queryKey: ["settings", "profile"] }),

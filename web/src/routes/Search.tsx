@@ -8,14 +8,17 @@ import { JobTable } from "../components/job/JobTable";
 import { SourceStatsBar } from "../components/job/SourceStatsBar";
 import { ManualJobDialog } from "../components/job/ManualJobDialog";
 import { ErrorState } from "../components/shared/ErrorState";
-import { api } from "../lib/api-client";
+import { api, apiErrorMessage } from "../lib/api-client";
+import type { components } from "../lib/api-types";
+
+type SearchResponse = components["schemas"]["SearchResponse"];
 
 export default function Search() {
   const [location, setLocation] = useState("");
   const [keyword, setKeyword] = useState("");
   const [manualOpen, setManualOpen] = useState(false);
   const [elapsed, setElapsed] = useState(0);
-  const [result, setResult] = useState<any | null>(null);
+  const [result, setResult] = useState<SearchResponse | null>(null);
   const [cancelError, setCancelError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const qc = useQueryClient();
@@ -30,10 +33,7 @@ export default function Search() {
           body: { location: location || undefined, keyword: keyword || undefined, use_llm: true },
           signal: abortRef.current.signal,
         });
-        if (error) {
-          const e = error as { detail?: { msg?: string }[] };
-          throw new Error(e.detail?.[0]?.msg || "search failed");
-        }
+        if (error) throw new Error(apiErrorMessage(error, "search failed"));
         return data!;
       } finally {
         clearInterval(timer);

@@ -4,27 +4,25 @@ import { ExternalLink, Sparkles } from "lucide-react";
 import { Button } from "../ui/Button";
 import { Dialog } from "../ui/Dialog";
 import { AiPendingBadge } from "./AiPendingBadge";
-import { api } from "../../lib/api-client";
+import { api, apiErrorMessage } from "../../lib/api-client";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import type { components } from "../../lib/api-types";
 
-type Scored = {
-  job: { id: string; url: string; description: string | null };
-  matched_skills: string[];
-  missing_skills: string[];
-  reasons: string[];
-  recommended_resume_variant: string | null;
-};
+type Scored = components["schemas"]["ScoredJobOut"];
 
 export function JobTableExpandedRow({ scored }: { scored: Scored }) {
   const [tailor, setTailor] = useState<{ markdown: string; ai_pending: boolean } | null>(null);
+  const matchedSkills = scored.matched_skills ?? [];
+  const missingSkills = scored.missing_skills ?? [];
+  const reasons = scored.reasons ?? [];
 
   const run = useMutation({
     mutationFn: async () => {
       const { data, error } = await api.POST("/api/jobs/{job_id}/tailor", {
         params: { path: { job_id: scored.job.id } },
       });
-      if (error) throw new Error(error.detail?.[0]?.msg || "tailor failed");
+      if (error) throw new Error(apiErrorMessage(error, "tailor failed"));
       return data!;
     },
     onSuccess: (d) => setTailor({ markdown: d.markdown, ai_pending: d.ai_pending }),
@@ -35,11 +33,11 @@ export function JobTableExpandedRow({ scored }: { scored: Scored }) {
       <div className="flex flex-wrap gap-x-6 gap-y-2">
         <div>
           <span className="text-success font-medium">Fits:</span>{" "}
-          <span className="text-text-muted">{scored.matched_skills.join(", ") || "—"}</span>
+          <span className="text-text-muted">{matchedSkills.join(", ") || "—"}</span>
         </div>
         <div>
           <span className="text-danger font-medium">Gaps:</span>{" "}
-          <span className="text-text-muted">{scored.missing_skills.join(", ") || "—"}</span>
+          <span className="text-text-muted">{missingSkills.join(", ") || "—"}</span>
         </div>
         {scored.recommended_resume_variant && (
           <div>
@@ -48,8 +46,8 @@ export function JobTableExpandedRow({ scored }: { scored: Scored }) {
           </div>
         )}
       </div>
-      {scored.reasons.length > 0 && (
-        <p className="text-text-muted text-xs">{scored.reasons.join(" · ")}</p>
+      {reasons.length > 0 && (
+        <p className="text-text-muted text-xs">{reasons.join(" · ")}</p>
       )}
       <div className="flex gap-2">
         <Button size="sm" variant="primary" onClick={() => run.mutate()} disabled={run.isPending}>

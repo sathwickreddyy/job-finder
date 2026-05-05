@@ -5,38 +5,21 @@ import { FitScoreCell } from "./FitScoreCell";
 import { StatusCell } from "./StatusCell";
 import { JobTableExpandedRow } from "./JobTableExpandedRow";
 import type { ApplicationStatus } from "../../lib/constants";
+import type { components } from "../../lib/api-types";
 
-type ScoredJobRow = {
-  job: {
-    id: string;
-    role: string;
-    company: string;
-    url: string;
-    location: string | null;
-    source: string;
-    description: string | null;
-  };
-  fit_score: number;
-  priority: "P0" | "P1" | "P2" | "Ignore";
-  matched_skills: string[];
-  missing_skills: string[];
-  reasons: string[];
-  recommended_resume_variant: string | null;
-};
+export type ScoredJobRow = components["schemas"]["ScoredJobOut"];
 
 export function JobTableRow({
   scored,
-  application,
   expanded,
   onToggle,
 }: {
   scored: ScoredJobRow;
-  application: { status: ApplicationStatus; next_interview_at: string | null } | null;
   expanded: boolean;
   onToggle: () => void;
 }) {
   const Chevron = expanded ? ChevronDown : ChevronRight;
-  const status = (application?.status ?? "Found") as ApplicationStatus;
+  const status = (scored.application?.status ?? "Found") as ApplicationStatus;
 
   return (
     <>
@@ -71,7 +54,7 @@ export function JobTableRow({
           <StatusCell
             jobId={scored.job.id}
             value={status}
-            nextInterviewAt={application?.next_interview_at ?? null}
+            nextInterviewAt={scored.application?.next_interview_at ?? null}
           />
         </td>
       </tr>

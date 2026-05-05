@@ -22,10 +22,12 @@ const ROW = {
   },
   fit_score: 85,
   priority: "P0" as const,
+  level_match: "Senior",
   matched_skills: ["python", "fastapi"],
   missing_skills: ["kafka"],
   reasons: ["matches backend"],
   recommended_resume_variant: "master",
+  next_action: "Apply today",
 };
 
 describe("JobTable", () => {

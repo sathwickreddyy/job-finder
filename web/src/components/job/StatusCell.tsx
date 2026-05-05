@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Select } from "../ui/Select";
-import { api } from "../../lib/api-client";
+import { api, apiErrorMessage } from "../../lib/api-client";
 import { ALL_STATUSES, type ApplicationStatus } from "../../lib/constants";
 import { InterviewSchedulePopover } from "./InterviewSchedulePopover";
 
@@ -18,6 +18,13 @@ export function StatusCell({
   const [local, setLocal] = useState<ApplicationStatus>(value);
   const [pickerOpen, setPickerOpen] = useState(false);
 
+  // Re-sync when the parent sends a new value (e.g. after a dashboard refresh
+  // or another tab/device updated status). Without this, local state goes
+  // stale and the dropdown disagrees with what the server actually has.
+  useEffect(() => {
+    setLocal(value);
+  }, [value]);
+
   const patch = useMutation({
     mutationFn: async (body: {
       status: ApplicationStatus;
@@ -28,7 +35,11 @@ export function StatusCell({
         params: { path: { job_id: jobId } },
         body,
       });
-      if (error) throw new Error(error.detail?.[0]?.msg || "update failed");
+      if (error) throw new Error(apiErrorMessage(error, "update failed"));
+    },
+    onError: () => {
+      // Roll the dropdown back so the user sees we didn't commit.
+      setLocal(value);
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["jobs"] });

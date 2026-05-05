@@ -1,24 +1,28 @@
 ---
-name: Frontend API error extraction pattern
-description: openapi-fetch error shape is HTTPValidationError not the custom envelope; plan's error.error?.message is a type error — use error.detail?.[0]?.msg instead
+name: Frontend API error extraction helper
+description: Use apiErrorMessage() from web/src/lib/api-client.ts to pull human-readable messages from API errors; handles envelope + HTTPValidationError + bare detail
 type: reference
+originSessionId: 7541074f-e90a-4c55-be66-749ef29632ce
 ---
+Use `apiErrorMessage(error, fallback)` from `web/src/lib/api-client.ts` for every `if (error) throw new Error(...)` path. The helper accepts the unknown `error` shape from openapi-fetch and tries three shapes in order:
 
-The FastAPI backend in this project installs a uniform error envelope via `app/api/errors.py` (returns `{error: {code, message, details}}`), but the **OpenAPI schema** that `openapi-typescript` regenerates from does NOT declare this shape per route — it only shows FastAPI's default 422 `HTTPValidationError` response (`{detail: ValidationError[]}`).
+1. **Backend envelope** (from `app/api/errors.py`): `{ error: { code, message, details } }` — the canonical shape for runtime HTTPException and unhandled 500s.
+2. **FastAPI validation error**: `{ detail: [{ msg, ... }] }` — what 422s look like.
+3. **Bare FastAPI detail string**: `{ detail: "..." }` — occasionally surfaces when a response precedes the error-handler middleware.
 
-Result: when frontend code does `const { data, error } = await api.PATCH(...)`, the TypeScript type of `error` is the `HTTPValidationError` shape, and `error.error?.message` is a type error that breaks `npm run build`.
+Falls back to the caller-supplied string if none match.
 
-**The extraction pattern that works today:**
+**Use:**
 
 ```ts
+import { api, apiErrorMessage } from "../lib/api-client";
+
 const { data, error } = await api.POST("/api/...", { body: {...} });
-if (error) {
-  throw new Error(error.detail?.[0]?.msg || "operation failed");
-}
+if (error) throw new Error(apiErrorMessage(error, "operation failed"));
 ```
 
-**Why:** `error.detail` on a 422 is a list of ValidationError objects, each with `msg`. For non-422 errors (e.g., a custom 404 raised via `HTTPException`), the runtime response body is `{error: {code, message, details}}` per `app/api/errors.py` — but the TS type still says `HTTPValidationError`, so we fall back to a static string. The fallback is user-visible, not user-facing — the actual backend message is logged or reachable via the envelope on the wire.
+**Do NOT** write `error.detail?.[0]?.msg` directly — it misses the envelope shape and returns the fallback for every 500 raised via `HTTPException`, which is what the user actually cares about seeing.
 
-**Do NOT follow the plan's `error.error?.message` pattern** — it's a type error against the current generated types.
+**Do NOT** write `error.error?.message` directly either — generated `api-types.ts` types `error` as `HTTPValidationError`, so that's a TS build error.
 
-**Future fix (out of scope for the current plan):** declare `responses={404: {"model": ErrorResponse}, 500: {"model": ErrorResponse}}` on each route so the OpenAPI schema matches the runtime envelope, and rebuild `api-types.ts`. Then `error.error?.message` will type-check correctly. Plan Tasks 21-28 should keep using the `detail?.[0]?.msg` pattern until that fix lands.
+History: the first pass only handled `detail?.[0]?.msg` because the backend envelope wasn't wired up yet. Once `install_error_handlers` landed, every call site needed to also read the envelope shape. Centralizing in `apiErrorMessage` keeps the two shapes in one place.

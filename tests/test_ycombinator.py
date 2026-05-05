@@ -5,7 +5,6 @@ import logging
 from pathlib import Path
 
 import httpx
-import pytest
 
 from app.sources.ycombinator import YCombinatorSource
 

@@ -30,21 +30,24 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Pull private config (optional)
-        if: ${{ env.CONFIG_SOURCE_URL != '' }}
-        env:
-          CONFIG_SOURCE_URL: ${{ secrets.CONFIG_SOURCE_URL }}
-          RESUME_SOURCE_URL: ${{ secrets.RESUME_SOURCE_URL }}
+      - name: Configure remote config backend (optional)
+        # Use `secrets.*` directly in the `if:` — env vars from later step
+        # `env:` blocks aren't visible to this step's conditional.
+        if: ${{ secrets.CONFIG_SOURCE_URL != '' }}
         run: |
           echo "Remote config URL configured — CONFIG_BACKEND=http will be used."
           echo "CONFIG_BACKEND=http" >> $GITHUB_ENV
 
       - name: Init DB + import config + run daily
         env:
+          CONFIG_BACKEND: ${{ secrets.CONFIG_SOURCE_URL != '' && 'http' || 'local' }}
+          CONFIG_SOURCE_URL: ${{ secrets.CONFIG_SOURCE_URL }}
+          RESUME_SOURCE_URL: ${{ secrets.RESUME_SOURCE_URL }}
           NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
           NOTION_JOBS_DATABASE_ID: ${{ secrets.NOTION_JOBS_DATABASE_ID }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          LLM_MODEL: ${{ secrets.LLM_MODEL }}
         run: |
           python -m app.main init-db
           python -m app.main import-config

@@ -8,7 +8,7 @@ import { Button } from "../components/ui/Button";
 import { Badge } from "../components/ui/Badge";
 import { LoadingState } from "../components/shared/LoadingState";
 import { ErrorState } from "../components/shared/ErrorState";
-import { api } from "../lib/api-client";
+import { api, apiErrorMessage } from "../lib/api-client";
 
 export default function Resume() {
   const qc = useQueryClient();
@@ -16,11 +16,7 @@ export default function Resume() {
     queryKey: ["resume"],
     queryFn: async () => {
       const { data, error } = await api.GET("/api/resume");
-      if (error)
-        throw new Error(
-          (error as { detail?: { msg?: string }[] }).detail?.[0]?.msg ||
-            "load failed",
-        );
+      if (error) throw new Error(apiErrorMessage(error, "load failed"));
       return data!;
     },
   });
@@ -35,11 +31,7 @@ export default function Resume() {
       const { error } = await api.PUT("/api/resume", {
         body: { markdown: draft },
       });
-      if (error)
-        throw new Error(
-          (error as { detail?: { msg?: string }[] }).detail?.[0]?.msg ||
-            "save failed",
-        );
+      if (error) throw new Error(apiErrorMessage(error, "save failed"));
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["resume"] }),
   });
@@ -54,6 +46,7 @@ export default function Resume() {
       : d.md_source === "local"
         ? "amber"
         : "red";
+  const readOnly = d.md_source === "portfolio";
 
   return (
     <div className="space-y-4">
@@ -85,12 +78,30 @@ export default function Resume() {
             size="sm"
             variant="primary"
             onClick={() => save.mutate()}
-            disabled={save.isPending || draft === d.markdown}
+            disabled={save.isPending || draft === d.markdown || readOnly}
+            title={
+              readOnly
+                ? "Resume source is portfolio (read-only) — edit the portfolio repo to make changes."
+                : undefined
+            }
           >
             <Save className="w-3 h-3" /> {save.isPending ? "Saving…" : "Save"}
           </Button>
         </div>
       </div>
+
+      {readOnly && (
+        <div className="bg-accent/10 border border-accent/30 rounded-md p-3 text-xs text-accent">
+          Read-only: the active resume is served from the portfolio repo.
+          Edit the markdown there (or unset <code>RESUME_MD_PATH</code>) to
+          enable in-app saves.
+        </div>
+      )}
+      {save.isError && (
+        <div className="bg-danger/10 border border-danger/30 rounded-md p-3 text-xs text-danger">
+          {(save.error as Error).message}
+        </div>
+      )}
 
       <div className="grid grid-cols-2 gap-4">
         <Card className="p-4">

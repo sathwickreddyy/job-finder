@@ -19,20 +19,21 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from ...config import Settings
-from ...config_repo import (
-    COMPANIES_YAML,
-    PROFILE_YAML,
-    SCORING_YAML,
-    ConfigRepository,
-)
+from ...config_repo import ConfigRepository
 from ...dedupe import dedupe_jobs
 from ...models import ApplicationStatus, Job, ScoredJob
 from ...resume.source import read_resume
 from ...resume.tailor import tailor as run_tailor
 from ...scoring.rule_scorer import score_job
+from ...storage.config_resolver import (
+    resolve_companies,
+    resolve_profile,
+    resolve_scoring,
+)
+from ...storage.config_store import ConfigStore
 from ...storage.sqlite_store import SQLiteStore
 from ...utils import stable_job_id
-from ..deps import get_config_repo, get_settings, get_store
+from ..deps import get_config_repo, get_config_store, get_settings, get_store
 from ..schemas import (
     ApplicationOut,
     JobDetailOut,
@@ -47,12 +48,14 @@ router = APIRouter(tags=["jobs"])
 
 
 def _to_scored_out(scored: ScoredJob, app: Optional[dict]) -> ScoredJobOut:
-    """Build a ScoredJobOut from a ScoredJob.
-
-    `app` is unused today but kept in the signature so downstream callers
-    (Tasks 10–12) can pass the joined application row without a second
-    query — future refactors may surface application fields into the
-    row-level DTO for the Tracker table."""
+    """Build a ScoredJobOut from a ScoredJob plus the optional joined
+    applications row. The application is embedded on the row so the Tracker
+    table can render Status without a second API call."""
+    app_out = (
+        ApplicationOut(**{k: v for k, v in app.items() if k != "job_id"})
+        if app
+        else None
+    )
     return ScoredJobOut(
         job=JobOut.model_validate(scored.job.model_dump()),
         fit_score=scored.fit_score,
@@ -64,6 +67,7 @@ def _to_scored_out(scored: ScoredJob, app: Optional[dict]) -> ScoredJobOut:
         risks=scored.risks,
         recommended_resume_variant=scored.recommended_resume_variant,
         next_action=scored.next_action,
+        application=app_out,
     )
 
 
@@ -143,6 +147,7 @@ def add_manual_job(
     body: ManualJobIn,
     store: SQLiteStore = Depends(get_store),
     repo: ConfigRepository = Depends(get_config_repo),
+    cstore: ConfigStore = Depends(get_config_store),
 ) -> JobDetailOut:
     """Insert a manually-entered job, score it, and return the detail blob.
 
@@ -162,9 +167,9 @@ def add_manual_job(
     )
     store.upsert_jobs(dedupe_jobs([job]))
 
-    profile = repo.load_yaml(PROFILE_YAML)
-    scoring = repo.load_yaml(SCORING_YAML)
-    companies = repo.load_yaml(COMPANIES_YAML)
+    profile = resolve_profile(cstore, repo)
+    scoring = resolve_scoring(cstore, repo)
+    companies = resolve_companies(cstore, repo)
     scored = score_job(job, profile, scoring, companies)
     store.upsert_scored_jobs([scored])
 
@@ -180,6 +185,7 @@ def tailor_job(
     job_id: str,
     store: SQLiteStore = Depends(get_store),
     repo: ConfigRepository = Depends(get_config_repo),
+    cstore: ConfigStore = Depends(get_config_store),
     settings: Settings = Depends(get_settings),
 ) -> TailorOut:
     """Generate a tailor sheet for one scored job.
@@ -197,7 +203,7 @@ def tailor_job(
         raise HTTPException(404, detail=f"job {job_id} not scored yet")
 
     bundle = read_resume(settings)
-    profile = repo.load_yaml(PROFILE_YAML)
+    profile = resolve_profile(cstore, repo)
     markdown = run_tailor(
         resume_text=(bundle.markdown or ""),
         scored=scored_match,

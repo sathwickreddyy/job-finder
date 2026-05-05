@@ -4,7 +4,7 @@ import { cn } from "../ui/utils";
 export function SourceStatsBar({
   stats,
 }: {
-  stats: Record<string, { fetched: number; kept: number; duration_ms: number; error: string | null }>;
+  stats: Record<string, { fetched: number; kept: number; duration_ms: number; error?: string | null }>;
 }) {
   const entries = Object.entries(stats);
   if (entries.length === 0) return null;

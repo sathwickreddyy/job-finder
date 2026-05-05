@@ -86,4 +86,28 @@ describe("Dashboard", () => {
       expect(screen.getByText(/internal error/)).toBeInTheDocument(),
     );
   });
+
+  it("error state reads the backend envelope {error:{message}}", async () => {
+    vi.stubGlobal(
+      "fetch",
+      async () =>
+        new Response(
+          JSON.stringify({
+            error: {
+              code: "internal",
+              message: "envelope message shown",
+              details: {},
+            },
+          }),
+          {
+            status: 500,
+            headers: { "content-type": "application/json" },
+          },
+        ),
+    );
+    render(wrap(<Dashboard />));
+    await waitFor(() =>
+      expect(screen.getByText(/envelope message shown/)).toBeInTheDocument(),
+    );
+  });
 });

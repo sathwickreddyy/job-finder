@@ -87,7 +87,7 @@ def _level_points(desc: str, role: str, profile: dict) -> tuple[int, str, list[s
 
 
 def _location_points(job: Job, profile: dict, cfg: dict) -> tuple[int, list[str]]:
-    preferred = [normalize_text(l) for l in profile.get("preferred_locations", [])]
+    preferred = [normalize_text(loc_pref) for loc_pref in profile.get("preferred_locations", [])]
     remote_prefs = [normalize_text(r) for r in (profile.get("remote_preferences") or [])]
     location_boosts: dict = cfg.get("location_boosts") or {}
     reasons: list[str] = []

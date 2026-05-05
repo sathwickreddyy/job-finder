@@ -3,7 +3,7 @@ import { Card } from "../components/ui/Card";
 import { JobTable } from "../components/job/JobTable";
 import { LoadingState } from "../components/shared/LoadingState";
 import { ErrorState } from "../components/shared/ErrorState";
-import { api } from "../lib/api-client";
+import { api, apiErrorMessage } from "../lib/api-client";
 import { formatRelative, formatDate } from "../lib/format";
 
 export default function Dashboard() {
@@ -11,10 +11,7 @@ export default function Dashboard() {
     queryKey: ["dashboard"],
     queryFn: async () => {
       const { data, error } = await api.GET("/api/dashboard");
-      if (error) {
-        const e = error as { detail?: { msg?: string }[] };
-        throw new Error(e.detail?.[0]?.msg || "load failed");
-      }
+      if (error) throw new Error(apiErrorMessage(error, "load failed"));
       return data!;
     },
   });
@@ -71,7 +68,7 @@ export default function Dashboard() {
 
       <div>
         <h3 className="text-sm font-semibold mb-3">Top shortlist</h3>
-        <JobTable rows={d.shortlist_top as any} />
+        <JobTable rows={d.shortlist_top} />
       </div>
     </div>
   );
