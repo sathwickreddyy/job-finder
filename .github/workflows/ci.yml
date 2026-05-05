@@ -43,16 +43,36 @@ jobs:
         run: npm install
       - name: Regenerate types from live API
         run: |
+          set -euo pipefail
           python -m app.api.main &
           APIPID=$!
+          trap "kill $APIPID 2>/dev/null || true" EXIT
+          # Wait up to ~10s for the API to come up; fail fast if it doesn't.
           for i in 1 2 3 4 5 6 7 8 9 10; do
-            curl -fsS http://localhost:47131/api/health && break || sleep 1
+            if curl -fsS http://localhost:47131/api/health >/dev/null; then
+              break
+            fi
+            sleep 1
+            if [ $i -eq 10 ]; then
+              echo "::error::API did not become healthy in 10s"
+              exit 1
+            fi
           done
           cd web && npx openapi-typescript http://localhost:47131/openapi.json -o src/lib/api-types.ts
-          kill $APIPID || true
+          # Surface drift between committed api-types.ts and the live schema.
+          # Committing stale types was silent before; now CI fails if a route
+          # change wasn't accompanied by a type regen.
+          if ! git diff --quiet -- src/lib/api-types.ts; then
+            echo "::error::src/lib/api-types.ts is stale — run 'make types' locally and commit the result"
+            git --no-pager diff -- src/lib/api-types.ts
+            exit 1
+          fi
       - name: Typecheck + build
         working-directory: web
         run: npm run build
+      - name: Frontend lint
+        working-directory: web
+        run: npm run lint
       - name: Frontend tests
         working-directory: web
         run: npm test
