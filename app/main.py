@@ -135,7 +135,13 @@ def shortlist() -> None:
 # sync-notion
 # ---------------------------------------------------------------------------
 @app.command("sync-notion", help="Sync P0/P1/P2 jobs to Notion (skipped if creds missing).")
-def sync_notion() -> None:
+def sync_notion(
+    allow_partial: bool = typer.Option(
+        False,
+        "--allow-partial",
+        help="Exit 0 even if some pages failed. Default: any failure is a hard error.",
+    ),
+) -> None:
     settings = load_settings()
     store = build_store(settings)
     scored = store.get_scored_jobs(
@@ -143,6 +149,11 @@ def sync_notion() -> None:
     )
     result = notion_int.sync_scored_jobs(scored, settings, store)
     typer.echo(f"notion: {result}")
+    # Schema mismatch / auth failure → hard error, even under --allow-partial.
+    if result.get("error"):
+        raise typer.Exit(code=2)
+    if not allow_partial and result.get("failed", 0) > 0:
+        raise typer.Exit(code=1)
 
 
 # ---------------------------------------------------------------------------
@@ -226,17 +237,24 @@ def run_daily(
     write_shortlist(store.get_scored_jobs(), path)
 
     # 4. Optional Notion sync
+    notion_result: dict = {}
     if settings.notion_enabled:
         targets = store.get_scored_jobs(
             priorities=[Priority.P0.value, Priority.P1.value, Priority.P2.value]
         )
-        result = notion_int.sync_scored_jobs(targets, settings, store)
-        log.info("run-daily: notion=%s", result)
+        notion_result = notion_int.sync_scored_jobs(targets, settings, store)
+        log.info("run-daily: notion=%s", notion_result)
     else:
         log.info("run-daily: notion skipped (no creds)")
 
     store.mark_run()
     typer.echo(f"run-daily complete: {counts} — shortlist at {path}")
+
+    # Surface Notion failures as a nonzero exit so the scheduler shows red.
+    if notion_result.get("error"):
+        raise typer.Exit(code=2)
+    if notion_result.get("failed", 0) > 0:
+        raise typer.Exit(code=1)
 
 
 # ---------------------------------------------------------------------------
