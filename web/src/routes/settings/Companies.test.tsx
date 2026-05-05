@@ -105,4 +105,63 @@ describe("Companies settings", () => {
     );
     expect(screen.getByText("razorpay")).toBeInTheDocument();
   });
+
+  it("expanding a row reveals token, preferred_locations, notes editors", async () => {
+    const user = userEvent.setup();
+    render(wrap(<Companies />));
+    await waitFor(() => expect(screen.getByText("Razorpay")).toBeInTheDocument());
+
+    // Razorpay (lever) → expand
+    const expandBtns = screen.getAllByRole("button", { name: /Expand/ });
+    await user.click(expandBtns[0]);
+
+    // Lever → company_slug label is visible, value is the placeholder + input populated
+    expect(await screen.findByText(/Lever company_slug/)).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("company_slug")).toHaveValue("razorpay");
+    expect(
+      screen.getByText(/Preferred locations/i),
+    ).toBeInTheDocument();
+  });
+
+  it("PATCHes board_token on blur when edited in expanded row", async () => {
+    const patches: { id: string; body: Record<string, unknown> }[] = [];
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {
+      // openapi-fetch passes a Request, not (url, init). Read both from it.
+      const req = input instanceof Request ? input : new Request(urlOf(input));
+      const url = req.url;
+      const method = req.method.toUpperCase();
+      if (method === "GET" && url.endsWith("/api/settings/companies")) {
+        return new Response(JSON.stringify(FIXTURE), { status: 200 });
+      }
+      if (method === "PATCH" && url.includes("/api/settings/companies/")) {
+        const id = url.split("/").pop() ?? "";
+        const body = await req.text();
+        patches.push({ id, body: JSON.parse(body || "{}") });
+        return new Response('{"ok":true}', { status: 200 });
+      }
+      return new Response("{}", { status: 200 });
+    });
+
+    const user = userEvent.setup();
+    render(wrap(<Companies />));
+    await waitFor(() => expect(screen.getByText("Rubrik")).toBeInTheDocument());
+
+    // Rubrik (greenhouse) is the second row → expand
+    const expandBtns = screen.getAllByRole("button", { name: /Expand/ });
+    await user.click(expandBtns[1]);
+
+    const tokenInput = await screen.findByPlaceholderText("board_token");
+    await user.clear(tokenInput);
+    await user.type(tokenInput, "rubrik-2");
+    // Trigger blur by tabbing out
+    await user.tab();
+
+    await waitFor(() =>
+      expect(
+        patches.some(
+          (p) => p.id === "2" && p.body.board_token === "rubrik-2",
+        ),
+      ).toBe(true),
+    );
+  });
 });
