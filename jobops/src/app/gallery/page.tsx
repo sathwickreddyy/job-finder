@@ -45,13 +45,13 @@ export default function GalleryPage() {
         <section id="buttons" className="scroll-mt-8">
           <h2>Button colors</h2>
           <p className="mb-5 text-muted-foreground">
-            Neutral surfaces with green actions, yellow review, and red decline controls.
+            Neutral surfaces with Google-blue actions, yellow review, and red decline controls.
           </p>
           <div className="grid gap-4 sm:grid-cols-3">
             <div className="rounded-card border border-border bg-card p-5">
               <p className="mb-4 text-sm text-muted-foreground">Primary action</p>
               <Button
-                onClick={() => setButtonPreview("Green primary button selected — preview only.")}
+                onClick={() => setButtonPreview("Blue primary button selected — preview only.")}
               >
                 Continue
               </Button>

@@ -1,12 +1,12 @@
-/* Google-style neutral surfaces and green/red/yellow controls; no blue accents. */
+/* Google-style neutral surfaces with blue primary, red decline and yellow review controls. */
 :root {
   color-scheme: dark;
   --surface: #202124;
   --surface-container-low: #292a2d;
   --surface-container: #242528;
   --surface-container-high: #303134;
-  --primary-container: #173e26;
-  --on-primary-container: #a8dab5;
+  --primary-container: #233652;
+  --on-primary-container: #d2e3fc;
   --secondary-container: #3c4043;
   --on-secondary-container: #e8eaed;
   --background: var(--surface);
@@ -19,10 +19,10 @@
   --muted-foreground: #bdc1c6;
   --border: #5f6368;
   --input: #9aa0a6;
-  --primary: #81c995;
-  --primary-hover: #a8dab5;
-  --primary-foreground: #0d2818;
-  --link: #81c995;
+  --primary: #8ab4f8;
+  --primary-hover: #aecbfa;
+  --primary-foreground: #202124;
+  --link: #8ab4f8;
   --accent-soft: var(--primary-container);
   --amber: #fdd663;
   --amber-soft: #41331c;
@@ -45,8 +45,8 @@
   --surface-container-low: #ffffff;
   --surface-container: #f1f3f4;
   --surface-container-high: #ffffff;
-  --primary-container: #e6f4ea;
-  --on-primary-container: #137333;
+  --primary-container: #e8f0fe;
+  --on-primary-container: #174ea6;
   --secondary-container: #f1f3f4;
   --on-secondary-container: #3c4043;
   --foreground: #202124;
@@ -54,10 +54,10 @@
   --muted-foreground: #5f6368;
   --border: #dadce0;
   --input: #80868b;
-  --primary: #188038;
-  --primary-hover: #137333;
+  --primary: #1a73e8;
+  --primary-hover: #185abc;
   --primary-foreground: #ffffff;
-  --link: #137333;
+  --link: #1967d2;
   --amber: #8a5000;
   --amber-soft: #fef7e0;
   --teal: #188038;
