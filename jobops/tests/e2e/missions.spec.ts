@@ -1,0 +1,145 @@
+import { test, expect, type Page } from "@playwright/test";
+
+async function newJob(page: Page, suffix: string) {
+  const company = `Mission Demo ${suffix}`;
+  await page.goto("/jobs/new");
+  await page.getByLabel("Company", { exact: true }).fill(company);
+  await page.getByLabel("Role / title").fill("Senior Backend Engineer");
+  await page.getByLabel("Location", { exact: true }).fill("Bengaluru");
+  await page.getByLabel("Original job URL").fill(`https://example.com/mission-job/${suffix}`);
+  await page.getByLabel("Job description", { exact: true }).fill("Python PostgreSQL distributed systems");
+  await page.getByRole("button", { name: "Save job", exact: true }).click();
+  await expect(page).toHaveURL(/\/jobs\/[0-9a-f-]+$/);
+  return page.url().split("/").pop()!;
+}
+async function createApply(page: Page, suffix: string) {
+  const jobId = await newJob(page, suffix);
+  await page.goto(`/missions/new?type=APPLY_JOB&entityType=JOB&entityId=${jobId}`);
+  await page.getByLabel("Title", { exact: true }).fill(`Apply mission ${suffix}`);
+  await page.getByLabel("Selected resume", { exact: true }).selectOption({ index: 1 });
+  await page.getByRole("button", { name: "Create mission", exact: true }).click();
+  await expect(page).toHaveURL(/\/missions\/[0-9a-f-]+$/);
+  return page.url().split("/").pop()!;
+}
+
+test("discovery mission exposes predictable agent context without identity and retains evidence files", async ({ page }) => {
+  const title = `Discovery browser ${Date.now()}`;
+  await page.goto("/missions/new?type=DISCOVER_JOBS");
+  await page.getByLabel("Title", { exact: true }).fill(title);
+  await page.getByLabel("Desired roles", { exact: true }).fill("Senior Backend Engineer, Platform Engineer");
+  await page.getByLabel("Locations", { exact: true }).fill("Bengaluru, Remote");
+  await page.getByLabel("Maximum results", { exact: true }).fill("20");
+  await page.getByRole("button", { name: "Create mission", exact: true }).click();
+  await expect(page).toHaveURL(/\/missions\/[0-9a-f-]+$/);
+  const id = page.url().split("/").pop()!;
+  const contextResponse = await page.request.get(`/missions/${id}/context.json`);
+  expect(contextResponse.ok()).toBe(true);
+  const context = await contextResponse.json();
+  expect(context.input.maxResults).toBe(20);
+  expect(context.candidate.roles).toContain("Platform Engineer");
+  expect(context.candidate).not.toHaveProperty("fullName");
+  expect(context.candidate).not.toHaveProperty("primaryEmail");
+  expect(context.selectedResume).toBeNull();
+  await page.getByRole("link", { name: "Agent view", exact: true }).click();
+  for (const heading of ["MISSION ID", "TYPE", "STATUS", "GOAL", "TARGET ENTITY", "INPUT DATA", "CANDIDATE INFORMATION", "SELECTED RESUME", "CONSTRAINTS", "STEPS", "APPROVAL REQUIREMENTS", "SUCCESS CRITERIA", "EXPECTED OUTPUT", "RESULT SUBMISSION LINK", "RELATED LINKS", "FILES"]) await expect(page.getByRole("heading", { name: heading, exact: true })).toBeVisible();
+  await page.getByRole("link", { name: "Open Result Form", exact: true }).click();
+  await page.getByLabel("Summary", { exact: true }).fill("Reviewed fictional sources and returned import records.");
+  await page.getByLabel("Structured result (JSON object)").fill(JSON.stringify({ jobs: [], searchedSources: ["COMPANY_CAREERS"] }));
+  await page.getByLabel("Screenshots / files").setInputFiles({ name: "discovery-evidence.txt", mimeType: "text/plain", buffer: Buffer.from("Verified fictional source evidence") });
+  await page.getByRole("button", { name: "Save result and evidence", exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`/missions/${id}$`));
+  const evidenceLink = page.getByRole("link", { name: "Download discovery-evidence.txt", exact: true });
+  await expect(evidenceLink).toBeVisible();
+  const evidence = await page.request.get((await evidenceLink.getAttribute("href"))!);
+  expect(evidence.headers()["content-disposition"]).toContain("attachment");
+  expect(await evidence.text()).toBe("Verified fictional source evidence");
+  const completed = await page.request.get(`/missions/${id}/context.json`);
+  expect((await completed.json()).mission.status).toBe("COMPLETED");
+  await page.goto(`/missions/${id}/result`);
+  await expect(page.getByRole("heading", { name: "Mission closed", exact: true })).toBeVisible();
+});
+
+test("apply mission records operator and reviewed application result with an audit event", async ({ page }) => {
+  const id = await createApply(page, `review-${Date.now()}`);
+  await page.getByLabel("Operator", { exact: true }).selectOption("CODEX");
+  await page.getByRole("button", { name: "Start execution", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Start execution", exact: true })).toHaveCount(0);
+  await expect(page.getByText("CODEX", { exact: true })).toBeVisible();
+  await page.getByRole("link", { name: "Agent view", exact: true }).click();
+  const download = page.getByRole("link", { name: "Download Resume", exact: true });
+  const pdf = await page.request.get((await download.getAttribute("href"))!);
+  expect(pdf.ok()).toBe(true); expect((await pdf.body()).subarray(0, 5).toString()).toBe("%PDF-");
+  const context = await (await page.request.get(`/missions/${id}/context.json`)).json();
+  expect(context.candidate).not.toHaveProperty("currentCompensation");
+  expect(context.candidate).not.toHaveProperty("metadata");
+  await page.getByRole("link", { name: "Open Result Form", exact: true }).click();
+  await page.getByLabel("Summary", { exact: true }).fill("Application prepared using the selected resume. Stopped before Submit.");
+  await page.getByLabel("Application stage", { exact: true }).selectOption("READY_FOR_REVIEW");
+  await page.getByRole("button", { name: "Save result and evidence", exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`/missions/${id}$`));
+  await page.getByRole("link", { name: "Open application", exact: true }).click();
+  await expect(page.getByLabel("Application stage", { exact: true })).toHaveValue("READY_FOR_REVIEW");
+  await expect(page.getByText("Application prepared using the selected resume. Stopped before Submit.", { exact: true })).toBeVisible();
+  await page.goto(`/missions/${id}/result`);
+  await page.getByLabel("Summary", { exact: true }).fill("A human approved and manually submitted the external application.");
+  await page.getByLabel("Mission result status", { exact: true }).selectOption("COMPLETED");
+  await page.getByLabel("Application stage", { exact: true }).selectOption("APPLIED");
+  await page.getByRole("checkbox", { name: /A human explicitly approved/ }).check();
+  await page.getByRole("button", { name: "Save result and evidence", exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`/missions/${id}$`));
+  await page.getByRole("link", { name: "Open application", exact: true }).click();
+  await expect(page.getByLabel("Application stage", { exact: true })).toHaveValue("APPLIED");
+  await expect(page.getByRole("heading", { name: "Application Submitted", exact: true })).toBeVisible();
+});
+
+test("profile update rejects unapproved patches and retains unrelated state with old/new evidence", async ({ page }) => {
+  const suffix = Date.now();
+  await page.goto("/profiles/new");
+  await page.getByLabel("Display name", { exact: true }).fill(`Mission Profile ${suffix}`);
+  await page.getByLabel("Profile URL", { exact: true }).fill(`https://example.com/profile/${suffix}`);
+  await page.getByLabel("Known state (JSON)").fill(JSON.stringify({ headline: "Old headline", skills: ["Python"], privateNote: "preserve locally" }));
+  await page.getByLabel("Target state (JSON)").fill(JSON.stringify({ headline: "Senior Backend Engineer" }));
+  await page.getByRole("button", { name: "Create profile", exact: true }).click();
+  await expect(page).toHaveURL(/\/profiles\/[0-9a-f-]+$/);
+  const profileUrl = page.url();
+  await page.getByRole("link", { name: "Create update mission", exact: true }).click();
+  await page.getByRole("button", { name: "Create mission", exact: true }).click();
+  await expect(page).toHaveURL(/\/missions\/[0-9a-f-]+$/);
+  const id = page.url().split("/").pop()!;
+  const context = await (await page.request.get(`/missions/${id}/context.json`)).json();
+  expect(context.entity.data.knownState).not.toHaveProperty("privateNote");
+  expect(context.input.profileKnownState).not.toHaveProperty("privateNote");
+  await page.getByRole("link", { name: "Record result", exact: true }).click();
+  await page.getByLabel("Summary", { exact: true }).fill("Changed only the approved headline and observed the saved result.");
+  await page.getByLabel("Profile state update (JSON)").fill(JSON.stringify({ headline: "Senior Backend Engineer" }));
+  await page.getByRole("button", { name: "Save result and evidence", exact: true }).click();
+  await expect(page.locator("form [role=alert]")).toContainText("Explicitly approve the profile field: headline");
+  expect((await (await page.request.get(`/missions/${id}/context.json`)).json()).mission.status).toBe("READY");
+  await page.getByRole("checkbox", { name: "Human approved: headline" }).check();
+  await page.getByRole("button", { name: "Save result and evidence", exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`/missions/${id}$`));
+  await expect(page.getByText("Profile state recorded", { exact: true })).toBeVisible();
+  await page.goto(profileUrl);
+  const state = JSON.parse(await page.getByLabel("Known state (JSON)").inputValue());
+  expect(state).toEqual({ headline: "Senior Backend Engineer", skills: ["Python"], privateNote: "preserve locally" });
+});
+
+test("unknown questions block APPLIED and persist a waiting result without guessing", async ({ page }) => {
+  const id = await createApply(page, `unknown-${Date.now()}`);
+  await page.getByRole("link", { name: "Record result", exact: true }).click();
+  await page.getByLabel("Summary", { exact: true }).fill("Stopped at a required unknown sponsorship question.");
+  await page.getByLabel("Unknown or ambiguous questions", { exact: true }).fill("Does this role require visa sponsorship, now or later?");
+  await page.getByLabel("Application stage", { exact: true }).selectOption("APPLIED");
+  await page.getByRole("button", { name: "Save result and evidence", exact: true }).click();
+  await expect(page.locator("form [role=alert]")).toContainText("explicit confirmation");
+  await page.getByRole("checkbox", { name: /A human explicitly approved/ }).check();
+  await page.getByRole("button", { name: "Save result and evidence", exact: true }).click();
+  await expect(page.locator("form [role=alert]")).toContainText("Resolve unknown questions");
+  await page.getByLabel("Application stage", { exact: true }).selectOption("PREPARING");
+  await page.getByLabel("Mission result status", { exact: true }).selectOption("COMPLETED");
+  await page.getByRole("button", { name: "Save result and evidence", exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`/missions/${id}$`));
+  const context = await (await page.request.get(`/missions/${id}/context.json`)).json();
+  expect(context.mission.status).toBe("WAITING_FOR_USER");
+  expect(context.input.unknownQuestions).toEqual(["Does this role require visa sponsorship, now or later?"]);
+});
