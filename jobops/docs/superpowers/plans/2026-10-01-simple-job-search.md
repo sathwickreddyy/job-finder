@@ -75,3 +75,5 @@
 - Implementation uses a clean `codex/simple-job-search` branch in the existing workspace so the user's running localhost preview updates directly.
 
 - Task 1 complete: shared controls, Home, discovery and persistent profile preferences. Prompt tests 2/2 and isolated browser flows 2/2 passed; lint and TypeScript passed.
+
+- Task 2 complete: saved descriptions, direct application/outreach prompts and records, frozen submitted resume links, retired task/mission UI and agent entry points. Intent tests 3/3 and isolated browser flows 2/2 passed; lint and TypeScript passed.

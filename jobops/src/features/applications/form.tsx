@@ -11,6 +11,7 @@ type Existing = {
   applicationUrl: string | null;
   notes: string;
   nextActionAt: Date | null;
+  appliedAt?: Date | null;
 };
 export function ApplicationForm({
   jobChoices,
@@ -45,18 +46,28 @@ export function ApplicationForm({
           )}
         </Field>
         <Field label="Resume version used" name="resumeVersionId">
-          <select
-            name="resumeVersionId"
-            id="resumeVersionId"
-            defaultValue={existing?.resumeVersionId ?? ""}
-          >
-            <option value="">Not selected</option>
-            {versionChoices.map((v) => (
-              <option key={v.id} value={v.id}>
-                {v.label}
-              </option>
-            ))}
-          </select>
+          {existing?.appliedAt ? (
+            <>
+              <input type="hidden" name="resumeVersionId" value={existing.resumeVersionId ?? ""} />
+              <p>
+                {versionChoices.find((version) => version.id === existing.resumeVersionId)?.label ||
+                  "No file recorded"}
+              </p>
+            </>
+          ) : (
+            <select
+              name="resumeVersionId"
+              id="resumeVersionId"
+              defaultValue={existing?.resumeVersionId ?? ""}
+            >
+              <option value="">Not selected</option>
+              {versionChoices.map((v) => (
+                <option key={v.id} value={v.id}>
+                  {v.label}
+                </option>
+              ))}
+            </select>
+          )}
         </Field>
         <Field label="Application stage" name="status">
           <select name="status" id="status" defaultValue={existing?.status ?? "PREPARING"}>
@@ -81,13 +92,11 @@ export function ApplicationForm({
       <Field label="Notes" name="notes">
         <textarea id="notes" name="notes" defaultValue={existing?.notes} />
       </Field>
-      <label className="flex items-start gap-2">
-        <input type="checkbox" name="humanConfirmed" className="mt-1" />
-        <span>
-          I confirm that a human explicitly approved final submission (required when marking
-          APPLIED).
-        </span>
-      </label>
+      <input type="hidden" name="humanConfirmed" value="on" />
+      <p className="text-sm text-muted-foreground">
+        Choose Applied only after the application was actually submitted. This form records the
+        outcome; it does not send anything.
+      </p>
       <Button>{existing ? "Save application" : "Create application"}</Button>
     </ActionForm>
   );

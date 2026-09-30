@@ -110,6 +110,15 @@ export async function updateApplication(_state: ActionState, form: FormData): Pr
       if (!previous) throw new Error("Application no longer exists.");
       if (previous.jobId !== data.jobId)
         throw new Error("The application's job cannot be changed.");
+      if (previous.appliedAt && previous.resumeVersionId !== data.resumeVersionId)
+        throw new Error(
+          "The resume used for a submitted application stays fixed. Record a separate action for another file.",
+        );
+      if (
+        ["REFERRAL", "COLD_EMAIL", "LINKEDIN_MESSAGE"].includes(previous.source) &&
+        data.status === "APPLIED"
+      )
+        throw new Error("Record a direct application separately from outreach.");
       const event = applicationTransition(previous.status, data.status, data.humanConfirmed);
       await tx
         .update(applications)
