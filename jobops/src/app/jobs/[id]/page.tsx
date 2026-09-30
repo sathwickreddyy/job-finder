@@ -1,3 +1,4 @@
+import { displayDate, getDisplayPreferences } from "@/features/candidate/preferences";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { and, desc, eq, ilike } from "drizzle-orm";
@@ -18,7 +19,7 @@ import { changeJob, updateJobDescription, compareResumes } from "@/features/jobs
 import { jobTimeline } from "@/features/jobs/service";
 import { ActionForm } from "@/components/action-form";
 import { PageHeader, Panel, Field, Button, StatusBadge } from "@/components/ui";
-import { dateLabel, label } from "@/lib/utils";
+import { label } from "@/lib/utils";
 export default async function JobDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   if (!z.uuid().safeParse(id).success) notFound();
@@ -34,7 +35,7 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
       .select({ version: resumeVersions, family: resumes })
       .from(resumeVersions)
       .innerJoin(resumes, eq(resumeVersions.resumeId, resumes.id))
-      .where(and(eq(resumeVersions.isCurrent, true),eq(resumes.isActive,true))),
+      .where(and(eq(resumeVersions.isCurrent, true), eq(resumes.isActive, true))),
     db.select().from(applications).where(eq(applications.jobId, id)),
     db.select().from(contacts).where(ilike(contacts.company, job.company)),
     db.select().from(missions).where(eq(missions.entityId, id)).orderBy(desc(missions.createdAt)),
@@ -45,6 +46,7 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
       .map((v) => ({ ...v, ...compareKeywords(current?.skills ?? [], v.version.keywords) }))
       .sort((a, b) => b.score - a.score);
   const missionLink = (type: string) => `/missions/new?type=${type}&entityType=JOB&entityId=${id}`;
+  const preferences = await getDisplayPreferences();
   return (
     <>
       <PageHeader
@@ -77,7 +79,7 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
               <dt>Source</dt>
               <dd>{label(job.source)}</dd>
               <dt>Posted</dt>
-              <dd>{dateLabel(job.postedAt)}</dd>
+              <dd>{displayDate(job.postedAt, preferences)}</dd>
               <dt>Experience</dt>
               <dd>
                 {job.experienceMin ?? "Unknown"}–{job.experienceMax ?? "Unknown"} years
@@ -89,7 +91,7 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
                   : "Not recorded"}
               </dd>
               <dt>First seen</dt>
-              <dd>{dateLabel(job.firstSeenAt)}</dd>
+              <dd>{displayDate(job.firstSeenAt, preferences)}</dd>
             </dl>
             <p className="whitespace-pre-wrap leading-7">
               {current?.description ||
@@ -183,7 +185,7 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
             {snapshots.map((s) => (
               <details key={s.id} className="mb-3">
                 <summary>
-                  {dateLabel(s.capturedAt)} · {s.skills.length} keywords
+                  {displayDate(s.capturedAt, preferences, true)} · {s.skills.length} keywords
                 </summary>
                 <p className="whitespace-pre-wrap text-sm text-muted-foreground">
                   {s.description || "No description"}
@@ -252,7 +254,7 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
               {timeline.map((a) => (
                 <div className="timeline-item" key={a.id}>
                   <p>{a.summary}</p>
-                  <small>{dateLabel(a.createdAt)}</small>
+                  <small>{displayDate(a.createdAt, preferences, true)}</small>
                 </div>
               ))}
             </div>

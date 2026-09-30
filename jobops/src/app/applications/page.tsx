@@ -1,9 +1,10 @@
+import { displayDate, getDisplayPreferences } from "@/features/candidate/preferences";
 import Link from "next/link";
 import { and, desc, eq, ilike, lte, or } from "drizzle-orm";
 import { db } from "@/db";
 import { applications, applicationStages, jobs, resumeVersions, resumes } from "@/db/schema";
 import { PageHeader, Button, StatusBadge, EmptyState } from "@/components/ui";
-import { dateLabel, label } from "@/lib/utils";
+import { label } from "@/lib/utils";
 export default async function ApplicationsPage({
   searchParams,
 }: {
@@ -32,6 +33,7 @@ export default async function ApplicationsPage({
     .orderBy(desc(applications.updatedAt))
     .limit(300);
   const board = p.view === "board";
+  const preferences = await getDisplayPreferences();
   return (
     <>
       <PageHeader
@@ -112,7 +114,7 @@ export default async function ApplicationsPage({
                         <strong>{job.company}</strong>
                         <p className="mt-1 text-sm">{job.title}</p>
                         <p className="mt-3 text-xs text-muted-foreground">
-                          Next action: {dateLabel(app.nextActionAt)}
+                          Next action: {displayDate(app.nextActionAt, preferences)}
                         </p>
                         <span className="mt-2 block text-xs text-primary">
                           Open and change stage
@@ -148,8 +150,8 @@ export default async function ApplicationsPage({
                     <StatusBadge status={app.status} />
                   </td>
                   <td>{family ? `${family.name} / ${version?.versionLabel}` : "Not selected"}</td>
-                  <td>{dateLabel(app.appliedAt)}</td>
-                  <td>{dateLabel(app.nextActionAt)}</td>
+                  <td>{displayDate(app.appliedAt, preferences)}</td>
+                  <td>{displayDate(app.nextActionAt, preferences)}</td>
                 </tr>
               ))}
             </tbody>

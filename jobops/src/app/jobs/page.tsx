@@ -1,9 +1,17 @@
+import { displayDate, getDisplayPreferences } from "@/features/candidate/preferences";
 import Link from "next/link";
 import { and, count, desc, eq, gte, ilike, lte, or, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { jobs, jobStatuses, jobResumeMatches, resumeVersions, resumes } from "@/db/schema";
+import {
+  jobs,
+  jobStatuses,
+  jobResumeMatches,
+  resumeVersions,
+  resumes,
+  jobSnapshots,
+} from "@/db/schema";
 import { PageHeader, Button, EmptyState, StatusBadge } from "@/components/ui";
-import { dateLabel, label } from "@/lib/utils";
+import { label } from "@/lib/utils";
 export default async function JobsPage({
   searchParams,
 }: {
@@ -17,6 +25,7 @@ export default async function JobsPage({
         ilike(jobs.title, `%${p.q}%`),
         ilike(jobs.company, `%${p.q}%`),
         ilike(jobs.notes, `%${p.q}%`),
+        sql`exists (select 1 from ${jobSnapshots} s where s.job_id = ${jobs.id} and s.captured_at = (select max(s2.captured_at) from ${jobSnapshots} s2 where s2.job_id = ${jobs.id}) and (s.description ilike ${`%${p.q}%`} or s.skills::text ilike ${`%${p.q}%`}))`,
       ),
     );
   for (const key of ["company", "title", "location", "source"] as const)
@@ -25,7 +34,10 @@ export default async function JobsPage({
     filters.push(eq(jobs.status, p.status as (typeof jobStatuses)[number]));
   if (p.freshness && Number(p.freshness) > 0)
     filters.push(
-      gte(jobs.postedAt, new Date(new Date().getTime() - Math.min(Number(p.freshness), 365) * 86400000)),
+      gte(
+        jobs.postedAt,
+        new Date(new Date().getTime() - Math.min(Number(p.freshness), 365) * 86400000),
+      ),
     );
   if (p.experience && Number.isFinite(Number(p.experience)) && Number(p.experience) >= 0)
     filters.push(
@@ -40,9 +52,9 @@ export default async function JobsPage({
       score: sql<number>`max(${jobResumeMatches.score})`.as("score"),
     })
     .from(jobResumeMatches)
-    .innerJoin(resumeVersions, eq(jobResumeMatches.resumeVersionId,resumeVersions.id))
-    .innerJoin(resumes, eq(resumeVersions.resumeId,resumes.id))
-    .where(and(eq(resumeVersions.isCurrent,true),eq(resumes.isActive,true)))
+    .innerJoin(resumeVersions, eq(jobResumeMatches.resumeVersionId, resumeVersions.id))
+    .innerJoin(resumes, eq(resumeVersions.resumeId, resumes.id))
+    .where(and(eq(resumeVersions.isCurrent, true), eq(resumes.isActive, true)))
     .groupBy(jobResumeMatches.jobId)
     .as("coverage");
   const where = and(...filters),
@@ -71,6 +83,7 @@ export default async function JobsPage({
     query.set("page", String(n));
     return `/jobs?${query}`;
   };
+  const preferences = await getDisplayPreferences();
   return (
     <>
       <PageHeader
@@ -174,7 +187,7 @@ export default async function JobsPage({
                   </td>
                   <td>
                     {label(job.source)}
-                    <div className="cell-subtitle">{dateLabel(job.postedAt)}</div>
+                    <div className="cell-subtitle">{displayDate(job.postedAt, preferences)}</div>
                   </td>
                   <td>{score === null ? "Not compared" : `${Math.round(score)}%`}</td>
                   <td>

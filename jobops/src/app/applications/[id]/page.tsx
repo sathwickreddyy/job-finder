@@ -1,3 +1,4 @@
+import { displayDate, getDisplayPreferences } from "@/features/candidate/preferences";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { desc, eq, ilike, or } from "drizzle-orm";
@@ -17,7 +18,7 @@ import { PageHeader, Panel, Button, StatusBadge, Field } from "@/components/ui";
 import { ActionForm } from "@/components/action-form";
 import { ApplicationForm } from "@/features/applications/form";
 import { addApplicationNote } from "@/features/applications/actions";
-import { dateLabel, label } from "@/lib/utils";
+import { label } from "@/lib/utils";
 export default async function ApplicationDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   if (!z.uuid().safeParse(id).success) notFound();
@@ -52,6 +53,7 @@ export default async function ApplicationDetail({ params }: { params: Promise<{ 
     db.select().from(contacts).where(ilike(contacts.company, job.company)),
   ]);
   const selected = versions.find((v) => v.version.id === app.resumeVersionId);
+  const preferences = await getDisplayPreferences();
   return (
     <>
       <PageHeader
@@ -74,7 +76,9 @@ export default async function ApplicationDetail({ params }: { params: Promise<{ 
       />
       <div className="mb-5 flex flex-wrap items-center gap-4">
         <StatusBadge status={app.status} />
-        <span className="text-muted-foreground">Applied: {dateLabel(app.appliedAt)}</span>
+        <span className="text-muted-foreground">
+          Applied: {displayDate(app.appliedAt, preferences)}
+        </span>
         {selected && (
           <a
             className="button-secondary"
@@ -106,7 +110,7 @@ export default async function ApplicationDetail({ params }: { params: Promise<{ 
                   <h3>{label(e.eventType)}</h3>
                   <p>{e.summary}</p>
                   <small>
-                    {dateLabel(e.occurredAt)} · {label(e.source)}
+                    {displayDate(e.occurredAt, preferences, true)} · {label(e.source)}
                   </small>
                   {Object.keys(e.payload).length > 0 && (
                     <details>
@@ -132,7 +136,7 @@ export default async function ApplicationDetail({ params }: { params: Promise<{ 
               mail.map((m) => (
                 <p className="mb-4" key={m.id}>
                   <Link href={`/mail/${m.id}`}>{m.subject}</Link>
-                  <small className="block">{dateLabel(m.receivedAt)}</small>
+                  <small className="block">{displayDate(m.receivedAt, preferences, true)}</small>
                 </p>
               ))
             ) : (
