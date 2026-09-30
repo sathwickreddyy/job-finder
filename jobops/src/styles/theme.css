@@ -1,0 +1,80 @@
+/* Shared Mica surface language from SDE Prep and Living Moments.
+   Palette, canvas and elevation live here; components use Tailwind tokens. */
+:root {
+  color-scheme: dark;
+  --background: #0a0a12;
+  --canvas:
+    radial-gradient(circle at top left, rgb(34 211 238 / 9%), transparent 34rem),
+    radial-gradient(circle at 72% 18%, rgb(66 133 244 / 7.5%), transparent 30rem);
+  --foreground: #e8eaed;
+  --card: rgb(255 255 255 / 5%);
+  --rail: rgb(255 255 255 / 3%);
+  --popover: #121820;
+  --muted: rgb(255 255 255 / 8%);
+  --muted-foreground: #a9b5c5;
+  --border: rgb(255 255 255 / 14%);
+  --input: #697c90;
+  --primary: #00b7c3;
+  --primary-hover: #33d4de;
+  --primary-foreground: #04121a;
+  --link: #69dbe2;
+  --blue-soft: rgb(0 183 195 / 12%);
+  --amber: #efbc66;
+  --amber-soft: rgb(239 188 102 / 10%);
+  --teal: #87d8ae;
+  --teal-soft: rgb(135 216 174 / 10%);
+  --danger: #ff9ba5;
+  --danger-soft: rgb(255 107 107 / 10%);
+  --scrim: rgb(4 4 10 / 74%);
+  --glass: blur(16px) saturate(1.2);
+  --surface-shadow: 0 1px 2px rgb(0 0 0 / 20%), 0 16px 48px -24px rgb(0 0 0 / 35%);
+}
+:root[data-theme="light"] {
+  color-scheme: light;
+  --background: #fbf6f3;
+  --canvas:
+    radial-gradient(120% 60% at 12% 0%, rgb(255 138 61 / 18%), transparent 55%),
+    radial-gradient(120% 55% at 88% 8%, rgb(61 125 255 / 16%), transparent 55%),
+    radial-gradient(120% 55% at 20% 72%, rgb(26 188 138 / 12%), transparent 58%),
+    linear-gradient(180deg, #fbf6f3, #eef4fb);
+  --foreground: #18242c;
+  --card: rgb(255 255 255 / 62%);
+  --rail: rgb(255 255 255 / 38%);
+  --popover: #fafcfb;
+  --muted: rgb(15 22 44 / 6%);
+  --muted-foreground: #4b5c67;
+  --border: rgb(15 22 44 / 17%);
+  --input: #778b94;
+  --primary: #0b707b;
+  --primary-hover: #085d66;
+  --primary-foreground: #ffffff;
+  --link: #085d66;
+  --blue-soft: rgb(14 124 134 / 10%);
+  --amber: #805800;
+  --amber-soft: rgb(210 160 55 / 13%);
+  --teal: #25663e;
+  --teal-soft: rgb(53 128 42 / 9%);
+  --danger: #a52f36;
+  --danger-soft: rgb(179 39 27 / 8%);
+  --scrim: rgb(10 12 20 / 42%);
+  --surface-shadow: 0 1px 2px rgb(15 22 44 / 5%), 0 16px 48px -24px rgb(15 22 44 / 20%);
+}
+
+@theme inline {
+  --color-rail: var(--rail);
+  --color-primary-hover: var(--primary-hover);
+  --color-danger-soft: var(--danger-soft);
+  --color-success: var(--teal);
+  --color-success-soft: var(--teal-soft);
+  --color-warning: var(--amber);
+  --color-warning-soft: var(--amber-soft);
+  --color-selected: var(--blue-soft);
+  --color-scrim: var(--scrim);
+  --shadow-surface: var(--surface-shadow);
+  --radius-card: 1rem;
+  --radius-panel: 1.5rem;
+}
+@utility glass {
+  backdrop-filter: var(--glass);
+  box-shadow: var(--surface-shadow);
+}

@@ -3,41 +3,20 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useSyncExternalStore, type ReactNode } from "react";
+import { BriefcaseBusiness, Home, Inbox, Moon, Settings2, Sun, UserRound } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 const navigation = [
-  ["Today", "/", "M3 3h7v7H3zm11 0h7v7h-7zM3 14h7v7H3zm11 0h7v7h-7z"],
-  ["Jobs", "/jobs", "M3 7h18v14H3zM8 7V3h8v4M3 12h18M10 12v3h4v-3"],
-  ["Applications", "/applications", "M5 3h14v18H5zM8 8h8M8 12h8M8 16h5"],
-  ["Resumes", "/resumes", "M6 3h8l4 4v14H6zM14 3v5h4M9 12h6M9 16h6"],
-  ["Profiles", "/profiles", "M8 7a4 4 0 108 0 4 4 0 10-8 0M4 21v-2a8 8 0 0116 0v2"],
-  ["Contacts", "/contacts", "M4 3h16v18H4zM8 8a3 3 0 106 0 3 3 0 10-6 0M7 18v-2a4 4 0 018 0v2"],
-  ["Mail", "/mail", "M3 5h18v14H3zM3 5l9 7 9-7"],
-  ["Missions", "/missions", "M4 4h16v16H4zM8 8l2 2 4-4M8 15h8"],
-  [
-    "Settings",
-    "/settings",
-    "M12 8a4 4 0 100 8 4 4 0 100-8M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M5 19l2-2M17 7l2-2",
-  ],
-] as const;
-
-function Icon({ path }: { path: string }) {
-  return (
-    <svg
-      className="nav-icon"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d={path} />
-    </svg>
-  );
-}
-
-function subscribeTheme(callback: () => void) {
+  { label: "Home", href: "/", icon: Home, routes: ["/tasks"] },
+  {
+    label: "Opportunities",
+    href: "/opportunities",
+    icon: BriefcaseBusiness,
+    routes: ["/jobs", "/applications", "/contacts", "/import"],
+  },
+  { label: "Inbox", href: "/inbox", icon: Inbox, routes: ["/mail"] },
+];
+function subscribe(callback: () => void) {
   window.addEventListener("storage", callback);
   window.addEventListener("jobops-theme", callback);
   return () => {
@@ -45,94 +24,106 @@ function subscribeTheme(callback: () => void) {
     window.removeEventListener("jobops-theme", callback);
   };
 }
-function clientTheme() {
-  return localStorage.getItem("jobops-theme") === "light";
+function snapshot() {
+  try {
+    return localStorage.getItem("jobops-theme") === "light";
+  } catch {
+    return document.documentElement.dataset.theme === "light";
+  }
 }
-function serverTheme() {
-  return false;
-}
-
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const light = useSyncExternalStore(subscribeTheme, clientTheme, serverTheme);
+  const light = useSyncExternalStore(subscribe, snapshot, () => false);
   useEffect(() => {
     document.documentElement.dataset.theme = light ? "light" : "dark";
   }, [light]);
   function toggleTheme() {
-    const next = !light;
-    localStorage.setItem("jobops-theme", next ? "light" : "dark");
-    document.documentElement.dataset.theme = next ? "light" : "dark";
+    const next = light ? "dark" : "light";
+    document.documentElement.dataset.theme = next;
+    try {
+      localStorage.setItem("jobops-theme", next);
+    } catch {
+      /* Session-only theme. */
+    }
     window.dispatchEvent(new Event("jobops-theme"));
   }
+  const profileActive = ["/my-profile", "/resumes", "/profiles"].some((p) =>
+    pathname.startsWith(p),
+  );
+  const navClass = (active: boolean) =>
+    cn(
+      "flex min-h-11 items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors hover:bg-muted hover:no-underline",
+      active ? "bg-selected text-link" : "text-muted-foreground hover:text-foreground",
+    );
   return (
-    <div className="app-shell">
+    <div className="min-h-dvh md:grid md:grid-cols-[13rem_minmax(0,1fr)]">
       <a className="skip-link" href="#main">
         Skip to content
       </a>
-      <aside className="sidebar">
-        <Link href="/" className="brand">
-          <span className="brand-mark">J</span>JobOps
-        </Link>
-        <nav aria-label="Primary" className="navigation">
-          {navigation.map(([label, href, path]) => {
-            const active = pathname === href || (href !== "/" && pathname.startsWith(`${href}/`));
+      <aside className="glass flex flex-col gap-5 border-b border-border bg-rail p-4 md:sticky md:top-0 md:h-dvh md:border-r md:border-b-0 md:px-5 md:py-8">
+        <div className="flex items-center justify-between">
+          <Link
+            href="/"
+            className="flex items-center gap-2.5 px-2 text-xl font-semibold tracking-tight text-foreground hover:no-underline"
+          >
+            <span className="flex size-8 items-center justify-center rounded-xl bg-primary text-base text-primary-foreground">
+              J
+            </span>
+            JobOps
+          </Link>
+          <span className="text-xs text-muted-foreground md:hidden">India · IST</span>
+        </div>
+        <nav aria-label="Primary" className="flex flex-wrap gap-1 md:mt-6 md:flex-col">
+          {navigation.map(({ label, href, icon: Icon, routes }) => {
+            const active = pathname === href || routes.some((p) => pathname.startsWith(p));
             return (
               <Link
                 key={href}
                 href={href}
-                className={`nav-link ${active ? "active" : ""}`}
+                className={navClass(active)}
                 aria-current={active ? "page" : undefined}
               >
-                <Icon path={path} />
+                <Icon size={18} aria-hidden />
                 {label}
               </Link>
             );
           })}
         </nav>
-        <div className="sidebar-bottom">
-          <p className="sidebar-note">
-            Your career workspace.
-            <br />
-            Every action stays in your control.
-          </p>
-          <button type="button" onClick={toggleTheme} className="theme-button">
-            {light ? "☾ Dark appearance" : "☼ Light appearance"}
-          </button>
-          <Link href="/gallery" className="button-quiet" style={{ marginTop: 10, fontSize: 12 }}>
-            Component gallery
+        <div className="flex flex-wrap items-center gap-1 md:mt-auto md:flex-col md:items-stretch">
+          <Link
+            href="/my-profile"
+            className={navClass(profileActive)}
+            aria-current={profileActive ? "page" : undefined}
+          >
+            <UserRound size={18} aria-hidden />
+            My profile
           </Link>
+          <Link href="/settings" className={navClass(pathname === "/settings")}>
+            <Settings2 size={18} aria-hidden />
+            Settings
+          </Link>
+          <button
+            type="button"
+            onClick={toggleTheme}
+            className={cn(navClass(false), "text-left")}
+            aria-label={light ? "Use dark theme" : "Use colourful light theme"}
+          >
+            {light ? <Moon size={18} aria-hidden /> : <Sun size={18} aria-hidden />}
+            {light ? "Dark theme" : "Colourful light"}
+          </button>
+          <p className="mt-5 hidden px-3 text-xs leading-relaxed text-muted-foreground md:block">
+            Your search in India.
+            <br />
+            Your next move.
+          </p>
         </div>
       </aside>
-      <div className="workspace">
-        <header className="topbar">
-          <form action="/jobs" className="global-search">
-            <svg
-              className="global-search-icon"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              aria-hidden="true"
-            >
-              <circle cx="10" cy="10" r="6" />
-              <path d="m15 15 6 6" />
-            </svg>
-            <input
-              name="q"
-              aria-label="Search jobs"
-              placeholder="Search jobs, companies, or skills…"
-              type="search"
-            />
-          </form>
-          <span className="workspace-label">
-            <span className="status-dot" />
-            Personal workspace
-          </span>
-        </header>
-        <main className="page-content" id="main">
-          {children}
-        </main>
-      </div>
+      <main
+        id="main"
+        className="mx-auto w-full min-w-0 max-w-7xl px-5 py-8 sm:px-8 lg:px-12 lg:py-12"
+      >
+        {children}
+      </main>
     </div>
   );
 }

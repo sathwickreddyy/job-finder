@@ -9,6 +9,14 @@ export const dynamic = "force-dynamic";
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              "try{document.documentElement.dataset.theme=localStorage.getItem('jobops-theme')==='light'?'light':'dark'}catch{}",
+          }}
+        />
+      </head>
       <body>
         <AppShell>{children}</AppShell>
       </body>

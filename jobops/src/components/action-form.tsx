@@ -38,7 +38,7 @@ export function ActionForm({
       {state.error && (
         <div
           role="alert"
-          className="rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-400"
+          className="rounded-lg border border-destructive/40 bg-danger-soft p-3 text-sm text-destructive"
         >
           {state.error}
         </div>
@@ -46,7 +46,7 @@ export function ActionForm({
       {state.success && (
         <div
           role="status"
-          className="rounded-lg border border-emerald-500/40 bg-emerald-500/10 p-3 text-sm text-emerald-400"
+          className="rounded-lg border border-success/40 bg-success-soft p-3 text-sm text-success"
         >
           {state.success}
         </div>
