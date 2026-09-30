@@ -39,3 +39,6 @@ coverage/
 
 # Logs
 *.log
+
+# Local visual-companion sessions contain access keys and interaction history
+.superpowers/
