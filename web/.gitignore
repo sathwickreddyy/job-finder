@@ -1,9 +1,0 @@
-node_modules
-dist
-.eslintcache
-coverage
-
-# TypeScript incremental build output
-*.tsbuildinfo
-vite.config.d.ts
-vite.config.js

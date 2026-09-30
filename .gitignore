@@ -1,32 +1,41 @@
-# Python
-__pycache__/
-*.py[cod]
-*.egg-info/
-.pytest_cache/
-.ruff_cache/
+# OS and editor files
+.DS_Store
+.idea/
+.vscode/
+
+# Local secrets
+.env
+.env.*
+!.env.example
+
+# Python dependencies and caches
 .venv/
 venv/
-.env
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
 
-# App data (personal)
-data/job_search.db
-data/job_search.db-*
-data/shortlist.md
-data/exports/*.json
+# Frontend dependencies and build output
+node_modules/
+dist/
+build/
+coverage/
+*.tsbuildinfo
 
-# IDE
-.vscode/
-.idea/
+# Local data and personal resumes
+/data/*
+!/data/.gitkeep
+/resumes/*
+!/resumes/.gitkeep
+*.sqlite
+*.sqlite3
+*.db
+*.db-shm
+*.db-wal
 
-# OS
-.DS_Store
-
-# Claude Code per-developer settings (memory/ IS committed — see .claude/memory/)
-.claude/settings.local.json
-
-# Visual brainstorming scratch
-.superpowers/
-
-# Web frontend (Task 15+)
-web/node_modules
-web/dist
+# Logs
+*.log
