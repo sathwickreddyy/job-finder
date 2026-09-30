@@ -180,6 +180,7 @@ export const resumeVersions = pgTable(
     sha256: text("sha256").notNull(),
     extractedText: text("extracted_text").notNull().default(""),
     summary: text("summary"),
+    changeNotes: text("change_notes").notNull().default(""),
     skills: strings("skills"),
     keywords: strings("keywords"),
     experienceTags: strings("experience_tags"),
@@ -277,6 +278,32 @@ export const jobResumeMatches = pgTable(
   (t) => [
     uniqueIndex("job_resume_matches_pair_idx").on(t.jobId, t.resumeVersionId),
     check("job_resume_matches_score", sql`${t.score} >= 0 AND ${t.score} <= 100`),
+  ],
+);
+
+export const resumeAssessments = pgTable(
+  "resume_assessments",
+  {
+    id: id(),
+    versionId: uuid("version_id")
+      .notNull()
+      .references(() => resumeVersions.id, { onDelete: "restrict" }),
+    snapshotId: uuid("snapshot_id")
+      .notNull()
+      .references(() => jobSnapshots.id, { onDelete: "restrict" }),
+    source: text("source").notNull(),
+    method: text("method").notNull(),
+    score: real("score"),
+    findings: text("findings").notNull().default(""),
+    assessedAt: date("assessed_at").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index("resume_assessments_version_idx").on(t.versionId),
+    check(
+      "resume_assessments_score",
+      sql`${t.score} IS NULL OR (${t.score} >= 0 AND ${t.score} <= 100)`,
+    ),
   ],
 );
 

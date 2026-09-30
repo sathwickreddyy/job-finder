@@ -1,204 +1,97 @@
-import { displayDate, getDisplayPreferences } from "@/features/candidate/preferences";
 import Link from "next/link";
+import { FileText, Upload } from "lucide-react";
 import { ActionForm } from "@/components/action-form";
-import { Button, EmptyState, Field, PageHeader, Panel, StatusBadge } from "@/components/ui";
-import { createResumeFamily, uploadVersion } from "@/features/resumes/actions";
+import { Button, Field, PageHeader, Panel } from "@/components/ui";
+import { quickResumeUpload } from "@/features/candidate/hub-actions";
 import { listResumes } from "@/features/resumes/service";
-
-export const dynamic = "force-dynamic";
-
-export default async function ResumesPage({
+export default async function Resumes({
   searchParams,
 }: {
   searchParams: Promise<{ q?: string; archived?: string }>;
 }) {
-  const query = await searchParams;
-  const resumes = await listResumes(query.q ?? "", query.archived === "1");
-  const uploadFamilies = await listResumes("", false);
-  const preferences = await getDisplayPreferences();
+  const p = await searchParams;
+  const files = await listResumes(p.q, p.archived === "1");
   return (
-    <>
+    <div className="space-y-6">
       <PageHeader
-        title="Resumes"
-        description="A private vault of resume families and the exact PDF versions used in your applications."
+        title="Your resumes"
+        description="Your actual files, revised versions, bullet changes and company/role history."
         actions={
-          <>
-            <Button asChild>
-              <a href="#upload">Upload Resume</a>
-            </Button>
-            <Button variant="outline" asChild>
-              <a href="#create-family">Create Resume Family</a>
-            </Button>
-          </>
+          <Button asChild>
+            <a href="#upload">
+              <Upload size={17} aria-hidden />
+              Upload a resume
+            </a>
+          </Button>
         }
       />
-      <form className="mb-5 flex flex-wrap items-end gap-3" role="search">
-        <Field
-          label="Search resumes"
-          name="q"
-          defaultValue={query.q}
-          placeholder="Name or category"
-        />
-        <label className="flex items-center gap-2 pb-2 text-sm">
-          <input
-            type="checkbox"
-            name="archived"
-            value="1"
-            defaultChecked={query.archived === "1"}
-          />{" "}
-          Include archived
-        </label>
-        <Button variant="outline">Filter</Button>
-        <Link href="/resumes" className="pb-2 text-sm text-muted-foreground">
-          Clear
-        </Link>
-      </form>
-      {resumes.length ? (
-        <div className="grid gap-4 xl:grid-cols-3">
-          {resumes.map((resume) => (
-            <Panel key={resume.id}>
-              <div className="mb-4 flex items-start justify-between gap-3">
-                <div>
-                  <Link href={`/resumes/${resume.id}`} className="font-semibold hover:underline">
-                    {resume.name}
-                  </Link>
-                  <p className="mt-1 text-xs text-muted-foreground">{resume.category}</p>
-                </div>
-                <StatusBadge status={resume.isActive ? "ACTIVE" : "ARCHIVED"} />
-              </div>
-              <p className="mb-4 text-sm text-muted-foreground">
-                {resume.description || "Add a description to help choose this resume family."}
-              </p>
-              <dl className="mb-4 space-y-2 text-sm">
-                <div className="flex justify-between gap-3">
-                  <dt className="text-muted-foreground">Current version</dt>
-                  <dd>{resume.currentVersion?.versionLabel ?? "No PDF uploaded"}</dd>
-                </div>
-                <div className="flex justify-between">
-                  <dt className="text-muted-foreground">Used in applications</dt>
-                  <dd>{resume.usageCount}</dd>
-                </div>
-                <div className="flex justify-between">
-                  <dt className="text-muted-foreground">Updated</dt>
-                  <dd>{displayDate(resume.updatedAt, preferences)}</dd>
-                </div>
-              </dl>
-              <div className="mb-5 flex min-h-6 flex-wrap gap-1.5">
-                {resume.currentVersion?.keywords.slice(0, 8).map((keyword) => (
-                  <span
-                    key={keyword}
-                    className="rounded-md border border-border bg-secondary px-2 py-1 text-xs"
-                  >
-                    {keyword}
-                  </span>
-                ))}
-                {(resume.currentVersion?.keywords.length ?? 0) > 8 && (
-                  <span className="py-1 text-xs text-muted-foreground">
-                    +{resume.currentVersion!.keywords.length - 8}
-                  </span>
-                )}
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <Button size="sm" variant="outline" asChild>
-                  <Link href={`/resumes/${resume.id}`}>View versions</Link>
-                </Button>
-                {resume.currentVersion && (
-                  <Button size="sm" variant="outline" asChild>
-                    <a href={`/api/resumes/${resume.currentVersion.id}/file?download=1`}>
-                      Download PDF
-                    </a>
-                  </Button>
-                )}
-              </div>
-            </Panel>
-          ))}
-        </div>
-      ) : (
-        <EmptyState
-          title="No matching resume families"
-          description="Create a family, then upload its first PDF. Text and editable keyword tags are extracted locally."
-          action={
-            <Button asChild>
-              <a href="#create-family">Create Resume Family</a>
-            </Button>
-          }
-        />
-      )}
-      <div className="mt-7 grid gap-5 lg:grid-cols-2">
-        <div id="upload">
-          <Panel title="Upload Resume">
-            {uploadFamilies.length ? (
-              <ActionForm action={uploadVersion}>
-                <Field label="Resume family" name="resumeId">
-                  <select id="resumeId" name="resumeId" required>
-                    {uploadFamilies.map((resume) => (
-                      <option key={resume.id} value={resume.id}>
-                        {resume.name}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-                <Field
-                  label="Version label"
-                  name="versionLabel"
-                  placeholder="v1 — backend roles"
-                  required
-                  maxLength={80}
-                />
-                <Field
-                  label="PDF file"
-                  name="file"
-                  type="file"
-                  accept="application/pdf,.pdf"
-                  required
-                  hint="PDF only, up to 10 MB. Original files remain private and are retained even when text extraction fails."
-                />
-                <label className="flex items-center gap-2 text-sm">
-                  <input type="checkbox" name="makeCurrent" defaultChecked /> Make this the current
-                  version
-                </label>
-                <Button>Upload PDF</Button>
-              </ActionForm>
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                Create a resume family first using the form beside this panel.
-              </p>
-            )}
-          </Panel>
-        </div>
-        <div id="create-family">
-          <Panel title="Create Resume Family">
-            <ActionForm action={createResumeFamily}>
-              <Field
-                label="Name"
-                name="name"
-                placeholder="Backend Senior"
-                required
-                minLength={2}
-                maxLength={100}
-              />
-              <Field
-                label="Category"
-                name="category"
-                placeholder="Backend Engineering"
-                defaultValue="General"
-                required
-                maxLength={80}
-              />
-              <Field label="Description" name="description">
-                <textarea
-                  id="description"
-                  name="description"
-                  rows={3}
-                  placeholder="When should this resume be used?"
-                  maxLength={2000}
-                />
-              </Field>
-              <Button>Create Family</Button>
-            </ActionForm>
-          </Panel>
-        </div>
+      <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl bg-selected p-5 text-selected-foreground">
+        <p>Want to tailor a version for a specific role?</p>
+        <Button variant="outline" asChild>
+          <Link href="/resume-prompt">Open resume prompt</Link>
+        </Button>
       </div>
-    </>
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {files.map((file) => (
+          <Link
+            key={file.id}
+            href={`/resumes/${file.id}`}
+            className="pressable rounded-card border border-border bg-card p-6 text-foreground hover:border-primary hover:no-underline"
+          >
+            <FileText size={27} strokeWidth={1.6} className="mb-4 text-primary" aria-hidden />
+            <h2 className="text-lg font-semibold">{file.name}</h2>
+            <p className="mt-2 break-all text-sm text-muted-foreground">
+              {file.currentVersion?.originalFilename || "No file uploaded"}
+            </p>
+            <p className="mt-4 text-xs text-muted-foreground">
+              {file.currentVersion?.versionLabel || "Original pending"} · {file.usageCount} recorded
+              actions{file.isActive ? "" : " · archived"}
+            </p>
+          </Link>
+        ))}
+      </div>
+      {!files.length && (
+        <Panel>
+          <h2 className="text-xl font-semibold">No uploaded resumes yet</h2>
+          <p className="mt-2 text-muted-foreground">
+            Upload your existing PDF below. Each revised file stays separate from the original.
+          </p>
+        </Panel>
+      )}
+      <section id="upload">
+        <Panel title="Upload your existing resume">
+          <ActionForm action={quickResumeUpload}>
+            <Field label="Resume name" name="name" placeholder="My resume" />
+            <Field label="PDF file" name="file">
+              <input id="file" name="file" type="file" accept="application/pdf,.pdf" required />
+            </Field>
+            <p className="text-sm text-muted-foreground">
+              PDF up to 10 MiB. Your file is kept as uploaded.
+            </p>
+            <Button>Upload resume</Button>
+          </ActionForm>
+        </Panel>
+      </section>
+      <details className="rounded-card border border-border bg-card p-5">
+        <summary className="cursor-pointer text-sm font-medium">
+          Find an older or archived resume
+        </summary>
+        <form className="mt-4 flex flex-wrap items-center gap-3">
+          <input
+            type="search"
+            name="q"
+            aria-label="Search resumes"
+            defaultValue={p.q}
+            placeholder="Name or category"
+            className="!w-auto min-w-0 flex-1"
+          />
+          <label className="flex items-center gap-2">
+            <input type="checkbox" name="archived" value="1" defaultChecked={p.archived === "1"} />
+            Include archived
+          </label>
+          <Button variant="outline">Search</Button>
+        </form>
+      </details>
+    </div>
   );
 }

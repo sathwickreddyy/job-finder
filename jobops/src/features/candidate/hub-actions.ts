@@ -189,14 +189,14 @@ export async function quickResumeUpload(_state: ActionState, form: FormData): Pr
       .values({ name, slug: `resume-${randomUUID()}`, category: "General", description: "" })
       .returning();
     createdId = family.id;
-    await uploadResumeVersion({
+    const version = await uploadResumeVersion({
       resumeId: family.id,
       versionLabel: "Original",
       file,
       makeCurrent: true,
     });
     refresh();
-    return { success: "Resume saved. Use the resume prompt when you have a job description." };
+    return { success: "Resume saved.", redirect: `/resumes/${family.id}?version=${version.id}` };
   } catch (e) {
     if (createdId)
       await db

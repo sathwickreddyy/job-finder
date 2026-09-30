@@ -77,3 +77,5 @@
 - Task 1 complete: shared controls, Home, discovery and persistent profile preferences. Prompt tests 2/2 and isolated browser flows 2/2 passed; lint and TypeScript passed.
 
 - Task 2 complete: saved descriptions, direct application/outreach prompts and records, frozen submitted resume links, retired task/mission UI and agent entry points. Intent tests 3/3 and isolated browser flows 2/2 passed; lint and TypeScript passed.
+
+- Task 3 complete: additive migration applied, original/revised PDF viewer, version notes, company/role usage and sourced snapshot-specific assessments. Validation tests 4/4 and isolated PDF/assessment flows 2/2 passed; original bytes and stale-assessment behavior verified.
