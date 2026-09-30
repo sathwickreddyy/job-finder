@@ -14,15 +14,14 @@ cp .env.example .env
 docker compose up -d
 npm install
 npm run db:migrate
-npm run db:seed    # optional fictional demonstration, including real sample PDFs
 npm run dev
 ```
 
-Open [JobOps](http://127.0.0.1:3210). PostgreSQL binds to `127.0.0.1:5549`; the application binds to `127.0.0.1:3210`. These ports avoid the other local projects. The app also works without seeding: its empty states link to candidate settings, family creation, jobs, and missions.
+Open [JobOps](http://127.0.0.1:3210). PostgreSQL binds to `127.0.0.1:5549`; the application binds to `127.0.0.1:3210`. These ports avoid the other local projects. A new workspace starts empty, ready for your own candidate information, resume and saved jobs. Starting the application or applying migrations never inserts sample data.
 
 Use the exact origin configured in `APP_URL` when opening the application. If you change the application port or host, update both the launch command and `APP_URL`; update the Gmail callback too when Gmail is configured. Mutating requests from a different origin are rejected.
 
-The seed is idempotent and preserves existing records and candidate configuration. Its sample candidate facts, companies, contacts, files, and messages are explicitly fictional. Replace sample candidate information and upload your own resume before preparing real applications. Unknown answers are intentionally `UNKNOWN`.
+Fictional data is reserved for controlled demonstrations and the isolated browser-test database. `npm run db:seed` is an explicit opt-in command; do not run it as part of normal setup. Its candidate facts, companies, contacts, PDFs and messages are fictional. It preserves existing records and candidate configuration, but deliberately inserts missing examples. Unknown application answers remain `UNKNOWN` until you provide them.
 
 ## What is implemented
 
@@ -72,7 +71,7 @@ Keyword coverage is dictionary-based overlap: matched job keywords divided by al
 | `npm run format` / `npm run format:check` | Prettier                                                       |
 | `npm run db:generate`                     | Generate SQL after a schema change                             |
 | `npm run db:migrate`                      | Apply committed migrations                                     |
-| `npm run db:seed`                         | Optional non-destructive fictional seed                        |
+| `npm run db:seed`                         | Explicit fictional data for controlled demos/tests only        |
 | `npm run db:studio`                       | Local Drizzle Studio; keep it private                          |
 
 Install the browser once with `npx playwright install chromium`. `test:e2e` derives a separate `jobops_e2e` database using the local PostgreSQL credentials, uses `data/e2e-uploads`, `.next-e2e`, and port 3211, and checks an ownership marker before using an existing test database. It never drops or resets your normal database. The database role needs `CREATEDB` (the Docker development role has it). Test data remains in the isolated database for inspection; application data is not cleaned or reset.
@@ -128,6 +127,8 @@ tar -czf backups/jobops-uploads.tar.gz data/uploads
 Run these commands from `jobops/`. The dump command targets the default Compose database; the archive command targets the default `STORAGE_ROOT`. If either location is customized, back up the configured database and actual storage directory instead. The Compose service must be running for `pg_dump`.
 
 Store backups outside Git and securely preserve your `.env` secrets separately. Keep the original `GMAIL_TOKEN_ENCRYPTION_KEY` to restore Gmail connections. Test restoration into a **separate** database/storage root before relying on backups; do not restore over live data without an explicit decision.
+
+The original development fixtures were removed from the main local workspace after being backed up. The one-time `scripts/clean-demo.ts` utility recognizes only the initial development session, preserves later edits, checks references from retained records, and requires an exact preview digest before applying a transactional deletion. It saves private record/upload backups under ignored `data/backups/`. It does not reset the schema, run at startup, or touch `jobops_e2e`. It is not a general-purpose delete or reset command.
 
 ## Mission operation
 
