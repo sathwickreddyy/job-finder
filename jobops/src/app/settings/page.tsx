@@ -204,7 +204,7 @@ export default async function SettingsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {["jobs", "applications", "contacts", "missions", "candidate"].map((entity) => (
+                  {["jobs", "applications", "contacts", "candidate"].map((entity) => (
                     <tr key={entity}>
                       <td className="capitalize">{entity}</td>
                       <td>

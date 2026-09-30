@@ -1,3 +1,4 @@
+import * as promptContext from "@/features/workspace/prompts";
 import { describe, expect, it } from "vitest";
 import { resumePrompt, searchPrompt } from "@/features/simple-preview/prompts";
 
@@ -22,4 +23,27 @@ describe("prompts for existing assistant conversations", () => {
     expect(prompt).toContain("candidates based in India");
     expect(prompt).toContain("do not invent openings");
   });
+});
+
+it("includes saved search criteria without guessing unknown preferences", () => {
+  const makeContext = (
+    promptContext as unknown as {
+      jobPreferencesContext?: (value: Record<string, unknown>) => string;
+    }
+  ).jobPreferencesContext;
+  expect(makeContext, "saved job preferences must be included in copied prompts").toBeTypeOf(
+    "function",
+  );
+  const context = makeContext!({
+    remotePreference: "REMOTE",
+    minExperience: 4,
+    maxExperience: 8,
+    preferredTechnologies: ["Kafka", "PostgreSQL"],
+    excludedRoles: ["Support"],
+  });
+  expect(context).toContain("remote");
+  expect(context).toContain("4–8 years");
+  expect(context).toContain("Kafka, PostgreSQL");
+  expect(context).toContain("Support");
+  expect(makeContext!({ remotePreference: "UNKNOWN" })).not.toContain("UNKNOWN");
 });

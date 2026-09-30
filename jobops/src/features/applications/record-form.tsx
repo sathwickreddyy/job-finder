@@ -8,27 +8,49 @@ export function RecordForm({
   versionChoices,
   jobId,
   method = "DIRECT",
+  existing,
 }: {
   jobChoices: Choice[];
   versionChoices: Choice[];
   jobId?: string;
   method?: string;
+  existing?: {
+    id: string;
+    versionId: string | null;
+    url: string | null;
+    notes: string;
+    recipient: string;
+  };
 }) {
   return (
-    <ActionForm action={recordAction}>
+    <ActionForm key={existing?.id ?? jobId} action={recordAction}>
+      {existing && <input type="hidden" name="recordId" value={existing.id} />}
       <input type="hidden" name="method" value={method} />
-      <Field label="Opening" name="jobId">
-        <select id="jobId" name="jobId" required defaultValue={jobId ?? ""}>
-          <option value="">Choose a saved opening</option>
-          {jobChoices.map((choice) => (
-            <option key={choice.id} value={choice.id}>
-              {choice.label}
-            </option>
-          ))}
-        </select>
-      </Field>
+      {jobId ? (
+        <div>
+          <input type="hidden" name="jobId" value={jobId} />
+          <p className="text-sm font-medium">
+            {jobChoices.find((choice) => choice.id === jobId)?.label}
+          </p>
+        </div>
+      ) : (
+        <Field label="Opening" name="jobId">
+          <select id="jobId" name="jobId" required defaultValue="">
+            <option value="">Choose a saved opening</option>
+            {jobChoices.map((choice) => (
+              <option key={choice.id} value={choice.id}>
+                {choice.label}
+              </option>
+            ))}
+          </select>
+        </Field>
+      )}
       <Field label="Resume file used" name="resumeVersionId">
-        <select id="resumeVersionId" name="resumeVersionId" defaultValue="">
+        <select
+          id="resumeVersionId"
+          name="resumeVersionId"
+          defaultValue={existing?.versionId ?? ""}
+        >
           <option value="">No file used / not selected</option>
           {versionChoices.map((choice) => (
             <option key={choice.id} value={choice.id}>
@@ -62,16 +84,22 @@ export function RecordForm({
             type="date"
             hint="Leave blank to use today when recording a sent action."
           />
-          <Field label="Destination link" name="applicationUrl" type="url" />
+          <Field
+            label="Destination link"
+            name="applicationUrl"
+            type="url"
+            defaultValue={existing?.url ?? ""}
+          />
           {method !== "DIRECT" && (
             <Field
               label="Recipient or contact"
               name="recipient"
+              defaultValue={existing?.recipient}
               placeholder="Name, public profile or verified email"
             />
           )}
           <Field label="Notes" name="notes">
-            <textarea id="notes" name="notes" rows={3} />
+            <textarea id="notes" name="notes" rows={3} defaultValue={existing?.notes} />
           </Field>
         </div>
       </details>

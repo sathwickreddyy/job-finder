@@ -67,3 +67,30 @@ export function outreachPrompt(
         : "write a LinkedIn message";
   return `Help me ${request} for ${role} at ${company}, an India-based opening.\n\nJob link: ${url}\n\nJob description:\n${description || "Ask me for the full description."}\n${context ? `\nMy preferences:\n${context}\n` : ""}\nUse what you already know about my actual work. Help me choose a relevant person using their verified public profile or the contact I provide. Do not invent email addresses, personal details or a relationship.\n\nDraft a concise, specific message: why I am interested, the relevant evidence from my background and one clear request. For a referral, include the job link and ask whether they are comfortable referring me. Keep it personal and respectful. Suggest which resume or portfolio evidence to share and work through wording with me.\n\nShow me the final recipient and message. Ask me before sending through computer use; otherwise give me the text to send myself. After sending, return the channel, recipient, date, exact resume filename if attached, and follow-up suggestion so I can record the outreach. Do not claim that messaging someone is a submitted job application.`;
 }
+
+export function jobPreferencesContext(value: Record<string, unknown>) {
+  const list = (key: string) =>
+    Array.isArray(value[key])
+      ? value[key]
+          .filter((item): item is string => typeof item === "string" && Boolean(item.trim()))
+          .join(", ")
+      : "";
+  const remote =
+    typeof value.remotePreference === "string" && value.remotePreference !== "UNKNOWN"
+      ? value.remotePreference.toLowerCase().replaceAll("_", " ")
+      : "";
+  const hasRange =
+    typeof value.minExperience === "number" &&
+    typeof value.maxExperience === "number" &&
+    value.maxExperience > 0;
+  return [
+    list("desiredRoles") && `Target roles: ${list("desiredRoles")}`,
+    list("locations") && `Preferred India locations: ${list("locations")}`,
+    remote && `Work mode: ${remote}`,
+    hasRange && `Target role experience range: ${value.minExperience}–${value.maxExperience} years`,
+    list("preferredTechnologies") && `Preferred technologies: ${list("preferredTechnologies")}`,
+    list("excludedRoles") && `Exclude roles: ${list("excludedRoles")}`,
+  ]
+    .filter(Boolean)
+    .join("\n");
+}

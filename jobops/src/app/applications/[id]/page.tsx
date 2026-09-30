@@ -14,6 +14,7 @@ import {
 } from "@/db/schema";
 import { PageHeader, Panel, Button, StatusBadge, Field } from "@/components/ui";
 import { ActionForm } from "@/components/action-form";
+import { RecordForm } from "@/features/applications/record-form";
 import { ApplicationForm } from "@/features/applications/form";
 import { addApplicationNote } from "@/features/applications/actions";
 import { methodNames } from "@/features/applications/domain";
@@ -91,20 +92,43 @@ export default async function ApplicationDetail({ params }: { params: Promise<{ 
       </div>
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
         <div className="stack">
-          <Panel title="Application details">
+          <Panel title={outreach ? "Outreach details" : "Application details"}>
             {outreach ? (
-              <p className="text-sm text-muted-foreground">
-                {sent
-                  ? "Your outreach is recorded as sent. Add replies or follow-up notes below."
-                  : "This outreach is a plan. After sending, record it from the outreach page."}{" "}
-                <Link href={`/outreach?job=${job.id}&method=${app.source}`} className="text-link">
-                  Open outreach prompt
-                </Link>{" "}
-                ·{" "}
-                <Link href={`/applications/new?jobId=${job.id}`} className="text-link">
-                  Record a direct application
-                </Link>
-              </p>
+              <>
+                <p className="text-sm text-muted-foreground">
+                  {sent
+                    ? "Your outreach is recorded as sent. Add replies or follow-up notes below."
+                    : "This outreach is a plan. After sending, update this record below."}{" "}
+                  <Link href={`/outreach?record=${app.id}`} className="text-link">
+                    Open outreach prompt
+                  </Link>{" "}
+                  ·{" "}
+                  <Link href={`/applications/new?jobId=${job.id}`} className="text-link">
+                    Record a direct application
+                  </Link>
+                </p>
+                {!sent && (
+                  <RecordForm
+                    jobId={job.id}
+                    method={app.source}
+                    existing={{
+                      id: app.id,
+                      versionId: app.resumeVersionId,
+                      url: app.applicationUrl,
+                      notes: app.notes,
+                      recipient: String(
+                        events.find((event) => typeof event.payload.recipient === "string")?.payload
+                          .recipient ?? "",
+                      ),
+                    }}
+                    jobChoices={[{ id: job.id, label: `${job.company} — ${job.title}` }]}
+                    versionChoices={versions.map(({ version, family }) => ({
+                      id: version.id,
+                      label: `${family.name} / ${version.versionLabel} / ${version.originalFilename}`,
+                    }))}
+                  />
+                )}
+              </>
             ) : (
               <ApplicationForm
                 existing={app}

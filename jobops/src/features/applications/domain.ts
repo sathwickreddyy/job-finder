@@ -1,3 +1,4 @@
+import { indiaDayBoundary } from "@/features/mail/attention";
 import { applicationStages } from "@/db/schema";
 export type ApplicationStage = (typeof applicationStages)[number];
 export const recordMethods = ["DIRECT", "REFERRAL", "COLD_EMAIL", "LINKEDIN_MESSAGE"] as const;
@@ -64,4 +65,11 @@ export function applicationTransition(
     summary:
       previous === next ? `Updated application in ${next}` : `Moved from ${previous} to ${next}`,
   };
+}
+
+export function recordSentAt(value: string, now = new Date()) {
+  const date = value ? indiaDayBoundary(value) : now;
+  if (!date) throw new Error("Use a valid sent date in India time.");
+  if (date > now) throw new Error("A sent date cannot be in the future.");
+  return date;
 }

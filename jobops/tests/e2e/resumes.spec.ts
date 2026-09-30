@@ -92,6 +92,16 @@ test("resume files, bullet changes, exact usage and sourced assessments survive 
   await expect(page.getByLabel("Changes for this file")).toHaveValue(
     "Clarified ownership of the existing Kafka project.",
   );
+  await page.getByLabel("Changes for this file").fill("Unsaved revision-only wording");
+  await page.locator(`a[href="${familyPath}?version=${originalId}&tab=changes"]`).click();
+  await expect(page.getByLabel("Changes for this file")).toHaveValue(
+    "Original wording clarified; no new experience claimed.",
+  );
+  await expect(page.getByRole("status")).toHaveCount(0);
+  await page.locator(`a[href="${familyPath}?version=${revisedId}&tab=changes"]`).click();
+  await expect(page.getByLabel("Changes for this file")).toHaveValue(
+    "Clarified ownership of the existing Kafka project.",
+  );
   await page.goto(`${familyPath}?version=${originalId}&tab=usage`);
   await expect(page.getByRole("heading", { name: company, exact: true })).toBeVisible();
   await page.getByRole("link", { name: "File", exact: true }).click();

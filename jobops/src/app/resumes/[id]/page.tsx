@@ -153,7 +153,7 @@ export default async function ResumeDetail({
                     Text extraction needs attention
                   </summary>
                   <p className="mt-3 text-sm text-muted-foreground">{version.parsingError}</p>
-                  <ActionForm action={retryParsing}>
+                  <ActionForm key={version.id} action={retryParsing}>
                     <input type="hidden" name="versionId" value={version.id} />
                     <Button variant="outline">Retry text extraction</Button>
                   </ActionForm>
@@ -167,7 +167,7 @@ export default async function ResumeDetail({
                 Keep the original bullet, revised wording, reason and facts you confirmed with your
                 assistant.
               </p>
-              <ActionForm action={saveChangeNotes}>
+              <ActionForm key={version.id} action={saveChangeNotes}>
                 <input type="hidden" name="versionId" value={version.id} />
                 <Field label="Changes for this file" name="changeNotes">
                   <textarea
@@ -266,7 +266,7 @@ export default async function ResumeDetail({
                 ))}
               </Panel>
               <Panel title="Save an assessment">
-                <ActionForm action={saveAssessment}>
+                <ActionForm key={version.id} action={saveAssessment}>
                   <input type="hidden" name="versionId" value={version.id} />
                   <Field label="Job description assessed" name="snapshotId">
                     <select name="snapshotId" id="snapshotId" required defaultValue="">

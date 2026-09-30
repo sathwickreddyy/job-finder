@@ -1,4 +1,4 @@
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import {
   applications,
@@ -11,11 +11,16 @@ import {
   settings,
 } from "@/db/schema";
 
+import { jobPreferencesContext } from "./prompts";
+
 // Real personal records shared by the home page and the read-only gallery.
 export async function readWorkspace() {
   const [candidate, preferences, sites, openings, applied, versions, matches] = await Promise.all([
     db.select().from(candidateProfiles).limit(1),
-    db.select().from(settings).where(eq(settings.key, "workingPreferences")),
+    db
+      .select()
+      .from(settings)
+      .where(inArray(settings.key, ["workingPreferences", "jobPreferences"])),
     db
       .select({ name: profiles.displayName, url: profiles.profileUrl })
       .from(profiles)
@@ -85,7 +90,11 @@ export async function readWorkspace() {
     context: [
       person?.careerSummary,
       person?.noticePeriod && `Notice period: ${person.noticePeriod}`,
-      preferences[0]?.value.context,
+      preferences.find((item) => item.key === "workingPreferences")?.value.context,
+      jobPreferencesContext({
+        remotePreference: person?.remotePreference,
+        ...(preferences.find((item) => item.key === "jobPreferences")?.value ?? {}),
+      }),
     ]
       .filter(Boolean)
       .join("\n"),

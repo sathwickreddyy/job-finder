@@ -179,17 +179,15 @@ export async function saveAssessment(_state: ActionState, form: FormData): Promi
         .where(eq(jobSnapshots.id, input.snapshotId));
       if (!version || !snapshot || !snapshot.description.trim())
         throw new Error("Choose an existing resume and a saved full job description.");
-      await tx
-        .insert(resumeAssessments)
-        .values({
-          versionId: input.versionId,
-          snapshotId: input.snapshotId,
-          source: input.source,
-          method: input.method,
-          score: input.score,
-          findings: input.findings,
-          assessedAt,
-        });
+      await tx.insert(resumeAssessments).values({
+        versionId: input.versionId,
+        snapshotId: input.snapshotId,
+        source: input.source,
+        method: input.method,
+        score: input.score,
+        findings: input.findings,
+        assessedAt,
+      });
       return version.resumeId;
     });
     refresh(familyId);

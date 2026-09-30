@@ -25,7 +25,10 @@ export function ApplicationForm({
   existing?: Existing;
 }) {
   return (
-    <ActionForm action={existing ? updateApplication : createApplication}>
+    <ActionForm
+      key={existing?.id ?? selectedJob}
+      action={existing ? updateApplication : createApplication}
+    >
       {existing && <input type="hidden" name="id" value={existing.id} />}
       <div className="form-grid">
         <Field label="Job" name="jobId">
@@ -83,6 +86,14 @@ export function ApplicationForm({
           defaultValue={existing?.nextActionAt?.toISOString().slice(0, 10)}
         />
       </div>
+      {!existing?.appliedAt && (
+        <Field
+          label="Date submitted (India time)"
+          name="sentDate"
+          type="date"
+          hint="Use the actual submission date when marking Applied. Leave blank for today."
+        />
+      )}
       <Field
         label="Application URL"
         name="applicationUrl"
