@@ -12,8 +12,10 @@ import {
   candidateProfiles,
 } from "@/db/schema";
 import { PageHeader, Panel, Button, StatusBadge } from "@/components/ui";
-import { dateLabel } from "@/lib/utils";
+import { displayDate, getDisplayPreferences } from "@/features/candidate/preferences";
 export default async function Today() {
+  const preferences = await getDisplayPreferences();
+  const dateLabel = (value: Date | null | undefined) => displayDate(value, preferences);
   const now = new Date(),
     stale = new Date(new Date().getTime() - 30 * 86400000);
   const [
@@ -29,6 +31,7 @@ export default async function Today() {
     recentMail,
     activity,
     candidate,
+    naukriProfiles,
   ] = await Promise.all([
     db.select({ n: count() }).from(jobs).where(eq(jobs.status, "NEW")),
     db.select({ n: count() }).from(jobs).where(eq(jobs.status, "SHORTLISTED")),
@@ -49,7 +52,7 @@ export default async function Today() {
       .select()
       .from(missions)
       .where(inArray(missions.status, ["DRAFT", "READY", "IN_PROGRESS", "WAITING_FOR_USER"]))
-      .orderBy(desc(missions.priority), desc(missions.createdAt))
+      .orderBy(missions.priority, desc(missions.createdAt))
       .limit(10),
     db.select({ n: count() }).from(missions).where(eq(missions.status, "READY_FOR_REVIEW")),
     db.select({ n: count() }).from(mailEvents).where(eq(mailEvents.status, "NEEDS_REVIEW")),
@@ -78,6 +81,12 @@ export default async function Today() {
     db.select().from(mailMessages).orderBy(desc(mailMessages.receivedAt)).limit(5),
     db.select().from(activityLogs).orderBy(desc(activityLogs.createdAt)).limit(10),
     db.select().from(candidateProfiles).limit(1),
+    db
+      .select()
+      .from(profiles)
+      .where(eq(profiles.provider, "NAUKRI"))
+      .orderBy(profiles.createdAt)
+      .limit(1),
   ]);
   const queues = [
     {
@@ -127,7 +136,7 @@ export default async function Today() {
           </>
         }
       />
-      {candidate[0]?.metadata.demo === true && (
+      {candidate[0]?.metadata.isDemo === true && (
         <div className="notice mb-6">
           You are viewing fictional demo data. Update Candidate Profile with your own information
           before preparing real applications. Unknown answers remain explicit.
@@ -227,6 +236,16 @@ export default async function Today() {
             )}
           </Panel>
           <Panel title="Profiles to inspect">
+            <Link
+              className="button-secondary mb-4"
+              href={
+                naukriProfiles[0]
+                  ? `/missions/new?type=INSPECT_PROFILE&entityType=PROFILE&entityId=${naukriProfiles[0].id}`
+                  : "/profiles/new"
+              }
+            >
+              {naukriProfiles[0] ? "Inspect Naukri profile" : "Add Naukri profile"}
+            </Link>
             {staleProfiles.length ? (
               staleProfiles.map((p) => (
                 <div className="mb-4" key={p.id}>
@@ -236,7 +255,7 @@ export default async function Today() {
                     className="button-quiet mt-1"
                     href={`/missions/new?type=INSPECT_PROFILE&entityType=PROFILE&entityId=${p.id}`}
                   >
-                    Inspect {p.provider === "NAUKRI" ? "Naukri profile" : p.displayName}
+                    Inspect {p.displayName}
                   </Link>
                 </div>
               ))
