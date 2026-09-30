@@ -48,7 +48,7 @@ export default async function InboxPage({
         description="Recruiting mail, grouped by date. Clear next steps when something needs you."
         actions={
           <Link href="/mail" className="button-secondary">
-            Connections & application updates
+            Mail connections
           </Link>
         }
       />
@@ -70,49 +70,54 @@ export default async function InboxPage({
           </Link>
         ))}
       </nav>
-      <form action="/inbox" className="mb-7 grid items-end gap-3 sm:grid-cols-2 lg:grid-cols-5">
-        <input type="hidden" name="view" value={p.view ?? "all"} />
-        <div>
-          <label htmlFor="mail-search" className="mb-1 block text-xs">
-            Search
-          </label>
-          <input
-            type="search"
-            name="q"
-            id="mail-search"
-            defaultValue={p.q}
-            placeholder="Subject or sender"
-          />
-        </div>
-        <div>
-          <label htmlFor="mail-category" className="mb-1 block text-xs">
-            Category
-          </label>
-          <select name="category" id="mail-category" defaultValue={p.category ?? ""}>
-            <option value="">All categories</option>
-            {mailClassifications.map((c) => (
-              <option key={c} value={c}>
-                {c.toLowerCase().replaceAll("_", " ")}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label htmlFor="mail-from" className="mb-1 block text-xs">
-            From (IST)
-          </label>
-          <input type="date" id="mail-from" name="from" defaultValue={p.from} />
-        </div>
-        <div>
-          <label htmlFor="mail-to" className="mb-1 block text-xs">
-            Through (IST)
-          </label>
-          <input type="date" id="mail-to" name="to" defaultValue={p.to} />
-        </div>
-        <Button type="submit" variant="outline">
-          Filter messages
-        </Button>
-      </form>
+      <details className="mb-7" open={Boolean(p.q || p.category || p.from || p.to)}>
+        <summary className="cursor-pointer text-sm text-muted-foreground">
+          Search or filter messages
+        </summary>
+        <form action="/inbox" className="mt-4 grid items-end gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          <input type="hidden" name="view" value={p.view ?? "all"} />
+          <div>
+            <label htmlFor="mail-search" className="mb-1 block text-xs">
+              Search
+            </label>
+            <input
+              type="search"
+              name="q"
+              id="mail-search"
+              defaultValue={p.q}
+              placeholder="Subject or sender"
+            />
+          </div>
+          <div>
+            <label htmlFor="mail-category" className="mb-1 block text-xs">
+              Category
+            </label>
+            <select name="category" id="mail-category" defaultValue={p.category ?? ""}>
+              <option value="">All categories</option>
+              {mailClassifications.map((c) => (
+                <option key={c} value={c}>
+                  {c.toLowerCase().replaceAll("_", " ")}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label htmlFor="mail-from" className="mb-1 block text-xs">
+              From (IST)
+            </label>
+            <input type="date" id="mail-from" name="from" defaultValue={p.from} />
+          </div>
+          <div>
+            <label htmlFor="mail-to" className="mb-1 block text-xs">
+              Through (IST)
+            </label>
+            <input type="date" id="mail-to" name="to" defaultValue={p.to} />
+          </div>
+          <Button type="submit" variant="outline">
+            Filter messages
+          </Button>
+        </form>
+      </details>
       {((p.from && !from) || (p.to && !to) || (from && to && from >= to)) && (
         <p role="alert" className="mb-5 text-sm text-destructive">
           Enter a valid date range. Dates are interpreted in India Standard Time.

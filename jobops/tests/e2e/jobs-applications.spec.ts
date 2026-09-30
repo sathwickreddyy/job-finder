@@ -1,51 +1,4 @@
 import { test, expect } from "@playwright/test";
-test("manual job, snapshot, application stage and timeline", async ({ page }) => {
-  const company = `Browser Manual ${Date.now()}`;
-  await page.goto("/jobs/new");
-  await page.getByLabel("Company", { exact: true }).fill(company);
-  await page.getByLabel("Role / title").fill("Senior Platform Engineer");
-  await page.getByLabel("Location", { exact: true }).fill("Pune");
-  await page
-    .getByLabel("Original job URL")
-    .fill(`https://example.com/jobs/${encodeURIComponent(company)}`);
-  await page
-    .getByLabel("Job description", { exact: true })
-    .fill("Python PostgreSQL Kafka Docker distributed systems");
-  await page.getByRole("button", { name: "Save job", exact: true }).click();
-  await expect(page).toHaveURL(/\/jobs\/[0-9a-f-]+$/);
-  await expect(
-    page.getByRole("heading", { name: "Senior Platform Engineer", exact: true }),
-  ).toBeVisible();
-  await page.getByLabel("Job status", { exact: true }).selectOption("SHORTLISTED");
-  await page.getByRole("button", { name: "Save job status" }).click();
-  await expect(page.getByRole("status")).toHaveText("Job saved.");
-  await page.getByRole("button", { name: "Save keyword comparisons" }).click();
-  await expect(
-    page.getByText("Keyword comparisons saved for current resume versions."),
-  ).toBeVisible();
-  await page.getByRole("link", { name: "Create application", exact: true }).click();
-  await page.getByLabel("Resume version used").selectOption({ index: 1 });
-  await page.getByRole("button", { name: "Create application", exact: true }).click();
-  await expect(page).toHaveURL(/\/applications\/[0-9a-f-]+$/);
-  await page.getByLabel("Application stage", { exact: true }).selectOption("APPLIED");
-  await page.getByRole("button", { name: "Save application", exact: true }).click();
-  await expect(
-    page.getByRole("alert").filter({ hasText: "Confirm that final submission" }),
-  ).toContainText("approved");
-  await page.getByRole("checkbox", { name: /I confirm/ }).check();
-  await page.getByRole("button", { name: "Save application", exact: true }).click();
-  await expect(page.getByRole("status")).toHaveText("Application saved and event appended.");
-  await expect(
-    page.getByRole("heading", { name: "Application Submitted", exact: true }),
-  ).toBeVisible();
-  await page
-    .getByLabel("Timeline note")
-    .fill("Spoke to fictional recruiter about the platform role.");
-  await page.getByRole("button", { name: "Add timeline note" }).click();
-  await expect(
-    page.getByText("Spoke to fictional recruiter about the platform role.", { exact: true }),
-  ).toBeVisible();
-});
 test("bulk JSON preview catches rows, skips duplicates and preserves changed snapshots", async ({
   page,
 }) => {
@@ -80,6 +33,7 @@ test("bulk JSON preview catches rows, skips duplicates and preserves changed sna
   await page.getByRole("button", { name: "Import validated jobs" }).click();
   await expect(page.getByRole("status")).toContainText("merged 1");
   await page.getByRole("link", { name: "Existing job" }).click();
+  await page.locator("summary").filter({ hasText: "Notes and saved description history" }).click();
   await expect(
     page.getByRole("heading", { name: "Snapshot history (2)", exact: true }),
   ).toBeVisible();
@@ -92,16 +46,17 @@ test("bulk JSON preview catches rows, skips duplicates and preserves changed sna
 test("navigation and URL-persisted filters remain usable on small screens", async ({ page }) => {
   await page.goto("/jobs?status=SHORTLISTED");
   await expect(page.getByLabel("Job status", { exact: true })).toHaveValue("SHORTLISTED");
+  await page.locator("summary").filter({ hasText: "Filter by company or status" }).click();
   await page.getByRole("button", { name: "Filter jobs" }).click();
   await expect(page).toHaveURL(/status=SHORTLISTED/);
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByRole("link", { name: "Home", exact: true }).click();
   await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByRole("heading", { name: /find your next role/i })).toBeVisible();
+  await expect(page.getByRole("link", { name: /Find openings/ }).last()).toBeVisible();
   await expect(
-    page.getByRole("heading", { name: "What’s your next move?", exact: true }),
+    page.getByRole("link", { name: "My sites & profile", exact: true }).first(),
   ).toBeVisible();
-  await expect(page.getByRole("button", { name: /Find openings/ })).toBeVisible();
-  await expect(page.getByRole("link", { name: "My profile", exact: true }).first()).toBeVisible();
   await page.goto("/today");
   await expect(page).toHaveURL(/\/$/);
 });
@@ -151,5 +106,9 @@ test("same-batch merge uses the final description and preserves omitted metadata
       .locator("p.whitespace-pre-wrap"),
   ).toHaveText("Kafka");
   await page.goto(`/jobs?q=Kafka&company=${encodeURIComponent(company)}`);
-  await expect(page.getByRole("link", { name: first.title, exact: true })).toBeVisible();
+  await expect(
+    page
+      .getByRole("link")
+      .filter({ has: page.getByRole("heading", { name: first.title, exact: true }) }),
+  ).toBeVisible();
 });

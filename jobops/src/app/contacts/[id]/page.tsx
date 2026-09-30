@@ -24,12 +24,6 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
         description={`${contact.title || "Contact"} at ${contact.company}`}
         actions={
           <>
-            <Link
-              className="button-secondary"
-              href={`/missions/new?type=VERIFY_CONTACT&entityType=CONTACT&entityId=${id}`}
-            >
-              Create verification mission
-            </Link>
             {contact.linkedinUrl && (
               <a
                 href={contact.linkedinUrl}

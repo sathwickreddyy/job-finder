@@ -58,8 +58,8 @@ export default async function MailPage({
   return (
     <>
       <PageHeader
-        title="Mail"
-        description="Recruiting messages and proposed application updates. Every change is reviewed by you."
+        title="Mail connections & linked records"
+        description="Connect your inbox or link a recruiting message to an existing record."
         actions={
           <>
             <Link href="/mail/import" className="button-secondary">
@@ -109,7 +109,7 @@ export default async function MailPage({
                   Last complete sync: {displayDate(connection.lastSyncedAt, preferences, true)}
                 </p>
               </div>
-              <span className="badge badge-teal">Read-only</span>
+              <span className="badge">Read-only</span>
             </div>
             <div className="actions">
               <ActionForm action={syncGmail}>
@@ -128,9 +128,9 @@ export default async function MailPage({
         <section>
           <div className="tabs">
             {[
-              ["NEEDS_REVIEW", "Needs review"],
-              ["REVIEWED", "Reviewed"],
-              ["DISMISSED", "Dismissed"],
+              ["NEEDS_REVIEW", "Unlinked"],
+              ["REVIEWED", "Linked"],
+              ["DISMISSED", "Kept unlinked"],
             ].map(([value, name]) => (
               <Link
                 className={`tab ${status === value ? "active" : ""}`}
@@ -167,9 +167,6 @@ export default async function MailPage({
                     </div>
                     <div className="actions">
                       <StatusBadge status={event.type} />
-                      <span className="badge">
-                        {Math.round(event.confidence * 100)}% rule confidence
-                      </span>
                     </div>
                   </div>
                   <p className="muted mb-4">
@@ -177,9 +174,6 @@ export default async function MailPage({
                       message.bodyText?.slice(0, 320) ||
                       "No message body supplied."}
                   </p>
-                  {Array.isArray(event.details.reasons) && (
-                    <p className="field-hint mb-4">{event.details.reasons.join(". ")}</p>
-                  )}
                   {event.status === "NEEDS_REVIEW" ? (
                     <MailReviewForm event={event} applications={applicationOptions} />
                   ) : (
@@ -198,11 +192,9 @@ export default async function MailPage({
           ) : (
             <EmptyState
               title={
-                status === "NEEDS_REVIEW"
-                  ? "No proposed mail updates to review"
-                  : "No messages in this view"
+                status === "NEEDS_REVIEW" ? "No unlinked messages here" : "No messages in this view"
               }
-              description="Import recruiting messages or sync a connected Gmail account. Application stages change only after explicit review."
+              description="Import recruiting messages or sync a connected Gmail account. Link a message when it belongs to an application or outreach record."
               action={
                 <Link href="/mail/import" className="button">
                   Import recruiting mail

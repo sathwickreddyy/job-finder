@@ -46,7 +46,7 @@ export async function importMail(_previous: ActionState, form: FormData): Promis
     revalidatePath("/inbox");
     revalidatePath("/");
     return {
-      success: `${result.imported} messages imported; ${result.duplicates} duplicates skipped. Review each proposed update before changing an application.`,
+      success: `${result.imported} messages imported; ${result.duplicates} duplicates skipped. Open a message to link it to an existing record.`,
       redirect: "/mail",
     };
   } catch (error) {
@@ -74,11 +74,11 @@ export async function reviewMailEvent(
         updateStage: form.get("updateStage") === "on",
       });
     if (data.decision === "APPEND" && !data.applicationId)
-      throw new Error("Choose the application to link before appending this event.");
+      throw new Error("Choose a record before linking this message.");
     const stage = suggestedStages[data.type as keyof typeof suggestedStages];
     if (data.decision === "APPEND" && data.updateStage && !stage)
       throw new Error(
-        "This classification has no proposed stage. Add the event without changing the stage.",
+        "This category has no matching stage. Link the message without changing the stage.",
       );
     if (data.decision === "DISMISS") data.updateStage = false;
     await db.transaction(async (tx) => {
@@ -166,14 +166,13 @@ export async function reviewMailEvent(
       });
     });
     revalidatePath("/mail");
+    revalidatePath("/inbox");
     revalidatePath("/applications");
     revalidatePath("/");
     if (data.applicationId) revalidatePath(`/applications/${data.applicationId}`);
     return {
       success:
-        data.decision === "APPEND"
-          ? "Reviewed event appended to the application timeline."
-          : "Proposed update dismissed. No application state changed.",
+        data.decision === "APPEND" ? "Message linked to your record." : "Message kept unlinked.",
     };
   } catch (error) {
     return actionError(error);
@@ -223,7 +222,7 @@ export async function syncGmail(_previous: ActionState, form: FormData): Promise
     revalidatePath("/inbox");
     revalidatePath("/");
     return {
-      success: `${imported.imported} recruiting messages imported; ${imported.duplicates} duplicates skipped.${result.nextPageToken ? " More messages remain. Sync again to continue from the next page." : " Sync complete. Review proposed updates below."}`,
+      success: `${imported.imported} recruiting messages imported; ${imported.duplicates} duplicates skipped.${result.nextPageToken ? " More messages remain. Sync again to continue from the next page." : " Refresh complete. Open Inbox to read your messages."}`,
     };
   } catch (error) {
     return actionError(error);

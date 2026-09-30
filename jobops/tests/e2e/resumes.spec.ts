@@ -50,15 +50,13 @@ test("resume files, bullet changes, exact usage and sourced assessments survive 
     "Original wording clarified; no new experience claimed.",
   );
   await page.getByRole("link", { name: "ATS assessment", exact: true }).click();
-  await page
-    .getByLabel("Job description assessed", { exact: true })
-    .selectOption({
-      label: await page
-        .getByLabel("Job description assessed", { exact: true })
-        .locator("option")
-        .filter({ hasText: company })
-        .innerText(),
-    });
+  await page.getByLabel("Job description assessed", { exact: true }).selectOption({
+    label: await page
+      .getByLabel("Job description assessed", { exact: true })
+      .locator("option")
+      .filter({ hasText: company })
+      .innerText(),
+  });
   await page.getByLabel("Assessed by").fill("Claude");
   await page.getByLabel("Score out of 100 (optional)").fill("78");
   await page.getByLabel("Scoring method").fill("Specific keyword and formatting rubric");

@@ -32,8 +32,8 @@ export default async function MailMessagePage({ params }: { params: Promise<{ id
         title={message.subject}
         description={`${message.senderName || message.sender} · ${displayDate(message.receivedAt, preferences, true)}`}
         actions={
-          <Link href="/mail" className="button-secondary">
-            Return to mail review
+          <Link href="/inbox" className="button-secondary">
+            Return to Inbox
           </Link>
         }
       />
@@ -56,16 +56,16 @@ export default async function MailMessagePage({ params }: { params: Promise<{ id
           </div>
         </Panel>
         {events.map((event) => (
-          <Panel title="Proposed application event" key={event.id}>
-            <div className="actions mb-5">
-              <StatusBadge status={event.status} />
-              <span className="badge">{Math.round(event.confidence * 100)}% rule confidence</span>
-            </div>
+          <Panel title="Link this message to a record" key={event.id}>
             {event.status === "NEEDS_REVIEW" ? (
               <MailReviewForm event={event} applications={applicationOptions} />
             ) : (
               <>
-                <p className="muted">This proposal was manually reviewed.</p>
+                <p className="muted">
+                  {event.status === "REVIEWED"
+                    ? "Message linked to your record."
+                    : "Message kept unlinked."}
+                </p>
                 {event.linkedApplicationId && (
                   <Link href={`/applications/${event.linkedApplicationId}`}>
                     Open application timeline
