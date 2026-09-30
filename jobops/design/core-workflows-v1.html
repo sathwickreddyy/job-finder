@@ -1,0 +1,2728 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark" />
+    <title>JobOps — your next move</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --canvas: #0a101b;
+        --background: #0d1421;
+        --surface: #131d2d;
+        --raised: #19263a;
+        --line: #29384e;
+        --text: #e5ebf4;
+        --muted: #9aabc2;
+        --blue: #3b6ecc;
+        --link: #9bc0ff;
+        --soft: #1d3356;
+        --green: #79d1ba;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        font-size: 14px;
+        line-height: 1.55;
+        background: var(--canvas);
+        color: var(--text);
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+      }
+      button,
+      input,
+      textarea,
+      select {
+        font: inherit;
+      }
+      button {
+        cursor: pointer;
+      }
+      button,
+      a,
+      input,
+      textarea,
+      select {
+        -webkit-tap-highlight-color: transparent;
+      }
+      button {
+        color: inherit;
+      }
+      :focus-visible {
+        outline: 2px solid var(--link);
+        outline-offset: 4px;
+      }
+      button:disabled {
+        cursor: default;
+        opacity: 0.5;
+      }
+      a {
+        color: var(--link);
+        text-underline-offset: 4px;
+      }
+      svg {
+        width: 20px;
+        height: 20px;
+        flex: 0 0 auto;
+        stroke-width: 1.7;
+      }
+      h1,
+      h2,
+      h3,
+      p {
+        margin: 0;
+      }
+      h1 {
+        font-size: clamp(27px, 3vw, 38px);
+        letter-spacing: -1.25px;
+        line-height: 1.18;
+        font-weight: 600;
+      }
+      h2 {
+        font-size: 26px;
+        letter-spacing: -0.7px;
+        font-weight: 600;
+        line-height: 1.25;
+      }
+      h3 {
+        font-size: 16px;
+        font-weight: 600;
+        letter-spacing: -0.2px;
+      }
+      p {
+        color: var(--muted);
+      }
+      .muted {
+        color: var(--muted);
+      }
+      .small {
+        font-size: 12px;
+      }
+      .gallery {
+        width: min(1320px, 100% - 80px);
+        margin: 40px auto 56px;
+      }
+      .gallery-heading {
+        display: flex;
+        align-items: flex-end;
+        gap: 28px;
+        justify-content: space-between;
+        margin-bottom: 28px;
+      }
+      .round {
+        color: var(--link);
+        font-size: 13px;
+        margin-bottom: 12px;
+      }
+      .intro {
+        max-width: 650px;
+      }
+      .intro > p:last-child {
+        margin-top: 12px;
+        max-width: 610px;
+      }
+      .preview-notice {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        max-width: 214px;
+        color: var(--muted);
+        font-size: 12px;
+        padding-bottom: 3px;
+      }
+      .preview-notice svg {
+        width: 16px;
+        height: 16px;
+        margin-top: 2px;
+      }
+      .switcher {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+        margin-bottom: 22px;
+      }
+      .direction {
+        display: flex;
+        align-items: center;
+        gap: 13px;
+        padding: 15px 18px;
+        background: transparent;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        text-align: left;
+        min-height: 82px;
+        transition:
+          background 0.15s,
+          border-color 0.15s;
+      }
+      .direction:hover {
+        background: var(--surface);
+        border-color: #536782;
+      }
+      .direction[aria-pressed="true"] {
+        background: #152640;
+        border-color: #658fd8;
+        box-shadow: inset 0 0 0 1px #658fd8;
+      }
+      .letter {
+        width: 30px;
+        height: 30px;
+        display: grid;
+        place-items: center;
+        background: var(--raised);
+        border-radius: 7px;
+        color: var(--muted);
+        font-weight: 600;
+        flex: 0 0 auto;
+      }
+      .direction[aria-pressed="true"] .letter {
+        background: var(--blue);
+        color: white;
+      }
+      .direction-title {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 15px;
+        font-weight: 600;
+      }
+      .direction small {
+        color: var(--muted);
+        font-size: 12px;
+        display: block;
+        margin-top: 3px;
+      }
+      .recommended {
+        font-size: 10px;
+        font-weight: 500;
+        color: var(--link);
+        padding: 2px 6px;
+        border: 1px solid #34527f;
+        border-radius: 4px;
+      }
+      .preview-frame {
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        overflow: hidden;
+        box-shadow: 0 18px 55px #0003;
+        background: var(--background);
+      }
+      .preview-bar {
+        min-height: 41px;
+        display: flex;
+        gap: 15px;
+        align-items: center;
+        justify-content: space-between;
+        padding: 8px 18px;
+        border-bottom: 1px solid var(--line);
+        background: #111b2a;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .preview-bar-title {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .preview-dot {
+        width: 6px;
+        height: 6px;
+        background: #6f8baa;
+        border-radius: 50%;
+      }
+      .reset {
+        min-height: 26px;
+        padding: 0 2px;
+        border: 0;
+        background: transparent;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .reset:hover {
+        color: var(--text);
+      }
+      .application {
+        min-height: 605px;
+      }
+      .layout-a {
+        display: grid;
+        grid-template-columns: 190px minmax(0, 1fr);
+      }
+      .sidebar {
+        padding: 27px 16px 20px;
+        border-right: 1px solid var(--line);
+        background: #101a29;
+        display: flex;
+        flex-direction: column;
+        gap: 32px;
+      }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        font-size: 19px;
+        font-weight: 650;
+        letter-spacing: -0.7px;
+        white-space: nowrap;
+      }
+      .brand-mark {
+        width: 25px;
+        height: 28px;
+        color: var(--link);
+      }
+      .sidebar .brand {
+        padding: 0 10px;
+      }
+      .nav {
+        display: flex;
+        gap: 4px;
+      }
+      .sidebar .nav {
+        flex-direction: column;
+      }
+      .nav-button {
+        min-height: 44px;
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        border: 0;
+        background: transparent;
+        padding: 10px 13px;
+        border-radius: 7px;
+        text-align: left;
+        color: var(--muted);
+        white-space: nowrap;
+      }
+      .nav-button:hover {
+        background: var(--raised);
+        color: var(--text);
+      }
+      .nav-button[aria-current="page"] {
+        background: var(--soft);
+        color: #bfd7ff;
+      }
+      .nav-button svg {
+        width: 18px;
+        height: 18px;
+      }
+      .sidebar-footer {
+        margin-top: auto;
+        padding: 0 10px;
+      }
+      .sidebar-footer p {
+        font-size: 12px;
+        max-width: 135px;
+        line-height: 1.65;
+      }
+      .sidebar-footer svg {
+        color: var(--green);
+        margin-bottom: 7px;
+      }
+      .content {
+        padding: 32px 36px 36px;
+        min-width: 0;
+      }
+      .content-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 20px;
+        margin-bottom: 27px;
+      }
+      .content-header p {
+        margin-top: 7px;
+      }
+      .button {
+        display: inline-flex;
+        justify-content: center;
+        align-items: center;
+        gap: 8px;
+        min-height: 44px;
+        padding: 10px 16px;
+        background: var(--blue);
+        border: 1px solid transparent;
+        border-radius: 7px;
+        font-size: 13px;
+        font-weight: 600;
+        color: white;
+        text-decoration: none;
+        white-space: nowrap;
+      }
+      .button:hover {
+        background: #3565bf;
+      }
+      .button svg {
+        width: 17px;
+        height: 17px;
+      }
+      .secondary {
+        background: var(--surface);
+        border-color: var(--line);
+        color: var(--text);
+      }
+      .secondary:hover {
+        background: var(--raised);
+        border-color: #52647d;
+      }
+      .quiet {
+        background: transparent;
+        color: var(--muted);
+        border-color: transparent;
+      }
+      .quiet:hover {
+        color: var(--text);
+        background: var(--raised);
+      }
+      .text-button {
+        background: transparent;
+        border: 0;
+        color: var(--link);
+        padding: 8px 0;
+        min-height: 44px;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        text-align: left;
+        font-size: 13px;
+      }
+      .text-button:hover {
+        text-decoration: underline;
+        text-underline-offset: 4px;
+      }
+      .filters {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+        align-items: center;
+        border-bottom: 1px solid var(--line);
+        padding-bottom: 12px;
+      }
+      .filter {
+        min-height: 36px;
+        border-radius: 6px;
+        border: 0;
+        background: transparent;
+        color: var(--muted);
+        padding: 7px 12px;
+        font-size: 13px;
+      }
+      .filter:hover {
+        background: var(--surface);
+        color: var(--text);
+      }
+      .filter[aria-pressed="true"] {
+        background: var(--raised);
+        color: var(--text);
+      }
+      .filter-count {
+        font-size: 11px;
+        color: var(--muted);
+        margin-left: 6px;
+      }
+      .first-job {
+        padding: 60px 0 48px;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 176px;
+        gap: 36px;
+        align-items: center;
+      }
+      .empty-symbol {
+        color: var(--link);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 43px;
+        height: 43px;
+        margin-bottom: 20px;
+        background: #162942;
+        border: 1px solid #274466;
+        border-radius: 11px;
+      }
+      .empty-symbol svg {
+        width: 23px;
+        height: 23px;
+      }
+      .empty-title {
+        font-family: Georgia, "Times New Roman", serif;
+        font-size: 35px;
+        font-weight: 400;
+        line-height: 1.2;
+        letter-spacing: -0.8px;
+      }
+      .first-job p {
+        margin: 13px 0 23px;
+        max-width: 365px;
+      }
+      .actions {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      .quiet-steps {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: grid;
+        gap: 22px;
+      }
+      .quiet-steps li {
+        display: flex;
+        gap: 11px;
+        align-items: flex-start;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .step-number {
+        width: 23px;
+        height: 23px;
+        border: 1px solid var(--line);
+        color: var(--muted);
+        border-radius: 50%;
+        display: grid;
+        place-items: center;
+        flex: 0 0 auto;
+        font-size: 11px;
+      }
+      .quiet-steps strong {
+        display: block;
+        color: var(--text);
+        font-size: 13px;
+        font-weight: 500;
+      }
+      .resume-nudge {
+        border-top: 1px solid var(--line);
+        display: flex;
+        align-items: center;
+        gap: 13px;
+        padding-top: 20px;
+      }
+      .resume-nudge > svg {
+        color: var(--muted);
+      }
+      .resume-nudge p {
+        font-size: 12px;
+      }
+      .resume-nudge .text-button {
+        margin-left: auto;
+      }
+      .top-navigation {
+        min-height: 78px;
+        display: flex;
+        gap: 38px;
+        align-items: center;
+        padding: 15px 36px;
+        border-bottom: 1px solid var(--line);
+        background: #101a29;
+      }
+      .top-navigation .nav {
+        margin-left: auto;
+        gap: 8px;
+      }
+      .layout-b .content {
+        max-width: 1010px;
+        margin: auto;
+      }
+      .guided-home {
+        padding: 28px 0 4px;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 70px;
+        align-items: center;
+      }
+      .guided-heading {
+        font-family: Georgia, "Times New Roman", serif;
+        font-size: 39px;
+        font-weight: 400;
+        line-height: 1.15;
+        letter-spacing: -1px;
+        margin-bottom: 15px;
+      }
+      .guided-copy > p {
+        margin-bottom: 24px;
+        max-width: 370px;
+      }
+      .journey {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+        counter-reset: journey;
+      }
+      .journey li {
+        padding: 0 0 23px 41px;
+        position: relative;
+        counter-increment: journey;
+      }
+      .journey li::before {
+        content: counter(journey);
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 25px;
+        height: 25px;
+        border: 1px solid var(--line);
+        border-radius: 50%;
+        display: grid;
+        place-items: center;
+        color: var(--muted);
+        font-size: 11px;
+      }
+      .journey li:not(:last-child)::after {
+        content: "";
+        position: absolute;
+        left: 12px;
+        top: 32px;
+        bottom: 8px;
+        width: 1px;
+        background: var(--line);
+      }
+      .journey li.current::before {
+        color: #c4dbff;
+        border-color: #537ab4;
+        background: var(--soft);
+      }
+      .journey li.done::before {
+        content: "✓";
+        color: var(--green);
+        border-color: #345e59;
+      }
+      .journey p {
+        margin-top: 4px;
+        font-size: 12px;
+      }
+      .journey button {
+        padding: 0;
+        min-height: 24px;
+        color: var(--text);
+        border: 0;
+        background: transparent;
+        font-weight: 500;
+        text-align: left;
+      }
+      .journey button:hover {
+        color: var(--link);
+      }
+      .home-footnote {
+        border-top: 1px solid var(--line);
+        margin-top: 54px;
+        padding-top: 20px;
+        display: flex;
+        gap: 20px;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .empty-centered {
+        padding: 44px 16px;
+        text-align: center;
+        max-width: 540px;
+        margin: auto;
+      }
+      .empty-centered p {
+        margin: 14px auto 23px;
+        max-width: 385px;
+      }
+      .empty-centered .actions {
+        justify-content: center;
+      }
+      .workspace-toolbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 19px 30px;
+        border-bottom: 1px solid var(--line);
+      }
+      .profile-launch {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        border: 1px solid var(--line);
+        background: transparent;
+        color: var(--text);
+        border-radius: 24px;
+        padding: 6px 12px 6px 7px;
+        min-height: 40px;
+        font-size: 12px;
+      }
+      .profile-launch:hover {
+        background: var(--raised);
+      }
+      .avatar {
+        display: grid;
+        place-items: center;
+        width: 25px;
+        height: 25px;
+        border-radius: 50%;
+        background: var(--soft);
+        color: var(--link);
+      }
+      .avatar svg {
+        width: 14px;
+        height: 14px;
+      }
+      .layout-c .content {
+        padding: 30px;
+      }
+      .inline-start {
+        display: grid;
+        grid-template-columns: 1fr minmax(280px, 0.9fr);
+        gap: 60px;
+        padding: 46px 20px 28px;
+        align-items: center;
+      }
+      .inline-start h3 {
+        font-family: Georgia, "Times New Roman", serif;
+        font-size: 35px;
+        font-weight: 400;
+        line-height: 1.2;
+        letter-spacing: -0.7px;
+        margin-bottom: 16px;
+        max-width: 330px;
+      }
+      .inline-start p {
+        max-width: 330px;
+        margin-bottom: 18px;
+      }
+      .quick-form {
+        border-left: 1px solid var(--line);
+        padding-left: 32px;
+      }
+      .quick-form .button {
+        width: 100%;
+        margin-top: 4px;
+      }
+      label {
+        display: block;
+        font-size: 13px;
+        font-weight: 500;
+        margin-bottom: 7px;
+      }
+      input,
+      textarea,
+      select {
+        width: 100%;
+        padding: 10px 12px;
+        border: 1px solid #607b9e;
+        background: var(--background);
+        color: var(--text);
+        border-radius: 6px;
+        min-height: 44px;
+      }
+      input::placeholder,
+      textarea::placeholder {
+        color: #8799b3;
+        opacity: 1;
+      }
+      textarea {
+        min-height: 100px;
+        resize: vertical;
+      }
+      .field {
+        margin-bottom: 18px;
+      }
+      .field small {
+        display: block;
+        font-size: 11px;
+        color: var(--muted);
+        margin-top: 7px;
+      }
+      label .optional {
+        color: var(--muted);
+        font-weight: 400;
+      }
+      .form-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0 18px;
+      }
+      .full {
+        grid-column: 1 / -1;
+      }
+      .profile-heading {
+        display: flex;
+        align-items: center;
+        gap: 15px;
+        margin-bottom: 28px;
+      }
+      .profile-heading .avatar {
+        width: 45px;
+        height: 45px;
+        border-radius: 12px;
+      }
+      .profile-heading .avatar svg {
+        width: 22px;
+        height: 22px;
+      }
+      .profile-heading p {
+        margin-top: 5px;
+        font-size: 13px;
+      }
+      .profile-form {
+        max-width: 680px;
+      }
+      .file-box {
+        position: relative;
+        display: flex;
+        align-items: center;
+        gap: 15px;
+        background: var(--surface);
+        border: 1px dashed #4a6384;
+        border-radius: 9px;
+        padding: 19px;
+        min-height: 87px;
+        cursor: pointer;
+        margin: 0;
+      }
+      .file-box:hover {
+        background: var(--raised);
+      }
+      .file-box:focus-within {
+        outline: 2px solid var(--link);
+        outline-offset: 3px;
+      }
+      .file-box > svg {
+        color: var(--link);
+        width: 26px;
+        height: 26px;
+      }
+      .file-box strong {
+        font-weight: 500;
+        display: block;
+      }
+      .file-box small {
+        color: var(--muted);
+        display: block;
+        margin-top: 3px;
+        font-weight: 400;
+      }
+      .file-box input {
+        position: absolute;
+        inset: 0;
+        opacity: 0;
+        width: 100%;
+        height: 100%;
+        cursor: pointer;
+      }
+      .profile-details {
+        margin: 22px 0;
+        border-top: 1px solid var(--line);
+        border-bottom: 1px solid var(--line);
+      }
+      summary {
+        cursor: pointer;
+        padding: 15px 0;
+        color: var(--muted);
+        font-size: 13px;
+      }
+      details[open] summary {
+        color: var(--text);
+      }
+      details p {
+        padding-bottom: 15px;
+        font-size: 13px;
+      }
+      .form-footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 14px;
+        margin-top: 23px;
+      }
+      .profile-steps {
+        display: flex;
+        gap: 26px;
+        border-bottom: 1px solid var(--line);
+        margin-bottom: 27px;
+      }
+      .profile-step {
+        padding: 0 0 12px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        border: 0;
+        border-bottom: 2px solid transparent;
+        background: none;
+        color: var(--muted);
+        min-height: 44px;
+      }
+      .profile-step[aria-pressed="true"] {
+        color: var(--text);
+        border-color: var(--link);
+      }
+      .profile-step .step-number {
+        width: 22px;
+        height: 22px;
+      }
+      .job-list {
+        display: grid;
+        padding-top: 6px;
+      }
+      .job-row {
+        width: 100%;
+        text-align: left;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto 20px;
+        gap: 20px;
+        align-items: center;
+        background: transparent;
+        border: 0;
+        border-bottom: 1px solid var(--line);
+        padding: 22px 10px;
+        min-height: 90px;
+      }
+      .job-row:hover {
+        background: #162337;
+      }
+      .job-row h3 {
+        font-size: 15px;
+        overflow-wrap: anywhere;
+      }
+      .job-row p {
+        font-size: 12px;
+        margin-top: 5px;
+      }
+      .job-row > svg {
+        color: var(--muted);
+        width: 17px;
+        height: 17px;
+      }
+      .stage-pill {
+        border: 1px solid #3e5372;
+        color: #b8cdee;
+        border-radius: 20px;
+        padding: 4px 10px;
+        font-size: 11px;
+        white-space: nowrap;
+        background: #18283f;
+      }
+      .stage-pill.applied {
+        border-color: #396056;
+        color: var(--green);
+        background: #15302b;
+      }
+      .cards-view {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+        padding-top: 24px;
+      }
+      .cards-view .job-row {
+        grid-template-columns: 1fr 20px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 22px;
+        background: var(--surface);
+      }
+      .cards-view .job-row:hover {
+        border-color: #6884a8;
+      }
+      .cards-view .stage-pill {
+        grid-row: 2;
+        width: fit-content;
+        margin-top: 7px;
+      }
+      .cards-view .job-row > svg {
+        grid-column: 2;
+        grid-row: 1;
+      }
+      .no-results {
+        padding: 64px 20px;
+        text-align: center;
+      }
+      .no-results p {
+        margin: 10px 0 18px;
+      }
+      .detail-body {
+        padding: 27px;
+      }
+      .detail-company {
+        margin: 6px 0 22px;
+      }
+      .detail-title {
+        font-size: 23px;
+        overflow-wrap: anywhere;
+      }
+      .detail-section {
+        padding: 23px 0;
+        border-top: 1px solid var(--line);
+      }
+      .detail-section h3 {
+        margin-bottom: 12px;
+      }
+      .detail-section p {
+        font-size: 13px;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+      }
+      .stage-control {
+        max-width: 320px;
+      }
+      .stage-help {
+        color: var(--muted);
+        font-size: 12px;
+        margin-top: 9px;
+      }
+      .activity {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        display: grid;
+        gap: 12px;
+      }
+      .activity li {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .activity-dot {
+        width: 6px;
+        height: 6px;
+        background: #6f8baa;
+        border-radius: 50%;
+      }
+      .back-button {
+        margin-bottom: 19px;
+      }
+      .embedded-detail {
+        max-width: 760px;
+      }
+      .embedded-detail .detail-body {
+        padding: 0;
+      }
+      .context-details {
+        border-top: 1px solid var(--line);
+        margin-top: 4px;
+      }
+      .more-buttons {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        padding-bottom: 16px;
+      }
+      .more-buttons button {
+        border: 1px solid var(--line);
+        background: var(--surface);
+        border-radius: 6px;
+        padding: 8px 11px;
+        color: var(--muted);
+        min-height: 40px;
+        font-size: 12px;
+      }
+      .more-buttons button:hover {
+        color: var(--text);
+        border-color: #60789a;
+      }
+      .preview-hint {
+        font-size: 12px;
+        color: var(--green);
+        padding: 0 0 15px;
+      }
+      dialog {
+        color: var(--text);
+        border: 1px solid #3d5271;
+        border-radius: 13px;
+        background: var(--surface);
+        width: min(510px, calc(100% - 32px));
+        max-height: calc(100dvh - 40px);
+        padding: 0;
+        box-shadow: 0 24px 80px #0008;
+      }
+      dialog::backdrop {
+        background: #050a13b8;
+        backdrop-filter: blur(3px);
+      }
+      dialog.drawer {
+        margin: 20px 20px 20px auto;
+        height: calc(100dvh - 40px);
+        max-height: none;
+        width: min(510px, calc(100% - 32px));
+      }
+      .dialog-heading {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 20px;
+        padding: 19px 24px;
+        border-bottom: 1px solid var(--line);
+      }
+      .dialog-heading h2 {
+        font-size: 19px;
+        letter-spacing: -0.4px;
+      }
+      .close {
+        display: grid;
+        place-items: center;
+        background: transparent;
+        border: 0;
+        width: 36px;
+        height: 36px;
+        border-radius: 7px;
+        color: var(--muted);
+        flex: 0 0 auto;
+      }
+      .close:hover {
+        color: var(--text);
+        background: var(--raised);
+      }
+      .dialog-content {
+        padding: 24px;
+      }
+      .dialog-content > p {
+        margin: 0 0 22px;
+        font-size: 13px;
+      }
+      .dialog-actions {
+        display: flex;
+        gap: 10px;
+        justify-content: flex-end;
+        padding-top: 9px;
+      }
+      .dialog-note {
+        color: var(--muted);
+        margin-top: 17px;
+        font-size: 11px;
+      }
+      .decision {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 35px;
+        margin-top: 24px;
+      }
+      .decision-text {
+        max-width: 680px;
+      }
+      .decision h2 {
+        font-size: 17px;
+        letter-spacing: -0.2px;
+        margin-bottom: 7px;
+      }
+      .decision p {
+        font-size: 13px;
+      }
+      .choice-button {
+        background: transparent;
+        color: var(--link);
+        border-color: #4d71a9;
+        min-width: 195px;
+      }
+      .choice-button:hover,
+      .choice-button.selected {
+        background: var(--soft);
+        border-color: var(--link);
+      }
+      .selection-note {
+        font-size: 12px;
+        color: var(--green);
+        margin-top: 10px;
+        text-align: right;
+        max-width: 280px;
+      }
+      .notes {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 30px;
+        border-top: 1px solid var(--line);
+        margin-top: 31px;
+        padding-top: 25px;
+      }
+      .notes h3 {
+        font-size: 13px;
+        margin-bottom: 6px;
+      }
+      .notes p {
+        font-size: 12px;
+      }
+      .toast {
+        position: fixed;
+        bottom: 24px;
+        left: 50%;
+        transform: translateX(-50%);
+        padding: 11px 18px;
+        border: 1px solid #3f675f;
+        border-radius: 8px;
+        background: #18332d;
+        color: #bcebdd;
+        font-size: 13px;
+        z-index: 20;
+        max-width: calc(100% - 40px);
+        box-shadow: 0 8px 32px #0004;
+      }
+      .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+      }
+      [hidden] {
+        display: none !important;
+      }
+      @media (max-width: 1080px) {
+        .gallery {
+          width: calc(100% - 48px);
+          margin-top: 28px;
+        }
+        .layout-a {
+          grid-template-columns: 160px minmax(0, 1fr);
+        }
+        .content {
+          padding: 27px;
+        }
+        .first-job {
+          grid-template-columns: 1fr;
+          padding: 35px 0;
+          gap: 30px;
+        }
+        .quiet-steps {
+          grid-template-columns: repeat(3, 1fr);
+          gap: 18px;
+        }
+        .quiet-steps li {
+          display: block;
+        }
+        .quiet-steps .step-number {
+          margin-bottom: 8px;
+        }
+        .guided-home {
+          gap: 35px;
+        }
+        .inline-start {
+          padding-left: 0;
+          padding-right: 0;
+          gap: 32px;
+        }
+        .recommended {
+          display: none;
+        }
+      }
+      @media (max-width: 760px) {
+        .gallery {
+          width: calc(100% - 28px);
+          margin-top: 25px;
+        }
+        .gallery-heading {
+          display: block;
+          margin-bottom: 22px;
+        }
+        .preview-notice {
+          max-width: none;
+          margin-top: 18px;
+        }
+        .switcher {
+          gap: 7px;
+        }
+        .direction {
+          display: block;
+          padding: 12px;
+          min-height: 112px;
+        }
+        .letter {
+          margin-bottom: 9px;
+          width: 23px;
+          height: 23px;
+          font-size: 12px;
+          border-radius: 5px;
+        }
+        .direction-title {
+          font-size: 13px;
+        }
+        .direction small {
+          font-size: 11px;
+        }
+        .application {
+          min-height: 650px;
+        }
+        .layout-a {
+          display: block;
+        }
+        .sidebar {
+          display: flex;
+          flex-direction: row;
+          flex-wrap: wrap;
+          gap: 10px;
+          padding: 15px 17px;
+          align-items: center;
+          border-right: 0;
+          border-bottom: 1px solid var(--line);
+        }
+        .sidebar .brand {
+          padding: 0;
+        }
+        .sidebar .nav {
+          width: 100%;
+          margin-left: 0;
+          flex-direction: row;
+        }
+        .sidebar-footer {
+          display: none;
+        }
+        .nav-button {
+          font-size: 12px;
+          padding: 9px;
+          gap: 6px;
+        }
+        .nav-button svg {
+          width: 15px;
+          height: 15px;
+        }
+        .brand {
+          font-size: 17px;
+          gap: 6px;
+        }
+        .brand-mark {
+          width: 21px;
+        }
+        .content,
+        .layout-c .content {
+          padding: 23px 20px;
+        }
+        .content-header {
+          gap: 13px;
+        }
+        .content-header h2 {
+          font-size: 23px;
+        }
+        .content-header p {
+          font-size: 12px;
+        }
+        .content-header > .button {
+          padding: 9px 11px;
+          font-size: 12px;
+        }
+        .content-header > .button svg {
+          display: none;
+        }
+        .first-job {
+          padding: 30px 0;
+        }
+        .empty-title,
+        .inline-start h3 {
+          font-size: 31px;
+        }
+        .quiet-steps {
+          gap: 11px;
+        }
+        .quiet-steps li {
+          font-size: 11px;
+        }
+        .quiet-steps strong {
+          font-size: 12px;
+        }
+        .resume-nudge {
+          align-items: flex-start;
+          gap: 10px;
+        }
+        .resume-nudge > svg {
+          margin-top: 4px;
+        }
+        .resume-nudge .text-button {
+          min-width: 70px;
+          font-size: 12px;
+          padding-top: 0;
+        }
+        .top-navigation {
+          padding: 15px 20px;
+          flex-wrap: wrap;
+          gap: 10px;
+        }
+        .top-navigation .nav {
+          gap: 0;
+        }
+        .top-navigation .nav-button svg {
+          display: none;
+        }
+        .guided-home {
+          grid-template-columns: 1fr;
+          padding-top: 12px;
+          gap: 40px;
+        }
+        .guided-heading {
+          font-size: 34px;
+        }
+        .journey li {
+          padding-bottom: 22px;
+        }
+        .home-footnote {
+          margin-top: 20px;
+          display: block;
+        }
+        .inline-start {
+          grid-template-columns: 1fr;
+          padding-top: 30px;
+          gap: 24px;
+        }
+        .quick-form {
+          border-left: 0;
+          border-top: 1px solid var(--line);
+          padding-left: 0;
+          padding-top: 24px;
+        }
+        .workspace-toolbar {
+          padding: 16px 20px;
+        }
+        .profile-launch {
+          font-size: 11px;
+        }
+        .cards-view {
+          grid-template-columns: 1fr;
+        }
+        .job-row {
+          gap: 10px;
+          padding-left: 0;
+          padding-right: 0;
+        }
+        .job-row h3 {
+          font-size: 14px;
+        }
+        .form-grid {
+          grid-template-columns: 1fr;
+        }
+        .decision {
+          display: block;
+        }
+        .decision .button {
+          margin-top: 18px;
+        }
+        .selection-note {
+          text-align: left;
+        }
+        .notes {
+          grid-template-columns: 1fr;
+          gap: 18px;
+        }
+        .profile-steps {
+          gap: 17px;
+          font-size: 12px;
+        }
+        .profile-step {
+          gap: 6px;
+        }
+        .preview-bar {
+          padding: 8px 13px;
+          font-size: 11px;
+        }
+        .preview-bar-title {
+          gap: 7px;
+        }
+        dialog.drawer {
+          margin: 12px auto;
+          height: calc(100dvh - 24px);
+        }
+        .dialog-content,
+        .detail-body {
+          padding: 21px;
+        }
+      }
+      .home-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1.3fr) minmax(240px, 0.9fr);
+        gap: 35px;
+      }
+      .home-title {
+        font-family: Georgia, "Times New Roman", serif;
+        font-size: 31px;
+        font-weight: 400;
+        letter-spacing: -0.7px;
+        line-height: 1.2;
+      }
+      .home-intro {
+        margin-top: 11px;
+        font-size: 13px;
+        max-width: 510px;
+      }
+      .task-launchers {
+        margin-top: 23px;
+        display: grid;
+        gap: 8px;
+      }
+      .task-launcher {
+        display: flex;
+        align-items: center;
+        gap: 13px;
+        width: 100%;
+        padding: 14px;
+        border: 1px solid var(--line);
+        border-radius: 9px;
+        background: var(--surface);
+        text-align: left;
+        min-height: 73px;
+      }
+      .task-launcher:hover {
+        background: #192a42;
+        border-color: #6585b2;
+      }
+      .task-launcher > svg:first-child {
+        color: var(--link);
+        width: 22px;
+        height: 22px;
+      }
+      .task-launcher > svg:last-child {
+        margin-left: auto;
+        width: 16px;
+        color: var(--muted);
+      }
+      .task-launcher strong {
+        font-size: 13px;
+        font-weight: 550;
+      }
+      .task-launcher small {
+        display: block;
+        margin-top: 3px;
+        font-size: 11px;
+        color: var(--muted);
+      }
+      .home-side {
+        padding-left: 25px;
+        border-left: 1px solid var(--line);
+      }
+      .side-section + .side-section {
+        margin-top: 26px;
+        padding-top: 25px;
+        border-top: 1px solid var(--line);
+      }
+      .side-heading {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 16px;
+      }
+      .side-heading h3 {
+        font-size: 14px;
+      }
+      .side-heading .text-button {
+        min-height: 30px;
+        padding: 0;
+        font-size: 11px;
+      }
+      .calm-empty {
+        padding: 17px 0 6px;
+      }
+      .calm-empty > svg {
+        color: #6483a7;
+        width: 25px;
+        height: 25px;
+        margin-bottom: 12px;
+      }
+      .calm-empty h4 {
+        font-size: 13px;
+        font-weight: 500;
+        margin: 0 0 5px;
+      }
+      .calm-empty p {
+        font-size: 12px;
+        line-height: 1.65;
+      }
+      .task-status {
+        font-size: 10px;
+        color: var(--link);
+        display: block;
+        margin-top: 5px;
+      }
+      .review-row {
+        display: block;
+        padding: 13px 0;
+        text-align: left;
+        background: none;
+        border: 0;
+        border-bottom: 1px solid var(--line);
+        width: 100%;
+      }
+      .review-row:hover strong {
+        color: var(--link);
+      }
+      .review-row strong {
+        font-size: 12px;
+        font-weight: 500;
+      }
+      .home-profile {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-top: 23px;
+        padding-top: 19px;
+        border-top: 1px solid var(--line);
+      }
+      .home-profile p {
+        font-size: 12px;
+      }
+      .home-profile .text-button {
+        margin-left: auto;
+        white-space: nowrap;
+      }
+      .guide-layout {
+        display: grid;
+        grid-template-columns: 240px minmax(0, 1fr);
+        gap: 45px;
+        margin-top: 24px;
+      }
+      .guide-menu {
+        display: grid;
+        align-content: start;
+      }
+      .guide-item {
+        display: flex;
+        gap: 13px;
+        align-items: center;
+        min-height: 58px;
+        background: none;
+        color: var(--muted);
+        border: 0;
+        text-align: left;
+        padding: 9px;
+        border-radius: 7px;
+        font-size: 13px;
+      }
+      .guide-item[aria-pressed="true"] {
+        background: var(--soft);
+        color: var(--text);
+      }
+      .guide-content {
+        padding: 14px 0;
+      }
+      .guide-content > .empty-symbol {
+        margin-bottom: 20px;
+      }
+      .guide-content h3 {
+        font-size: 25px;
+        line-height: 1.3;
+        margin-bottom: 12px;
+        letter-spacing: -0.5px;
+      }
+      .guide-content > p {
+        margin-bottom: 23px;
+        max-width: 430px;
+      }
+      .guide-review {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 35px;
+        margin-top: 28px;
+        padding-top: 24px;
+        border-top: 1px solid var(--line);
+      }
+      .composer {
+        padding: 17px;
+        background: var(--surface);
+        border: 1px solid #5274a4;
+        border-radius: 12px;
+        margin-top: 25px;
+      }
+      .composer textarea {
+        min-height: 110px;
+        border: 0;
+        padding: 1px 2px;
+        background: transparent;
+        font-size: 15px;
+        resize: vertical;
+      }
+      .composer-footer {
+        margin-top: 14px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 15px;
+      }
+      .composer-footer small {
+        color: var(--muted);
+        font-size: 11px;
+      }
+      .suggestions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 7px;
+        margin: 14px 0 28px;
+      }
+      .suggestions button {
+        background: none;
+        border: 1px solid var(--line);
+        border-radius: 20px;
+        color: var(--muted);
+        padding: 8px 12px;
+        min-height: 36px;
+        font-size: 11px;
+      }
+      .suggestions button:hover {
+        border-color: #7795c0;
+        color: var(--text);
+      }
+      .queue-heading {
+        font-size: 13px;
+        margin-bottom: 8px;
+      }
+      .task-context {
+        font-size: 12px;
+        border: 1px solid var(--line);
+        border-radius: 7px;
+        padding: 12px;
+        margin: 18px 0;
+        background: var(--background);
+      }
+      .task-context strong {
+        display: block;
+        font-size: 13px;
+        margin-bottom: 5px;
+      }
+      .task-context p {
+        font-size: 12px;
+      }
+      .handoff {
+        padding: 15px;
+        border-left: 2px solid var(--link);
+        background: var(--background);
+        margin: 18px 0;
+        font-size: 12px;
+        line-height: 1.7;
+        color: var(--muted);
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+      }
+      .approval-actions {
+        display: grid;
+        gap: 9px;
+        margin-top: 20px;
+      }
+      .approval-actions button {
+        justify-content: flex-start;
+      }
+      .preview-step {
+        padding: 13px;
+        border: 1px dashed #4c668a;
+        border-radius: 7px;
+        font-size: 11px;
+        color: var(--muted);
+        margin-top: 25px;
+      }
+      .preview-step .text-button {
+        min-height: 34px;
+        font-size: 12px;
+        padding-bottom: 0;
+      }
+      .mail-filter {
+        margin: 24px 0 0;
+      }
+      .mail-empty {
+        padding: 45px 0;
+      }
+      .stage-trail {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        flex-wrap: wrap;
+        margin: 0 0 24px;
+        font-size: 11px;
+        color: var(--muted);
+      }
+      .stage-trail .current {
+        color: var(--link);
+      }
+      .stage-trail svg {
+        width: 12px;
+        height: 12px;
+      }
+      @media (max-width: 1080px) {
+        .home-grid {
+          gap: 24px;
+          grid-template-columns: minmax(0, 1.2fr) minmax(200px, 0.8fr);
+        }
+        .home-side {
+          padding-left: 21px;
+        }
+        .guide-layout {
+          grid-template-columns: 210px minmax(0, 1fr);
+          gap: 25px;
+        }
+      }
+      @media (max-width: 760px) {
+        .home-grid {
+          grid-template-columns: 1fr;
+        }
+        .home-side {
+          padding: 24px 0 0;
+          border-left: 0;
+          border-top: 1px solid var(--line);
+        }
+        .home-title {
+          font-size: 29px;
+        }
+        .guide-layout {
+          grid-template-columns: 1fr;
+          gap: 20px;
+        }
+        .guide-menu {
+          display: flex;
+          overflow: auto;
+          gap: 7px;
+        }
+        .guide-item {
+          flex: 0 0 auto;
+          font-size: 12px;
+          min-height: 44px;
+          gap: 7px;
+        }
+        .guide-item .step-number {
+          width: 20px;
+          height: 20px;
+        }
+        .guide-review {
+          grid-template-columns: 1fr;
+          gap: 24px;
+        }
+        .composer-footer {
+          align-items: flex-end;
+        }
+        .sidebar .nav {
+          gap: 0;
+        }
+        .sidebar .nav-button svg {
+          display: none;
+        }
+        .profile-launch {
+          padding-right: 8px;
+          gap: 5px;
+        }
+        .top-navigation {
+          gap: 8px;
+        }
+        .top-navigation .nav {
+          order: 3;
+          width: 100%;
+          margin-left: 0;
+        }
+        .top-navigation > .profile-launch {
+          margin-left: auto;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          transition: none !important;
+          scroll-behavior: auto !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="gallery">
+      <header class="gallery-heading">
+        <div class="intro">
+          <p class="round">JobOps redesign / Your home and core workflow</p>
+          <h1>What do you want to move forward today?</h1>
+          <p>
+            Three ways to direct your job search in India. Start a task, work with your chosen
+            assistant, and review the next move in one place.
+          </p>
+        </div>
+        <div class="preview-notice">
+          <span id="notice-icon"></span
+          ><span>Design preview · nothing here is saved to JobOps.</span>
+        </div>
+      </header>
+      <div class="switcher" role="group" aria-label="Preview a design direction">
+        <button class="direction" data-direction="a" aria-pressed="true">
+          <span class="letter">A</span
+          ><span
+            ><span class="direction-title"
+              >Action home <span class="recommended">Recommended</span></span
+            ><small>Choose a task. Review what comes back.</small></span
+          >
+        </button>
+        <button class="direction" data-direction="b" aria-pressed="false">
+          <span class="letter">B</span
+          ><span
+            ><span class="direction-title">Guided next step</span
+            ><small>Move through your search at your pace.</small></span
+          >
+        </button>
+        <button class="direction" data-direction="c" aria-pressed="false">
+          <span class="letter">C</span
+          ><span
+            ><span class="direction-title">Conversation + queue</span
+            ><small>Describe the goal. Keep the work visible.</small></span
+          >
+        </button>
+      </div>
+      <section class="preview-frame" aria-label="Interactive JobOps preview">
+        <div class="preview-bar">
+          <span class="preview-bar-title"
+            ><span class="preview-dot"></span><span id="preview-title">A / Action home</span></span
+          ><button class="reset" data-action="reset">Reset preview</button>
+        </div>
+        <div id="application"></div>
+      </section>
+      <section class="decision" aria-label="Choose a design direction">
+        <div class="decision-text">
+          <h2 id="decision-title">Start work. Review the next move.</h2>
+          <p id="decision-description">
+            Five clear tasks replace the page-heavy menu. Review requests and urgent mail sit beside
+            them, so work coming back from your assistant never gets lost.
+          </p>
+        </div>
+        <div class="options">
+          <button id="choose" class="button choice-button option" data-choice="a">
+            Choose this direction
+          </button>
+          <p id="selection-note" class="selection-note" aria-live="polite"></p>
+        </div>
+      </section>
+      <section class="notes" aria-label="What changes across all three directions">
+        <div>
+          <h3>You direct. Your assistant does the work.</h3>
+          <p>
+            Find openings, refine your resume with Codex or Claude Code, update profiles, and
+            prepare your next move. JobOps keeps the record.
+          </p>
+        </div>
+        <div>
+          <h3>Review before the next move</h3>
+          <p>
+            Decide whether to apply, ask for a referral, or draft outreach. Corrections and resume
+            revisions stay attached to the task.
+          </p>
+        </div>
+        <div>
+          <h3>Important mail comes to you</h3>
+          <p>
+            Refresh when you want. Time-sensitive messages and the action they need surface on Home,
+            with date groups in Inbox.
+          </p>
+        </div>
+      </section>
+    </main>
+    <dialog id="modal" aria-labelledby="dialog-title"></dialog>
+    <div id="toast" class="toast" role="status" hidden></div>
+    <script>
+      const icons = {
+        brand: '<path d="M5 4h13v12a5 5 0 0 1-10 0v-5"/><path d="M5 4v3h9v9a1 1 0 0 1-2 0"/>',
+        jobs: '<rect x="3" y="6" width="18" height="15" rx="2"/><path d="M8 6V3h8v3M3 12a22 22 0 0 0 18 0M10 13h4"/>',
+        user: '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
+        home: '<path d="m3 10 9-7 9 7v11h-6v-7H9v7H3Z"/>',
+        plus: '<path d="M12 5v14M5 12h14"/>',
+        arrow: '<path d="m9 5 7 7-7 7"/>',
+        back: '<path d="m15 5-7 7 7 7"/>',
+        file: '<path d="M14 2H5v20h14V7Z"/><path d="M14 2v6h5M8 12h8M8 16h6"/>',
+        close: '<path d="m6 6 12 12M18 6 6 18"/>',
+        lock: '<rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V6a4 4 0 0 1 8 0v4M12 14v3"/>',
+        check: '<path d="m5 12 4 4L19 6"/>',
+        leaf: '<path d="M20 3C8 2 2 7 5 15c5 5 15 3 15-12ZM4 21l11-11"/>',
+      };
+      const icon = (name, cls = "") =>
+        `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">${icons[name] || icons.jobs}</svg>`;
+      const esc = (value) =>
+        String(value ?? "").replace(
+          /[&<>"']/g,
+          (character) =>
+            ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character],
+        );
+      const descriptions = {
+        a: [
+          "Two places",
+          "A simpler home for every job",
+          "Saved jobs and applications share one place. Your resume and personal details live together in My profile. Open a job to see everything related to it.",
+        ],
+        b: [
+          "Guided home",
+          "A little guidance before the full workspace",
+          "Home gives you one next step and a short setup path. Jobs holds your search; My profile holds your resume and details. A gentler start, with one extra destination.",
+        ],
+        c: [
+          "One workspace",
+          "Keep the job in front of you",
+          "Your jobs are the whole app. Add one directly, open its details alongside your search, and pull out your profile only when you need it. The fewest destinations, with more in-place panels.",
+        ],
+      };
+      const stages = ["Saved", "Preparing", "Applied", "Interviewing", "Offer", "Closed"];
+      let state = {
+        direction: "a",
+        page: "jobs",
+        filter: "All jobs",
+        jobs: [],
+        profile: { name: "", role: "", location: "", resume: "" },
+        profileStep: 1,
+        detail: null,
+      };
+      const sites = {
+        Naukri: "https://www.naukri.com/",
+        Instahyre: "https://www.instahyre.com/",
+        Cutshort: "https://cutshort.io/",
+        Hirist: "https://www.hirist.tech/",
+      };
+      let selection = null;
+      let toastTimer;
+      const app = document.getElementById("application");
+      const modal = document.getElementById("modal");
+      let modalOrigin = null;
+      let replacingModal = false;
+      document.getElementById("notice-icon").innerHTML = icon("lock");
+      const brand = () => `<div class="brand">${icon("brand", "brand-mark")}JobOps</div>`;
+      const action = (text, name, type = "button", glyph = "") =>
+        `<button type="${type}" class="button"${name ? ` data-action="${name}"` : ""}>${glyph ? icon(glyph) : ""}${text}</button>`;
+      const activeJob = () => state.jobs.find((job) => job.id === state.detail);
+      const hasProfile = () =>
+        Boolean(state.profile.name || state.profile.role || state.profile.resume);
+      function announce(message) {
+        const toast = document.getElementById("toast");
+        toast.textContent = message;
+        toast.hidden = false;
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => (toast.hidden = true), 3800);
+      }
+      function nav(pages) {
+        return `<nav class="nav" aria-label="Preview main navigation">${pages.map(([page, text, glyph]) => `<button class="nav-button" data-page="${page}" ${state.page === page ? 'aria-current="page"' : ""}>${icon(glyph)}${text}</button>`).join("")}</nav>`;
+      }
+      function filters() {
+        const counts = {
+          "All jobs": state.jobs.length,
+          Saved: state.jobs.filter((job) => ["Saved", "Preparing"].includes(job.stage)).length,
+          Applications: state.jobs.filter((job) =>
+            ["Applied", "Interviewing", "Offer"].includes(job.stage),
+          ).length,
+          Closed: state.jobs.filter((job) => job.stage === "Closed").length,
+        };
+        return `<div class="filters" role="group" aria-label="Filter your jobs">${Object.entries(
+          counts,
+        )
+          .map(
+            ([name, count]) =>
+              `<button class="filter" data-filter="${name}" aria-pressed="${state.filter === name}">${name}${count ? `<span class="filter-count">${count}</span>` : ""}</button>`,
+          )
+          .join("")}</div>`;
+      }
+      function resumeNudge() {
+        return `<div class="resume-nudge">${icon("file")}<div><h3 class="small">${state.profile.resume ? esc(state.profile.resume) : "Bring your resume when you’re ready"}</h3><p>${state.profile.resume ? "Chosen for this preview. No file was uploaded." : "Keep your resume and details in one place."}</p></div><button class="text-button" data-action="profile">${state.profile.resume ? "My profile" : "Add resume"}</button></div>`;
+      }
+      function emptyJobs() {
+        if (state.direction === "b")
+          return `<div class="empty-centered"><span class="empty-symbol">${icon("jobs")}</span><h3 class="empty-title">A place for your next role.</h3><p>Find opportunities on Indian job sites. Save the ones you like, then keep every next step together.</p><div class="actions">${action("Find jobs", "find-jobs", "button", "jobs")}<button class="button quiet" data-action="add-job">Save a job</button></div><button class="text-button" data-action="profile">Add your resume first</button></div>`;
+        if (state.direction === "c")
+          return `<div class="inline-start"><div><span class="empty-symbol">${icon("jobs")}</span><h3>Your next role starts here.</h3><p>Explore Indian job sites, save the roles you like, and follow their progress in this space.</p>${action("Find jobs", "find-jobs", "button", "jobs")}<div><button class="text-button" data-action="profile">${icon("file")}Add your resume first</button></div></div><form class="quick-form" data-form="job"><h3 style="font:600 15px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;letter-spacing:0;margin-bottom:19px">Already found a role? Save it.</h3><div class="field"><label for="quick-title">Job title</label><input id="quick-title" name="title" placeholder="The role you’re considering" required maxlength="160" /></div><div class="field"><label for="quick-company">Company</label><input id="quick-company" name="company" placeholder="Where you’d like to work" required maxlength="120" /></div><button type="submit" class="button secondary">Save this job</button><p class="dialog-note">Preview only. You can add the job link next.</p></form></div>`;
+        return `<div class="first-job"><div><span class="empty-symbol">${icon("jobs")}</span><h3 class="empty-title">Your next role starts here.</h3><p>Find jobs on Indian job sites. Save the ones you like, and keep every next step in one place.</p><div class="actions">${action("Find jobs", "find-jobs", "button", "jobs")}<button class="button quiet" data-action="add-job">Save a job</button></div></div><ol class="quiet-steps"><li><span class="step-number">1</span><span><strong>Make it yours</strong>Your resume and preferences.</span></li><li><span class="step-number">2</span><span><strong>Find a role</strong>Search Indian job sites.</span></li><li><span class="step-number">3</span><span><strong>Keep it moving</strong>Save, prepare, and apply.</span></li></ol></div>`;
+      }
+      function jobList() {
+        const jobs = state.jobs.filter(
+          (job) =>
+            state.filter === "All jobs" ||
+            (state.filter === "Saved" && ["Saved", "Preparing"].includes(job.stage)) ||
+            (state.filter === "Applications" &&
+              ["Applied", "Interviewing", "Offer"].includes(job.stage)) ||
+            (state.filter === "Closed" && job.stage === "Closed"),
+        );
+        if (!jobs.length)
+          return `<div class="no-results"><h3>No ${state.filter.toLowerCase()} yet</h3><p>Change a job’s stage as your search moves forward.</p><button class="button secondary" data-filter="All jobs">See all jobs</button></div>`;
+        return `<div class="${state.direction === "b" ? "cards-view" : "job-list"}">${jobs.map((job) => `<button class="job-row" data-job="${job.id}"><div><h3>${esc(job.title)}</h3><p>${esc(job.company)}${job.location ? ` / ${esc(job.location)}` : ""}</p></div><span class="stage-pill ${["Applied", "Interviewing", "Offer"].includes(job.stage) ? "applied" : ""}">${esc(job.stage)}</span>${icon("arrow")}</button>`).join("")}</div>`;
+      }
+      function jobsPage() {
+        if (state.direction === "b" && state.detail)
+          return `<div class="embedded-detail"><button class="text-button back-button" data-action="back-jobs">${icon("back")}All jobs</button>${jobDetail()}</div>`;
+        return `<header class="content-header"><div><h2>${state.direction === "c" ? "Your job search" : "Your jobs"}</h2><p>${state.jobs.length ? "Every opportunity, from saved to offer." : "Your search in India, one step at a time."}</p></div>${state.jobs.length ? `<div class="actions">${action("Find jobs", "find-jobs", "button", "jobs")}<button class="button secondary" data-action="add-job">Save a job</button></div>` : ""}</header>${filters()}${state.jobs.length ? jobList() : emptyJobs()}${!state.jobs.length && state.direction === "a" ? resumeNudge() : ""}`;
+      }
+      function homePage() {
+        const started = hasProfile();
+        const hasJobs = state.jobs.length > 0;
+        return `<div class="guided-home"><div class="guided-copy"><span class="empty-symbol">${icon(started ? "jobs" : "leaf")}</span><h2 class="guided-heading">${started ? `Your next step,<br>${esc(state.profile.name.split(" ")[0] || "at your pace")}.` : "Let’s make this<br>yours."}</h2><p>${hasJobs ? "Your jobs are ready when you are. Open one to prepare your application or record an update." : started ? "You’ve made a start. Explore roles on Indian job sites and save the ones that feel right." : "Your resume, the Indian cities you prefer, and a clear next step. Build your search at your own pace."}</p>${action(hasJobs ? "Open your jobs" : started ? "Find jobs" : "Set up My profile", hasJobs ? "jobs" : started ? "find-jobs" : "profile", "button", hasJobs ? "jobs" : started ? "jobs" : "user")}${!started ? '<div><button class="text-button" data-action="find-jobs">Or explore jobs first</button></div>' : ""}</div><ol class="journey"><li class="${started ? "done" : "current"}"><button data-action="profile">A little about you</button><p>Your resume, target role, and preferred cities.</p></li><li class="${hasJobs ? "done" : started ? "current" : ""}"><button data-action="find-jobs">Find roles in India</button><p>Naukri, Instahyre, Cutshort, or Hirist.</p></li><li><button data-action="add-job">Save one and take the next step</button><p>Prepare, apply, and record what happens.</p></li></ol></div><div class="home-footnote"><p class="small">Already have a role in mind?</p><button class="text-button" data-action="add-job">Save a job ${icon("arrow")}</button></div>`;
+      }
+      function profileForm() {
+        const profile = state.profile;
+        const guided = state.direction === "b";
+        const basic = `<div class="form-grid"><div class="field"><label for="profile-name">Your name <span class="optional">(optional)</span></label><input id="profile-name" name="name" value="${esc(profile.name)}" placeholder="What should we call you?" autocomplete="off" maxlength="100" /></div><div class="field"><label for="profile-role">Role you’re looking for <span class="optional">(optional)</span></label><input id="profile-role" name="role" value="${esc(profile.role)}" placeholder="Your next role" maxlength="160" /></div><div class="field full"><label for="profile-location">Preferred locations in India <span class="optional">(optional)</span></label><input id="profile-location" name="location" value="${esc(profile.location)}" placeholder="Bengaluru, Hyderabad, or remote in India" maxlength="200" /></div></div>`;
+        const resume = `<div class="field"><label for="profile-resume">Your resume <span class="optional">(optional)</span></label><label class="file-box" for="profile-resume">${icon("file")}<span><strong id="resume-name">${esc(profile.resume) || "Choose a PDF"}</strong><small id="resume-helper">${profile.resume ? "Only the filename is used in this preview." : "Use your current resume. You can change it later."}</small></span><input type="file" accept="application/pdf,.pdf" name="resume" id="profile-resume" /></label><small>Preview only. The file stays on your device and is not read or uploaded.</small></div>`;
+        return `<form class="profile-form" data-form="profile">${guided ? `<div class="profile-steps" role="group" aria-label="Profile setup steps"><button type="button" class="profile-step" data-profile-step="1" aria-pressed="${state.profileStep === 1}"><span class="step-number">1</span>Your details</button><button type="button" class="profile-step" data-profile-step="2" aria-pressed="${state.profileStep === 2}"><span class="step-number">2</span>Your resume</button></div>` : ""}<div ${guided && state.profileStep !== 1 ? "hidden" : ""}>${basic}</div><div ${guided && state.profileStep !== 2 ? "hidden" : ""}>${resume}</div><details class="profile-details"><summary>More about your search</summary><div class="form-grid"><div class="field"><label for="profile-salary">Expected salary <span class="optional">(₹ LPA)</span></label><input id="profile-salary" name="salary" type="number" min="0" step="0.5" value="${esc(profile.salary)}" placeholder="Lakhs per year" /></div><div class="field"><label for="profile-notice">Notice period</label><select id="profile-notice" name="notice">${["Not added", "Immediate", "30 days", "60 days", "90 days", "Serving notice"].map((notice) => `<option${profile.notice === notice ? " selected" : ""}>${notice}</option>`).join("")}</select></div><div class="field full"><label for="profile-preference">What matters in your next role?</label><textarea id="profile-preference" name="preference" placeholder="For example, the kind of work or flexibility you want" maxlength="3000">${esc(profile.preference)}</textarea></div></div><p>Your Naukri, Instahyre, Cutshort, and Hirist profile details would live here.</p></details><div class="form-footer"><span class="small muted">${guided ? "Skip anything you’re not ready to add." : "Your details stay together."}</span>${guided && state.profileStep === 1 ? '<button type="button" class="button" data-profile-step="2">Continue</button>' : action("Save profile", "", "submit")}</div></form>`;
+      }
+      function profilePage() {
+        return `<div class="profile-heading"><span class="avatar">${icon("user")}</span><div><h2>My profile</h2><p>Your resume and the details you use to apply.</p></div></div>${profileForm()}`;
+      }
+      function jobDetail() {
+        const job = activeJob();
+        if (!job) return "";
+        const url = /^https?:\/\//i.test(job.url) ? job.url : "";
+        return `<div class="detail-body"><h2 class="detail-title">${esc(job.title)}</h2><p class="detail-company">${esc(job.company)}${job.location ? ` / ${esc(job.location)}` : ""}</p><section class="detail-section"><label for="job-stage">Where are you with this job?</label><select class="stage-control" id="job-stage" data-stage="${job.id}">${stages.map((stage) => `<option${job.stage === stage ? " selected" : ""}>${stage}</option>`).join("")}</select><p class="stage-help">${job.stage === "Saved" ? "Keep it here until you’re ready to prepare." : job.stage === "Applied" ? "Marked as applied in this preview. Nothing was submitted." : "Update the stage as your search moves forward."}</p></section><section class="detail-section"><h3>Your resume</h3><p>${state.profile.resume ? esc(state.profile.resume) : "Add a resume to your profile when you’re ready to prepare."}</p><button class="text-button" data-action="profile">${state.profile.resume ? "View My profile" : "Add a resume"}</button></section><section class="detail-section"><h3>Job details</h3><p>${job.notes ? esc(job.notes) : "No notes yet. Keep the description or anything you want to remember here."}</p>${url ? `<p style="margin-top:12px"><a href="${esc(url)}" target="_blank" rel="noopener noreferrer">Open original job</a></p>` : ""}<button class="text-button" data-action="edit-job">Edit link and notes</button></section><section class="detail-section"><h3>Progress</h3><ul class="activity">${job.history
+          .slice()
+          .reverse()
+          .map((entry) => `<li><span class="activity-dot"></span>${esc(entry)}</li>`)
+          .join(
+            "",
+          )}</ul></section><details class="context-details"><summary>More for this job</summary><div class="more-buttons"><button data-more="contacts">Contacts</button><button data-more="mail">Related mail</button><button data-more="help">Get help with this job</button></div><p class="preview-hint" id="more-hint" hidden></p></details></div>`;
+      }
+      function render() {
+        const direction = state.direction;
+        const pageContent =
+          state.page === "profile"
+            ? profilePage()
+            : state.page === "home"
+              ? homePage()
+              : jobsPage();
+        if (direction === "a")
+          app.innerHTML = `<div class="application layout-a"><aside class="sidebar">${brand()}${nav(
+            [
+              ["jobs", "Jobs", "jobs"],
+              ["profile", "My profile", "user"],
+            ],
+          )}<div class="sidebar-footer">${icon("leaf")}<p>A calmer place to move your search forward.</p></div></aside><div class="content">${pageContent}</div></div>`;
+        else if (direction === "b")
+          app.innerHTML = `<div class="application layout-b"><header class="top-navigation">${brand()}${nav(
+            [
+              ["home", "Home", "home"],
+              ["jobs", "Jobs", "jobs"],
+              ["profile", "My profile", "user"],
+            ],
+          )}</header><div class="content">${pageContent}</div></div>`;
+        else
+          app.innerHTML = `<div class="application layout-c"><header class="workspace-toolbar">${brand()}<button class="profile-launch" data-action="profile"><span class="avatar">${icon("user")}</span>${state.profile.name ? esc(state.profile.name.split(" ")[0]) : "My profile"}${icon("arrow")}</button></header><div class="content">${jobsPage()}</div></div>`;
+        document
+          .querySelectorAll("[data-direction]")
+          .forEach((button) =>
+            button.setAttribute("aria-pressed", String(button.dataset.direction === direction)),
+          );
+        document.getElementById("preview-title").textContent =
+          `${direction.toUpperCase()} / ${descriptions[direction][0]}`;
+        document.getElementById("decision-title").textContent = descriptions[direction][1];
+        document.getElementById("decision-description").textContent = descriptions[direction][2];
+        const choose = document.getElementById("choose");
+        choose.dataset.choice = direction;
+        choose.classList.toggle("selected", selection === direction);
+        choose.textContent =
+          selection === direction ? `${direction.toUpperCase()} selected` : "Choose this direction";
+        document.getElementById("selection-note").textContent = selection
+          ? `${selection.toUpperCase()} selected. Share what you like or want to change in chat.`
+          : "";
+      }
+      function showModal(title, html, drawer = false) {
+        replacingModal = modal.open;
+        if (modal.open) modal.close();
+        else if (!modal.contains(document.activeElement)) modalOrigin = document.activeElement;
+        modal.className = drawer ? "drawer" : "";
+        modal.innerHTML = `<div class="dialog-heading"><h2 id="dialog-title">${title}</h2><button type="button" class="close" data-action="close" aria-label="Close dialog">${icon("close")}</button></div>${html}`;
+        modal.showModal();
+        requestAnimationFrame(() =>
+          (
+            modal.querySelector('input:not([type="file"]):not([type="hidden"])') ||
+            modal.querySelector("textarea") ||
+            modal.querySelector("select") ||
+            modal.querySelector(".close")
+          ).focus(),
+        );
+      }
+      modal.addEventListener("close", () => {
+        if (replacingModal || modal.open) {
+          replacingModal = false;
+          return;
+        }
+        const heading = app.querySelector("h2");
+        if (modalOrigin?.isConnected) modalOrigin.focus();
+        else if (heading) {
+          heading.tabIndex = -1;
+          heading.focus();
+        }
+      });
+      function addJob() {
+        showModal(
+          "Save a job",
+          `<div class="dialog-content"><p>Found a role on an Indian job site? Keep it here and decide what’s next.</p><form data-form="job"><div class="field"><label for="job-title">Job title</label><input id="job-title" name="title" required maxlength="160" placeholder="The role you’re considering" /></div><div class="field"><label for="job-company">Company</label><input id="job-company" name="company" required maxlength="120" placeholder="Where you’d like to work" /></div><div class="field"><label for="job-url">Job link <span class="optional">(optional)</span></label><input id="job-url" name="url" type="url" placeholder="A Naukri, Instahyre, Cutshort, or Hirist link" maxlength="2000" /></div><div class="dialog-actions"><button type="button" class="button quiet" data-action="close">Cancel</button>${action("Save job", "", "submit")}</div><p class="dialog-note">This creates a preview draft only. Nothing is saved to JobOps.</p></form></div>`,
+        );
+      }
+      function findJobs() {
+        showModal(
+          "Find jobs in India",
+          `<div class="dialog-content"><p>Choose where to look. Copy your search details, then explore roles on the site.</p><div class="field"><label for="search-role">Role you’re looking for</label><input id="search-role" value="${esc(state.profile.role)}" placeholder="For example, backend engineer" maxlength="160" /></div><div class="field"><label for="search-location">Location in India</label><input id="search-location" value="${esc(state.profile.location)}" list="indian-cities" placeholder="Bengaluru, Hyderabad, or remote in India" maxlength="200" /><datalist id="indian-cities"><option>Bengaluru</option><option>Hyderabad</option><option>Pune</option><option>Chennai</option><option>Delhi NCR</option><option>Mumbai</option><option>Remote in India</option></datalist></div><div class="field"><label for="search-site">Job site</label><select id="search-site">${Object.keys(
+            sites,
+          )
+            .map((name) => `<option>${name}</option>`)
+            .join(
+              "",
+            )}</select></div><div class="actions"><button class="button secondary" data-action="copy-search">Copy search details</button><a id="open-site" class="button" href="${sites.Naukri}" target="_blank" rel="noopener noreferrer">Open Naukri</a></div><p class="dialog-note">Opens the site in a new tab. Search and applications happen there; this preview doesn’t submit anything.</p><div class="context-details" style="margin-top:22px"><button class="text-button" data-action="add-job">Found a role? Save a job here ${icon("arrow")}</button></div></div>`,
+        );
+      }
+      function openProfile() {
+        if (modal.open) modal.close();
+        state.detail = null;
+        if (state.direction === "c")
+          showModal(
+            "My profile",
+            `<div class="dialog-content"><p>Your resume and the details you use to apply.</p>${profileForm()}</div>`,
+            true,
+          );
+        else {
+          state.page = "profile";
+          render();
+        }
+      }
+      function openJob(id) {
+        state.detail = id;
+        state.page = "jobs";
+        if (state.direction === "b") render();
+        else showModal("Job details", jobDetail(), state.direction !== "b");
+      }
+      function readProfile(form) {
+        if (!form) return;
+        const data = new FormData(form);
+        ["name", "role", "location", "preference", "salary", "notice"].forEach((field) => {
+          if (data.has(field)) state.profile[field] = String(data.get(field)).trim();
+        });
+      }
+      document.addEventListener("click", (event) => {
+        const button = event.target.closest("button");
+        if (!button) return;
+        if (button.dataset.direction) {
+          state.direction = button.dataset.direction;
+          state.page = state.direction === "b" ? "home" : "jobs";
+          state.detail = null;
+          state.profileStep = 1;
+          if (modal.open) modal.close();
+          render();
+          return;
+        }
+        if (button.id === "choose") {
+          selection = state.direction;
+          if (typeof window.toggleSelect === "function") window.toggleSelect(button);
+          render();
+          return;
+        }
+        if (button.dataset.page) {
+          state.page = button.dataset.page;
+          state.detail = null;
+          render();
+          return;
+        }
+        if (button.dataset.filter) {
+          state.filter = button.dataset.filter;
+          render();
+          return;
+        }
+        if (button.dataset.job) {
+          openJob(Number(button.dataset.job));
+          return;
+        }
+        if (button.dataset.profileStep) {
+          readProfile(button.closest("form"));
+          state.profileStep = Number(button.dataset.profileStep);
+          render();
+          const step = app.querySelector(`[data-profile-step="${state.profileStep}"]`);
+          if (step) step.focus();
+          return;
+        }
+        if (button.dataset.more) {
+          const hints = {
+            contacts:
+              "A contact and your conversation notes would live here, attached to this job.",
+            mail: "Related recruiter messages would appear here when you connect or import mail.",
+            help: "A short, supervised task would start here, using this job’s details and your chosen resume.",
+          };
+          const hint = document.getElementById("more-hint");
+          hint.hidden = false;
+          hint.textContent = hints[button.dataset.more];
+          return;
+        }
+        switch (button.dataset.action) {
+          case "find-jobs":
+            findJobs();
+            break;
+          case "copy-search": {
+            const role = document.getElementById("search-role").value.trim();
+            const location = document.getElementById("search-location").value.trim();
+            const search = [role, location || "India"].filter(Boolean).join(" — ");
+            if (navigator.clipboard && window.isSecureContext)
+              navigator.clipboard
+                .writeText(search)
+                .then(() => announce("Search details copied. Paste them on your chosen job site."))
+                .catch(() =>
+                  announce("Copy is unavailable. Select the role and location to copy them."),
+                );
+            else announce("Select the role and location to copy them.");
+            break;
+          }
+          case "add-job":
+            addJob();
+            break;
+          case "close":
+            modal.close();
+            break;
+          case "profile":
+            openProfile();
+            break;
+          case "jobs":
+          case "back-jobs":
+            state.page = "jobs";
+            state.detail = null;
+            render();
+            break;
+          case "reset":
+            state.jobs = [];
+            state.profile = { name: "", role: "", location: "", resume: "" };
+            state.filter = "All jobs";
+            state.detail = null;
+            state.page = state.direction === "b" ? "home" : "jobs";
+            state.profileStep = 1;
+            render();
+            announce("Preview cleared. JobOps data is unchanged.");
+            break;
+          case "edit-job": {
+            const job = activeJob();
+            if (!job) break;
+            showModal(
+              "Edit job details",
+              `<div class="dialog-content"><form data-form="edit-job"><div class="field"><label for="edit-location">Location <span class="optional">(optional)</span></label><input id="edit-location" name="location" value="${esc(job.location)}" maxlength="200" /></div><div class="field"><label for="edit-url">Job link <span class="optional">(optional)</span></label><input id="edit-url" type="url" name="url" value="${esc(job.url)}" placeholder="https://" maxlength="2000" /></div><div class="field"><label for="edit-notes">Description or notes</label><textarea id="edit-notes" name="notes" maxlength="10000">${esc(job.notes)}</textarea></div><div class="dialog-actions"><button type="button" class="button quiet" data-action="cancel-edit">Cancel</button>${action("Save details", "", "submit")}</div></form></div>`,
+            );
+            break;
+          }
+          case "cancel-edit":
+            modal.close();
+            openJob(state.detail);
+            break;
+        }
+      });
+      document.addEventListener("submit", (event) => {
+        const form = event.target.closest("[data-form]");
+        if (!form) return;
+        event.preventDefault();
+        const data = new FormData(form);
+        if (form.dataset.form === "job") {
+          const title = String(data.get("title") || "").trim();
+          const company = String(data.get("company") || "").trim();
+          if (!title || !company) {
+            announce("Add a job title and company to continue.");
+            return;
+          }
+          const job = {
+            id: Date.now(),
+            title,
+            company,
+            url: String(data.get("url") || "").trim(),
+            location: "",
+            notes: "",
+            stage: "Saved",
+            history: ["Saved to your jobs just now"],
+          };
+          state.jobs.push(job);
+          state.page = "jobs";
+          state.filter = "All jobs";
+          if (modal.open) modal.close();
+          render();
+          announce("Job added to this preview. Open it to try the next step.");
+        } else if (form.dataset.form === "profile") {
+          readProfile(form);
+          if (modal.open) modal.close();
+          if (state.direction === "b") state.page = "home";
+          render();
+          announce("Profile updated in this preview.");
+        } else if (form.dataset.form === "edit-job") {
+          const job = activeJob();
+          if (!job) return;
+          ["url", "location", "notes"].forEach(
+            (field) => (job[field] = String(data.get(field) || "").trim()),
+          );
+          modal.close();
+          render();
+          openJob(job.id);
+          announce("Job details updated in this preview.");
+        }
+      });
+      document.addEventListener("change", (event) => {
+        const element = event.target;
+        if (element.id === "search-site") {
+          const link = document.getElementById("open-site");
+          link.href = sites[element.value];
+          link.textContent = `Open ${element.value}`;
+        }
+        if (element.id === "profile-resume" && element.files[0]) {
+          state.profile.resume = element.files[0].name;
+          document.getElementById("resume-name").textContent = state.profile.resume;
+          document.getElementById("resume-helper").textContent =
+            "Only the filename is used in this preview.";
+        }
+        if (element.dataset.stage) {
+          const job = state.jobs.find((item) => item.id === Number(element.dataset.stage));
+          if (!job || job.stage === element.value) return;
+          job.stage = element.value;
+          job.history.push(`Moved to ${job.stage.toLowerCase()} just now`);
+          if (modal.open) {
+            modal.querySelector(".detail-body").outerHTML = jobDetail();
+            modal.querySelector("[data-stage]").focus();
+          }
+          render();
+          announce(`Stage changed to ${job.stage.toLowerCase()} in this preview.`);
+        }
+      });
+      modal.addEventListener("click", (event) => {
+        if (event.target === modal) {
+          const r = modal.getBoundingClientRect();
+          if (
+            event.clientX < r.left ||
+            event.clientX > r.right ||
+            event.clientY < r.top ||
+            event.clientY > r.bottom
+          )
+            modal.close();
+        }
+      });
+      // This gallery keeps all task states in memory. No assistant, API, or mailbox is connected.
+      const taskTypes = [
+        {
+          id: "find",
+          title: "Find openings",
+          description: "Search roles that fit you, across Indian job sites.",
+          glyph: "jobs",
+        },
+        {
+          id: "tailor",
+          title: "Tailor my resume",
+          description: "Work through a job description with your assistant.",
+          glyph: "file",
+        },
+        {
+          id: "profiles",
+          title: "Update job profiles",
+          description: "Bring your portal profiles up to date.",
+          glyph: "user",
+        },
+        {
+          id: "apply",
+          title: "Prepare an application",
+          description: "Get everything ready for a role you’ve chosen.",
+          glyph: "check",
+        },
+        {
+          id: "outreach",
+          title: "Ask for a referral",
+          description: "Or prepare a cold email or LinkedIn message.",
+          glyph: "arrow",
+        },
+      ];
+      let workflow = {
+        tasks: [],
+        selected: null,
+        guide: 0,
+        mailFilter: "Today",
+        refreshed: false,
+        prompt: "",
+      };
+      descriptions.a = [
+        "Action home",
+        "Start work. Review the next move.",
+        "Five clear tasks replace the page-heavy menu. Review requests and urgent mail sit beside them, so work coming back from your assistant never gets lost.",
+      ];
+      descriptions.b = [
+        "Guided next step",
+        "One next step, with the rest close by.",
+        "A simple journey keeps the current task in focus. Move freely between finding roles, tailoring your resume, updating profiles, and choosing how to approach a role.",
+      ];
+      descriptions.c = [
+        "Conversation + queue",
+        "Describe the goal. Keep the work visible.",
+        "Start with a short instruction, then confirm a structured task. A visible queue holds the work and its review requests, with urgent mail beside it.",
+      ];
+      const currentTask = () => workflow.tasks.find((task) => task.id === workflow.selected);
+      const taskType = (id) => taskTypes.find((type) => type.id === id) || taskTypes[0];
+      function taskButtons() {
+        return `<div class="task-launchers">${taskTypes.map((task) => `<button class="task-launcher" data-task="${task.id}">${icon(task.glyph)}<span><strong>${task.title}</strong><small>${task.description}</small></span>${icon("arrow")}</button>`).join("")}</div>`;
+      }
+      function reviewQueue(all = false) {
+        const tasks = all
+          ? workflow.tasks
+          : workflow.tasks.filter((task) => task.stage === "review" || task.stage === "changes");
+        if (!tasks.length)
+          return `<div class="calm-empty">${icon(all ? "jobs" : "check")}<h4>${all ? "No tasks yet" : "You’re all caught up"}</h4><p>${all ? "Start with a task above. Its progress and your decisions will stay here." : "When your assistant has something ready, you’ll review it here before the next move."}</p></div>`;
+        return tasks
+          .map(
+            (task) =>
+              `<button class="review-row" data-review-task="${task.id}"><strong>${esc(taskType(task.type).title)}${task.role ? ` / ${esc(task.role)}` : ""}</strong><span class="task-status">${task.stage === "review" ? "Needs your review" : task.stage === "changes" ? "Changes requested" : task.stage === "decided" ? esc(task.decision) : "Ready for your assistant"} · preview</span></button>`,
+          )
+          .join("");
+      }
+      function mailSummary() {
+        return `<section class="side-section"><div class="side-heading"><h3>Time-sensitive mail</h3><button class="text-button" data-flow="refresh-mail">Refresh mail</button></div><div class="calm-empty">${icon("file")}<h4>${workflow.refreshed ? "No mailbox connected in this preview" : "Mail hasn’t been refreshed"}</h4><p>${workflow.refreshed ? "Your real messages stay untouched. Connected mail would be grouped by date, with urgent actions shown here." : "Refresh to bring in replies, interview dates, and anything that needs your attention."}</p></div><button class="text-button" data-page="inbox">Open inbox ${icon("arrow")}</button></section>`;
+      }
+      function profileNudge() {
+        return `<div class="home-profile">${icon("file")}<div><h3 class="small">${state.profile.resume ? esc(state.profile.resume) : "Start with the resume you already use"}</h3><p>${state.profile.resume ? "Chosen locally for this preview." : "Add it once. Refine it for each opportunity."}</p></div><button class="text-button" data-action="profile">${hasProfile() ? "My profile" : "Add resume"}</button></div>`;
+      }
+      function actionHome() {
+        return `<div class="home-grid"><section><h2 class="home-title">What’s your next move?</h2><p class="home-intro">Choose a task. Your assistant works with you; you decide what happens next.</p>${taskButtons()}${profileNudge()}</section><aside class="home-side"><section class="side-section"><div class="side-heading"><h3>For your review</h3></div>${reviewQueue()}</section>${mailSummary()}${workflow.tasks.length ? `<section class="side-section"><h3 class="queue-heading">Your tasks</h3>${reviewQueue(true)}</section>` : ""}</aside></div>`;
+      }
+      function guidedHome() {
+        const task = taskTypes[workflow.guide];
+        const guideDescriptions = [
+          "Tell your assistant the role and Indian cities you’re aiming for. Bring suitable openings back here before deciding which deserve your time.",
+          "Paste a job description and choose your resume. Collaborate with Codex or Claude Code, review the changes, and keep the version you approve.",
+          "Use your latest approved resume and details to prepare updates for Naukri, Instahyre, Cutshort, Hirist, or LinkedIn. Review and approve the proposed changes before they are published.",
+          "Choose a role, verify your details, and prepare the application. You decide when to proceed with applying or choose a referral instead.",
+          "Choose a referral, cold email, or LinkedIn message. Work through the draft and its recipient before deciding whether to send it.",
+        ];
+        return `<h2 class="home-title">A clear next step.</h2><p class="home-intro">Move at your pace. You can start wherever you need help.</p><div class="guide-layout"><nav class="guide-menu" aria-label="Your job search steps">${taskTypes.map((item, index) => `<button class="guide-item" data-guide="${index}" aria-pressed="${workflow.guide === index}"><span class="step-number">${index + 1}</span>${item.title}</button>`).join("")}</nav><section class="guide-content"><span class="empty-symbol">${icon(task.glyph)}</span><h3>${task.title}</h3><p>${guideDescriptions[workflow.guide]}</p><button class="button" data-task="${task.id}">Start this task ${icon("arrow")}</button><div><button class="text-button" data-action="profile">${icon("file")}${state.profile.resume ? "Review My profile" : "Add my resume first"}</button></div></section></div><div class="guide-review"><section><h3 class="queue-heading">Waiting for your decision</h3>${reviewQueue()}</section>${mailSummary()}</div>${workflow.tasks.length ? `<section class="side-section" style="margin-top:28px;padding-top:24px;border-top:1px solid var(--line)"><h3 class="queue-heading">Your tasks</h3>${reviewQueue(true)}</section>` : ""}`;
+      }
+      function conversationHome() {
+        return `<div class="home-grid"><section><h2 class="home-title">Tell it what you need.</h2><p class="home-intro">Turn your next goal into a task you and your assistant can work through.</p><form class="composer" data-form="conversation"><label class="sr-only" for="task-prompt">What would you like help with?</label><textarea id="task-prompt" name="prompt" required maxlength="3000" placeholder="Find backend roles in Bengaluru, or help me tailor my resume for a role…">${esc(workflow.prompt)}</textarea><div class="composer-footer"><small>You’ll review the task before starting.</small><button class="button" type="submit">Create task ${icon("arrow")}</button></div></form><div class="suggestions">${taskTypes.map((task) => `<button data-task="${task.id}">${task.title}</button>`).join("")}</div><h3 class="queue-heading">Your task queue</h3>${reviewQueue(true)}${profileNudge()}</section><aside class="home-side"><section class="side-section"><h3 class="queue-heading">Needs your decision</h3>${reviewQueue()}</section>${mailSummary()}</aside></div>`;
+      }
+      function inboxPage() {
+        return `<header class="content-header"><div><h2>Inbox</h2><p>Messages and the next step they need, grouped by date.</p></div><button class="button" data-flow="refresh-mail">Refresh mail</button></header><div class="filters mail-filter" role="group" aria-label="Group mail by date">${["Today", "This week", "Older"].map((label) => `<button class="filter" data-mail-filter="${label}" aria-pressed="${workflow.mailFilter === label}">${label}</button>`).join("")}</div><div class="calm-empty mail-empty">${icon("file")}<h4>${workflow.refreshed ? "No mailbox connected in this preview" : "Your inbox starts empty"}</h4><p>${workflow.refreshed ? "No real email was read or changed. Interview dates, recruiter replies, and urgent actions would appear in the selected date group." : "Refresh when you want to check for recruiter replies, interview details, and next steps. Dates would follow India Standard Time."}</p></div>`;
+      }
+      function opportunitiesPage() {
+        return `<header class="content-header"><div><h2>Opportunities</h2><p>Openings you’ve chosen, with resumes and next steps attached.</p></div><button class="button" data-task="find">Find openings</button></header><div class="empty-centered"><span class="empty-symbol">${icon("jobs")}</span><h3 class="empty-title">Room for the right roles.</h3><p>Ask your assistant to find openings in India, or bring a job description you already have.</p><div class="actions"><button class="button" data-task="find">Find openings</button><button class="button secondary" data-task="tailor">I have a job description</button></div></div>`;
+      }
+      render = function () {
+        const focused = document.activeElement;
+        const restoreFocus = app.contains(focused);
+        const focusId = focused.id;
+        const focusData = focused.dataset ? Object.entries(focused.dataset)[0] : null;
+        const direction = state.direction;
+        const selectedPage = ["profile", "opportunities", "inbox"].includes(state.page)
+          ? state.page
+          : "home";
+        state.page = selectedPage;
+        const content =
+          selectedPage === "profile"
+            ? profilePage()
+            : selectedPage === "opportunities"
+              ? opportunitiesPage()
+              : selectedPage === "inbox"
+                ? inboxPage()
+                : direction === "a"
+                  ? actionHome()
+                  : direction === "b"
+                    ? guidedHome()
+                    : conversationHome();
+        const navigation = nav([
+          ["home", "Home", "home"],
+          ["opportunities", "Opportunities", "jobs"],
+          ["inbox", "Inbox", "file"],
+        ]);
+        if (direction === "a")
+          app.innerHTML = `<div class="application layout-a"><aside class="sidebar">${brand()}${navigation}<div class="sidebar-footer"><button class="nav-button" data-action="profile">${icon("user")}My profile</button><p style="margin-top:16px">Your search in India.<br>Your next move.</p></div></aside><div class="content">${content}</div></div>`;
+        else
+          app.innerHTML = `<div class="application layout-${direction}"><header class="top-navigation">${brand()}${navigation}<button class="profile-launch" data-action="profile"><span class="avatar">${icon("user")}</span>My profile</button></header><div class="content">${content}</div></div>`;
+        document
+          .querySelectorAll("[data-direction]")
+          .forEach((button) =>
+            button.setAttribute("aria-pressed", String(button.dataset.direction === direction)),
+          );
+        document.getElementById("preview-title").textContent =
+          `${direction.toUpperCase()} / ${descriptions[direction][0]}`;
+        document.getElementById("decision-title").textContent = descriptions[direction][1];
+        document.getElementById("decision-description").textContent = descriptions[direction][2];
+        const choose = document.getElementById("choose");
+        choose.dataset.choice = direction;
+        choose.classList.toggle("selected", selection === direction);
+        choose.textContent =
+          selection === direction ? `${direction.toUpperCase()} selected` : "Choose this direction";
+        document.getElementById("selection-note").textContent = selection
+          ? `${selection.toUpperCase()} selected. Share what you like or want to change in chat.`
+          : "";
+        if (restoreFocus)
+          requestAnimationFrame(() => {
+            if (modal.open) return;
+            let target = focusId ? app.querySelector(`#${CSS.escape(focusId)}`) : null;
+            if (!target && focusData) {
+              const attribute = focusData[0].replace(
+                /[A-Z]/g,
+                (letter) => `-${letter.toLowerCase()}`,
+              );
+              target = app.querySelector(`[data-${attribute}="${CSS.escape(focusData[1])}"]`);
+            }
+            if (!target) {
+              target = app.querySelector("h2");
+              if (target) target.tabIndex = -1;
+            }
+            target?.focus();
+          });
+      };
+      function createTask(typeId, prompt = "") {
+        const type = taskType(typeId);
+        showModal(
+          type.title,
+          `<div class="dialog-content"><p>${type.description} Keep the starting details short; you can refine them with your assistant.</p><form data-form="workflow-task"><input type="hidden" name="taskType" value="${type.id}" /><div class="field"><label for="task-role">${type.id === "find" ? "Role you’re looking for" : "Role or company"} <span class="optional">(optional)</span></label><input id="task-role" name="role" value="${esc(state.profile.role)}" placeholder="For example, backend engineer" maxlength="180" /></div>${type.id === "find" ? `<div class="field"><label for="task-city">Preferred locations in India</label><input id="task-city" name="location" value="${esc(state.profile.location)}" placeholder="Bengaluru, Pune, or remote in India" maxlength="200" /></div>` : ""}<div class="field"><label for="task-description">${type.id === "tailor" || type.id === "apply" ? "Job description or link" : "Anything your assistant should know"} <span class="optional">(optional)</span></label><textarea id="task-description" name="description" placeholder="${type.id === "tailor" ? "Paste the job description you want to tailor your resume for…" : "A link, requirements, or the help you need…"}" maxlength="12000">${esc(prompt)}</textarea></div>${["find", "profiles"].includes(type.id) ? `<div class="field"><label for="task-source">Where to focus</label><select id="task-source" name="source"><option>India-focused openings across selected sites</option><option>Naukri</option><option>Instahyre</option><option>Cutshort</option><option>Hirist</option><option>LinkedIn — India</option><option>Company career pages — India</option></select></div>` : ""}<div class="form-grid"><div class="field"><label for="task-assistant">Work with</label><select id="task-assistant" name="assistant"><option>Codex</option><option>Claude Code</option><option>ChatGPT</option><option>Claude</option></select></div><div class="field"><label for="task-resume">Resume</label><select id="task-resume" name="resume"><option>${state.profile.resume ? esc(state.profile.resume) : "Choose with my assistant"}</option></select></div></div><div class="dialog-actions"><button type="button" class="button quiet" data-action="close">Cancel</button><button type="submit" class="button">Create preview task</button></div><p class="dialog-note">Preview only. No assistant starts, files change, or external action runs.</p></form></div>`,
+          true,
+        );
+      }
+      function showTask(id) {
+        workflow.selected = id;
+        const task = currentTask();
+        if (!task) return;
+        const type = taskType(task.type);
+        const review = task.stage === "review";
+        const reviewOptions = {
+          find: {
+            title: "How would you like to approach this role?",
+            description:
+              "Review the opening, then choose an application, a referral, or a message.",
+            summary: "Review the opening",
+            artifact:
+              "The opening and its source would appear here. No opening was fetched or created in this preview.",
+            choices: [
+              "Prepare to apply",
+              "Request a referral",
+              "Draft cold email",
+              "Draft LinkedIn message",
+            ],
+          },
+          tailor: {
+            title: "Review the proposed resume version.",
+            description:
+              "Compare the changes with your current resume. Ask for revisions or approve the version you want to use.",
+            summary: "Review proposed version",
+            artifact:
+              "The proposed PDF, changes, and job-description coverage would appear here. No resume was generated or changed in this preview.",
+            choices: ["Approve version"],
+          },
+          profiles: {
+            title: "Review the proposed profile update.",
+            description:
+              "Check the fields and resume your assistant proposes to change. Approve the update before anything is published.",
+            summary: "Review proposed changes",
+            artifact:
+              "The current and proposed profile details would appear here, with the selected portal. No portal data was read or changed in this preview.",
+            choices: ["Approve proposed update"],
+          },
+          outreach: {
+            title: "Review the recipient and draft.",
+            description:
+              "Check who will receive the message and every word of the draft. Approve sending only after both look right.",
+            summary: "Review recipient and draft",
+            artifact:
+              "The recipient, channel, and editable message would appear here. No recipient was chosen and no draft was generated in this preview.",
+            choices: ["Approve sending"],
+          },
+          apply: {
+            title: "Review the application before submission.",
+            description:
+              "Check the resume and application details, then approve submission or choose a referral or outreach instead.",
+            summary: "Review application summary",
+            artifact:
+              "The chosen resume and completed application answers would appear here. No external form was filled or submitted in this preview.",
+            choices: ["Approve submission", "Choose a referral", "Draft outreach instead"],
+          },
+        };
+        const decision = reviewOptions[task.type] || reviewOptions.find;
+        const reviewContent = `<p class="dialog-note">This is a preview of the review step. No opening, resume version, profile update, or outreach draft has been generated.</p><details class="profile-details"><summary>${decision.summary}</summary><p>${decision.artifact}</p></details><div class="approval-actions">${decision.choices.map((choice, index) => `<button class="button${index ? " secondary" : ""}" data-decision="${esc(choice)}">${choice}</button>`).join("")}<button class="button quiet" data-flow="request-changes">Ask for changes first</button></div><p class="dialog-note">Approval buttons record a decision in this preview only. Nothing is sent, published, or submitted.</p>`;
+        showModal(
+          type.title,
+          `<div class="dialog-content"><div class="stage-trail"><span>Create task</span>${icon("arrow")}<span class="${task.stage === "handoff" ? "current" : ""}">Work with assistant</span>${icon("arrow")}<span class="${review ? "current" : ""}">Your review</span></div><h3>${review ? decision.title : task.stage === "decided" ? "Your decision is recorded." : task.stage === "changes" ? "Ready for another pass." : `Ready to work with ${esc(task.assistant)}.`}</h3><p style="margin-top:10px">${review ? decision.description : task.stage === "decided" ? `Selected: ${esc(task.decision)}. Nothing was sent, published, or submitted.` : task.stage === "changes" ? "Your feedback stays attached to this task for your next conversation with the assistant." : "Take the task to your assistant. JobOps will hold the details, progress, and your decisions together."}</p><div class="task-context"><strong>${esc(task.role) || type.title}</strong><p>${esc(task.location) || "India"}${task.source ? ` / ${esc(task.source)}` : ""}</p><p>Resume: ${esc(task.resume)}</p></div>${review ? reviewContent : `<div class="handoff">${esc(task.feedback || task.description || type.description)}</div><div class="actions"><button class="button" data-flow="copy-task">Copy task for ${esc(task.assistant)}</button><button class="button quiet" data-action="close">Back to Home</button></div>${task.stage !== "decided" ? `<div class="preview-step">Explore how the review step would work after your assistant returns.<br><button class="text-button" data-flow="preview-review">Preview the review step ${icon("arrow")}</button></div>` : ""}`}</div>`,
+          state.direction !== "b",
+        );
+      }
+      document.addEventListener("click", (event) => {
+        const button = event.target.closest("button");
+        if (!button) return;
+        if (button.dataset.task) {
+          createTask(button.dataset.task);
+          return;
+        }
+        if (button.dataset.guide) {
+          workflow.guide = Number(button.dataset.guide);
+          render();
+          return;
+        }
+        if (button.dataset.reviewTask) {
+          showTask(Number(button.dataset.reviewTask));
+          return;
+        }
+        if (button.dataset.mailFilter) {
+          workflow.mailFilter = button.dataset.mailFilter;
+          render();
+          return;
+        }
+        if (button.dataset.decision) {
+          const task = currentTask();
+          task.stage = "decided";
+          task.decision = button.dataset.decision;
+          render();
+          showTask(task.id);
+          announce("Decision recorded in this preview only.");
+          return;
+        }
+        if (button.dataset.action === "reset") {
+          workflow.tasks = [];
+          workflow.selected = null;
+          workflow.guide = 0;
+          workflow.mailFilter = "Today";
+          workflow.refreshed = false;
+          workflow.prompt = "";
+          render();
+        }
+        switch (button.dataset.flow) {
+          case "refresh-mail":
+            workflow.refreshed = true;
+            render();
+            announce("Preview refreshed. No mailbox was accessed.");
+            break;
+          case "preview-review": {
+            const task = currentTask();
+            task.stage = "review";
+            render();
+            showTask(task.id);
+            break;
+          }
+          case "copy-task": {
+            const task = currentTask();
+            const text = `${taskType(task.type).title}\nRole: ${task.role || "Discuss with me"}\nRegion: ${task.location || "India"}\nSource: ${task.source || "Provided job"}\nResume: ${task.resume}\n${task.description}\n${task.feedback || ""}\nReview results with me before external actions. This is a design-preview task, not an API request.`;
+            navigator.clipboard
+              ?.writeText(text)
+              .then(() => announce("Preview task copied."))
+              .catch(() => announce("Copy unavailable. Select the task details to copy."));
+            break;
+          }
+          case "request-changes":
+            showModal(
+              "What should change?",
+              `<div class="dialog-content"><p>Keep the feedback with this task for your next pass with the assistant.</p><form data-form="task-feedback"><div class="field"><label for="task-feedback">Your feedback</label><textarea id="task-feedback" name="feedback" required maxlength="5000" placeholder="What would you like to revise?"></textarea></div><div class="dialog-actions"><button type="submit" class="button">Save feedback</button></div><p class="dialog-note">Preview only. No message is sent to an assistant.</p></form></div>`,
+            );
+            break;
+        }
+      });
+      document.addEventListener("submit", (event) => {
+        const form = event.target.closest("[data-form]");
+        if (!form) return;
+        const data = new FormData(form);
+        if (form.dataset.form === "workflow-task") {
+          event.preventDefault();
+          const task = {
+            id: Date.now(),
+            type: data.get("taskType"),
+            role: String(data.get("role") || "").trim(),
+            location: String(data.get("location") || "").trim(),
+            description: String(data.get("description") || "").trim(),
+            source: String(data.get("source") || ""),
+            assistant: data.get("assistant"),
+            resume: data.get("resume"),
+            stage: "handoff",
+          };
+          workflow.tasks.push(task);
+          state.page = "home";
+          render();
+          showTask(task.id);
+        } else if (form.dataset.form === "conversation") {
+          event.preventDefault();
+          const prompt = String(data.get("prompt") || "").trim();
+          if (!prompt) return;
+          workflow.prompt = prompt;
+          const type = /tailor|resume|ats/i.test(prompt)
+            ? "tailor"
+            : /profile|portal/i.test(prompt)
+              ? "profiles"
+              : /referral|email|message|outreach/i.test(prompt)
+                ? "outreach"
+                : /apply|application/i.test(prompt)
+                  ? "apply"
+                  : "find";
+          createTask(type, prompt);
+        } else if (form.dataset.form === "task-feedback") {
+          event.preventDefault();
+          const task = currentTask();
+          task.feedback = String(data.get("feedback") || "").trim();
+          if (!task.feedback) return;
+          task.stage = "changes";
+          render();
+          showTask(task.id);
+        }
+      });
+      render();
+    </script>
+  </body>
+</html>
