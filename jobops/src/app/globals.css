@@ -105,6 +105,12 @@
   select {
     cursor: pointer;
   }
+  select:hover,
+  select:focus,
+  input:not([type="checkbox"]):not([type="radio"]):focus,
+  textarea:focus {
+    border-color: var(--primary);
+  }
   label {
     color: var(--foreground);
     font-weight: 550;
@@ -814,6 +820,24 @@
       animation: none !important;
       transition: none !important;
       scroll-behavior: auto !important;
+    }
+  }
+}
+
+/* Short, interruptible press feedback; keyboard and reduced-motion stay instant. */
+@utility pressable {
+  cursor: pointer;
+  transition: transform 120ms cubic-bezier(0.2, 0, 0, 1);
+  &:active:not(:disabled):not(:focus-visible) {
+    transform: scale(0.97);
+  }
+  &:focus-visible {
+    transition: none;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+    &:active:not(:disabled):not(:focus-visible) {
+      transform: none;
     }
   }
 }
