@@ -2,10 +2,14 @@
 
 ## Current State
 
-This repository contains only `AGENTS.md`, `.gitignore`, and Git history.
-There is no application source, README, directory scaffold, dependency setup,
-or build, run, lint, or test command. Establish the structure and tooling only
-when a new implementation is requested.
+The runnable JobOps application lives in `jobops/`. It is a Next.js App Router modular monolith with
+PostgreSQL/Drizzle, private local uploads, deterministic matching and supervised
+missions. There are no LLM calls or autonomous external submissions.
+
+Run all application commands from the `jobops/` directory at the repository root:
+`npm run dev`, `build`, `lint`, `typecheck`, `test`, `test:e2e`, and
+`db:migrate` / `db:seed`. Browser tests use a separate marked `jobops_e2e`
+database, port 3211, and `data/e2e-uploads`; never point them at personal data.
 
 ## Commits
 

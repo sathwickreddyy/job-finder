@@ -2,10 +2,14 @@
 
 ## Current State
 
-This repository contains only `AGENTS.md`, `.gitignore`, and Git history.
-There is no application source, README, directory scaffold, dependency setup,
-or build, run, lint, or test command. Establish the structure and tooling only
-when a new implementation is requested.
+This directory contains the runnable JobOps application, a Next.js App Router modular monolith with
+PostgreSQL/Drizzle, private local uploads, deterministic matching and supervised
+missions. There are no LLM calls or autonomous external submissions.
+
+Run all application commands from the `jobops/` directory at the repository root:
+`npm run dev`, `build`, `lint`, `typecheck`, `test`, `test:e2e`, and
+`db:migrate` / `db:seed`. Browser tests use a separate marked `jobops_e2e`
+database, port 3211, and `data/e2e-uploads`; never point them at personal data.
 
 ## Commits
 
@@ -23,13 +27,3 @@ when a new implementation is requested.
 ## Security
 
 Do not commit secrets, personal resumes, generated databases, or local data.
-
-<!-- BEGIN:nextjs-agent-rules -->
-
-# This is NOT the Next.js you know
-
-This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
-
-This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
-
-<!-- END:nextjs-agent-rules -->

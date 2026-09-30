@@ -870,18 +870,18 @@ JSON is the primary interface.
 Expected format:
 
 [
-  {
-    "company": "Example",
-    "title": "Senior Software Engineer",
-    "location": "Bengaluru",
-    "url": "https://...",
-    "source": "COMPANY_CAREERS",
-    "postedAt": "2026-09-30",
-    "experienceMin": 4,
-    "experienceMax": 7,
-    "description": "...",
-    "notes": "..."
-  }
+{
+"company": "Example",
+"title": "Senior Software Engineer",
+"location": "Bengaluru",
+"url": "https://...",
+"source": "COMPANY_CAREERS",
+"postedAt": "2026-09-30",
+"experienceMin": 4,
+"experienceMax": 7,
+"description": "...",
+"notes": "..."
+}
 ]
 
 Implement:
@@ -1539,26 +1539,26 @@ Use a modular directory organization.
 For example, something along the lines of:
 
 src/
-  app/
-  components/
-  features/
-    jobs/
-    resumes/
-    applications/
-    missions/
-    profiles/
-    mail/
-    contacts/
-    candidate/
-  db/
-  lib/
-  services/
-    storage/
-    pdf/
-    keywords/
-    mail/
-  validation/
-  types/
+app/
+components/
+features/
+jobs/
+resumes/
+applications/
+missions/
+profiles/
+mail/
+contacts/
+candidate/
+db/
+lib/
+services/
+storage/
+pdf/
+keywords/
+mail/
+validation/
+types/
 
 Do not mechanically follow this if Next.js conventions suggest something cleaner.
 
