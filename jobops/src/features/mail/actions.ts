@@ -43,6 +43,7 @@ export async function importMail(_previous: ActionState, form: FormData): Promis
     const records = mailImportSchema.parse(JSON.parse(raw));
     const result = await importMailRecords(records, "IMPORT");
     revalidatePath("/mail");
+    revalidatePath("/inbox");
     revalidatePath("/");
     return {
       success: `${result.imported} messages imported; ${result.duplicates} duplicates skipped. Review each proposed update before changing an application.`,
@@ -219,6 +220,7 @@ export async function syncGmail(_previous: ActionState, form: FormData): Promise
       }
     });
     revalidatePath("/mail");
+    revalidatePath("/inbox");
     revalidatePath("/");
     return {
       success: `${imported.imported} recruiting messages imported; ${imported.duplicates} duplicates skipped.${result.nextPageToken ? " More messages remain. Sync again to continue from the next page." : " Sync complete. Review proposed updates below."}`,

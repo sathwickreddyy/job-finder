@@ -80,7 +80,8 @@ export default async function MailPage({
       )}
       <div className="stack">
         {!gmail.configured && (
-          <Panel title="Import mode is ready">
+          <Panel title="Import mode is ready" className="scroll-mt-6">
+            <span id="gmail-setup" />
             <p className="muted">
               Paste recruiting messages as JSON to classify and review them locally. Gmail sync
               requires Google OAuth credentials and an encryption key.
