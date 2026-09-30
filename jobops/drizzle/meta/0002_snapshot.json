@@ -170,12 +170,8 @@
           "name": "application_events_application_id_applications_id_fk",
           "tableFrom": "application_events",
           "tableTo": "applications",
-          "columnsFrom": [
-            "application_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["application_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -336,12 +332,8 @@
           "name": "applications_job_id_jobs_id_fk",
           "tableFrom": "applications",
           "tableTo": "jobs",
-          "columnsFrom": [
-            "job_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["job_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -349,12 +341,8 @@
           "name": "applications_resume_version_id_resume_versions_id_fk",
           "tableFrom": "applications",
           "tableTo": "resume_versions",
-          "columnsFrom": [
-            "resume_version_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["resume_version_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -833,12 +821,8 @@
           "name": "job_resume_matches_job_id_jobs_id_fk",
           "tableFrom": "job_resume_matches",
           "tableTo": "jobs",
-          "columnsFrom": [
-            "job_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["job_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -846,12 +830,8 @@
           "name": "job_resume_matches_resume_version_id_resume_versions_id_fk",
           "tableFrom": "job_resume_matches",
           "tableTo": "resume_versions",
-          "columnsFrom": [
-            "resume_version_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["resume_version_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -955,12 +935,8 @@
           "name": "job_snapshots_job_id_jobs_id_fk",
           "tableFrom": "job_snapshots",
           "tableTo": "jobs",
-          "columnsFrom": [
-            "job_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["job_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1313,12 +1289,8 @@
           "name": "mail_events_mail_message_id_mail_messages_id_fk",
           "tableFrom": "mail_events",
           "tableTo": "mail_messages",
-          "columnsFrom": [
-            "mail_message_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["mail_message_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -1326,12 +1298,8 @@
           "name": "mail_events_linked_application_id_applications_id_fk",
           "tableFrom": "mail_events",
           "tableTo": "applications",
-          "columnsFrom": [
-            "linked_application_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["linked_application_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -1506,12 +1474,8 @@
           "name": "mail_messages_linked_application_id_applications_id_fk",
           "tableFrom": "mail_messages",
           "tableTo": "applications",
-          "columnsFrom": [
-            "linked_application_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["linked_application_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -1600,12 +1564,8 @@
           "name": "mission_evidence_mission_id_missions_id_fk",
           "tableFrom": "mission_evidence",
           "tableTo": "missions",
-          "columnsFrom": [
-            "mission_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["mission_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -1613,12 +1573,8 @@
           "name": "mission_evidence_execution_id_mission_executions_id_fk",
           "tableFrom": "mission_evidence",
           "tableTo": "mission_executions",
-          "columnsFrom": [
-            "execution_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["execution_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -1712,12 +1668,8 @@
           "name": "mission_executions_mission_id_missions_id_fk",
           "tableFrom": "mission_executions",
           "tableTo": "missions",
-          "columnsFrom": [
-            "mission_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["mission_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1827,12 +1779,8 @@
           "name": "mission_steps_mission_id_missions_id_fk",
           "tableFrom": "mission_steps",
           "tableTo": "missions",
-          "columnsFrom": [
-            "mission_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["mission_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -2285,12 +2233,8 @@
           "name": "resume_versions_resume_id_resumes_id_fk",
           "tableFrom": "resume_versions",
           "tableTo": "resumes",
-          "columnsFrom": [
-            "resume_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["resume_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -2502,12 +2446,8 @@
           "name": "task_credentials_mission_id_missions_id_fk",
           "tableFrom": "task_credentials",
           "tableTo": "missions",
-          "columnsFrom": [
-            "mission_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["mission_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -2585,12 +2525,8 @@
           "name": "task_decisions_proposal_id_task_proposals_id_fk",
           "tableFrom": "task_decisions",
           "tableTo": "task_proposals",
-          "columnsFrom": [
-            "proposal_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["proposal_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -2685,12 +2621,8 @@
           "name": "task_proposals_mission_id_missions_id_fk",
           "tableFrom": "task_proposals",
           "tableTo": "missions",
-          "columnsFrom": [
-            "mission_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["mission_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -2805,12 +2737,8 @@
           "name": "task_updates_mission_id_missions_id_fk",
           "tableFrom": "task_updates",
           "tableTo": "missions",
-          "columnsFrom": [
-            "mission_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["mission_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -2818,12 +2746,8 @@
           "name": "task_updates_proposal_id_task_proposals_id_fk",
           "tableFrom": "task_updates",
           "tableTo": "task_proposals",
-          "columnsFrom": [
-            "proposal_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["proposal_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -2859,27 +2783,12 @@
     "public.contact_verification": {
       "name": "contact_verification",
       "schema": "public",
-      "values": [
-        "UNKNOWN",
-        "VALID",
-        "INVALID",
-        "ACCEPT_ALL",
-        "UNVERIFIED",
-        "MANUAL_VERIFIED"
-      ]
+      "values": ["UNKNOWN", "VALID", "INVALID", "ACCEPT_ALL", "UNVERIFIED", "MANUAL_VERIFIED"]
     },
     "public.job_status": {
       "name": "job_status",
       "schema": "public",
-      "values": [
-        "NEW",
-        "REVIEWING",
-        "SHORTLISTED",
-        "IGNORED",
-        "PREPARING",
-        "APPLIED",
-        "CLOSED"
-      ]
+      "values": ["NEW", "REVIEWING", "SHORTLISTED", "IGNORED", "PREPARING", "APPLIED", "CLOSED"]
     },
     "public.mail_classification": {
       "name": "mail_classification",
@@ -2930,25 +2839,12 @@
     "public.operator": {
       "name": "operator",
       "schema": "public",
-      "values": [
-        "HUMAN",
-        "CHATGPT",
-        "CLAUDE",
-        "CODEX",
-        "OTHER"
-      ]
+      "values": ["HUMAN", "CHATGPT", "CLAUDE", "CODEX", "OTHER"]
     },
     "public.profile_provider": {
       "name": "profile_provider",
       "schema": "public",
-      "values": [
-        "NAUKRI",
-        "LINKEDIN",
-        "INSTAHYRE",
-        "WELLFOUND",
-        "CUTSHORT",
-        "OTHER"
-      ]
+      "values": ["NAUKRI", "LINKEDIN", "INSTAHYRE", "WELLFOUND", "CUTSHORT", "OTHER"]
     }
   },
   "schemas": {},

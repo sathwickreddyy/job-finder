@@ -25,7 +25,10 @@ Fictional data is reserved for controlled demonstrations and the isolated browse
 
 ## What is implemented
 
-- **Today:** actual review queues, open missions, mail updates, follow-ups, interviews, stale profiles, activity.
+- **Home:** six editable starters (find openings, tailor a resume, improve profiles, prepare an application, draft outreach, showcase work), a custom goal, human review and high-priority mail. Focus is India; preferences are yours to edit.
+- **My profile:** working preferences, LinkedIn, GitHub, portfolio websites and job portals, improvement notes, original PDFs, approved versions and confirmed candidate details together.
+- **Tasks and agent API:** copy a handoff into your existing ChatGPT/Claude/Codex conversation; use its existing context without assuming a role. Task-scoped expiring bearer access supports progress, immutable proposals, draft PDFs and operator evidence. Only browser decisions approve work; retries reuse records and revised external work requires fresh approval.
+- **Opportunities and Inbox:** a compact opportunity list with tailoring/application/referral actions; on-demand Gmail refresh, India date filters, Today/This week/Older mail groups, action reasons and reversible done/reopen controls. Original messages remain available.
 - **Jobs:** manual creation; search and URL-persisted company, role, location, source, status, freshness and experience filters; newest/added/keyword sorting; details, notes, snapshot history, contacts and missions.
 - **Import:** JSON/CSV row validation, preview, normalized URLs, URL/fallback duplicate detection including same-batch duplicates, explicit skip/merge, atomic writes, preserved snapshots and summary.
 - **Resumes:** logical families, validated PDF uploads, original bytes, SHA256, local text extraction, grouped keywords, editable keywords/skills/experience tags, preview/download, version history, current selection and archiving. Extraction failure keeps the PDF and supports retry/manual keywords.
@@ -38,6 +41,14 @@ Fictional data is reserved for controlled demonstrations and the isolated browse
 - **Export:** jobs/applications/contacts CSV or JSON, missions JSON including steps/executions/evidence metadata, candidate JSON. CSV formula escaping is enabled. Exports do not include OAuth tokens or file contents.
 - **Interface:** responsive dark/light workbench, accessible labeled forms, keyboard focus, real links and buttons, and a retained interactive [component gallery](http://127.0.0.1:3210/gallery).
 
+## Working with an assistant
+
+Start in **My profile** with your real resume, public links and preferences. On **Home**, choose and edit a task, then copy its handoff into the assistant session you already use. JobOps neither reads assistant memory automatically nor starts an LLM. The assistant returns work for your review; only an approval on its exact latest proposal permits an application, message or publication. Uploading a proposed PDF keeps the current resume until you approve the revision.
+
+Set `JOBOPS_ACCESS_TOKEN` in your private `.env`, restart, and unlock your browser before generating agent API access on a task. Never share the workspace key with an agent: share only that task's generated credential. The [agent guide](http://127.0.0.1:3210/agent-guide) describes payloads, and the scoped context response includes the machine-readable contract. Credentials expire after seven days and can be replaced or revoked. Cloud assistants need access to the app's origin; if localhost is unreachable, paste the result through the task page instead.
+
+Home and task pages refresh saved task state every 15 seconds while visible. Optional browser notifications announce changed review items on these pages; this is not background push delivery when JobOps is closed. Gmail refresh happens only on demand and requires a real configured read-only connection. Marking an email done does not change an application stage.
+
 ## Architecture
 
 One Next.js 16.3.8 App Router repository with React 19.3, strict TypeScript, Tailwind 4, owned shadcn-style primitives, Zod, Drizzle and PostgreSQL. Server-rendered pages read relational data; validated server actions call domain modules and commit transactional updates. No queue, worker, Redis, microservice or external AI dependency is required.
@@ -45,7 +56,7 @@ One Next.js 16.3.8 App Router repository with React 19.3, strict TypeScript, Tai
 ```text
 src/app/                 Pages, protected JSON/download/OAuth routes
 src/components/          Workbench shell, accessible forms and owned UI primitives
-src/features/            Candidate, jobs, applications, resumes, missions, profiles, contacts, mail
+src/features/            Tasks, candidate, jobs, applications, resumes, missions, profiles, contacts, mail
 src/db/                  Typed relational schema and lazy PostgreSQL pool
 src/services/            Private local storage, PDF extraction, keyword dictionary, mail rules/OAuth
 drizzle/                 Versioned SQL migrations and schema snapshots
@@ -54,7 +65,7 @@ tests/                   Unit and real-browser integration tests
 data/uploads/            Private originals and mission evidence (ignored by Git)
 ```
 
-Nineteen separate tables model the requested domains. Applications use one canonical stage enum. Job descriptions are snapshots, resume versions retain files, and significant changes append application/activity events. Mission results record previous/new state and evidence in the same transaction as entity updates. Resume selection changes invalidate saved heuristic comparisons. Indexes, foreign keys, unique current-version constraints and numeric/range checks live in migrations.
+Twenty-three separate tables model the requested domains, including scoped credentials, immutable task proposals, human decisions and progress updates. Applications use one canonical stage enum. Job descriptions are snapshots, resume versions retain files, and significant changes append application/activity events. Mission results record previous/new state and evidence in the same transaction as entity updates. Resume selection changes invalidate saved heuristic comparisons. Indexes, foreign keys, unique current-version constraints and numeric/range checks live in migrations.
 
 Keyword coverage is dictionary-based overlap: matched job keywords divided by all job keywords. Aliases and token boundaries are normalized; matched/missing/resume-only keywords are visible. It does not measure proficiency or predict hiring outcomes. Keywords are editable.
 
@@ -76,19 +87,25 @@ Keyword coverage is dictionary-based overlap: matched job keywords divided by al
 
 Install the browser once with `npx playwright install chromium`. `test:e2e` derives a separate `jobops_e2e` database using the local PostgreSQL credentials, uses `data/e2e-uploads`, `.next-e2e`, and port 3211, and checks an ownership marker before using an existing test database. It never drops or resets your normal database. The database role needs `CREATEDB` (the Docker development role has it). Test data remains in the isolated database for inspection; application data is not cleaned or reset.
 
-Verification passed with 59 unit tests and 14 real-browser flows. Confirmed results and remaining unverified integration work are recorded in [verification.md](docs/verification.md).
+The protected API checks run separately from browser-only mode:
+
+```bash
+JOBOPS_E2E_ACCESS_TOKEN=jobops-test-only-workspace-access-key-2026 npm run test:e2e -- tests/e2e/task-api.spec.ts
+```
+
+This is a test-only key for the isolated test server. Confirmed results and remaining integration setup are recorded in [verification.md](docs/verification.md).
 
 ## Environment
 
-| Variable                                   | Required / behavior                                                  |
-| ------------------------------------------ | -------------------------------------------------------------------- |
-| `DATABASE_URL`                             | PostgreSQL connection; example targets the local Compose service     |
-| `APP_URL`                                  | Canonical origin; defaults to `http://127.0.0.1:3210`                |
-| `JOBOPS_ACCESS_TOKEN`                      | Optional for loopback; mandatory 32+ characters for a network domain |
-| `STORAGE_ROOT`                             | Default `./data/uploads`; persistent private local directory         |
-| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Optional Gmail web OAuth client                                      |
-| `GOOGLE_REDIRECT_URI`                      | Same-origin `/api/gmail/callback`; example in `.env.example`         |
-| `GMAIL_TOKEN_ENCRYPTION_KEY`               | Optional Gmail prerequisite: base64-encoded 32 random bytes          |
+| Variable                                   | Required / behavior                                                                               |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`                             | PostgreSQL connection; example targets the local Compose service                                  |
+| `APP_URL`                                  | Canonical origin; defaults to `http://127.0.0.1:3210`                                             |
+| `JOBOPS_ACCESS_TOKEN`                      | 32+ characters required for agent API or a network domain; browser-only loopback works without it |
+| `STORAGE_ROOT`                             | Default `./data/uploads`; persistent private local directory                                      |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Optional Gmail web OAuth client                                                                   |
+| `GOOGLE_REDIRECT_URI`                      | Same-origin `/api/gmail/callback`; example in `.env.example`                                      |
+| `GMAIL_TOKEN_ENCRYPTION_KEY`               | Optional Gmail prerequisite: base64-encoded 32 random bytes                                       |
 
 Use `.env`; do not commit it. Generate independent access/encryption secrets locally:
 

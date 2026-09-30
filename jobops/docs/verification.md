@@ -1,25 +1,30 @@
-# Local verification
+# Redesign verification
 
-Verification date: October 1, 2026 (Asia/Kolkata). Environment: macOS with Node 24, Next.js 16.3.8 and PostgreSQL 17 from the local Compose service. Browser tests use a separate `jobops_e2e` database, port 3211, `data/e2e-uploads`, and `.next-e2e`; they preserve their fixtures and do not reset the normal career database.
+Verified October 1, 2026 (Asia/Kolkata), on macOS with Node 24, Next.js 16.3.8, React 19.3, Tailwind CSS 4.3.3, and local PostgreSQL 17.
 
-Final verification passed: 59 unit tests across 13 files and all 14 Chromium flows. The latest browser run completed in 26.0 seconds after the Today navigation correction.
+## Results
 
-- `npm install`: successful; exact stable versions pinned in package and lockfile.
-- `docker compose up -d` / `docker compose ps`: PostgreSQL healthy, loopback port 5549.
-- `npm run db:migrate`: both committed migrations apply, numeric/range constraints and indexes active.
-- `npm run db:seed`: successful and repeatable, existing rows preserved, actual fictional PDFs retained.
-- `npm run db:generate`: no schema changes; 19 tables match the committed migrations.
-- `npm run build`: successful, runtime-upload tracing warnings resolved.
-- Production server smoke on a temporary loopback port: eleven pages, mission context JSON, and the selected PDF returned successfully; the temporary server was stopped afterward. The main workbench on port 3210 remains healthy.
-- `npm run typecheck`: successful.
-- `npm run lint`: successful.
-- `npm run format:check`: successful.
-- `npm run test`: 59 tests across 13 files passed.
-- `npm run test:e2e`: 14 Chromium flows passed in 26.0 seconds.
-- `npm audit`: zero reported vulnerabilities after the tested Drizzle transitive esbuild override.
+- 72 unit tests across 16 files passed.
+- All 19 Chromium browser workflows passed (31.1 seconds), including five new core-workflow tests. The six protected API checks are intentionally skipped in browser-only mode and run separately with a test workspace key.
+- All six protected API integration checks passed (6.5 seconds).
+- Strict typechecking and ESLint passed.
+- Production build passed with Turbopack in the fresh ignored `.next/production-check` directory (`JOBOPS_BUILD_DIR=.next/production-check npm run build`). The first sandboxed build could not bind the compiler port; its default output directory retained that failure. A fresh build with local-process permission compiled successfully.
+- Desktop dark/light screenshots and the task drawer were inspected. Core pages fit a 390-pixel viewport, the drawer closes with Escape and restores focus, and theme selection persists across reloads.
+- Home, My profile, Opportunities and Inbox return HTTP 200 on the running development app at `http://127.0.0.1:3210`.
+- The additive migration applied to the normal and isolated databases. A final read-only check found all 23 normal application tables empty. No fixtures were added to the personal workspace.
 
-Browser flows cover real PDF bytes/headers/extraction/current versions/archive, damaged-PDF retention, manual job and application approval/timeline, JSON preview/duplicates/snapshots/export, same-batch merge ordering and metadata preservation, responsive URL filters, discovery context privacy/agent headings/files, apply operator/results/approval, profile approved diff/stale-state behavior, UNKNOWN answers, contacts, mail review, Today sidebar navigation and the `/today` redirect, and the Inspect Naukri action.
+## Covered behavior
 
-Three screenshots were captured and inspected. PDF download, copyable agent-link clipboard behavior and the mobile layout were also checked. Initial test records in the normal development database were retained; the isolated runner preserves its own fixtures and performs no database reset or cleanup.
+Browser checks cover editable preference snapshots, custom goals, profile links and improvement notes attached to showcase work, original PDF upload, draft revision review, explicit current-version approval, inbox attention actions and original-message retention, plus existing jobs, imports, application timelines, resume history, mission evidence, profile differences, contacts and mail review.
 
-Gmail live OAuth and mailbox sync remain unverified without real Google credentials; configuration, encryption, exact read-only scope rejection and local/import mail review are tested. No external applications were submitted, emails sent, portal profiles changed, or real personal facts seeded.
+Protected API checks cover missing/wrong/cross-task credentials, inaccessible browser approval controls, a real approval Server Action replay at public unlock endpoints, scoped resume downloads, rejected forged approvals, immutable request IDs, concurrent credential replacement, concurrent draft-upload retries, explicit resume promotion, stale-proposal rejection, revised application reuse, changed destination rejection, preservation of advanced application stages, opportunity synchronization and closed-task decisions. API requests never approve themselves.
+
+Tests use only the marked `jobops_e2e` database, loopback port 3211, `.next-e2e` and `data/e2e-uploads`. Existing test fixtures remain isolated; tests do not drop, reset or seed the personal database.
+
+## Integration setup still required
+
+The local workspace currently has no `JOBOPS_ACCESS_TOKEN` or Google OAuth credentials. Browser/manual handoffs work; task bearer access requires a private workspace key and browser unlock. Settings explains the setup. The workspace key must not be shared with an assistant; task credentials are separate, scoped and revocable.
+
+Live Gmail OAuth and refresh need a real read-only Google connection and have not been exercised against a personal mailbox. Deterministic classification, import/review, encryption and read-only scope checks are tested. Notifications work while Home or a task page is open and visible; closed-app background push is not implemented.
+
+JobOps does not invoke an LLM or operate external portals. No real applications, messages, profile edits or publications were performed during verification. An external assistant must reach the app origin to use its API; unreachable local instances support manual result entry.
