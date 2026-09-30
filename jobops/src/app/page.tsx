@@ -1,290 +1,173 @@
 import Link from "next/link";
-import { and, count, desc, eq, gte, inArray, lte, or, sql } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
+import { Check, FileText } from "lucide-react";
 import { db } from "@/db";
-import {
-  jobs,
-  applications,
-  profiles,
-  missions,
-  mailEvents,
-  mailMessages,
-  activityLogs,
-  candidateProfiles,
-} from "@/db/schema";
-import { PageHeader, Panel, Button, StatusBadge } from "@/components/ui";
+import { mailMessages } from "@/db/schema";
+import { StatusBadge } from "@/components/ui";
+import { TaskLauncher } from "@/features/tasks/form";
+import { listTasks, pendingTasks, taskOptions } from "@/features/tasks/read";
+import { LiveTasks } from "@/features/tasks/live";
+import { mailAttention } from "@/features/mail/attention";
+import { MailRefresh } from "@/features/mail/refresh";
 import { displayDate, getDisplayPreferences } from "@/features/candidate/preferences";
-export default async function Today() {
-  const preferences = await getDisplayPreferences();
-  const dateLabel = (value: Date | null | undefined) => displayDate(value, preferences);
-  const now = new Date(),
-    stale = new Date(new Date().getTime() - 30 * 86400000);
-  const [
-    newJobs,
-    shortlisted,
-    ready,
-    followups,
-    openMissions,
-    reviewMissions,
-    mailReview,
-    staleProfiles,
-    interviews,
-    recentMail,
-    activity,
-    candidate,
-    naukriProfiles,
-  ] = await Promise.all([
-    db.select({ n: count() }).from(jobs).where(eq(jobs.status, "NEW")),
-    db.select({ n: count() }).from(jobs).where(eq(jobs.status, "SHORTLISTED")),
-    db.select({ n: count() }).from(applications).where(eq(applications.status, "READY_FOR_REVIEW")),
-    db
-      .select({ app: applications, job: jobs })
-      .from(applications)
-      .innerJoin(jobs, eq(applications.jobId, jobs.id))
-      .where(
-        and(
-          lte(applications.nextActionAt, now),
-          sql`${applications.status} not in ('REJECTED','WITHDRAWN','CLOSED','OFFER')`,
-        ),
-      )
-      .orderBy(applications.nextActionAt)
-      .limit(10),
+export default async function HomePage() {
+  const [options, tasks, pending, messages, preferences] = await Promise.all([
+    taskOptions(),
+    listTasks(12),
+    pendingTasks(),
     db
       .select()
-      .from(missions)
-      .where(inArray(missions.status, ["DRAFT", "READY", "IN_PROGRESS", "WAITING_FOR_USER"]))
-      .orderBy(missions.priority, desc(missions.createdAt))
-      .limit(10),
-    db.select({ n: count() }).from(missions).where(eq(missions.status, "READY_FOR_REVIEW")),
-    db.select({ n: count() }).from(mailEvents).where(eq(mailEvents.status, "NEEDS_REVIEW")),
-    db
-      .select()
-      .from(profiles)
-      .where(or(sql`${profiles.lastInspectedAt} is null`, lte(profiles.lastInspectedAt, stale)))
-      .limit(10),
-    db
-      .select({ app: applications, job: jobs })
-      .from(applications)
-      .innerJoin(jobs, eq(applications.jobId, jobs.id))
-      .where(
-        and(
-          inArray(applications.status, [
-            "RECRUITER_SCREEN",
-            "TECHNICAL_INTERVIEW",
-            "MANAGER_INTERVIEW",
-            "FINAL_INTERVIEW",
-          ]),
-          gte(applications.nextActionAt, now),
-        ),
-      )
-      .orderBy(applications.nextActionAt)
-      .limit(10),
-    db.select().from(mailMessages).orderBy(desc(mailMessages.receivedAt)).limit(5),
-    db.select().from(activityLogs).orderBy(desc(activityLogs.createdAt)).limit(10),
-    db.select().from(candidateProfiles).limit(1),
-    db
-      .select()
-      .from(profiles)
-      .where(eq(profiles.provider, "NAUKRI"))
-      .orderBy(profiles.createdAt)
-      .limit(1),
+      .from(mailMessages)
+      .where(eq(mailMessages.attentionState, "OPEN"))
+      .orderBy(desc(mailMessages.receivedAt))
+      .limit(300),
+    getDisplayPreferences(),
   ]);
-  const queues = [
-    {
-      title: "New jobs awaiting review",
-      detail: "Check the source, requirements and fit.",
-      n: newJobs[0].n,
-      url: "/jobs?status=NEW",
-    },
-    {
-      title: "Shortlisted roles",
-      detail: "Choose the next application to prepare.",
-      n: shortlisted[0].n,
-      url: "/jobs?status=SHORTLISTED",
-    },
-    {
-      title: "Applications ready for review",
-      detail: "Review prepared forms before final submission.",
-      n: ready[0].n,
-      url: "/applications?status=READY_FOR_REVIEW",
-    },
-    {
-      title: "Mail updates needing review",
-      detail: "Confirm recruiting updates before changing a stage.",
-      n: mailReview[0].n,
-      url: "/mail?review=1",
-    },
-    {
-      title: "Missions awaiting your review",
-      detail: "Read the result and evidence.",
-      n: reviewMissions[0].n,
-      url: "/missions?status=READY_FOR_REVIEW",
-    },
-  ];
+  const attention = messages
+    .map((message) => ({ message, attention: mailAttention(message) }))
+    .filter((item) => item.attention)
+    .sort((a, b) => a.attention!.priority - b.attention!.priority)
+    .slice(0, 5);
+  const taskLink = (t: (typeof tasks)[number]) =>
+    t.input.workflow === true ? `/tasks/${t.id}` : `/missions/${t.id}`;
   return (
     <>
-      <PageHeader
-        title="Today"
-        description={`${dateLabel(now)} · A focused plan for your next career move.`}
-        actions={
-          <>
-            <Button variant="outline" asChild>
-              <Link href="/jobs/new">Add job</Link>
-            </Button>
-            <Button asChild>
-              <Link href="/missions/new?type=DISCOVER_JOBS">Find today’s jobs</Link>
-            </Button>
-          </>
-        }
-      />
-      {candidate[0]?.metadata.isDemo === true && (
-        <div className="notice mb-6">
-          You are viewing fictional demo data. Update Candidate Profile with your own information
-          before preparing real applications. Unknown answers remain explicit.
+      <header className="mb-10 flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <p className="mb-3 text-xs text-muted-foreground">YOUR WORKSPACE · INDIA</p>
+          <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
+            What’s your next move?
+          </h1>
+          <p className="mt-3 max-w-xl text-sm leading-relaxed text-muted-foreground">
+            Choose a starting point. Shape it with your assistant. Decide what happens next.
+          </p>
         </div>
-      )}
-      <div className="split-layout">
-        <div className="stack">
-          <Panel title="Your review queues">
-            {queues.map((q) => (
-              <Link
-                href={q.url}
-                key={q.title}
-                className="queue-row"
-                style={{ color: "var(--foreground)", textDecoration: "none" }}
-              >
-                <div>
-                  <strong>{q.title}</strong>
-                  <p className="text-xs text-muted-foreground">{q.detail}</p>
-                </div>
-                <span className="queue-count">{q.n}</span>
-              </Link>
-            ))}
-          </Panel>
-          <Panel title="Open missions">
-            {openMissions.length ? (
-              openMissions.map((m) => (
-                <div className="queue-row" key={m.id}>
-                  <div>
-                    <Link className="cell-title" href={`/missions/${m.id}`}>
-                      {m.title}
-                    </Link>
-                    <p className="text-xs text-muted-foreground">{dateLabel(m.createdAt)}</p>
-                  </div>
-                  <StatusBadge status={m.status} />
-                </div>
-              ))
+        <span className="pt-1 text-xs text-muted-foreground">
+          {displayDate(new Date(), preferences)}
+        </span>
+      </header>
+      <div className="grid items-start gap-10 xl:grid-cols-[minmax(0,1.35fr)_minmax(18rem,1fr)]">
+        <section className="min-w-0">
+          <h2 className="text-sm font-medium text-muted-foreground">Start something</h2>
+          <TaskLauncher options={options} />
+          <div className="mt-7 flex items-start gap-3 border-t border-border pt-6">
+            <FileText size={22} className="mt-1 shrink-0 text-link" aria-hidden />
+            <div className="flex-1">
+              <h3 className="mb-1 text-sm">
+                {options.resumes.length
+                  ? "Your context, ready when you are"
+                  : "Start with the resume you already use"}
+              </h3>
+              <p className="text-xs text-muted-foreground">
+                {options.resumes.length
+                  ? "Resume, preferences, and public profiles in one place."
+                  : "Add your resume and bring your own preferences."}
+              </p>
+            </div>
+            <Link href="/my-profile" className="shrink-0 text-sm text-link">
+              {options.resumes.length ? "My profile" : "Set up"} →
+            </Link>
+          </div>
+        </section>
+        <aside className="min-w-0 space-y-8 xl:border-l xl:border-border xl:pl-8">
+          <section aria-labelledby="review-heading">
+            <h2 id="review-heading" className="mb-5 text-base">
+              For your review{pending.length ? ` · ${pending.length}` : ""}
+            </h2>
+            {pending.length ? (
+              <div className="divide-y divide-border">
+                {pending.map((t) => (
+                  <Link
+                    href={taskLink(t)}
+                    key={t.id}
+                    className="block py-4 first:pt-0 hover:no-underline"
+                  >
+                    <p className="text-sm font-medium text-foreground">{t.title}</p>
+                    <p className="mt-1 text-xs text-warning">
+                      {t.status === "WAITING_FOR_USER"
+                        ? "Your assistant has a question"
+                        : "A proposal is ready"}{" "}
+                      →
+                    </p>
+                  </Link>
+                ))}
+              </div>
             ) : (
-              <p className="muted">
-                No open missions. Create a discovery or profile inspection mission to start.
+              <div className="py-4">
+                <Check size={24} className="mb-4 text-link" aria-hidden />
+                <h3>You’re all caught up</h3>
+                <p className="text-sm leading-relaxed text-muted-foreground">
+                  When your assistant has work ready, you’ll review it here before the next move.
+                </p>
+              </div>
+            )}
+            <LiveTasks reviewKeys={pending.map((t) => `${t.id}:${t.updatedAt.toISOString()}`)} />
+          </section>
+          <section className="border-t border-border pt-7">
+            <div className="mb-5 flex justify-between gap-3">
+              <h2 className="m-0 text-base">Needs your attention</h2>
+              <Link href="/inbox?view=attention" className="text-xs text-link">
+                Inbox →
+              </Link>
+            </div>
+            {attention.length ? (
+              <div className="mb-5 space-y-5">
+                {attention.map(({ message, attention: item }) => (
+                  <article key={message.id}>
+                    <Link
+                      href={`/mail/${message.id}`}
+                      className="text-sm font-medium text-foreground"
+                    >
+                      {message.subject}
+                    </Link>
+                    <p className="mt-1 text-xs text-warning">{item!.reason}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {displayDate(message.receivedAt, preferences)}
+                    </p>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <p className="mb-5 text-sm text-muted-foreground">
+                Interview details, assessments and replies that need you will appear here.
               </p>
             )}
-            <div className="actions mt-5">
-              <Link className="button-secondary" href="/missions/new?type=DISCOVER_JOBS">
-                Create discovery mission
-              </Link>
-              <Link className="button-quiet" href="/missions">
-                View all missions
-              </Link>
-            </div>
-          </Panel>
-          <Panel title="Recent activity">
-            <div className="timeline">
-              {activity.length ? (
-                activity.map((a) => (
-                  <article key={a.id} className="timeline-item">
-                    <p>{a.summary}</p>
-                    <small>{dateLabel(a.createdAt)}</small>
-                  </article>
-                ))
-              ) : (
-                <p className="muted">Your activity will appear as you add and review records.</p>
-              )}
-            </div>
-          </Panel>
-        </div>
-        <div className="stack">
-          <Panel title="Follow-ups due">
-            {followups.length ? (
-              followups.map(({ app, job }) => (
-                <div className="mb-4" key={app.id}>
-                  <Link href={`/applications/${app.id}`}>
-                    {job.company} — {job.title}
-                  </Link>
-                  <small className="block">Due {dateLabel(app.nextActionAt)}</small>
-                </div>
-              ))
-            ) : (
-              <p className="muted">No follow-ups due. Set a next action date on an application.</p>
-            )}
-            <Link className="button-secondary mt-3" href="/applications?followup=due">
-              View follow-ups
-            </Link>
-          </Panel>
-          <Panel title="Upcoming interviews">
-            {interviews.length ? (
-              interviews.map(({ app, job }) => (
-                <div className="mb-4" key={app.id}>
-                  <Link href={`/applications/${app.id}`}>
-                    {job.company} — {job.title}
-                  </Link>
-                  <small className="block">{dateLabel(app.nextActionAt)}</small>
-                  <StatusBadge status={app.status} />
-                </div>
-              ))
-            ) : (
-              <p className="muted">No interview dates recorded.</p>
-            )}
-          </Panel>
-          <Panel title="Profiles to inspect">
-            <Link
-              className="button-secondary mb-4"
-              href={
-                naukriProfiles[0]
-                  ? `/missions/new?type=INSPECT_PROFILE&entityType=PROFILE&entityId=${naukriProfiles[0].id}`
-                  : "/profiles/new"
-              }
-            >
-              {naukriProfiles[0] ? "Inspect Naukri profile" : "Add Naukri profile"}
-            </Link>
-            {staleProfiles.length ? (
-              staleProfiles.map((p) => (
-                <div className="mb-4" key={p.id}>
-                  <Link href={`/profiles/${p.id}`}>{p.displayName}</Link>
-                  <small className="block">Last inspection: {dateLabel(p.lastInspectedAt)}</small>
-                  <Link
-                    className="button-quiet mt-1"
-                    href={`/missions/new?type=INSPECT_PROFILE&entityType=PROFILE&entityId=${p.id}`}
-                  >
-                    Inspect {p.displayName}
-                  </Link>
-                </div>
-              ))
-            ) : (
-              <p className="muted">Profiles inspected within the last 30 days.</p>
-            )}
-            <Link className="button-secondary mt-2" href="/missions/new?type=UPDATE_PROFILE">
-              Create profile update mission
-            </Link>
-          </Panel>
-          <Panel title="Recent recruiting mail">
-            {recentMail.length ? (
-              recentMail.map((m) => (
-                <div className="mb-4" key={m.id}>
-                  <Link href={`/mail/${m.id}`}>{m.subject}</Link>
-                  <small className="block">
-                    {m.sender} · {dateLabel(m.receivedAt)}
-                  </small>
-                </div>
-              ))
-            ) : (
-              <p className="muted">Import messages or configure Gmail read-only in Settings.</p>
-            )}
-            <Link className="button-secondary" href="/mail?review=1">
-              Review mail updates
-            </Link>
-          </Panel>
-        </div>
+            <MailRefresh compact />
+          </section>
+        </aside>
       </div>
+      <section className="mt-12 border-t border-border pt-7">
+        <div className="mb-5 flex items-center justify-between">
+          <h2 className="m-0 text-lg">Your tasks</h2>
+          <Link href="/tasks" className="text-sm text-link">
+            View all →
+          </Link>
+        </div>
+        {tasks.length ? (
+          <div className="divide-y divide-border">
+            {tasks.map((t) => (
+              <Link
+                key={t.id}
+                href={taskLink(t)}
+                className="flex flex-wrap items-center justify-between gap-3 py-4 hover:no-underline"
+              >
+                <div>
+                  <p className="text-sm font-medium text-foreground">{t.title}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {String(t.input.assistant ?? "Manual task")} ·{" "}
+                    {displayDate(t.updatedAt, preferences)}
+                  </p>
+                </div>
+                <StatusBadge status={t.status} />
+              </Link>
+            ))}
+          </div>
+        ) : (
+          <p className="py-5 text-sm text-muted-foreground">
+            No tasks yet. Pick a starting point above, or bring your own goal.
+          </p>
+        )}
+      </section>
     </>
   );
 }

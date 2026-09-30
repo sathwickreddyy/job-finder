@@ -95,13 +95,13 @@ test("navigation and URL-persisted filters remain usable on small screens", asyn
   await page.getByRole("button", { name: "Filter jobs" }).click();
   await expect(page).toHaveURL(/status=SHORTLISTED/);
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.getByRole("link", { name: "Today", exact: true }).click();
+  await page.getByRole("link", { name: "Home", exact: true }).click();
   await expect(page).toHaveURL(/\/$/);
-  await expect(page.getByRole("heading", { name: "Today", exact: true })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Find today’s jobs", exact: true })).toBeVisible();
   await expect(
-    page.getByRole("link", { name: "Inspect Naukri profile", exact: true }).first(),
+    page.getByRole("heading", { name: "What’s your next move?", exact: true }),
   ).toBeVisible();
+  await expect(page.getByRole("button", { name: /Find openings/ })).toBeVisible();
+  await expect(page.getByRole("link", { name: "My profile", exact: true }).first()).toBeVisible();
   await page.goto("/today");
   await expect(page).toHaveURL(/\/$/);
 });
