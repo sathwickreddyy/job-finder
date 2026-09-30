@@ -1,0 +1,9 @@
+ALTER TABLE "application_events" ADD CONSTRAINT "application_events_confidence" CHECK ("application_events"."confidence" IS NULL OR ("application_events"."confidence" >= 0 AND "application_events"."confidence" <= 1));--> statement-breakpoint
+ALTER TABLE "candidate_profiles" ADD CONSTRAINT "candidate_experience_nonnegative" CHECK ("candidate_profiles"."years_of_experience" IS NULL OR "candidate_profiles"."years_of_experience" >= 0);--> statement-breakpoint
+ALTER TABLE "job_resume_matches" ADD CONSTRAINT "job_resume_matches_score" CHECK ("job_resume_matches"."score" >= 0 AND "job_resume_matches"."score" <= 100);--> statement-breakpoint
+ALTER TABLE "jobs" ADD CONSTRAINT "jobs_experience_range" CHECK (("jobs"."experience_min" IS NULL OR "jobs"."experience_min" >= 0) AND ("jobs"."experience_max" IS NULL OR "jobs"."experience_max" >= 0) AND ("jobs"."experience_min" IS NULL OR "jobs"."experience_max" IS NULL OR "jobs"."experience_min" <= "jobs"."experience_max"));--> statement-breakpoint
+ALTER TABLE "jobs" ADD CONSTRAINT "jobs_salary_range" CHECK (("jobs"."salary_min" IS NULL OR "jobs"."salary_min" >= 0) AND ("jobs"."salary_max" IS NULL OR "jobs"."salary_max" >= 0) AND ("jobs"."salary_min" IS NULL OR "jobs"."salary_max" IS NULL OR "jobs"."salary_min" <= "jobs"."salary_max"));--> statement-breakpoint
+ALTER TABLE "mail_events" ADD CONSTRAINT "mail_events_confidence" CHECK ("mail_events"."confidence" >= 0 AND "mail_events"."confidence" <= 1);--> statement-breakpoint
+ALTER TABLE "mission_steps" ADD CONSTRAINT "mission_steps_positive_sequence" CHECK ("mission_steps"."sequence" > 0);--> statement-breakpoint
+ALTER TABLE "missions" ADD CONSTRAINT "missions_priority" CHECK ("missions"."priority" BETWEEN 1 AND 5);--> statement-breakpoint
+ALTER TABLE "resume_versions" ADD CONSTRAINT "resume_versions_size_check" CHECK ("resume_versions"."file_size" > 0 AND "resume_versions"."file_size" <= 10485760);
