@@ -21,9 +21,18 @@ export function proxy(request: NextRequest) {
     return new NextResponse("Host is not allowed. Configure APP_URL for your deployment.", {
       status: 403,
     });
+  const taskApi = /^\/api\/v1\/tasks\/[0-9a-f-]+(?:\/(?:updates|proposals|resume))?$/.test(
+    request.nextUrl.pathname,
+  );
+  if (taskApi && request.headers.has("next-action"))
+    return NextResponse.json(
+      { error: "Server actions are not available on the agent API." },
+      { status: 403 },
+    );
   if (
     !["GET", "HEAD", "OPTIONS"].includes(request.method) &&
-    !safeOrigin(request.headers.get("origin"))
+    !safeOrigin(request.headers.get("origin")) &&
+    !(taskApi && !request.headers.has("origin"))
   )
     return new NextResponse("Request origin is not allowed. Reload JobOps and retry.", {
       status: 403,
@@ -37,6 +46,8 @@ export function proxy(request: NextRequest) {
     return new NextResponse("JOBOPS_ACCESS_TOKEN must contain at least 32 characters.", {
       status: 503,
     });
+  // Only these route handlers accept bearer access; each verifies a task-scoped credential.
+  if (taskApi) return NextResponse.next();
   if (
     token &&
     request.nextUrl.pathname !== "/unlock" &&

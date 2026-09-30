@@ -37,7 +37,7 @@ const environment = {
   ...process.env,
   DATABASE_URL: isolated.toString(),
   APP_URL: "http://127.0.0.1:3211",
-  JOBOPS_ACCESS_TOKEN: "",
+  JOBOPS_ACCESS_TOKEN: process.env.JOBOPS_E2E_ACCESS_TOKEN ?? "",
   STORAGE_ROOT: "./data/e2e-uploads",
   JOBOPS_BUILD_DIR: ".next-e2e",
   E2E_BASE_URL: "http://127.0.0.1:3211",

@@ -34,8 +34,12 @@ export async function findImportDuplicates(preview: ImportPreview) {
   }
   return preview;
 }
-export async function importJobRows(records: JobInput[], strategy: "skip" | "merge") {
-  return db.transaction(async (tx) => {
+export async function importJobRows(
+  records: JobInput[],
+  strategy: "skip" | "merge",
+  executor: typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0] = db,
+) {
+  return executor.transaction(async (tx) => {
     await tx.execute(sql`select pg_advisory_xact_lock(8093210)`);
     const summary = { created: 0, merged: 0, skipped: 0, ids: [] as string[] };
     for (const data of records) {

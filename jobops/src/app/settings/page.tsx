@@ -38,6 +38,7 @@ export default async function SettingsPage() {
       <nav aria-label="Settings sections" className="section-links">
         {[
           ["Candidate", "candidate"],
+          ["Agent access", "workspace-access"],
           ["Job preferences", "job-preferences"],
           ["Standard answers", "standard-answers"],
           ["Storage", "storage"],
@@ -51,6 +52,35 @@ export default async function SettingsPage() {
         ))}
       </nav>
       <div className="stack">
+        <section id="workspace-access">
+          <Panel title="Agent API access">
+            <p className="text-sm text-muted-foreground">
+              {(process.env.JOBOPS_ACCESS_TOKEN?.length ?? 0) >= 32
+                ? "Workspace protection is enabled. Open any task to prepare access for your assistant."
+                : "Enable a private workspace key to use the agent API. You can already copy handoffs and record results manually."}{" "}
+              Keep this workspace key private; share only the access generated for a specific task
+              with your assistant.
+            </p>
+            <details className="mt-4 text-sm">
+              <summary>Local setup</summary>
+              <ol className="mt-3 list-decimal space-y-2 pl-5 text-muted-foreground">
+                <li>
+                  Generate a random key with <code>openssl rand -hex 32</code>.
+                </li>
+                <li>
+                  Save it as <code>JOBOPS_ACCESS_TOKEN</code> in your local <code>jobops/.env</code>
+                  , then restart the app.
+                </li>
+                <li>
+                  Unlock JobOps with that key in your browser. Keep it in your password manager.
+                </li>
+              </ol>
+            </details>
+            <Link href="/agent-guide" className="mt-4 inline-block text-sm text-link">
+              Read the agent guide →
+            </Link>
+          </Panel>
+        </section>
         <section id="candidate">
           <Panel title="Candidate profile">
             <p className="muted mb-5">

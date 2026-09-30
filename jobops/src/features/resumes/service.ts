@@ -73,6 +73,8 @@ export async function uploadResumeVersion(input: {
   versionLabel: string;
   file: File;
   makeCurrent: boolean;
+  draft?: boolean;
+  executor?: Parameters<Parameters<typeof db.transaction>[0]>[0];
 }) {
   const bytes = Buffer.from(await input.file.arrayBuffer());
   validatePdf(bytes, input.file.name, input.file.type);
@@ -93,7 +95,7 @@ export async function uploadResumeVersion(input: {
       "Text extraction failed. The original PDF was retained. Try parsing again or enter keywords manually; password-protected and damaged PDFs may need replacement.";
   }
   try {
-    return await db.transaction(async (tx) => {
+    return await (input.executor ?? db).transaction(async (tx) => {
       const [family] = await tx
         .select()
         .from(resumes)
@@ -107,7 +109,7 @@ export async function uploadResumeVersion(input: {
         .where(
           and(eq(resumeVersions.resumeId, input.resumeId), eq(resumeVersions.isCurrent, true)),
         );
-      const makeCurrent = input.makeCurrent || !current;
+      const makeCurrent = !input.draft && (input.makeCurrent || !current);
       if (makeCurrent) {
         await tx
           .update(resumeVersions)

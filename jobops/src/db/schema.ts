@@ -471,6 +471,7 @@ export const mailMessages = pgTable(
       onDelete: "set null",
     }),
     processedAt: date("processed_at"),
+    attentionState: text("attention_state").notNull().default("OPEN"),
     createdAt: createdAt(),
   },
   (t) => [
@@ -535,4 +536,76 @@ export const gmailConnections = pgTable(
     updatedAt: updatedAt(),
   },
   (t) => [uniqueIndex("gmail_connections_email_idx").on(t.email)],
+);
+
+// New task workflow reuses missions; credentials and human decisions have separate trust boundaries.
+export const taskCredentials = pgTable(
+  "task_credentials",
+  {
+    id: id(),
+    missionId: uuid("mission_id")
+      .notNull()
+      .references(() => missions.id, { onDelete: "cascade" }),
+    digest: text("digest").notNull(),
+    expiresAt: date("expires_at").notNull(),
+    revokedAt: date("revoked_at"),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    uniqueIndex("task_credentials_digest_idx").on(t.digest),
+    index("task_credentials_mission_idx").on(t.missionId),
+  ],
+);
+
+export const taskProposals = pgTable(
+  "task_proposals",
+  {
+    id: id(),
+    missionId: uuid("mission_id")
+      .notNull()
+      .references(() => missions.id, { onDelete: "cascade" }),
+    requestId: text("request_id").notNull(),
+    digest: text("digest").notNull(),
+    kind: text("kind").notNull(),
+    summary: text("summary").notNull(),
+    payload: record("payload"),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("task_proposals_request_idx").on(t.missionId, t.requestId)],
+);
+
+export const taskDecisions = pgTable(
+  "task_decisions",
+  {
+    id: id(),
+    proposalId: uuid("proposal_id")
+      .notNull()
+      .references(() => taskProposals.id, { onDelete: "cascade" }),
+    decision: text("decision").notNull(),
+    feedback: text("feedback").notNull().default(""),
+    effects: record("effects"),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("task_decisions_proposal_idx").on(t.proposalId)],
+);
+
+export const taskUpdates = pgTable(
+  "task_updates",
+  {
+    id: id(),
+    missionId: uuid("mission_id")
+      .notNull()
+      .references(() => missions.id, { onDelete: "cascade" }),
+    requestId: text("request_id").notNull(),
+    digest: text("digest").notNull(),
+    status: text("status").notNull(),
+    summary: text("summary").notNull(),
+    proposalId: uuid("proposal_id").references(() => taskProposals.id, { onDelete: "cascade" }),
+    evidenceUrl: text("evidence_url"),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    uniqueIndex("task_updates_request_idx").on(t.missionId, t.requestId),
+    uniqueIndex("task_updates_execution_idx").on(t.proposalId),
+  ],
 );

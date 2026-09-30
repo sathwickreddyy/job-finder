@@ -15,6 +15,13 @@
       "when": 1790789856954,
       "tag": "0001_short_johnny_blaze",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1790797297268,
+      "tag": "0002_curved_molecule_man",
+      "breakpoints": true
     }
   ]
 }
