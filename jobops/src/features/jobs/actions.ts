@@ -70,14 +70,12 @@ export async function changeJob(_state: ActionState, form: FormData): Promise<Ac
         .where(eq(jobs.id, id))
         .returning();
       if (!job) throw new Error("Job no longer exists.");
-      await tx
-        .insert(activityLogs)
-        .values({
-          action: "JOB_UPDATED",
-          entityType: "JOB",
-          entityId: id,
-          summary: `${job.company} — ${job.title}: ${status}`,
-        });
+      await tx.insert(activityLogs).values({
+        action: "JOB_UPDATED",
+        entityType: "JOB",
+        entityId: id,
+        summary: `${job.company} — ${job.title}: ${status}`,
+      });
     });
     revalidatePath(`/jobs/${id}`);
     revalidatePath("/jobs");
@@ -111,25 +109,21 @@ export async function updateJobDescription(
     await db.transaction(async (tx) => {
       const [job] = await tx.select().from(jobs).where(eq(jobs.id, input.id)).limit(1);
       if (!job) throw new Error("Job no longer exists.");
-      await tx
-        .insert(jobSnapshots)
-        .values({
-          jobId: input.id,
-          description: input.description,
-          rawText: input.description,
-          skills: input.keywords,
-          requirements: input.requirements,
-          metadata: { source: "MANUAL_EDIT" },
-        });
+      await tx.insert(jobSnapshots).values({
+        jobId: input.id,
+        description: input.description,
+        rawText: input.description,
+        skills: input.keywords,
+        requirements: input.requirements,
+        metadata: { source: "MANUAL_EDIT" },
+      });
       await tx.delete(jobResumeMatches).where(eq(jobResumeMatches.jobId, input.id));
-      await tx
-        .insert(activityLogs)
-        .values({
-          action: "JOB_SNAPSHOT_CREATED",
-          entityType: "JOB",
-          entityId: input.id,
-          summary: "Saved job description and keyword snapshot",
-        });
+      await tx.insert(activityLogs).values({
+        action: "JOB_SNAPSHOT_CREATED",
+        entityType: "JOB",
+        entityId: input.id,
+        summary: "Saved job description and keyword snapshot",
+      });
     });
     revalidatePath(`/jobs/${input.id}`);
     return { success: "New snapshot saved. Previous descriptions remain in history." };

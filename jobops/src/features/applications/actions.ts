@@ -64,35 +64,29 @@ export async function createApplication(_state: ActionState, form: FormData): Pr
           appliedAt: data.status === "APPLIED" ? new Date() : null,
         })
         .returning();
-      await tx
-        .insert(applicationEvents)
-        .values({
-          applicationId: app.id,
-          eventType: "APPLICATION_CREATED",
-          summary: `Created application for ${job.company} — ${job.title}`,
-          payload: { stage: data.status, resumeVersionId: data.resumeVersionId },
-        });
+      await tx.insert(applicationEvents).values({
+        applicationId: app.id,
+        eventType: "APPLICATION_CREATED",
+        summary: `Created application for ${job.company} — ${job.title}`,
+        payload: { stage: data.status, resumeVersionId: data.resumeVersionId },
+      });
       if (data.status === "APPLIED")
-        await tx
-          .insert(applicationEvents)
-          .values({
-            applicationId: app.id,
-            eventType: "APPLICATION_SUBMITTED",
-            summary: "Human confirmed final submission",
-            payload: { humanConfirmed: true },
-          });
+        await tx.insert(applicationEvents).values({
+          applicationId: app.id,
+          eventType: "APPLICATION_SUBMITTED",
+          summary: "Human confirmed final submission",
+          payload: { humanConfirmed: true },
+        });
       await tx
         .update(jobs)
         .set({ status: jobStateForApplication(data.status, job.status), updatedAt: new Date() })
         .where(eq(jobs.id, job.id));
-      await tx
-        .insert(activityLogs)
-        .values({
-          action: "APPLICATION_CREATED",
-          entityType: "APPLICATION",
-          entityId: app.id,
-          summary: `Created ${job.company} application`,
-        });
+      await tx.insert(activityLogs).values({
+        action: "APPLICATION_CREATED",
+        entityType: "APPLICATION",
+        entityId: app.id,
+        summary: `Created ${job.company} application`,
+      });
       return app.id;
     });
     revalidatePath("/applications");
@@ -130,35 +124,31 @@ export async function updateApplication(_state: ActionState, form: FormData): Pr
           updatedAt: new Date(),
         })
         .where(eq(applications.id, id));
-      await tx
-        .insert(applicationEvents)
-        .values({
-          applicationId: id,
-          eventType: event.eventType,
-          summary: event.summary,
-          payload: {
-            ...event.payload,
-            previousResumeVersionId: previous.resumeVersionId,
-            resumeVersionId: data.resumeVersionId,
-            previousNextActionAt: previous.nextActionAt,
-            nextActionAt: data.nextActionAt,
-            previousNotes: previous.notes,
-            notes: data.notes,
-          },
-        });
+      await tx.insert(applicationEvents).values({
+        applicationId: id,
+        eventType: event.eventType,
+        summary: event.summary,
+        payload: {
+          ...event.payload,
+          previousResumeVersionId: previous.resumeVersionId,
+          resumeVersionId: data.resumeVersionId,
+          previousNextActionAt: previous.nextActionAt,
+          nextActionAt: data.nextActionAt,
+          previousNotes: previous.notes,
+          notes: data.notes,
+        },
+      });
       if (data.status === "APPLIED")
         await tx
           .update(jobs)
           .set({ status: "APPLIED", updatedAt: new Date() })
           .where(eq(jobs.id, previous.jobId));
-      await tx
-        .insert(activityLogs)
-        .values({
-          action: "APPLICATION_UPDATED",
-          entityType: "APPLICATION",
-          entityId: id,
-          summary: event.summary,
-        });
+      await tx.insert(activityLogs).values({
+        action: "APPLICATION_UPDATED",
+        entityType: "APPLICATION",
+        entityId: id,
+        summary: event.summary,
+      });
     });
     revalidatePath(`/applications/${id}`);
     revalidatePath("/applications");
@@ -180,14 +170,12 @@ export async function addApplicationNote(
       await tx
         .insert(applicationEvents)
         .values({ applicationId: data.id, eventType: "MANUAL_NOTE", summary: data.summary });
-      await tx
-        .insert(activityLogs)
-        .values({
-          action: "APPLICATION_NOTE",
-          entityType: "APPLICATION",
-          entityId: data.id,
-          summary: "Added application timeline note",
-        });
+      await tx.insert(activityLogs).values({
+        action: "APPLICATION_NOTE",
+        entityType: "APPLICATION",
+        entityId: data.id,
+        summary: "Added application timeline note",
+      });
     });
     revalidatePath(`/applications/${data.id}`);
     return { success: "Timeline note added." };

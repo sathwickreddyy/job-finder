@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { normalizeJobUrl, jobDedupeKey, parseJobImport, resolveDuplicateId } from "@/features/jobs/import";
+import {
+  normalizeJobUrl,
+  jobDedupeKey,
+  parseJobImport,
+  resolveDuplicateId,
+} from "@/features/jobs/import";
 describe("job import", () => {
   it("removes tracking but preserves job identity", () =>
     expect(normalizeJobUrl("https://EXAMPLE.com/jobs/42/?utm_source=mail&jobId=42#apply")).toBe(
@@ -51,16 +56,25 @@ describe("job import", () => {
     expect(r.valid).toBe(false);
   });
   it("rejects boolean and array numeric values", () => {
-    for(const experienceMin of [true,[],{}]) {
-      expect(parseJobImport(JSON.stringify([{company:"A",title:"R",url:"https://example.com",experienceMin}]),"json").valid).toBe(false);
+    for (const experienceMin of [true, [], {}]) {
+      expect(
+        parseJobImport(
+          JSON.stringify([{ company: "A", title: "R", url: "https://example.com", experienceMin }]),
+          "json",
+        ).valid,
+      ).toBe(false);
     }
   });
   it("tracks omitted fields for safe metadata merges", () => {
-    const row=parseJobImport('[{"company":"A","title":"R","url":"https://example.com"}]',"json").rows[0].data!;
-    expect(row.providedFields).not.toContain("location");expect(row.providedFields).not.toContain("source");
+    const row = parseJobImport('[{"company":"A","title":"R","url":"https://example.com"}]', "json")
+      .rows[0].data!;
+    expect(row.providedFields).not.toContain("location");
+    expect(row.providedFields).not.toContain("source");
   });
   it("fails conflicting URL and fallback identities instead of merging distinct jobs", () => {
-    expect(()=>resolveDuplicateId([{id:"job-a"},{id:"job-b"}])).toThrow(/identity conflict/);
-    expect(resolveDuplicateId([{id:"job-a"},{id:"job-a"}])).toBe("job-a");
+    expect(() => resolveDuplicateId([{ id: "job-a" }, { id: "job-b" }])).toThrow(
+      /identity conflict/,
+    );
+    expect(resolveDuplicateId([{ id: "job-a" }, { id: "job-a" }])).toBe("job-a");
   });
 });

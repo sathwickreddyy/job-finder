@@ -3,5 +3,96 @@ import { Button, Field } from "@/components/ui";
 import { profileProviders, profiles } from "@/db/schema";
 import { saveProfile } from "./actions";
 export function ProfileForm({ profile }: { profile?: typeof profiles.$inferSelect }) {
-  return <ActionForm action={saveProfile}><input type="hidden" name="id" value={profile?.id ?? ""} /><div className="form-grid"><Field name="provider" label="Portal provider"><select name="provider" id="provider" defaultValue={profile?.provider ?? "NAUKRI"}>{profileProviders.map((provider) => <option key={provider}>{provider}</option>)}</select></Field><Field name="displayName" label="Display name" required defaultValue={profile?.displayName ?? ""} placeholder="My Naukri profile" /><Field name="profileUrl" label="Profile URL" type="url" required defaultValue={profile?.profileUrl ?? ""} /><Field name="usernameOrEmail" label="Username or email (optional)" defaultValue={profile?.usernameOrEmail ?? ""} hint="Portal passwords are never stored" /><Field name="status" label="Profile status"><select name="status" id="status" defaultValue={profile?.status ?? "ACTIVE"}>{["ACTIVE", "PAUSED", "ARCHIVED", "UNKNOWN"].map((v) => <option key={v}>{v}</option>)}</select></Field><Field name="lastInspectedAt" label="Last inspected" type="datetime-local" defaultValue={profile?.lastInspectedAt?.toISOString().slice(0, 16) ?? ""} hint="Set only after observing the actual portal profile" /><div className="full"><Field name="knownState" label="Known state (JSON)" hint="Only record what you observed. Unobserved fields remain UNKNOWN."><textarea id="knownState" name="knownState" rows={7} className="font-mono text-xs" defaultValue={JSON.stringify(profile?.knownState ?? { headline: "UNKNOWN", skills: "UNKNOWN", currentResumeIdentifier: "UNKNOWN" }, null, 2)} /></Field></div><div className="full"><Field name="targetState" label="Target state (JSON)" hint="Supported fields: headline, summary, currentRole, experience, skills, preferredRoles, preferredLocations, noticePeriod, currentResumeIdentifier. UNKNOWN targets are excluded."><textarea id="targetState" name="targetState" rows={7} className="font-mono text-xs" defaultValue={JSON.stringify(profile?.targetState ?? {}, null, 2)} /></Field></div><div className="full"><Field name="notes" label="Notes"><textarea id="notes" name="notes" rows={3} defaultValue={profile?.notes ?? ""} /></Field></div></div><Button type="submit">{profile ? "Save profile" : "Create profile"}</Button></ActionForm>;
+  return (
+    <ActionForm action={saveProfile}>
+      <input type="hidden" name="id" value={profile?.id ?? ""} />
+      <div className="form-grid">
+        <Field name="provider" label="Portal provider">
+          <select name="provider" id="provider" defaultValue={profile?.provider ?? "NAUKRI"}>
+            {profileProviders.map((provider) => (
+              <option key={provider}>{provider}</option>
+            ))}
+          </select>
+        </Field>
+        <Field
+          name="displayName"
+          label="Display name"
+          required
+          defaultValue={profile?.displayName ?? ""}
+          placeholder="My Naukri profile"
+        />
+        <Field
+          name="profileUrl"
+          label="Profile URL"
+          type="url"
+          required
+          defaultValue={profile?.profileUrl ?? ""}
+        />
+        <Field
+          name="usernameOrEmail"
+          label="Username or email (optional)"
+          defaultValue={profile?.usernameOrEmail ?? ""}
+          hint="Portal passwords are never stored"
+        />
+        <Field name="status" label="Profile status">
+          <select name="status" id="status" defaultValue={profile?.status ?? "ACTIVE"}>
+            {["ACTIVE", "PAUSED", "ARCHIVED", "UNKNOWN"].map((v) => (
+              <option key={v}>{v}</option>
+            ))}
+          </select>
+        </Field>
+        <Field
+          name="lastInspectedAt"
+          label="Last inspected"
+          type="datetime-local"
+          defaultValue={profile?.lastInspectedAt?.toISOString().slice(0, 16) ?? ""}
+          hint="Set only after observing the actual portal profile"
+        />
+        <div className="full">
+          <Field
+            name="knownState"
+            label="Known state (JSON)"
+            hint="Only record what you observed. Unobserved fields remain UNKNOWN."
+          >
+            <textarea
+              id="knownState"
+              name="knownState"
+              rows={7}
+              className="font-mono text-xs"
+              defaultValue={JSON.stringify(
+                profile?.knownState ?? {
+                  headline: "UNKNOWN",
+                  skills: "UNKNOWN",
+                  currentResumeIdentifier: "UNKNOWN",
+                },
+                null,
+                2,
+              )}
+            />
+          </Field>
+        </div>
+        <div className="full">
+          <Field
+            name="targetState"
+            label="Target state (JSON)"
+            hint="Supported fields: headline, summary, currentRole, experience, skills, preferredRoles, preferredLocations, noticePeriod, currentResumeIdentifier. UNKNOWN targets are excluded."
+          >
+            <textarea
+              id="targetState"
+              name="targetState"
+              rows={7}
+              className="font-mono text-xs"
+              defaultValue={JSON.stringify(profile?.targetState ?? {}, null, 2)}
+            />
+          </Field>
+        </div>
+        <div className="full">
+          <Field name="notes" label="Notes">
+            <textarea id="notes" name="notes" rows={3} defaultValue={profile?.notes ?? ""} />
+          </Field>
+        </div>
+      </div>
+      <Button type="submit">{profile ? "Save profile" : "Create profile"}</Button>
+    </ActionForm>
+  );
 }

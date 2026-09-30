@@ -20,7 +20,12 @@ export function jobDedupeKey(input: { company: string; title: string; location: 
   return JSON.stringify([input.company, input.title, input.location].map(normalizedPart));
 }
 const numeric = z.preprocess(
-  (v) => v === "" || v === null || v === undefined ? undefined : typeof v === "string" && /^\d+(\.\d+)?$/.test(v.trim()) ? Number(v) : v,
+  (v) =>
+    v === "" || v === null || v === undefined
+      ? undefined
+      : typeof v === "string" && /^\d+(\.\d+)?$/.test(v.trim())
+        ? Number(v)
+        : v,
   z.number().finite().nonnegative().optional(),
 );
 const date = z
@@ -85,9 +90,12 @@ export const jobInputSchema = z
       });
   });
 export type JobInput = z.infer<typeof jobInputSchema> & { providedFields?: string[] };
-export function resolveDuplicateId(matches: {id: string}[]) {
-  const ids = [...new Set(matches.map(match => match.id))];
-  if (ids.length > 1) throw new Error("Job identity conflict: this URL belongs to one job and company/title/location to another. Correct the conflicting row before import.");
+export function resolveDuplicateId(matches: { id: string }[]) {
+  const ids = [...new Set(matches.map((match) => match.id))];
+  if (ids.length > 1)
+    throw new Error(
+      "Job identity conflict: this URL belongs to one job and company/title/location to another. Correct the conflicting row before import.",
+    );
   return ids[0];
 }
 export type ImportRow = {
@@ -131,7 +139,12 @@ export function parseJobImport(text: string, format: "json" | "csv"): ImportPrev
     const keys = [parsed.data.url, jobDedupeKey(parsed.data)];
     const duplicateOf = keys.map((k) => seen.get(k)).find(Boolean);
     for (const key of keys) if (!seen.has(key)) seen.set(key, index + 1);
-    return { row: index + 1, data: { ...parsed.data, providedFields: Object.keys(record) }, errors: [], duplicateOf };
+    return {
+      row: index + 1,
+      data: { ...parsed.data, providedFields: Object.keys(record) },
+      errors: [],
+      duplicateOf,
+    };
   });
   return { rows, valid: rows.every((r) => r.errors.length === 0) };
 }

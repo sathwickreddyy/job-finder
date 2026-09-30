@@ -1,12 +1,13 @@
-import { drizzle } from 'drizzle-orm/node-postgres';
-import { Pool } from 'pg';
-import * as schema from './schema';
+import { drizzle } from "drizzle-orm/node-postgres";
+import { Pool } from "pg";
+import * as schema from "./schema";
 
 let pool: Pool | undefined;
 let database: ReturnType<typeof createDatabase> | undefined;
 
 function createDatabase() {
-  if (!process.env.DATABASE_URL) throw new Error('DATABASE_URL is missing. Copy .env.example to .env and start PostgreSQL.');
+  if (!process.env.DATABASE_URL)
+    throw new Error("DATABASE_URL is missing. Copy .env.example to .env and start PostgreSQL.");
   pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 8 });
   return drizzle(pool, { schema });
 }
@@ -16,7 +17,7 @@ export const db = new Proxy({} as ReturnType<typeof createDatabase>, {
   get(_target, property) {
     database ??= createDatabase();
     const value: unknown = Reflect.get(database, property);
-    return typeof value === 'function' ? value.bind(database) : value;
+    return typeof value === "function" ? value.bind(database) : value;
   },
 });
 

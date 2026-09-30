@@ -1,8 +1,24 @@
 import { applicationStages } from "@/db/schema";
 export type ApplicationStage = (typeof applicationStages)[number];
-export function jobStateForApplication(stage: ApplicationStage, previous: "NEW"|"REVIEWING"|"SHORTLISTED"|"IGNORED"|"PREPARING"|"APPLIED"|"CLOSED") {
-  if (["APPLIED","ACKNOWLEDGED","ASSESSMENT","RECRUITER_SCREEN","TECHNICAL_INTERVIEW","MANAGER_INTERVIEW","FINAL_INTERVIEW","OFFER"].includes(stage)) return "APPLIED" as const;
-  if (["REJECTED","WITHDRAWN","CLOSED"].includes(stage) || previous === "APPLIED") return previous;
+export function jobStateForApplication(
+  stage: ApplicationStage,
+  previous: "NEW" | "REVIEWING" | "SHORTLISTED" | "IGNORED" | "PREPARING" | "APPLIED" | "CLOSED",
+) {
+  if (
+    [
+      "APPLIED",
+      "ACKNOWLEDGED",
+      "ASSESSMENT",
+      "RECRUITER_SCREEN",
+      "TECHNICAL_INTERVIEW",
+      "MANAGER_INTERVIEW",
+      "FINAL_INTERVIEW",
+      "OFFER",
+    ].includes(stage)
+  )
+    return "APPLIED" as const;
+  if (["REJECTED", "WITHDRAWN", "CLOSED"].includes(stage) || previous === "APPLIED")
+    return previous;
   return "PREPARING" as const;
 }
 export function applicationTransition(

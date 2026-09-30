@@ -1,5 +1,50 @@
 import { ActionForm } from "@/components/action-form";
 import { Button, Field, PageHeader, Panel } from "@/components/ui";
 import { importMail } from "@/features/mail/actions";
-const example = [{ externalId: "message-001", sender: "recruiting@example.com", recipient: "you@example.com", subject: "Thank you for applying", receivedAt: "2026-09-30T08:00:00Z", bodyText: "We received your application for Senior Backend Engineer at Example." }];
-export default function MailImportPage() { return <><PageHeader title="Import recruiting mail" description="Paste only job-related messages. Each message becomes a proposed event requiring review." /><Panel title="Structured message import"><ActionForm action={importMail}><Field name="messages" label="Messages (JSON array)" hint="Required fields: sender, subject, receivedAt. Optional: externalId, senderName, recipient, snippet, bodyText, threadId. Up to 200 messages and 2 MB per batch."><textarea id="messages" name="messages" rows={15} required placeholder={JSON.stringify(example, null, 2)} className="font-mono text-xs" /></Field><Button type="submit">Import and classify messages</Button></ActionForm><details className="mt-5"><summary>View import example</summary><pre>{JSON.stringify(example, null, 2)}</pre></details><p className="field-hint mt-4">Exact repeated messages are skipped. HTML is not rendered or executed. Import does not send mail or change an application.</p></Panel></>; }
+const example = [
+  {
+    externalId: "message-001",
+    sender: "recruiting@example.com",
+    recipient: "you@example.com",
+    subject: "Thank you for applying",
+    receivedAt: "2026-09-30T08:00:00Z",
+    bodyText: "We received your application for Senior Backend Engineer at Example.",
+  },
+];
+export default function MailImportPage() {
+  return (
+    <>
+      <PageHeader
+        title="Import recruiting mail"
+        description="Paste only job-related messages. Each message becomes a proposed event requiring review."
+      />
+      <Panel title="Structured message import">
+        <ActionForm action={importMail}>
+          <Field
+            name="messages"
+            label="Messages (JSON array)"
+            hint="Required fields: sender, subject, receivedAt. Optional: externalId, senderName, recipient, snippet, bodyText, threadId. Up to 200 messages and 2 MB per batch."
+          >
+            <textarea
+              id="messages"
+              name="messages"
+              rows={15}
+              required
+              placeholder={JSON.stringify(example, null, 2)}
+              className="font-mono text-xs"
+            />
+          </Field>
+          <Button type="submit">Import and classify messages</Button>
+        </ActionForm>
+        <details className="mt-5">
+          <summary>View import example</summary>
+          <pre>{JSON.stringify(example, null, 2)}</pre>
+        </details>
+        <p className="field-hint mt-4">
+          Exact repeated messages are skipped. HTML is not rendered or executed. Import does not
+          send mail or change an application.
+        </p>
+      </Panel>
+    </>
+  );
+}

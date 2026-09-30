@@ -5,9 +5,112 @@ import { db } from "@/db";
 import { contacts, contactVerificationStatuses } from "@/db/schema";
 import { EmptyState, PageHeader, StatusBadge } from "@/components/ui";
 export const dynamic = "force-dynamic";
-export default async function ContactsPage({ searchParams }: { searchParams: Promise<{ q?: string; company?: string; status?: string }> }) {
+export default async function ContactsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string; company?: string; status?: string }>;
+}) {
   const filters = await searchParams;
   const status = z.enum(contactVerificationStatuses).safeParse(filters.status);
-  const records = await db.select().from(contacts).where(and(filters.q ? or(ilike(contacts.name, `%${filters.q}%`), ilike(contacts.company, `%${filters.q}%`), ilike(contacts.title, `%${filters.q}%`)) : undefined, filters.company ? ilike(contacts.company, `%${filters.company}%`) : undefined, status.success ? eq(contacts.verificationStatus, status.data) : undefined)).orderBy(desc(contacts.updatedAt));
-  return <><PageHeader title="Contacts" description="Recruiters, hiring managers, and referral contacts, with recorded sources and verification." actions={<Link href="/contacts/new" className="button">Add contact</Link>} /><form className="filter-bar" action="/contacts"><input type="search" name="q" aria-label="Search contacts" placeholder="Search name, company, or role" defaultValue={filters.q} /><input name="company" aria-label="Filter company" placeholder="Company" defaultValue={filters.company} /><select name="status" aria-label="Verification status" defaultValue={filters.status ?? ""}><option value="">All verification states</option>{contactVerificationStatuses.map((v) => <option key={v}>{v}</option>)}</select><button className="button-secondary">Filter</button><Link href="/contacts" className="button-quiet">Reset</Link></form>{records.length ? <div className="table-wrap"><table><thead><tr><th>Contact</th><th>Company</th><th>Email</th><th>Verification</th><th>Source</th></tr></thead><tbody>{records.map((contact) => <tr key={contact.id}><td><Link href={`/contacts/${contact.id}`} className="cell-title">{contact.name}</Link><div className="cell-subtitle">{contact.title || "Role not recorded"}</div></td><td>{contact.company}</td><td>{contact.email ?? "Not recorded"}</td><td><StatusBadge status={contact.verificationStatus} /></td><td className="max-w-56 break-words">{contact.source}</td></tr>)}</tbody></table></div> : <EmptyState title="No contacts match this view" description="Record a contact and public source, or clear your filters. JobOps does not send messages or guess email addresses." action={<Link href={`/contacts/new${filters.company ? `?company=${encodeURIComponent(filters.company)}` : ""}`} className="button">Add contact</Link>} />}</>;
+  const records = await db
+    .select()
+    .from(contacts)
+    .where(
+      and(
+        filters.q
+          ? or(
+              ilike(contacts.name, `%${filters.q}%`),
+              ilike(contacts.company, `%${filters.q}%`),
+              ilike(contacts.title, `%${filters.q}%`),
+            )
+          : undefined,
+        filters.company ? ilike(contacts.company, `%${filters.company}%`) : undefined,
+        status.success ? eq(contacts.verificationStatus, status.data) : undefined,
+      ),
+    )
+    .orderBy(desc(contacts.updatedAt));
+  return (
+    <>
+      <PageHeader
+        title="Contacts"
+        description="Recruiters, hiring managers, and referral contacts, with recorded sources and verification."
+        actions={
+          <Link href="/contacts/new" className="button">
+            Add contact
+          </Link>
+        }
+      />
+      <form className="filter-bar" action="/contacts">
+        <input
+          type="search"
+          name="q"
+          aria-label="Search contacts"
+          placeholder="Search name, company, or role"
+          defaultValue={filters.q}
+        />
+        <input
+          name="company"
+          aria-label="Filter company"
+          placeholder="Company"
+          defaultValue={filters.company}
+        />
+        <select name="status" aria-label="Verification status" defaultValue={filters.status ?? ""}>
+          <option value="">All verification states</option>
+          {contactVerificationStatuses.map((v) => (
+            <option key={v}>{v}</option>
+          ))}
+        </select>
+        <button className="button-secondary">Filter</button>
+        <Link href="/contacts" className="button-quiet">
+          Reset
+        </Link>
+      </form>
+      {records.length ? (
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Contact</th>
+                <th>Company</th>
+                <th>Email</th>
+                <th>Verification</th>
+                <th>Source</th>
+              </tr>
+            </thead>
+            <tbody>
+              {records.map((contact) => (
+                <tr key={contact.id}>
+                  <td>
+                    <Link href={`/contacts/${contact.id}`} className="cell-title">
+                      {contact.name}
+                    </Link>
+                    <div className="cell-subtitle">{contact.title || "Role not recorded"}</div>
+                  </td>
+                  <td>{contact.company}</td>
+                  <td>{contact.email ?? "Not recorded"}</td>
+                  <td>
+                    <StatusBadge status={contact.verificationStatus} />
+                  </td>
+                  <td className="max-w-56 break-words">{contact.source}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <EmptyState
+          title="No contacts match this view"
+          description="Record a contact and public source, or clear your filters. JobOps does not send messages or guess email addresses."
+          action={
+            <Link
+              href={`/contacts/new${filters.company ? `?company=${encodeURIComponent(filters.company)}` : ""}`}
+              className="button"
+            >
+              Add contact
+            </Link>
+          }
+        />
+      )}
+    </>
+  );
 }

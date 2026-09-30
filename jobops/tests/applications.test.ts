@@ -15,8 +15,8 @@ describe("application event creation", () => {
   it("does not fabricate submission on a notes edit", () =>
     expect(applicationTransition("APPLIED", "APPLIED").eventType).toBe("APPLICATION_UPDATED"));
   it("retains truthful job state for imported recruiting stages", () => {
-    expect(jobStateForApplication("ACKNOWLEDGED","SHORTLISTED")).toBe("APPLIED");
-    expect(jobStateForApplication("REJECTED","APPLIED")).toBe("APPLIED");
-    expect(jobStateForApplication("PREPARING","APPLIED")).toBe("APPLIED");
+    expect(jobStateForApplication("ACKNOWLEDGED", "SHORTLISTED")).toBe("APPLIED");
+    expect(jobStateForApplication("REJECTED", "APPLIED")).toBe("APPLIED");
+    expect(jobStateForApplication("PREPARING", "APPLIED")).toBe("APPLIED");
   });
 });

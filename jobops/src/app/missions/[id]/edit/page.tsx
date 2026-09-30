@@ -8,7 +8,112 @@ import { terminalStatuses } from "@/features/missions/domain";
 export const dynamic = "force-dynamic";
 const json = (value: unknown) => JSON.stringify(value, null, 2);
 export default async function EditMissionPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params; const detail = await getMission(id); if (!detail) notFound();
+  const { id } = await params;
+  const detail = await getMission(id);
+  if (!detail) notFound();
   const { mission, steps } = detail;
-  return <><PageHeader title="Edit mission" description={mission.title} actions={<Button variant="outline" asChild><Link href={`/missions/${id}`}>Back to mission</Link></Button>}/>{terminalStatuses.has(mission.status) ? <Panel title="Closed mission"><p>This mission retains its final state and evidence. Create a new mission for another attempt.</p><Button className="mt-4" asChild><Link href={`/missions/new?type=${mission.type}&entityType=${mission.entityType}${mission.entityId ? `&entityId=${mission.entityId}` : ""}`}>Create a new mission</Link></Button></Panel> : <ActionForm action={editMission}><input name="id" type="hidden" value={id}/><Panel title="Plan and lifecycle"><div className="space-y-4"><Field name="title" label="Title" defaultValue={mission.title} required/><Field name="goal" label="Goal"><textarea id="goal" name="goal" defaultValue={mission.goal} rows={4} required/></Field><div className="grid gap-4 md:grid-cols-2"><Field name="priority" label="Priority"><select id="priority" name="priority" defaultValue={mission.priority}><option value={1}>High</option><option value={2}>Normal</option><option value={3}>Low</option></select></Field><Field name="status" label="Lifecycle status" hint="Use Start execution and Record result for execution lifecycle changes."><select id="status" name="status" defaultValue={mission.status}>{["DRAFT", "READY", "IN_PROGRESS", "WAITING_FOR_USER", "READY_FOR_REVIEW", "CANCELLED"].map((status) => <option key={status}>{status}</option>)}</select></Field></div><Field name="constraints" label="Constraints (JSON)"><textarea id="constraints" name="constraints" rows={10} className="font-mono text-xs" defaultValue={json(mission.constraints)} required/></Field><Field name="steps" label="Steps (JSON)"><textarea id="steps" name="steps" rows={12} className="font-mono text-xs" defaultValue={json(steps.map(({ title, instruction, requiresApproval }) => ({ title, instruction, requiresApproval })))} required/></Field><Field name="expectedResult" label="Expected output (JSON)"><textarea id="expectedResult" name="expectedResult" rows={8} className="font-mono text-xs" defaultValue={json(mission.expectedResult)} required/></Field></div></Panel><Button type="submit">Save mission</Button></ActionForm>}</>;
+  return (
+    <>
+      <PageHeader
+        title="Edit mission"
+        description={mission.title}
+        actions={
+          <Button variant="outline" asChild>
+            <Link href={`/missions/${id}`}>Back to mission</Link>
+          </Button>
+        }
+      />
+      {terminalStatuses.has(mission.status) ? (
+        <Panel title="Closed mission">
+          <p>
+            This mission retains its final state and evidence. Create a new mission for another
+            attempt.
+          </p>
+          <Button className="mt-4" asChild>
+            <Link
+              href={`/missions/new?type=${mission.type}&entityType=${mission.entityType}${mission.entityId ? `&entityId=${mission.entityId}` : ""}`}
+            >
+              Create a new mission
+            </Link>
+          </Button>
+        </Panel>
+      ) : (
+        <ActionForm action={editMission}>
+          <input name="id" type="hidden" value={id} />
+          <Panel title="Plan and lifecycle">
+            <div className="space-y-4">
+              <Field name="title" label="Title" defaultValue={mission.title} required />
+              <Field name="goal" label="Goal">
+                <textarea id="goal" name="goal" defaultValue={mission.goal} rows={4} required />
+              </Field>
+              <div className="grid gap-4 md:grid-cols-2">
+                <Field name="priority" label="Priority">
+                  <select id="priority" name="priority" defaultValue={mission.priority}>
+                    <option value={1}>High</option>
+                    <option value={2}>Normal</option>
+                    <option value={3}>Low</option>
+                  </select>
+                </Field>
+                <Field
+                  name="status"
+                  label="Lifecycle status"
+                  hint="Use Start execution and Record result for execution lifecycle changes."
+                >
+                  <select id="status" name="status" defaultValue={mission.status}>
+                    {[
+                      "DRAFT",
+                      "READY",
+                      "IN_PROGRESS",
+                      "WAITING_FOR_USER",
+                      "READY_FOR_REVIEW",
+                      "CANCELLED",
+                    ].map((status) => (
+                      <option key={status}>{status}</option>
+                    ))}
+                  </select>
+                </Field>
+              </div>
+              <Field name="constraints" label="Constraints (JSON)">
+                <textarea
+                  id="constraints"
+                  name="constraints"
+                  rows={10}
+                  className="font-mono text-xs"
+                  defaultValue={json(mission.constraints)}
+                  required
+                />
+              </Field>
+              <Field name="steps" label="Steps (JSON)">
+                <textarea
+                  id="steps"
+                  name="steps"
+                  rows={12}
+                  className="font-mono text-xs"
+                  defaultValue={json(
+                    steps.map(({ title, instruction, requiresApproval }) => ({
+                      title,
+                      instruction,
+                      requiresApproval,
+                    })),
+                  )}
+                  required
+                />
+              </Field>
+              <Field name="expectedResult" label="Expected output (JSON)">
+                <textarea
+                  id="expectedResult"
+                  name="expectedResult"
+                  rows={8}
+                  className="font-mono text-xs"
+                  defaultValue={json(mission.expectedResult)}
+                  required
+                />
+              </Field>
+            </div>
+          </Panel>
+          <Button type="submit">Save mission</Button>
+        </ActionForm>
+      )}
+    </>
+  );
 }
