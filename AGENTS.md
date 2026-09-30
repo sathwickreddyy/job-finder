@@ -3,8 +3,8 @@
 ## Current State
 
 The runnable JobOps application lives in `jobops/`. It is a Next.js App Router modular monolith with
-PostgreSQL/Drizzle, private local uploads, deterministic matching and supervised
-missions. There are no LLM calls or autonomous external submissions.
+PostgreSQL/Drizzle, private local PDF uploads, complete assistant prompts and direct application/outreach
+records. Legacy mission data remains stored, but its UI and agent endpoints are retired. There are no LLM calls or autonomous external submissions.
 
 Run all application commands from the `jobops/` directory at the repository root:
 `npm run dev`, `build`, `lint`, `typecheck`, `test`, `test:e2e`, and

@@ -34,9 +34,9 @@
 
 **Interfaces:** Produce `PromptPanel({prompt, compact?})`, `CopyButton({text,label?})`, `searchPrompt(role,location,context)`, shared site cards and real-data home. Keep preview routes independent.
 
-- [ ] Write prompt tests that verify selected resume/file context can be included and no API/progress instructions appear; run them before adding the context support.
-- [ ] Extract shared controls, retain Option A layout, build the real Home and Find pages, and simplify the profile page to actual links/preferences.
-- [ ] Verify clipboard contents, mobile layout and form persistence, then commit this unit.
+- [x] Write prompt tests that verify selected resume/file context can be included and no API/progress instructions appear; run them before adding the context support.
+- [x] Extract shared controls, retain Option A layout, build the real Home and Find pages, and simplify the profile page to actual links/preferences.
+- [x] Verify clipboard contents, mobile layout and form persistence, then commit this unit.
 
 ### Task 2: Jobs, application and outreach records
 
@@ -44,10 +44,10 @@
 
 **Interfaces:** Existing `importJobRows()` saves job descriptions. New `recordIntent({method,sent})` distinguishes direct submission from outreach; records write existing applications/events and retain the exact resume version.
 
-- [ ] Add failing domain tests: `recordIntent({method:"REFERRAL",sent:true}).applied === false` and direct sent is true. Run them and confirm failure.
-- [ ] Implement direct pages with restrained forms, full descriptions/prompts and explicit record-keeping. Persist sent dates and source/channel in application events.
-- [ ] Remove task/proposal links from main destinations, redirect obsolete task entry points and disable the unused task API entry points without dropping historical data.
-- [ ] Run domain tests and browser job/application/outreach flows; commit.
+- [x] Add failing domain tests: `recordIntent({method:"REFERRAL",sent:true}).applied === false` and direct sent is true. Run them and confirm failure.
+- [x] Implement direct pages with restrained forms, full descriptions/prompts and explicit record-keeping. Persist sent dates and source/channel in application events.
+- [x] Remove task/proposal links from main destinations, redirect obsolete task entry points and disable the unused task API entry points without dropping historical data.
+- [x] Run domain tests and browser job/application/outreach flows; commit.
 
 ### Task 3: Resume files, change notes and assessments
 
@@ -55,19 +55,19 @@
 
 **Interfaces:** A `changeNotes` string belongs to a file version. `resumeAssessments` relates a version to one immutable `jobSnapshots` row, with source, date, method, nullable 0–100 score and findings. Preserve original file storage and version IDs.
 
-- [ ] Write assessment validation tests for no score, zero, out-of-range score, missing source/method and invalid dates. Run before implementation.
-- [ ] Add an additive migration only; upload original/revised files in straightforward forms. Show file, bullet changes, company/role usage and sourced assessments.
-- [ ] Keep keyword coverage separate from ATS estimates and visibly label older description assessments.
-- [ ] Verify byte-preserving downloads, version switching and assessment persistence in the isolated browser database; commit.
+- [x] Write assessment validation tests for no score, zero, out-of-range score, missing source/method and invalid dates. Run before implementation.
+- [x] Add an additive migration only; upload original/revised files in straightforward forms. Show file, bullet changes, company/role usage and sourced assessments.
+- [x] Keep keyword coverage separate from ATS estimates and visibly label older description assessments.
+- [x] Verify byte-preserving downloads, version switching and assessment persistence in the isolated browser database; commit.
 
 ### Task 4: Verification and walkthrough
 
 **Files:** browser tests, README, verification notes and approved spec status.
 
-- [ ] Replace tests for removed task UI with the new end-to-end journey; retain meaningful PDF/import/mail/security coverage.
-- [ ] Run unit suite, browser suite, lint, TypeScript, formatting and a production build.
-- [ ] Get a fresh review of the whole change, address material findings and verify them.
-- [ ] Document the real search → description → resume → application/referral workflow, commit and give the user the step-by-step starting guide.
+- [x] Replace tests for removed task UI with the new end-to-end journey; retain meaningful PDF/import/mail/security coverage.
+- [x] Run unit suite, browser suite, lint, TypeScript, formatting and a production build.
+- [x] Get a fresh review of the whole change, address material findings and verify them.
+- [x] Document the real search → description → resume → application/referral workflow, commit and give the user the step-by-step starting guide.
 
 ## Execution ledger
 
@@ -79,3 +79,5 @@
 - Task 2 complete: saved descriptions, direct application/outreach prompts and records, frozen submitted resume links, retired task/mission UI and agent entry points. Intent tests 3/3 and isolated browser flows 2/2 passed; lint and TypeScript passed.
 
 - Task 3 complete: additive migration applied, original/revised PDF viewer, version notes, company/role usage and sourced snapshot-specific assessments. Validation tests 4/4 and isolated PDF/assessment flows 2/2 passed; original bytes and stale-assessment behavior verified.
+
+- Task 4 complete: mail wording/secondary controls simplified; obsolete UI tests replaced, historical data preserved. Fresh review findings resolved (form identity, in-place outreach, actual submission dates, consistent opening context and saved search criteria). All 83 unit tests and 18 browser workflows passed, along with lint, TypeScript, formatting and production build. Actual localhost pages and desktop/mobile screenshots checked; README contains the starting walkthrough. Live Gmail credentials remain the only external setup prerequisite for refresh.

@@ -1,6 +1,6 @@
-# Simple job search: visual review
+# Simple job search: approved Option A
 
-Status: Option A approved on 2026-10-01; production implementation in progress.
+Status: Option A approved on 2026-10-01; production implementation complete; review and verification recorded in `docs/verification.md`.
 
 This replaces the earlier action-home brief. The user's latest instructions remove agent API setup, task progress, proposals and approval layers from the everyday experience. The app supplies prompts, stores files and records outcomes. The user's existing ChatGPT/Claude conversations do the research and collaborative writing.
 
@@ -45,12 +45,12 @@ Buttons respond immediately to a press. Copy changes to Copied only after the cl
 - Home charts use actual dates in Asia/Kolkata. Saved openings and sent applications are separate series. Drafts are excluded from the sent count.
 - Copying prompts, changing preferences, switching layouts/themes, selecting resume details and viewing a local PDF are interactive.
 - Preview forms are deliberately labelled temporary. They do not write personal data, seed the database, save assessments, apply to a job, contact anyone or create API credentials.
-- Existing-record links and Inbox open the current app. Those destinations still use the earlier interface until the replacement is implemented.
-- This is not a claim that the revised production application is complete.
+- Existing-record links and Inbox open the implemented production flow.
+- Gallery controls remain previews; production pages persist the real records.
 
-## Next implementation after visual selection
+## Production implementation
 
-Reuse existing job-description storage, private PDF storage, profile links, application records and mail refresh. Replace the visible task-centric routes and navigation with the selected direct pages. Add only the missing version-change notes and sourced, job-specific resume assessments. Keep historical records; do not drop or recreate the personal database.
+The implementation reuses description snapshots, private PDF storage, profiles, application events and mail refresh. Spacious pages replace visible task routes; additive schema changes store version notes and sourced assessments. Historical records are retained.
 
 Validate the complete path: copy an India-focused prompt → save a real description → upload/view an original and revised PDF → record changes/assessment → choose direct application or outreach → record the exact resume used → see the correct landing-page metrics and inbox actions. Then provide the user a concise step-by-step walkthrough with their first real opening.
 
