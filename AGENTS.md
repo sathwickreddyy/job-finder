@@ -2,26 +2,10 @@
 
 ## Current State
 
-This repository is a clean project skeleton. The previous implementation,
-tests, dependencies, tooling, deployment configuration, and local data have
-been removed. Do not assume any framework or runtime is installed or configured.
-
-## Directory Structure
-
-- `app/`: future backend source.
-- `web/src/`: future frontend source.
-- `tests/`: future tests.
-- `config/`: future configuration.
-- `data/`: ignored local generated data.
-- `resumes/`: ignored local resume files.
-- `docs/`: future documentation.
-
-Directories currently contain only empty `.gitkeep` placeholders.
-
-## Development
-
-No build, run, lint, or test commands exist yet. Update these guidelines and
-README.md when a new implementation establishes the stack and its commands.
+This repository contains only `AGENTS.md`, `.gitignore`, and Git history.
+There is no application source, README, directory scaffold, dependency setup,
+or build, run, lint, or test command. Establish the structure and tooling only
+when a new implementation is requested.
 
 ## Commits
 
