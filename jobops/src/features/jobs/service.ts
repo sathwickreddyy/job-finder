@@ -1,8 +1,21 @@
 import { and, desc, eq, or, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { jobs, jobSnapshots, activityLogs, jobResumeMatches, resumeVersions, resumes } from "@/db/schema";
+import {
+  jobs,
+  jobSnapshots,
+  activityLogs,
+  jobResumeMatches,
+  resumeVersions,
+  resumes,
+} from "@/db/schema";
 import { extractKeywords, compareKeywords } from "@/services/keywords";
-import { jobDedupeKey, normalizeJobUrl, resolveDuplicateId, type ImportPreview, type JobInput } from "./import";
+import {
+  jobDedupeKey,
+  normalizeJobUrl,
+  resolveDuplicateId,
+  type ImportPreview,
+  type JobInput,
+} from "./import";
 
 export async function findImportDuplicates(preview: ImportPreview) {
   for (const row of preview.rows) {
@@ -12,8 +25,12 @@ export async function findImportDuplicates(preview: ImportPreview) {
       .from(jobs)
       .where(or(eq(jobs.canonicalUrl, row.data.url), eq(jobs.dedupeKey, jobDedupeKey(row.data))))
       .limit(2);
-    try { row.existingId = resolveDuplicateId(existing); }
-    catch (error) { row.errors.push((error as Error).message); preview.valid = false; }
+    try {
+      row.existingId = resolveDuplicateId(existing);
+    } catch (error) {
+      row.errors.push((error as Error).message);
+      preview.valid = false;
+    }
   }
   return preview;
 }
@@ -30,7 +47,7 @@ export async function importJobRows(records: JobInput[], strategy: "skip" | "mer
         .where(or(eq(jobs.canonicalUrl, canonicalUrl), eq(jobs.dedupeKey, dedupeKey)))
         .limit(2);
       const existingId = resolveDuplicateId(existingMatches);
-      const existing = existingMatches.find(job => job.id === existingId);
+      const existing = existingMatches.find((job) => job.id === existingId);
       const now = new Date();
       if (existing && strategy === "skip") {
         summary.skipped++;
@@ -72,10 +89,26 @@ export async function importJobRows(records: JobInput[], strategy: "skip" | "mer
           workMode: data.workMode === "UNKNOWN" ? existing.workMode : data.workMode,
         };
         const provided = new Set(data.providedFields ?? Object.keys(data));
-        for (const field of ["location", "source", "workMode", "employmentType", "externalId", "experienceMin", "experienceMax", "salaryMin", "salaryMax", "currency", "postedAt"] as const) {
+        for (const field of [
+          "location",
+          "source",
+          "workMode",
+          "employmentType",
+          "externalId",
+          "experienceMin",
+          "experienceMax",
+          "salaryMin",
+          "salaryMax",
+          "currency",
+          "postedAt",
+        ] as const) {
           if (!provided.has(field)) Reflect.deleteProperty(mergedValues, field);
         }
-        mergedValues.dedupeKey = jobDedupeKey({company:data.company,title:data.title,location:provided.has("location")?data.location:existing.location});
+        mergedValues.dedupeKey = jobDedupeKey({
+          company: data.company,
+          title: data.title,
+          location: provided.has("location") ? data.location : existing.location,
+        });
         await tx.update(jobs).set(mergedValues).where(eq(jobs.id, jobId));
         summary.merged++;
       } else {
@@ -100,26 +133,25 @@ export async function importJobRows(records: JobInput[], strategy: "skip" | "mer
             JSON.stringify(last.skills) !== JSON.stringify(snapshotSkills) ||
             JSON.stringify(last.requirements) !== JSON.stringify(requirements)))
       ) {
-        await tx
-          .insert(jobSnapshots)
-          .values({
-            jobId,
-            description,
-            rawText: description,
-            requirements,
-            skills: snapshotSkills,
-            metadata: { source: data.source, importUrl: canonicalUrl },
-          });
+        await tx.insert(jobSnapshots).values({
+          jobId,
+          capturedAt: new Date(
+            Math.max(new Date().getTime(), (last?.capturedAt.getTime() ?? 0) + 1),
+          ),
+          description,
+          rawText: description,
+          requirements,
+          skills: snapshotSkills,
+          metadata: { source: data.source, importUrl: canonicalUrl },
+        });
         await tx.delete(jobResumeMatches).where(eq(jobResumeMatches.jobId, jobId));
       }
-      await tx
-        .insert(activityLogs)
-        .values({
-          action: existing ? "JOB_MERGED" : "JOB_CREATED",
-          entityType: "JOB",
-          entityId: jobId,
-          summary: `${existing ? "Merged" : "Added"} ${data.company} — ${data.title}`,
-        });
+      await tx.insert(activityLogs).values({
+        action: existing ? "JOB_MERGED" : "JOB_CREATED",
+        entityType: "JOB",
+        entityId: jobId,
+        summary: `${existing ? "Merged" : "Added"} ${data.company} — ${data.title}`,
+      });
       summary.ids.push(jobId);
     }
     return summary;
@@ -132,9 +164,13 @@ export async function saveJobMatches(jobId: string) {
     .where(eq(jobSnapshots.jobId, jobId))
     .orderBy(desc(jobSnapshots.capturedAt))
     .limit(1);
-  const versions = await db.select({version:resumeVersions}).from(resumeVersions).innerJoin(resumes,eq(resumeVersions.resumeId,resumes.id)).where(and(eq(resumeVersions.isCurrent, true),eq(resumes.isActive,true)));
+  const versions = await db
+    .select({ version: resumeVersions })
+    .from(resumeVersions)
+    .innerJoin(resumes, eq(resumeVersions.resumeId, resumes.id))
+    .where(and(eq(resumeVersions.isCurrent, true), eq(resumes.isActive, true)));
   await db.transaction(async (tx) => {
-    for (const {version} of versions) {
+    for (const { version } of versions) {
       const comparison = compareKeywords(snapshot?.skills ?? [], version.keywords);
       await tx
         .insert(jobResumeMatches)
