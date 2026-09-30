@@ -1,63 +1,65 @@
-/* Shared Mica surface language from SDE Prep and Living Moments.
-   Palette, canvas and elevation live here; components use Tailwind tokens. */
+/* Material 3-inspired warm color roles. Keep palette and elevation centralized. */
 :root {
   color-scheme: dark;
-  --background: #0a0a12;
-  --canvas:
-    radial-gradient(circle at top left, rgb(34 211 238 / 9%), transparent 34rem),
-    radial-gradient(circle at 72% 18%, rgb(66 133 244 / 7.5%), transparent 30rem);
-  --foreground: #e8eaed;
-  --card: rgb(255 255 255 / 5%);
-  --rail: rgb(255 255 255 / 3%);
-  --popover: #121820;
-  --muted: rgb(255 255 255 / 8%);
-  --muted-foreground: #a9b5c5;
-  --border: rgb(255 255 255 / 14%);
-  --input: #697c90;
-  --primary: #00b7c3;
-  --primary-hover: #33d4de;
-  --primary-foreground: #04121a;
-  --link: #69dbe2;
-  --blue-soft: rgb(0 183 195 / 12%);
+  --surface: #17120f;
+  --surface-container-low: #201b17;
+  --surface-container: #251f1b;
+  --surface-container-high: #302924;
+  --primary-container: #663d26;
+  --on-primary-container: #ffdbc7;
+  --secondary-container: #584235;
+  --on-secondary-container: #f9ddca;
+  --background: var(--surface);
+  --canvas: none;
+  --foreground: #eee0d6;
+  --card: var(--surface-container-low);
+  --rail: var(--surface-container);
+  --popover: var(--surface-container-high);
+  --muted: #3b332d;
+  --muted-foreground: #d5c3b6;
+  --border: #51443b;
+  --input: #a28d7e;
+  --primary: #f4b68e;
+  --primary-hover: #ffc7a6;
+  --primary-foreground: #4b260f;
+  --link: #f4b68e;
+  --accent-soft: var(--primary-container);
   --amber: #efbc66;
-  --amber-soft: rgb(239 188 102 / 10%);
-  --teal: #87d8ae;
-  --teal-soft: rgb(135 216 174 / 10%);
-  --danger: #ff9ba5;
-  --danger-soft: rgb(255 107 107 / 10%);
-  --scrim: rgb(4 4 10 / 74%);
-  --glass: blur(16px) saturate(1.2);
-  --surface-shadow: 0 1px 2px rgb(0 0 0 / 20%), 0 16px 48px -24px rgb(0 0 0 / 35%);
+  --amber-soft: #483716;
+  --teal: #b3c58a;
+  --teal-soft: #303c20;
+  --danger: #ffb4ab;
+  --danger-soft: #56302b;
+  --scrim: rgb(12 9 6 / 64%);
+  --surface-shadow: 0 1px 3px rgb(0 0 0 / 12%);
 }
 :root[data-theme="light"] {
   color-scheme: light;
-  --background: #fbf6f3;
-  --canvas:
-    radial-gradient(120% 60% at 12% 0%, rgb(255 138 61 / 18%), transparent 55%),
-    radial-gradient(120% 55% at 88% 8%, rgb(61 125 255 / 16%), transparent 55%),
-    radial-gradient(120% 55% at 20% 72%, rgb(26 188 138 / 12%), transparent 58%),
-    linear-gradient(180deg, #fbf6f3, #eef4fb);
-  --foreground: #18242c;
-  --card: rgb(255 255 255 / 62%);
-  --rail: rgb(255 255 255 / 38%);
-  --popover: #fafcfb;
-  --muted: rgb(15 22 44 / 6%);
-  --muted-foreground: #4b5c67;
-  --border: rgb(15 22 44 / 17%);
-  --input: #778b94;
-  --primary: #0b707b;
-  --primary-hover: #085d66;
+  --surface: #fff8f4;
+  --surface-container-low: #fcf1e9;
+  --surface-container: #f6ebe3;
+  --surface-container-high: #f0e5dd;
+  --primary-container: #ffdbc7;
+  --on-primary-container: #663d26;
+  --secondary-container: #f4dece;
+  --on-secondary-container: #584235;
+  --foreground: #251a14;
+  --muted: #e9dcd1;
+  --muted-foreground: #594337;
+  --border: #dbc2b1;
+  --input: #90796a;
+  --primary: #855333;
+  --primary-hover: #6c3f24;
   --primary-foreground: #ffffff;
-  --link: #085d66;
-  --blue-soft: rgb(14 124 134 / 10%);
-  --amber: #805800;
-  --amber-soft: rgb(210 160 55 / 13%);
-  --teal: #25663e;
-  --teal-soft: rgb(53 128 42 / 9%);
+  --link: #855333;
+  --amber: #765100;
+  --amber-soft: #ffebbe;
+  --teal: #425a25;
+  --teal-soft: #e0ecc8;
   --danger: #a52f36;
-  --danger-soft: rgb(179 39 27 / 8%);
-  --scrim: rgb(10 12 20 / 42%);
-  --surface-shadow: 0 1px 2px rgb(15 22 44 / 5%), 0 16px 48px -24px rgb(15 22 44 / 20%);
+  --danger-soft: #ffdad6;
+  --scrim: rgb(31 23 16 / 36%);
+  --surface-shadow: 0 1px 3px rgb(57 39 24 / 6%);
 }
 
 @theme inline {
@@ -68,13 +70,13 @@
   --color-success-soft: var(--teal-soft);
   --color-warning: var(--amber);
   --color-warning-soft: var(--amber-soft);
-  --color-selected: var(--blue-soft);
+  --color-selected: var(--primary-container);
+  --color-selected-foreground: var(--on-primary-container);
   --color-scrim: var(--scrim);
   --shadow-surface: var(--surface-shadow);
-  --radius-card: 1rem;
-  --radius-panel: 1.5rem;
+  --radius-card: 1.5rem;
+  --radius-panel: 1.75rem;
 }
-@utility glass {
-  backdrop-filter: var(--glass);
+@utility surface {
   box-shadow: var(--surface-shadow);
 }

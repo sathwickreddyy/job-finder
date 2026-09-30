@@ -36,6 +36,8 @@ Do not commit secrets, personal resumes, generated databases, or local data.
 - The first redesign centers on actions delegated to external ChatGPT/Claude computer use and Codex/Claude Code: find openings, review job descriptions, tailor resumes interactively, update portals, and prepare applications or referral/cold-email/LinkedIn outreach.
 - Keep agent progress, resume revisions, approval requests and execution results tracked in JobOps through an API. The app does not need its own LLM calls. Keep sending, submission and portal-change approvals explicit.
 - Make on-demand email refresh, date-based grouping and urgent action items prominent. Start with this core workflow before adding other features.
-- Direction A (action home) was selected on 2026-10-01. Use shared Tailwind 4 theme tokens and the Mica background language from SDE Prep / Living Moments; avoid component-local palette literals.
+- Direction A (action home) was selected on 2026-10-01. Use shared Tailwind 4 theme tokens; avoid component-local palette literals.
 - Suggestions are editable starting points. Support custom goals and user-approved preferences supplied from existing assistant conversations. Do not assume access to ChatGPT or Claude memory.
 - My profile consolidates LinkedIn, GitHub, portfolio websites, job portals and resumes. Support profile improvement and project showcase tasks with review before publication.
+- Do not use blue or cyan accents, focus rings, or background glows. The user explicitly dislikes them; keep the shared palette warm (terracotta, sand, and warm neutrals).
+- Follow Google Material 3 styling: tonal surfaces, paired foreground/container colors, rounded panels, pill-shaped controls and clear active states. This supersedes the earlier Mica/glass theme direction.

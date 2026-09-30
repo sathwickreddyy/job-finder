@@ -11,8 +11,8 @@
   --color-primary: var(--primary);
   --color-link: var(--link);
   --color-primary-foreground: var(--primary-foreground);
-  --color-secondary: var(--muted);
-  --color-secondary-foreground: var(--foreground);
+  --color-secondary: var(--secondary-container);
+  --color-secondary-foreground: var(--on-secondary-container);
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
   --color-accent: var(--muted);
@@ -83,7 +83,7 @@
   textarea {
     width: 100%;
     border: 1px solid var(--input);
-    border-radius: 6px;
+    border-radius: 12px;
     background: var(--background);
     color: var(--foreground);
     padding: 9px 11px;
@@ -220,7 +220,7 @@
   }
   .nav-link.active {
     color: var(--link);
-    background: var(--blue-soft);
+    background: var(--accent-soft);
   }
   :root[data-theme="light"] .nav-link.active {
     color: var(--link);
@@ -406,9 +406,9 @@
     justify-content: center;
     align-items: center;
     gap: 7px;
-    min-height: 36px;
-    padding: 7px 13px;
-    border-radius: 6px;
+    min-height: 40px;
+    padding: 9px 20px;
+    border-radius: 999px;
     border: 1px solid transparent;
     font-size: 13px;
     font-weight: 550;
@@ -450,9 +450,9 @@
     color: var(--muted-foreground);
     white-space: nowrap;
   }
-  .badge-blue {
-    background: var(--blue-soft);
-    color: var(--link);
+  .badge-accent {
+    background: var(--accent-soft);
+    color: var(--on-primary-container);
   }
   .badge-amber {
     background: var(--amber-soft);
@@ -489,14 +489,8 @@
     color: var(--amber);
   }
   .status-info {
-    background: var(--blue-soft);
-    color: var(--link);
-  }
-  :root[data-theme="light"] .status-info {
-    color: var(--link);
-  }
-  :root[data-theme="light"] .badge-blue {
-    color: var(--link);
+    background: var(--accent-soft);
+    color: var(--on-primary-container);
   }
   .table-wrap {
     overflow: auto;
@@ -547,7 +541,7 @@
   }
   .notice {
     padding: 12px 15px;
-    background: var(--blue-soft);
+    background: var(--accent-soft);
     border: 1px solid var(--border);
     border-radius: 6px;
     font-size: 13px;
@@ -700,7 +694,7 @@
     background: var(--muted);
   }
   .gallery-nav button[aria-pressed="true"] {
-    background: var(--blue-soft);
+    background: var(--accent-soft);
     color: var(--foreground);
   }
   .queue-row {

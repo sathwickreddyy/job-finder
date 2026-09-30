@@ -186,9 +186,9 @@ export function TaskLauncher({ options }: { options: TaskOptions }) {
             <button
               key={starter.kind}
               onClick={() => setKind(starter.kind)}
-              className="glass group flex w-full items-center gap-4 rounded-card border border-border bg-card px-5 py-4 text-left transition-colors hover:border-primary/60 hover:bg-selected"
+              className="surface group flex w-full items-center gap-4 rounded-card border border-border bg-card px-5 py-4 text-left transition-colors hover:border-primary/60 hover:bg-selected"
             >
-              <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-selected text-link">
+              <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-selected text-selected-foreground">
                 <Icon size={21} aria-hidden />
               </span>
               <span className="min-w-0 flex-1">

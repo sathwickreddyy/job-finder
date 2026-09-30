@@ -52,15 +52,17 @@ export function AppShell({ children }: { children: ReactNode }) {
   );
   const navClass = (active: boolean) =>
     cn(
-      "flex min-h-11 items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors hover:bg-muted hover:no-underline",
-      active ? "bg-selected text-link" : "text-muted-foreground hover:text-foreground",
+      "flex min-h-11 items-center gap-3 rounded-full px-4 py-2.5 text-sm font-medium transition-colors hover:bg-muted hover:no-underline",
+      active
+        ? "bg-selected text-selected-foreground"
+        : "text-muted-foreground hover:text-foreground",
     );
   return (
     <div className="min-h-dvh md:grid md:grid-cols-[13rem_minmax(0,1fr)]">
       <a className="skip-link" href="#main">
         Skip to content
       </a>
-      <aside className="glass flex flex-col gap-5 border-b border-border bg-rail p-4 md:sticky md:top-0 md:h-dvh md:border-r md:border-b-0 md:px-5 md:py-8">
+      <aside className="surface flex flex-col gap-5 border-b border-border bg-rail p-4 md:sticky md:top-0 md:h-dvh md:border-r md:border-b-0 md:px-5 md:py-8">
         <div className="flex items-center justify-between">
           <Link
             href="/"

@@ -31,7 +31,7 @@ export function Panel({
   title?: string;
 }) {
   return (
-    <section className={cn("glass rounded-card border border-border bg-card p-5", className)}>
+    <section className={cn("surface rounded-card border border-border bg-card p-5", className)}>
       {title && <h2 className="mb-4 text-base font-semibold">{title}</h2>}
       {children}
     </section>
@@ -61,7 +61,7 @@ export function StatusBadge({ status }: { status: string }) {
       ? "badge-amber"
       : /COMPLETED|OFFER|VALID|ACTIVE|CURRENT/.test(status)
         ? "badge-teal"
-        : "badge-blue";
+        : "badge-accent";
   return <span className={cn("badge", tone)}>{label(status)}</span>;
 }
 export function Field({

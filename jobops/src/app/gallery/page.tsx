@@ -35,7 +35,7 @@ export default function GalleryPage() {
             keyboard.
           </p>
         </div>
-        <span className="badge badge-blue">Compact workbench selected</span>
+        <span className="badge badge-accent">Compact workbench selected</span>
       </div>
       <div className="stack">
         <section>
@@ -157,7 +157,7 @@ export default function GalleryPage() {
                 ))}
               </div>
               <span
-                className={`badge ${tab === "Complete" ? "badge-teal" : tab === "Needs review" ? "badge-amber" : "badge-blue"}`}
+                className={`badge ${tab === "Complete" ? "badge-teal" : tab === "Needs review" ? "badge-amber" : "badge-accent"}`}
               >
                 {tab}
               </span>
@@ -178,7 +178,7 @@ export default function GalleryPage() {
                       onClick={() => setStep(index)}
                     >
                       <span
-                        className={`badge ${index < step ? "badge-teal" : index === step ? "badge-blue" : ""}`}
+                        className={`badge ${index < step ? "badge-teal" : index === step ? "badge-accent" : ""}`}
                       >
                         {index < step ? "✓" : index + 1}
                       </span>
