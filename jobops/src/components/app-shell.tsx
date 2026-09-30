@@ -57,6 +57,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         ? "bg-selected text-selected-foreground"
         : "text-muted-foreground hover:text-foreground",
     );
+  if (pathname.startsWith("/gallery/simple")) return <main id="main">{children}</main>;
   return (
     <div className="min-h-dvh md:grid md:grid-cols-[13rem_minmax(0,1fr)]">
       <a className="skip-link" href="#main">
