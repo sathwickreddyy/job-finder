@@ -24,6 +24,7 @@ import {
   OPERATORS,
 } from "./domain";
 import { z } from "zod";
+import { redirect } from "next/navigation";
 
 export async function listMissions(filters: { q?: string; status?: string; type?: string }) {
   const status = z.enum(MISSION_STATUSES).safeParse(filters.status);
@@ -105,6 +106,7 @@ export async function getMission(id: string) {
   if (!z.uuid().safeParse(id).success) return null;
   const [mission] = await db.select().from(missions).where(eq(missions.id, id));
   if (!mission) return null;
+  if (mission.input.workflow === true) redirect(`/tasks/${id}`);
   const [steps, executions, evidence, activity, candidate, defaultRows] = await Promise.all([
     db
       .select()

@@ -7,6 +7,10 @@ import {
   safeOrigin,
 } from "@/lib/security";
 export function proxy(request: NextRequest) {
+  if (request.nextUrl.pathname === "/unlock" && !["GET", "HEAD"].includes(request.method))
+    return new NextResponse("Use the sign-in form endpoint.", { status: 405 });
+  if (request.nextUrl.pathname === "/api/unlock" && request.headers.has("next-action"))
+    return new NextResponse("Server actions are not available on this endpoint.", { status: 403 });
   const appUrl = new URL(process.env.APP_URL ?? "http://127.0.0.1:3210");
   let host: URL;
   try {

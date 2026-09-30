@@ -1,8 +1,15 @@
 import { expect, test } from "@playwright/test";
-import { createTask, decideTask } from "../../src/features/tasks/mutations";
+import { createTask, decideTask, proposeTask } from "../../src/features/tasks/mutations";
 import { issueTaskCredential } from "../../src/features/tasks/credentials";
 import { closeDatabase, db } from "../../src/db";
-import { applications, resumes, resumeVersions, taskCredentials } from "../../src/db/schema";
+import {
+  applications,
+  jobs,
+  missions,
+  resumes,
+  resumeVersions,
+  taskCredentials,
+} from "../../src/db/schema";
 import { and, eq, isNull } from "drizzle-orm";
 import { PDFDocument } from "pdf-lib";
 import { uploadResumeVersion } from "../../src/features/resumes/service";
@@ -324,6 +331,27 @@ test("revised application approvals reuse one tracked application", async ({ req
   });
   expect(revised.effects.applicationId).toBe(approved.effects.applicationId);
   expect(await db.select().from(applications).where(eq(applications.jobId, jobId))).toHaveLength(1);
+  await db
+    .update(applications)
+    .set({ applicationUrl: "https://example.invalid/changed" })
+    .where(eq(applications.id, String(revised.effects.applicationId)));
+  expect(
+    (
+      await request.post(`${url}/updates`, {
+        headers,
+        data: {
+          requestId: "execution-1",
+          status: "EXECUTED",
+          proposalId: latest.id,
+          summary: "Submitted the approved test application",
+        },
+      })
+    ).status(),
+  ).toBe(409);
+  await db
+    .update(applications)
+    .set({ applicationUrl: proposal.payload.targetUrl, status: "TECHNICAL_INTERVIEW" })
+    .where(eq(applications.id, String(revised.effects.applicationId)));
   const executed = await request.post(`${url}/updates`, {
     headers,
     data: {
@@ -335,5 +363,100 @@ test("revised application approvals reuse one tracked application", async ({ req
   });
   expect(executed.status()).toBe(200);
   const [application] = await db.select().from(applications).where(eq(applications.jobId, jobId));
-  expect(application.status).toBe("APPLIED");
+  expect(application.status).toBe("TECHNICAL_INTERVIEW");
+  expect((await db.select().from(jobs).where(eq(jobs.id, jobId)))[0].status).toBe("APPLIED");
+
+  const followup = await createTask({
+    kind: "APPLY",
+    title: "State guard check",
+    goal: "Prepare an application for review.",
+    assistant: "Codex",
+    context: "",
+    jobId,
+    resumeVersionId: version.id,
+  });
+  const prepared = await proposeTask(followup.id, proposal);
+  const decision = await decideTask(followup.id, {
+    proposalId: prepared.id,
+    decision: "APPROVE",
+    feedback: "",
+  });
+  await db
+    .update(applications)
+    .set({ status: "APPLIED" })
+    .where(eq(applications.id, String(decision.effects.applicationId)));
+  const newer = await proposeTask(followup.id, { ...proposal, requestId: "second-preparation" });
+  await expect(
+    decideTask(followup.id, { proposalId: newer.id, decision: "APPROVE", feedback: "" }),
+  ).rejects.toThrow("beyond preparation");
+});
+
+test("closed task decisions cannot bypass task review", async () => {
+  const task = await createTask({
+    kind: "CUSTOM",
+    title: "Closed-task review",
+    goal: "Review this fictional result first.",
+    assistant: "Codex",
+    context: "",
+  });
+  const proposal = await proposeTask(task.id, {
+    requestId: "one",
+    summary: "Ready to review",
+    payload: { kind: "NOTE", content: "A fictional test result" },
+  });
+  await db.update(missions).set({ status: "CANCELLED" }).where(eq(missions.id, task.id));
+  await expect(
+    decideTask(task.id, { proposalId: proposal.id, decision: "APPROVE", feedback: "" }),
+  ).rejects.toThrow("closed");
+});
+
+test("public unlock endpoints reject a real approval server-action request", async ({
+  page,
+  request,
+}) => {
+  const task = await createTask({
+    kind: "CUSTOM",
+    title: "Approval boundary",
+    goal: "Review this fictional result first.",
+    assistant: "Codex",
+    context: "",
+  });
+  await proposeTask(task.id, {
+    requestId: "one",
+    summary: "Ready to review",
+    payload: { kind: "NOTE", content: "This result must remain unapproved." },
+  });
+  await page.request.post("/api/unlock", {
+    headers: { origin: "http://127.0.0.1:3211" },
+    form: { token: process.env.JOBOPS_E2E_ACCESS_TOKEN! },
+  });
+  await page.goto(`/tasks/${task.id}`);
+  let capture!: (data: { headers: Record<string, string>; body: Buffer }) => void;
+  const captured = new Promise<{ headers: Record<string, string>; body: Buffer }>((resolve) => {
+    capture = resolve;
+  });
+  await page.route(`**/tasks/${task.id}`, async (route) => {
+    const req = route.request();
+    if (req.method() === "POST") {
+      capture({ headers: req.headers(), body: req.postDataBuffer()! });
+      await route.abort();
+    } else await route.continue();
+  });
+  await page.getByRole("button", { name: "Accept this result", exact: true }).click();
+  const action = await captured;
+  expect(action.headers["next-action"]).toBeTruthy();
+  const headers = {
+    origin: "http://127.0.0.1:3211",
+    "next-action": action.headers["next-action"],
+    "content-type": action.headers["content-type"],
+  };
+  expect(
+    (await request.post("/unlock", { headers, data: action.body, maxRedirects: 0 })).status(),
+  ).toBe(405);
+  expect(
+    (await request.post("/api/unlock", { headers, data: action.body, maxRedirects: 0 })).status(),
+  ).toBe(403);
+  expect((await db.select().from(missions).where(eq(missions.id, task.id)))[0].status).toBe(
+    "READY_FOR_REVIEW",
+  );
 });

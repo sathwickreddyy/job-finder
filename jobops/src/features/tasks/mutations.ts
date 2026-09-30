@@ -18,6 +18,7 @@ import {
   taskUpdates,
 } from "@/db/schema";
 import { importJobRows } from "@/features/jobs/service";
+import { jobStateForApplication } from "@/features/applications/domain";
 import {
   createTaskSchema,
   externalKinds,
@@ -38,6 +39,10 @@ async function lockedTask(tx: Transaction, id: string) {
 }
 export async function createTask(value: unknown) {
   const data = createTaskSchema.parse(value);
+  if (["TAILOR", "APPLY"].includes(data.kind) && !data.resumeVersionId)
+    throw new TaskError("Select your original resume before creating this task.");
+  if (data.kind === "APPLY" && !data.jobId)
+    throw new TaskError("Select an opportunity before preparing an application.");
   return db.transaction(async (tx) => {
     if (
       data.jobId &&
@@ -247,10 +252,45 @@ export async function reportTask(id: string, value: unknown) {
         throw new TaskError("Execution has already been reported for this proposal.", 409);
       const applicationId = approved.decision.effects.applicationId;
       if (typeof applicationId === "string") {
+        const payload = proposalSchema.shape.payload.parse(approved.proposal.payload);
+        const [application] = await tx
+          .select()
+          .from(applications)
+          .where(eq(applications.id, applicationId))
+          .for("update");
+        if (
+          !application ||
+          payload.kind !== "APPLICATION" ||
+          application.jobId !== payload.jobId ||
+          application.resumeVersionId !== payload.resumeVersionId ||
+          application.applicationUrl !== payload.targetUrl
+        )
+          throw new TaskError(
+            "The application changed after approval. Review its resume and destination before recording execution.",
+            409,
+          );
+        if (["REJECTED", "WITHDRAWN", "CLOSED"].includes(application.status))
+          throw new TaskError(
+            "This application is closed. Review its history before recording execution.",
+            409,
+          );
+        const status = ["DRAFT", "PREPARING", "READY_FOR_REVIEW"].includes(application.status)
+          ? "APPLIED"
+          : application.status;
         await tx
           .update(applications)
-          .set({ status: "APPLIED", appliedAt: new Date(), updatedAt: new Date() })
+          .set({ status, appliedAt: application.appliedAt ?? new Date(), updatedAt: new Date() })
           .where(eq(applications.id, applicationId));
+        const [job] = await tx
+          .select()
+          .from(jobs)
+          .where(eq(jobs.id, application.jobId))
+          .for("update");
+        if (job && job.status !== "CLOSED")
+          await tx
+            .update(jobs)
+            .set({ status: jobStateForApplication(status, job.status), updatedAt: new Date() })
+            .where(eq(jobs.id, job.id));
         await tx.insert(applicationEvents).values({
           applicationId,
           eventType: "APPLICATION_SUBMITTED",
@@ -270,6 +310,7 @@ export async function reportTask(id: string, value: unknown) {
           .from(profiles)
           .where(eq(profiles.id, task.input.profileId))
           .for("update");
+        await validatePayload(tx, task, p);
         if (profile && p.kind === "PROFILE")
           await tx
             .update(profiles)
@@ -327,6 +368,8 @@ export async function decideTask(id: string, value: unknown) {
     throw new TaskError("Describe what you would like changed.");
   return db.transaction(async (tx) => {
     const task = await lockedTask(tx, id);
+    if (["COMPLETED", "CANCELLED"].includes(task.status))
+      throw new TaskError("This task is closed. Create a new task for further work.", 409);
     const [proposal] = await tx
       .select()
       .from(taskProposals)
@@ -399,6 +442,18 @@ export async function decideTask(id: string, value: unknown) {
         const previousId = previousApprovals.find(
           (a) => typeof a.effects.applicationId === "string",
         )?.effects.applicationId;
+        if (typeof previousId === "string") {
+          const [existing] = await tx
+            .select()
+            .from(applications)
+            .where(eq(applications.id, previousId))
+            .for("update");
+          if (!existing || !["DRAFT", "PREPARING", "READY_FOR_REVIEW"].includes(existing.status))
+            throw new TaskError(
+              "This application has moved beyond preparation. Review its history before starting further work.",
+              409,
+            );
+        }
         const values = {
           jobId: p.jobId,
           resumeVersionId: p.resumeVersionId,
@@ -420,6 +475,15 @@ export async function decideTask(id: string, value: unknown) {
             409,
           );
         effects.applicationId = application.id;
+        const [job] = await tx.select().from(jobs).where(eq(jobs.id, p.jobId)).for("update");
+        if (job && job.status !== "CLOSED")
+          await tx
+            .update(jobs)
+            .set({
+              status: jobStateForApplication(application.status, job.status),
+              updatedAt: new Date(),
+            })
+            .where(eq(jobs.id, job.id));
         await tx.insert(applicationEvents).values({
           applicationId: application.id,
           eventType: previousId ? "APPLICATION_PREPARATION_REVISED" : "APPLICATION_CREATED",

@@ -56,3 +56,19 @@ describe("personalized task boundary", () => {
     ).toBe(false);
   });
 });
+
+it("requires workspace protection before creating or using task credentials", async () => {
+  const { requireProtectedWorkspace } = await import("@/features/tasks/credentials");
+  const original = process.env.JOBOPS_ACCESS_TOKEN;
+  try {
+    process.env.JOBOPS_ACCESS_TOKEN = "";
+    expect(requireProtectedWorkspace).toThrow("Enable a workspace access key");
+    process.env.JOBOPS_ACCESS_TOKEN = "short";
+    expect(requireProtectedWorkspace).toThrow("Enable a workspace access key");
+    process.env.JOBOPS_ACCESS_TOKEN = "test-only-access-key-with-at-least-32-characters";
+    expect(requireProtectedWorkspace).not.toThrow();
+  } finally {
+    if (original === undefined) delete process.env.JOBOPS_ACCESS_TOKEN;
+    else process.env.JOBOPS_ACCESS_TOKEN = original;
+  }
+});

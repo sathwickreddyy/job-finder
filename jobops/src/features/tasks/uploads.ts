@@ -66,19 +66,17 @@ export async function uploadTaskResume(id: string, file: File, label: string, re
         executor: tx,
       });
       storedPath = version.storagePath;
-      await tx
-        .insert(missionEvidence)
-        .values({
-          missionId: id,
-          type: "RESUME_DRAFT",
-          value: version.id,
-          metadata: {
-            requestId,
-            digest,
-            baseVersionId: base.id,
-            originalFilename: version.originalFilename,
-          },
-        });
+      await tx.insert(missionEvidence).values({
+        missionId: id,
+        type: "RESUME_DRAFT",
+        value: version.id,
+        metadata: {
+          requestId,
+          digest,
+          baseVersionId: base.id,
+          originalFilename: version.originalFilename,
+        },
+      });
       return { versionId: version.id, filename: version.originalFilename, isCurrent: false };
     });
   } catch (error) {

@@ -296,6 +296,8 @@ export async function startMission(_previous: ActionState, form: FormData): Prom
     await db.transaction(async (tx) => {
       const [mission] = await tx.select().from(missions).where(eq(missions.id, id)).for("update");
       if (!mission) throw new Error("Mission not found.");
+      if (mission.input.workflow === true)
+        throw new Error("Open this task from Home to review proposals and record progress.");
       assertMissionEditable(mission.status);
       if (mission.status === "DRAFT") throw new Error("Make the draft READY before starting.");
       const [active] = await tx
@@ -365,6 +367,8 @@ export async function editMission(_previous: ActionState, form: FormData): Promi
     await db.transaction(async (tx) => {
       const [mission] = await tx.select().from(missions).where(eq(missions.id, id)).for("update");
       if (!mission) throw new Error("Mission not found.");
+      if (mission.input.workflow === true)
+        throw new Error("Open this task from Home to review proposals and record progress.");
       assertMissionEditable(mission.status);
       const [execution] = await tx
         .select()
@@ -450,6 +454,8 @@ export async function updateMissionStep(
     await db.transaction(async (tx) => {
       const [mission] = await tx.select().from(missions).where(eq(missions.id, id)).for("update");
       if (!mission) throw new Error("Mission not found.");
+      if (mission.input.workflow === true)
+        throw new Error("Open this task from Home to review proposals and record progress.");
       assertMissionEditable(mission.status);
       const [step] = await tx
         .select()
@@ -601,11 +607,15 @@ export async function recordMissionResult(
     });
     const [initialMission] = await db.select().from(missions).where(eq(missions.id, id));
     if (!initialMission) throw new Error("Mission not found.");
+    if (initialMission.input.workflow === true)
+      throw new Error("Open this task from Home to review proposals and record progress.");
     validateResult(initialMission.status, input);
     uploaded = await evidenceUploads(form);
     await db.transaction(async (tx) => {
       const [mission] = await tx.select().from(missions).where(eq(missions.id, id)).for("update");
       if (!mission) throw new Error("Mission not found.");
+      if (mission.input.workflow === true)
+        throw new Error("Open this task from Home to review proposals and record progress.");
       const result = validateResult(mission.status, input);
       if (
         result.applicationStage &&
