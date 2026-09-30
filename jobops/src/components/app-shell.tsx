@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useSyncExternalStore, type ReactNode } from "react";
 
 const navigation = [
   ["Today", "/today", "M3 3h7v7H3zm11 0h7v7h-7zM3 14h7v7H3zm11 0h7v7h-7z"],
@@ -20,19 +20,25 @@ function Icon({ path }: { path: string }) {
   return <svg className="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={path} /></svg>;
 }
 
+function subscribeTheme(callback: () => void) {
+  window.addEventListener("storage", callback);
+  window.addEventListener("jobops-theme", callback);
+  return () => { window.removeEventListener("storage", callback); window.removeEventListener("jobops-theme", callback); };
+}
+function clientTheme() { return localStorage.getItem("jobops-theme") === "light"; }
+function serverTheme() { return false; }
+
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const [light, setLight] = useState(false);
+  const light = useSyncExternalStore(subscribeTheme, clientTheme, serverTheme);
   useEffect(() => {
-    const preferred = localStorage.getItem("jobops-theme") === "light";
-    setLight(preferred);
-    document.documentElement.dataset.theme = preferred ? "light" : "dark";
-  }, []);
+    document.documentElement.dataset.theme = light ? "light" : "dark";
+  }, [light]);
   function toggleTheme() {
     const next = !light;
-    setLight(next);
     localStorage.setItem("jobops-theme", next ? "light" : "dark");
     document.documentElement.dataset.theme = next ? "light" : "dark";
+    window.dispatchEvent(new Event("jobops-theme"));
   }
   return <div className="app-shell">
     <a className="skip-link" href="#main">Skip to content</a>
