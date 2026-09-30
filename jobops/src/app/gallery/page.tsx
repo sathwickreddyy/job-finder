@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Button } from "@/components/ui";
 
 const sections = ["Today", "Jobs", "Applications", "Resumes", "Missions"];
 const tasks = [
@@ -25,6 +26,9 @@ export default function GalleryPage() {
   const [step, setStep] = useState(1);
   const [query, setQuery] = useState("");
   const [saved, setSaved] = useState(false);
+  const [buttonPreview, setButtonPreview] = useState(
+    "Hover or click a button. This preview does not change any records.",
+  );
   return (
     <>
       <div className="page-header">
@@ -38,6 +42,43 @@ export default function GalleryPage() {
         <span className="badge badge-accent">Compact workbench selected</span>
       </div>
       <div className="stack">
+        <section id="buttons" className="scroll-mt-8">
+          <h2>Button colors</h2>
+          <p className="mb-5 text-muted-foreground">
+            Neutral surfaces with green actions, yellow review, and red decline controls.
+          </p>
+          <div className="grid gap-4 sm:grid-cols-3">
+            <div className="rounded-card border border-border bg-card p-5">
+              <p className="mb-4 text-sm text-muted-foreground">Primary action</p>
+              <Button
+                onClick={() => setButtonPreview("Green primary button selected — preview only.")}
+              >
+                Continue
+              </Button>
+            </div>
+            <div className="rounded-card border border-border bg-card p-5">
+              <p className="mb-4 text-sm text-muted-foreground">Review or changes</p>
+              <Button
+                variant="review"
+                onClick={() => setButtonPreview("Yellow review button selected — preview only.")}
+              >
+                Review changes
+              </Button>
+            </div>
+            <div className="rounded-card border border-border bg-card p-5">
+              <p className="mb-4 text-sm text-muted-foreground">Decline or removal</p>
+              <Button
+                variant="destructive"
+                onClick={() => setButtonPreview("Red decline button selected — preview only.")}
+              >
+                Decline
+              </Button>
+            </div>
+          </div>
+          <p className="mt-4 text-sm text-muted-foreground" role="status">
+            {buttonPreview}
+          </p>
+        </section>
         <section>
           <h2>Navigation</h2>
           <div className="grid-2">

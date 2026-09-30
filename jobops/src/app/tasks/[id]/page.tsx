@@ -119,10 +119,10 @@ export default async function TaskPage({ params }: { params: Promise<{ id: strin
                       <Button type="submit" name="decision" value="APPROVE">
                         {approvalLabels[proposal.kind] ?? "Approve"}
                       </Button>
-                      <Button type="submit" variant="outline" name="decision" value="CHANGES">
+                      <Button type="submit" variant="review" name="decision" value="CHANGES">
                         Ask for changes
                       </Button>
-                      <Button type="submit" variant="ghost" name="decision" value="DECLINE">
+                      <Button type="submit" variant="destructive" name="decision" value="DECLINE">
                         Decline
                       </Button>
                     </div>
