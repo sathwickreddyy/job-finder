@@ -1,5 +1,7 @@
 node_modules/
 .next/
+.next-e2e/
+next-env.d.ts
 .env
 .env.*
 !.env.example
@@ -10,4 +12,6 @@ playwright-report/
 test-results/
 *.tsbuildinfo
 *.log
+backups/
+*.dump
 .DS_Store
