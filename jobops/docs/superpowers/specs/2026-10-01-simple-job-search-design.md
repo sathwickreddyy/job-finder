@@ -1,6 +1,6 @@
 # Simple job search: visual review
 
-Status: live gallery implemented; main-page replacement awaiting the user's visual choice.
+Status: Option A approved on 2026-10-01; production implementation in progress.
 
 This replaces the earlier action-home brief. The user's latest instructions remove agent API setup, task progress, proposals and approval layers from the everyday experience. The app supplies prompts, stores files and records outcomes. The user's existing ChatGPT/Claude conversations do the research and collaborative writing.
 

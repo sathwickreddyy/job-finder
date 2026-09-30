@@ -1,0 +1,151 @@
+import Link from "next/link";
+import { ArrowRight, Search } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { ActivityChart } from "./activity-chart";
+import { JobSiteCards, SiteCards } from "./sites";
+import type { WorkspaceData } from "./read";
+export function WorkspaceHome({ data }: { data: WorkspaceData }) {
+  const stats = [
+    { label: "Saved openings", value: data.openings.length, href: "/jobs" },
+    {
+      label: "Applications sent",
+      value: data.applications.filter((app) => app.appliedAt).length,
+      href: "/applications?view=applied",
+    },
+    {
+      label: "Interview stage",
+      value: data.applications.filter(
+        (app) => app.status.includes("INTERVIEW") || app.status === "RECRUITER_SCREEN",
+      ).length,
+      href: "/applications?view=interviews",
+    },
+    {
+      label: "Offers",
+      value: data.applications.filter((app) => app.status === "OFFER").length,
+      href: "/applications?view=offers",
+    },
+  ];
+  const sources = data.openings.length
+    ? [...new Set(data.openings.map((job) => job.source))]
+    : ["LinkedIn", "Naukri", "Other sites"];
+  return (
+    <div className="space-y-9">
+      <section className="flex flex-wrap items-center justify-between gap-6">
+        <div>
+          <p className="mb-2 text-sm text-muted-foreground">Your job search in India</p>
+          <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
+            {data.name ? `${data.name}, find your next role.` : "Find your next role."}
+          </h1>
+          <p className="mt-3 max-w-xl text-base text-muted-foreground">
+            Your sites, your resumes, and a clear place to start.
+          </p>
+        </div>
+        <Button asChild className="min-h-12 px-7">
+          <Link href="/find">
+            <Search size={18} aria-hidden />
+            Find openings
+            <ArrowRight size={17} aria-hidden />
+          </Link>
+        </Button>
+      </section>
+      <section>
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <h2 className="text-xl font-semibold">Your online presence</h2>
+          <Link href="/my-profile" className="text-sm text-link">
+            Manage links
+          </Link>
+        </div>
+        <SiteCards sites={data.sites} />
+      </section>
+      <section>
+        <h2 className="mb-4 text-xl font-semibold">Places to find openings</h2>
+        <JobSiteCards />
+      </section>
+      <section className="space-y-4">
+        <div>
+          <h2 className="text-xl font-semibold">Your search in numbers</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Recorded in JobOps. Site analytics are not connected.
+          </p>
+        </div>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {stats.map((stat) => (
+            <Link
+              key={stat.label}
+              href={stat.href}
+              className="pressable rounded-card border border-border bg-card p-5 text-foreground hover:bg-selected hover:no-underline"
+            >
+              <p className="text-3xl font-semibold tabular-nums">{stat.value}</p>
+              <p className="mt-2 text-sm text-muted-foreground">{stat.label}</p>
+            </Link>
+          ))}
+        </div>
+        <div className="grid gap-4 lg:grid-cols-[1.5fr_1fr]">
+          <ActivityChart data={data} />
+          <div className="rounded-card border border-border bg-card p-5 sm:p-6">
+            <h3 className="font-semibold">Where you found openings</h3>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Saved openings by source · all time
+            </p>
+            <div className="mt-6 space-y-4">
+              {sources.map((source) => {
+                const count = data.openings.filter((job) => job.source === source).length;
+                return (
+                  <div key={source}>
+                    <div className="mb-2 flex justify-between text-sm">
+                      <span>{source.replaceAll("_", " ")}</span>
+                      <span>{count}</span>
+                    </div>
+                    <div className="h-2 overflow-hidden rounded-full bg-secondary">
+                      <div
+                        className="h-full rounded-full bg-primary"
+                        style={{
+                          width: `${data.openings.length ? (count / data.openings.length) * 100 : 0}%`,
+                        }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </section>
+      <details className="rounded-card border border-border bg-card p-5">
+        <summary className="cursor-pointer font-medium">First time? See the steps</summary>
+        <ol className="mt-4 list-decimal space-y-3 pl-5 text-sm text-muted-foreground">
+          <li>
+            <Link href="/find" className="text-link">
+              Find openings
+            </Link>
+            : copy the prompt into your ChatGPT or Claude conversation.
+          </li>
+          <li>
+            <Link href="/jobs/new" className="text-link">
+              Save a job description
+            </Link>
+            : bring back its full text and source link.
+          </li>
+          <li>
+            <Link href="/resume-prompt" className="text-link">
+              Review your resume
+            </Link>
+            : use your actual file in your assistant, then upload the revised version.
+          </li>
+          <li>
+            <Link href="/applications/new" className="text-link">
+              Record an application
+            </Link>{" "}
+            or referral and the exact resume you used.
+          </li>
+          <li>
+            <Link href="/inbox" className="text-link">
+              Refresh Inbox
+            </Link>{" "}
+            when you want to check replies and deadlines.
+          </li>
+        </ol>
+      </details>
+    </div>
+  );
+}

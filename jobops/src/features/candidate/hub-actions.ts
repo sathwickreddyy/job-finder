@@ -36,8 +36,7 @@ export async function saveWorkingContext(
     });
     refresh();
     return {
-      success:
-        "Preferences saved. New tasks start with this context; existing tasks keep their own copy.",
+      success: "Preferences saved. New prompts will include this context.",
     };
   } catch (e) {
     return actionError(e);
@@ -167,7 +166,7 @@ export async function savePublicProfile(_state: ActionState, form: FormData): Pr
       });
     });
     refresh();
-    return { success: "Profile link saved. You can now attach it to a task." };
+    return { success: "Profile link saved. It now appears on Home." };
   } catch (e) {
     return actionError(e);
   }
@@ -197,7 +196,7 @@ export async function quickResumeUpload(_state: ActionState, form: FormData): Pr
       makeCurrent: true,
     });
     refresh();
-    return { success: "Resume saved. Start a tailoring task whenever you have a job description." };
+    return { success: "Resume saved. Use the resume prompt when you have a job description." };
   } catch (e) {
     if (createdId)
       await db
