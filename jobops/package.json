@@ -1,0 +1,24 @@
+{
+  "name": "jobops", "version": "0.1.0", "private": true,
+  "scripts": {
+    "dev": "next dev --hostname 127.0.0.1 --port 3210",
+    "build": "next build", "start": "next start --hostname 127.0.0.1 --port 3210",
+    "lint": "eslint .", "format": "prettier --write .", "format:check": "prettier --check .",
+    "typecheck": "tsc --noEmit", "test": "vitest run", "test:watch": "vitest",
+    "test:e2e": "playwright test", "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate", "db:seed": "tsx scripts/seed.ts", "db:studio": "drizzle-kit studio"
+  },
+  "dependencies": {
+    "next": "latest", "react": "latest", "react-dom": "latest", "drizzle-orm": "latest", "pg": "latest", "zod": "latest",
+    "pdf-parse": "latest", "pdf-lib": "latest", "papaparse": "latest", "dotenv": "latest",
+    "lucide-react": "latest", "class-variance-authority": "latest", "clsx": "latest", "tailwind-merge": "latest",
+    "@radix-ui/react-slot": "latest"
+  },
+  "devDependencies": {
+    "typescript": "latest", "@types/node": "latest", "@types/react": "latest", "@types/react-dom": "latest",
+    "@types/pg": "latest", "@types/papaparse": "latest", "tailwindcss": "latest", "@tailwindcss/postcss": "latest",
+    "eslint": "latest", "eslint-config-next": "latest", "prettier": "latest", "drizzle-kit": "latest", "tsx": "latest",
+    "vitest": "latest", "@playwright/test": "latest"
+  },
+  "engines": { "node": ">=22.16.0" }
+}

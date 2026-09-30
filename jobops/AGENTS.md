@@ -1,0 +1,35 @@
+# Repository Guidelines
+
+## Current State
+
+This repository contains only `AGENTS.md`, `.gitignore`, and Git history.
+There is no application source, README, directory scaffold, dependency setup,
+or build, run, lint, or test command. Establish the structure and tooling only
+when a new implementation is requested.
+
+## Commits
+
+- Project commit key: `JOB_FINDER`.
+- Use the most granular applicable Jira issue key when an issue owns the work.
+- When no Jira issue covers the work, use `JOB_FINDER-9999: <summary>`.
+- Do not use another project's key or conventional-type prefixes such as `feat`,
+  `fix`, or `docs`.
+- Finalize and record any project-key change here before using the new key.
+- Only commit when explicitly requested. Propose a commit after each logical unit
+  is complete and verified; keep unrelated changes in separate commits.
+- Include `Co-Authored-By: Codex <noreply@openai.com>` for Codex-assisted commits.
+- Do not rewrite existing commits solely to change their prefixes.
+
+## Security
+
+Do not commit secrets, personal resumes, generated databases, or local data.
+
+<!-- BEGIN:nextjs-agent-rules -->
+
+# This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->

@@ -1,0 +1,20 @@
+name: jobops
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: jobops
+      POSTGRES_USER: jobops
+      POSTGRES_PASSWORD: jobops_local_only
+    ports:
+      - "127.0.0.1:5549:5432"
+    volumes:
+      - jobops_postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U jobops -d jobops"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+volumes:
+  jobops_postgres:
