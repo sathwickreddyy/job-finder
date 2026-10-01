@@ -64,7 +64,7 @@ await markerPool.query(
   [JSON.stringify({ ownedBy: "jobops-browser-tests" })],
 );
 await markerPool.end();
-await run("npm", ["run", "db:seed"]);
+await run("npm", ["run", "db:seed:test"]);
 await run(process.execPath, [
   "node_modules/@playwright/test/cli.js",
   "test",
