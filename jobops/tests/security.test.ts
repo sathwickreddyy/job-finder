@@ -94,6 +94,9 @@ describe("trusted local-network access", () => {
     "172.31.255.254",
     "192.168.0.1",
     "192.168.255.254",
+    "100.64.0.0",
+    "100.73.244.29",
+    "100.127.255.255",
     "[::1]",
     "[fc00::1]",
     "[fdff::1]",
@@ -112,7 +115,8 @@ describe("trusted local-network access", () => {
     "172.15.255.254",
     "172.32.0.1",
     "192.169.0.1",
-    "100.64.0.1",
+    "100.63.255.255",
+    "100.128.0.0",
     "169.254.1.1",
     "0.0.0.0",
     "10.0.0.1.evil.example",
@@ -133,6 +137,29 @@ describe("trusted local-network access", () => {
     expect(proxy(request("192.168.1.10:3210")).status).toBe(200);
     vi.stubEnv("APP_URL", "https://career.example");
     expect(proxy(request("192.168.1.10:3210")).status).toBe(403);
+  });
+
+  it("keeps port, origin and deployment checks on Tailscale access", () => {
+    localMode();
+    const host = "100.73.244.29:3210";
+    expect(
+      proxy(request(host, "/companies", { method: "POST", headers: { origin: `http://${host}` } }))
+        .status,
+    ).toBe(200);
+    expect(
+      proxy(
+        request(host, "/companies", {
+          method: "POST",
+          headers: { origin: "http://127.0.0.1:3210" },
+        }),
+      ).status,
+    ).toBe(403);
+    expect(proxy(request("100.73.244.29:3211")).status).toBe(403);
+    vi.stubEnv("APP_URL", "http://100.73.244.29:3210");
+    expect(proxy(request(host, "/companies")).status).toBe(200);
+    expect(proxy(request("127.0.0.1:3210", "/companies")).status).toBe(200);
+    vi.stubEnv("APP_URL", "https://career.example");
+    expect(proxy(request(host, "/companies")).status).toBe(403);
   });
 
   it("accepts browser writes only from the actual local target origin", () => {

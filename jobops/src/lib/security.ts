@@ -12,7 +12,7 @@ export function equalCredential(a: string, b: string) {
 export function isLoopback(hostname: string) {
   return ["localhost", "127.0.0.1", "[::1]", "::1"].includes(hostname.toLowerCase());
 }
-// This classifies target hostnames, not client IPs. The firewall is the LAN boundary.
+// This classifies target hostnames, not client IPs. The firewall/tailnet policy is the boundary.
 export function isLocalNetworkHost(hostname: string) {
   if (isLoopback(hostname)) return true;
   const address = hostname.replace(/^\[|\]$/g, "");
@@ -21,6 +21,8 @@ export function isLocalNetworkHost(hostname: string) {
     return (
       first === 127 ||
       first === 10 ||
+      // Tailscale uses the shared CGNAT range 100.64.0.0/10.
+      (first === 100 && second >= 64 && second <= 127) ||
       (first === 172 && second >= 16 && second <= 31) ||
       (first === 192 && second === 168)
     );
