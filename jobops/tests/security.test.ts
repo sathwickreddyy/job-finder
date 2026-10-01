@@ -82,7 +82,82 @@ describe("trusted local-network access", () => {
   function localMode() {
     vi.stubEnv("APP_URL", "http://127.0.0.1:3210");
     vi.stubEnv("JOBOPS_ACCESS_TOKEN", "");
+    vi.stubEnv("JOBOPS_LOCAL_HOSTS", "");
   }
+
+  it("allows only explicitly configured local hostname aliases", () => {
+    localMode();
+    expect(proxy(request("m4-pro:3210", "/")).status).toBe(403);
+    vi.stubEnv("JOBOPS_LOCAL_HOSTS", " M4-PRO, m4-pro.falcon-viper.ts.net, ");
+    for (const hostname of ["m4-pro", "m4-pro.falcon-viper.ts.net"]) {
+      expect(proxy(request(`${hostname}:3210`, "/")).status).toBe(200);
+      expect(
+        proxy(request(`${hostname}:3210`, "/api/v1/companies", { method: "POST" })).status,
+      ).toBe(200);
+    }
+    for (const host of [
+      "m4-pro:3211",
+      "m4-pro.evil.example:3210",
+      "other.falcon-viper.ts.net:3210",
+      "evil.example:3210",
+    ]) {
+      expect(proxy(request(host, "/")).status).toBe(403);
+    }
+  });
+
+  it("keeps exact browser-origin checks for local hostname aliases", () => {
+    localMode();
+    vi.stubEnv("JOBOPS_LOCAL_HOSTS", "m4-pro");
+    expect(
+      proxy(
+        request("m4-pro:3210", "/companies", {
+          method: "POST",
+          headers: { origin: "http://m4-pro:3210" },
+        }),
+      ).status,
+    ).toBe(200);
+    for (const origin of [
+      "http://127.0.0.1:3210",
+      "http://m4-pro:3211",
+      "https://evil.example",
+      "null",
+    ]) {
+      expect(
+        proxy(request("m4-pro:3210", "/companies", { method: "POST", headers: { origin } })).status,
+      ).toBe(403);
+    }
+    expect(proxy(request("m4-pro:3210", "/companies", { method: "POST" })).status).toBe(403);
+  });
+
+  it("does not enable local hostname trust for public deployments", () => {
+    localMode();
+    vi.stubEnv("JOBOPS_LOCAL_HOSTS", "m4-pro");
+    vi.stubEnv("APP_URL", "https://career.example");
+    expect(proxy(request("m4-pro:3210", "/")).status).toBe(403);
+    vi.stubEnv("APP_URL", "http://m4-pro:3210");
+    expect(proxy(request("m4-pro:3210", "/")).status).toBe(503);
+  });
+
+  it("retains configured access-token protection for hostname alias browsers", () => {
+    localMode();
+    vi.stubEnv("JOBOPS_LOCAL_HOSTS", "m4-pro");
+    vi.stubEnv("JOBOPS_ACCESS_TOKEN", "0123456789abcdef0123456789abcdef");
+    expect(proxy(request("m4-pro:3210", "/companies")).status).toBe(307);
+    expect(proxy(request("m4-pro:3210", "/api/export")).status).toBe(401);
+    const authorized = request("m4-pro:3210", "/companies");
+    authorized.cookies.set(accessCookie, credentialDigest(process.env.JOBOPS_ACCESS_TOKEN!));
+    expect(proxy(authorized).status).toBe(200);
+  });
+
+  it("ignores wildcard aliases and forwarded-host spoofing", () => {
+    localMode();
+    vi.stubEnv("JOBOPS_LOCAL_HOSTS", "m4-pro, *.ts.net, *");
+    expect(proxy(request("evil.ts.net:3210", "/")).status).toBe(403);
+    expect(
+      proxy(request("evil.example:3210", "/", { headers: { "x-forwarded-host": "m4-pro:3210" } }))
+        .status,
+    ).toBe(403);
+  });
 
   it.each([
     "localhost",

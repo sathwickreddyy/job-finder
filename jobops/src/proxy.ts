@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { localHostAliases } from "@/lib/local-hosts";
 import {
   accessCookie,
   credentialDigest,
@@ -23,7 +24,7 @@ export function proxy(request: NextRequest) {
   }
   const trustedLocalNetwork =
     isLocalNetworkHost(appUrl.hostname) &&
-    isLocalNetworkHost(host.hostname) &&
+    (isLocalNetworkHost(host.hostname) || localHostAliases().includes(host.hostname)) &&
     host.port === appUrl.port;
   if (host.host !== appUrl.host && !trustedLocalNetwork)
     return new NextResponse("Host is not allowed. Configure APP_URL for your deployment.", {

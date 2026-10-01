@@ -1,7 +1,9 @@
 import type { NextConfig } from "next";
+import { localHostAliases } from "./src/lib/local-hosts";
 const config: NextConfig = {
   distDir: process.env.JOBOPS_BUILD_DIR ?? ".next",
   agentRules: false,
+  allowedDevOrigins: localHostAliases(),
   serverExternalPackages: ["pdf-parse", "pg"],
   experimental: { serverActions: { bodySizeLimit: "12mb" } },
   async headers() {
