@@ -12,7 +12,7 @@ const config: NextConfig = {
           { key: "X-Content-Type-Options", value: "nosniff" },
           { key: "Referrer-Policy", value: "same-origin" },
           { key: "X-Frame-Options", value: "SAMEORIGIN" },
-          { key: "Cache-Control", value: "no-store" },
+          { key: "Cache-Control", value: "private, no-store" },
         ],
       },
     ];

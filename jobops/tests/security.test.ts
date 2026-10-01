@@ -68,7 +68,11 @@ describe("single-user access boundary", () => {
 });
 
 describe("trusted local-network access", () => {
-  function request(host: string, path = "/api/v1/companies", init: RequestInit = {}) {
+  function request(
+    host: string,
+    path = "/api/v1/companies",
+    init: NonNullable<ConstructorParameters<typeof NextRequest>[1]> = {},
+  ) {
     return new NextRequest(`http://${host}${path}`, {
       ...init,
       headers: { host, ...Object.fromEntries(new Headers(init.headers)) },
