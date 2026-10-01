@@ -13,7 +13,7 @@ For each verified opening, give me:
 • Why it fits my actual background, important gaps, and one useful next step.
 • Whether direct application or a referral looks appropriate, with evidence rather than an invented contact.
 
-Verify that each listing is still open. Exclude duplicates and overseas-only roles. If you cannot browse, say so and ask me for links or job descriptions; do not invent openings.
+Verify that each listing is still open. Exclude duplicates, overseas-only roles, and QA, testing, SDET or test-automation roles. If you cannot browse, say so and ask me for links or job descriptions; do not invent openings.
 
 Show the shortlist here so I can choose a role and copy its job description into my tracker. Do not apply or send messages yet.`;
 }

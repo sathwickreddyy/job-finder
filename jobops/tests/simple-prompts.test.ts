@@ -22,6 +22,7 @@ describe("prompts for existing assistant conversations", () => {
     expect(prompt).toContain("Prefer product engineering");
     expect(prompt).toContain("candidates based in India");
     expect(prompt).toContain("do not invent openings");
+    expect(prompt).toContain("QA, testing, SDET or test-automation roles");
   });
 });
 
