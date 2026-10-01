@@ -38,6 +38,11 @@
   --danger-action-foreground: #3c1210;
   --scrim: rgb(0 0 0 / 60%);
   --surface-shadow: 0 1px 2px rgb(0 0 0 / 20%);
+  /* Interview round families; validated for CVD on the dark card surface. */
+  --chart-coding: #5b8def;
+  --chart-design: #b98500;
+  --chart-people: #d9659b;
+  --chart-other: #80868b;
 }
 :root[data-theme="light"] {
   color-scheme: light;
@@ -69,6 +74,10 @@
   --danger-action-foreground: #ffffff;
   --scrim: rgb(32 33 36 / 32%);
   --surface-shadow: 0 1px 2px rgb(60 64 67 / 10%);
+  --chart-coding: #1967d2;
+  --chart-design: #a86400;
+  --chart-people: #c5307a;
+  --chart-other: #9aa0a6;
 }
 
 @theme inline {
@@ -88,6 +97,10 @@
   --color-selected: var(--primary-container);
   --color-selected-foreground: var(--on-primary-container);
   --color-scrim: var(--scrim);
+  --color-chart-coding: var(--chart-coding);
+  --color-chart-design: var(--chart-design);
+  --color-chart-people: var(--chart-people);
+  --color-chart-other: var(--chart-other);
   --shadow-surface: var(--surface-shadow);
   --radius-card: 1.5rem;
   --radius-panel: 1.75rem;

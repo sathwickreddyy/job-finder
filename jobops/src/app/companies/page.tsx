@@ -1,89 +1,126 @@
 import { Button, PageHeader } from "@/components/ui";
-import { CompanyCard } from "@/features/companies/card";
 import { companyCities } from "@/features/companies/domain";
+import { companyViews, type CompanyView } from "@/features/companies/format";
 import { readCompanies } from "@/features/companies/read";
+import { companySummaries, sharedPayScale } from "@/features/companies/summary";
+import {
+  CompanyGridCard,
+  CompareTable,
+  PipelineBoard,
+  ViewSwitcher,
+} from "@/features/companies/views";
+
+const unplaced = "Location not recorded";
 
 export default async function CompaniesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string }>;
+  searchParams: Promise<{ q?: string; view?: string }>;
 }) {
   const [data, query] = await Promise.all([readCompanies(), searchParams]);
+  const view: CompanyView = companyViews.some((row) => row.id === query.view)
+    ? (query.view as CompanyView)
+    : "grid";
   const search = query.q?.trim().toLowerCase() ?? "";
-  const filtered = data.companies.filter((company) =>
-    `${company.name} ${company.aliases.join(" ")} ${company.focus} ${(company.facts ?? []).map((fact) => `${fact.title} ${fact.summary}`).join(" ")}`
+  const all = companySummaries(data);
+  const scaleMax = sharedPayScale(all);
+  const byId = new Map(data.companies.map((company) => [company.id, company]));
+  const companies = all.filter((row) => {
+    const company = byId.get(row.id)!;
+    return `${row.name} ${company.aliases.join(" ")} ${row.focus} ${row.cities.join(" ")}`
       .toLowerCase()
-      .includes(search),
-  );
-  const otherCities = [...new Set(data.companies.flatMap((company) => company.cities))]
-    .filter((city) => !companyCities.includes(city as "Bengaluru" | "Hyderabad"))
+      .includes(search);
+  });
+  const href = (next: CompanyView) =>
+    `/companies?view=${next}${query.q ? `&q=${encodeURIComponent(query.q)}` : ""}`;
+  const otherCities = [...new Set(all.flatMap((row) => row.cities))]
+    .filter((city) => !companyCities.includes(city as (typeof companyCities)[number]))
     .sort();
   const cities = [
     ...companyCities,
     ...otherCities,
-    ...(data.companies.some((company) => !company.cities.length) ? ["Location not recorded"] : []),
+    ...(all.some((row) => !row.cities.length) ? [unplaced] : []),
   ];
   return (
-    <div className="space-y-8">
+    <div>
       <PageHeader
         title="Companies"
-        description="Explore careers in Bengaluru and Hyderabad. Keep your current resume and recorded applications close."
+        description="Pay ranges, interview loops and your progress for each company you are targeting in Bengaluru and Hyderabad."
       />
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <nav className="flex gap-2" aria-label="Company cities">
-          {cities.map((city) => (
-            <Button variant="secondary" asChild key={city}>
-              <a href={`#${city.toLowerCase().replaceAll(" ", "-")}`}>{city}</a>
-            </Button>
-          ))}
-        </nav>
+      <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
+        <ViewSwitcher
+          view={view}
+          hrefs={{ grid: href("grid"), compare: href("compare"), pipeline: href("pipeline") }}
+        />
         <form className="flex w-full gap-2 sm:w-auto">
+          <input type="hidden" name="view" value={view} />
           <input
             type="search"
             name="q"
             aria-label="Search companies"
-            placeholder="Company or focus"
+            placeholder="Company, focus or city"
             defaultValue={query.q}
-            className="min-w-0 sm:!w-64"
+            className="min-w-0 flex-1 sm:!w-64"
           />
           <Button variant="outline">Search</Button>
         </form>
       </div>
-      {cities.map((city) => {
-        const cityCompanies = filtered.filter((company) =>
-          city === "Location not recorded" ? !company.cities.length : company.cities.includes(city),
-        );
-        return (
-          <section
-            id={city.toLowerCase().replaceAll(" ", "-")}
-            key={city}
-            className="scroll-mt-6"
-            aria-labelledby={`${city}-heading`}
-          >
-            <div className="mb-5 flex items-baseline gap-3">
-              <h2 id={`${city}-heading`} className="text-2xl font-semibold tracking-tight">
-                {city}
-              </h2>
-              <span className="text-sm text-muted-foreground">
-                {cityCompanies.length} companies
-              </span>
-            </div>
-            <div className="grid items-start gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {cityCompanies.map((company) => (
-                <CompanyCard key={company.id} company={company} city={city} data={data} />
-              ))}
-            </div>
-            {!cityCompanies.length && (
-              <p className="rounded-card border border-dashed border-border p-6 text-muted-foreground">
-                No companies match in {city}. Try another search.
-              </p>
-            )}
-          </section>
-        );
-      })}
-      <p className="text-xs text-muted-foreground">
+      {view === "grid" && (
+        <div className="space-y-12">
+          {cities.map((city) => {
+            const rows = companies.filter((row) =>
+              city === unplaced ? !row.cities.length : row.cities.includes(city),
+            );
+            const id = city.toLowerCase().replaceAll(" ", "-");
+            return (
+              <section
+                key={city}
+                id={id}
+                aria-labelledby={`${id}-heading`}
+                className="scroll-mt-6 space-y-5"
+              >
+                <h2
+                  id={`${id}-heading`}
+                  className="flex items-baseline gap-3 text-xl font-semibold tracking-tight"
+                >
+                  {city}
+                  <span className="text-sm font-normal text-muted-foreground">
+                    {rows.length} companies
+                  </span>
+                </h2>
+                {rows.length ? (
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 [&>*]:min-w-0">
+                    {rows.map((row) => (
+                      <CompanyGridCard
+                        key={row.id}
+                        company={row}
+                        label={`View ${row.name} in ${city}`}
+                        href={`/companies/${row.id}${city === unplaced ? "" : `?city=${encodeURIComponent(city)}`}`}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <p className="rounded-card border border-dashed border-border p-6 text-muted-foreground">
+                    No companies match in {city}. Try another search.
+                  </p>
+                )}
+              </section>
+            );
+          })}
+        </div>
+      )}
+      {view === "compare" && (
+        <CompareTable companies={companies} scaleMax={scaleMax} basePath="/companies" />
+      )}
+      {view === "pipeline" && <PipelineBoard companies={companies} basePath="/companies" />}
+      {view !== "grid" && !companies.length && (
+        <p className="rounded-card border border-dashed border-border p-6 text-muted-foreground">
+          No companies match “{query.q}”. Try a company name or city.
+        </p>
+      )}
+      <p className="mt-12 text-xs text-muted-foreground">
         Research includes its source and observation dates. Community reports reflect their authors’
-        experiences. Check each role’s current location and availability on its careers portal.
+        experiences. Pay ranges use INR reports only; stock stays in the currency it was granted in.
       </p>
     </div>
   );

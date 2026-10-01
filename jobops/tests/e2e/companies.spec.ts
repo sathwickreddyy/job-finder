@@ -45,9 +45,36 @@ test("city cards follow current resumes while applications preserve the submitte
   const hyderabad = page.locator("#hyderabad article");
   await expect(bengaluru).toHaveCount(1);
   await expect(hyderabad).toHaveCount(1);
-  await expect(bengaluru.getByRole("link")).toHaveCount(0);
+  await page.goto("/companies?view=compare&q=Amazon");
+  await expect(page.getByRole("table")).toContainText("Amazon");
+  await page.getByRole("button", { name: "Fewest rounds", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Fewest rounds", exact: true })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await page.goto("/companies?view=pipeline&q=Amazon");
+  await expect(page.getByRole("region", { name: "Not started", exact: true })).not.toContainText(
+    "Amazon",
+  );
+  await page.getByRole("link", { name: "Grid", exact: true }).click();
+  await expect(page).toHaveURL(/view=grid&q=Amazon/);
   await bengaluru.click({ position: { x: 20, y: 20 } });
   await expect(page).toHaveURL(/\/companies\/amazon\?city=Bengaluru$/);
+  await expect(page.getByRole("tab", { name: "Compensation", exact: true })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await page.getByRole("tab", { name: "Your progress", exact: true }).click();
+  await expect(page).toHaveURL(/\/companies\/amazon\?city=Bengaluru&tab=progress$/);
+  await page.keyboard.press("ArrowLeft");
+  await expect(page.getByRole("tab", { name: "Interview loop", exact: true })).toBeFocused();
+  await expect(page).toHaveURL(/tab=interviews$/);
+  await page.keyboard.press("ArrowRight");
+  await page.reload();
+  await expect(page.getByRole("tab", { name: "Your progress", exact: true })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
   const applications = page.locator("#applications");
   const bengaluruResume = page.locator("#resume-bengaluru");
   const hyderabadResume = page.locator("#resume-hyderabad");
@@ -73,7 +100,7 @@ test("city cards follow current resumes while applications preserve the submitte
   await expect(
     page.getByRole("heading", { name: "Selected version: Company revision", exact: true }),
   ).toBeVisible();
-  await page.goto("/companies/amazon?city=Bengaluru");
+  await page.goto("/companies/amazon?city=Bengaluru&tab=progress");
   await expect(
     bengaluruResume.getByRole("link", { name: "Current resume: Company revision", exact: true }),
   ).toHaveAttribute("href", familyPath);

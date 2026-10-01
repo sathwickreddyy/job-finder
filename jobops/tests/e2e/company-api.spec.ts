@@ -138,6 +138,16 @@ test("company upsert preserves identity, sourced history and omitted values", as
   await expect(card).toHaveCount(1);
   await card.click();
   await expect(page).toHaveURL(new RegExp(`/companies/${input.slug}\\?city=Bengaluru$`));
+  const panel = page.getByRole("tabpanel");
+  await expect(panel.getByText("₹50 LPA", { exact: true })).toBeVisible();
+  await expect(panel.getByRole("cell", { name: /^Software engineer/ })).toBeVisible();
+  await page.getByRole("tab", { name: "Interview loop", exact: true }).click();
+  await expect(panel.getByRole("group", { name: "Filter questions by round type" })).toBeVisible();
+  await expect(
+    panel.getByText("Merge overlapping intervals", { exact: true }).last(),
+  ).toBeVisible();
+  await page.getByRole("tab", { name: "About & sources", exact: true }).click();
+  await panel.getByText(/^Show \d+ research notes?$/).click();
   await expect(page.getByText("Reported offer", { exact: true })).toBeVisible();
   const compensation = page.getByRole("table", { name: "Compensation", exact: true });
   await expect(compensation.getByRole("cell", { name: "2025", exact: true })).toBeVisible();
