@@ -31,7 +31,7 @@ test.afterEach(async ({ request }) => {
 test("company upsert preserves identity, sourced history and omitted values", async ({
   request,
   page,
-}) => {
+}, testInfo) => {
   const input = {
     ...identity(),
     focus: "Payments",
@@ -53,12 +53,41 @@ test("company upsert preserves identity, sourced history and omitted values", as
         title: "Reported offer",
         sourceUrl: "https://leetcode.com/discuss/post/1",
         data: {
+          publicationYear: 2025,
+          role: "Software engineer",
+          level: "Senior",
           fixedAnnual: 4500000,
           currency: "INR",
           context: { city: "Bengaluru", role: "Engineer" },
           topics: ["graphs"],
         },
         occurredAt: "2026-03-01T00:30:00+05:30",
+      },
+      {
+        factKey: "interview-1",
+        category: "INTERVIEW",
+        title: "Reported interview",
+        sourceUrl: "https://leetcode.com/discuss/post/2",
+        data: {
+          publishedAt: "2024-12-31",
+          role: "Software engineer",
+          outcome: "Offer",
+          questions: ["Explain an LRU cache"],
+          rounds: [
+            {
+              name: "Coding",
+              durationMinutes: 45,
+              topics: ["Arrays"],
+              questions: [
+                {
+                  text: "Merge overlapping intervals",
+                  topic: "Arrays",
+                  referenceUrl: "https://leetcode.com/problems/merge-intervals/",
+                },
+              ],
+            },
+          ],
+        },
       },
     ],
   };
@@ -108,12 +137,44 @@ test("company upsert preserves identity, sourced history and omitted values", as
   await card.click();
   await expect(page).toHaveURL(new RegExp(`/companies/${input.slug}\\?city=Bengaluru$`));
   await expect(page.getByText("Reported offer", { exact: true })).toBeVisible();
-  await expect(page.getByText("community reported · leetcode", { exact: true })).toBeVisible();
-  await expect(page.getByRole("link", { name: "leetcode.com", exact: true })).toHaveAttribute(
+  const compensation = page.getByRole("table", { name: "Compensation", exact: true });
+  await expect(compensation.getByRole("cell", { name: "2025", exact: true })).toBeVisible();
+  await expect(
+    compensation.getByText("community reported · leetcode", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    compensation.getByRole("link", { name: "leetcode.com", exact: true }),
+  ).toHaveAttribute("href", "https://leetcode.com/discuss/post/1");
+  await expect(compensation.getByText("₹50,00,000", { exact: true })).toBeVisible();
+  const interviews = page.getByRole("table", { name: "Interview details", exact: true });
+  await expect(interviews.getByRole("cell", { name: "2024", exact: true })).toBeVisible();
+  await expect(interviews.locator("ol").getByText("Coding", { exact: true })).toBeVisible();
+  const questions = page.getByRole("table", { name: "Interview questions", exact: true });
+  await expect(
+    questions.getByRole("cell", { name: "Explain an LRU cache", exact: true }),
+  ).toBeVisible();
+  await expect(questions.getByRole("link", { name: "View question", exact: true })).toHaveAttribute(
     "href",
-    "https://leetcode.com/discuss/post/1",
+    "https://leetcode.com/problems/merge-intervals/",
   );
-  await expect(page.getByText("50,00,000", { exact: true })).toBeVisible();
+  await expect(
+    questions.getByRole("link", { name: "View in report", exact: true }),
+  ).toHaveAttribute("href", "https://leetcode.com/discuss/post/2");
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.getByRole("heading", { name: "Compensation", exact: true })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
+    true,
+  );
+  const region = page.getByRole("region", { name: "Compensation table, scroll horizontally" });
+  await region.focus();
+  await expect(region).toBeFocused();
+  expect(await region.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
+  await page.keyboard.press("ArrowRight");
+  await expect.poll(() => region.evaluate((element) => element.scrollLeft)).toBeGreaterThan(0);
+  await page.screenshot({
+    path: testInfo.outputPath("research-tables-mobile.png"),
+    fullPage: true,
+  });
   const detail = await request.get(`${endpoint}/${input.slug}`);
   expect((await detail.json()).facts[0].observations).toHaveLength(2);
   const list = await request.get(endpoint, { params: { city: "Bangalore", q: input.name } });
@@ -332,6 +393,12 @@ test("schema is self-contained and typed for external ingestion clients", async 
   expect(contract.components.schemas.CompanyInput.required).toContain("slug");
   expect(contract.components.schemas.CompanyPatch.properties.slug).toBeUndefined();
   expect(contract.components.schemas.COMPENSATIONData.properties.fixedAnnual.minimum).toBe(0);
+  expect(contract.components.schemas.COMPENSATIONData.properties.publicationYear.type).toBe(
+    "integer",
+  );
+  expect(JSON.stringify(contract.components.schemas.INTERVIEWData.properties.questions)).toContain(
+    "referenceUrl",
+  );
 });
 
 test("README curl payloads work unchanged against the company API", async ({ request }) => {

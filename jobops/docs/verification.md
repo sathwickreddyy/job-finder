@@ -2,6 +2,15 @@
 
 Verified October 1, 2026 (Asia/Kolkata), on macOS with Node 24, Next.js 16.3.8, React 19.3, Tailwind CSS 4.3.3 and local PostgreSQL 17.
 
+## Structured company research tables
+
+- Company pages display Compensation, Interview details and Interview questions as separate semantic tables with publication year and source references. Empty tables have explicit empty states; missing values are never fabricated. Other research categories use report/details/reference tables.
+- All categories accept validated `data.publicationYear` and `data.publishedAt`; conflicting years are rejected. Event and observation dates remain separate. INR pay uses Indian number formatting, preserves zero and distinguishes annual amounts, one-time bonus and equity as reported.
+- Questions can be strings or structured objects with text, topic, round and HTTP(S) reference URL. Nested round questions retain their round and prefer question references, then round references, then the report. Original report data remains available in a disclosure.
+- All 144 unit tests, strict TypeScript, ESLint and the production build passed. All ten targeted company browser/API checks passed, including publication years, source links, structured and legacy questions, observation history, exact README payloads, mobile fit and native horizontal keyboard scrolling.
+- The populated mobile table screenshot was inspected at a 390-pixel viewport. Synthetic reports were confined to the ownership-marked `jobops_e2e` database; the live Google record had no research, and no personal records were modified.
+- README and generated API schemas document publication metadata and structured questions for external browser-control ingestion.
+
 ## Clickable company cards and dedicated company pages
 
 - Each directory card is one keyboard-accessible link to `/companies/{slug}?city={city}`. Careers and resume actions live on the company page; there are no nested interactive controls inside the directory link.

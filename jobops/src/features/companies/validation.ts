@@ -44,7 +44,28 @@ const httpUrl = z
 const date = z.union([z.iso.date(), z.iso.datetime({ offset: true })]);
 const amount = z.number().finite().nonnegative().optional();
 const words = z.array(text()).max(500).optional();
+const publicationFields = {
+  publicationYear: z.number().int().min(1900).max(9999).optional(),
+  publishedAt: date.optional(),
+};
+const questions = z
+  .array(
+    z.union([
+      text(10000).min(1),
+      z
+        .object({
+          text: text(10000).min(1),
+          referenceUrl: httpUrl.optional(),
+          topic: text().optional(),
+          round: text().optional(),
+        })
+        .passthrough(),
+    ]),
+  )
+  .max(500)
+  .optional();
 const roleFields = {
+  ...publicationFields,
   role: text().optional(),
   title: text().optional(),
   level: text().optional(),
@@ -58,6 +79,7 @@ const roleFields = {
 export const factDataSchemas = {
   COMPENSATION: z
     .object({
+      ...publicationFields,
       role: text().optional(),
       level: text().optional(),
       yearsExperience: amount,
@@ -74,21 +96,37 @@ export const factDataSchemas = {
     .passthrough(),
   INTERVIEW: z
     .object({
+      ...publicationFields,
       role: text().optional(),
       level: text().optional(),
       outcome: text().optional(),
       roundCount: z.number().int().nonnegative().optional(),
       rounds: z
-        .array(z.union([text(10000), z.object({}).passthrough()]))
+        .array(
+          z.union([
+            text(10000),
+            z
+              .object({
+                name: text().optional(),
+                summary: text(10000).optional(),
+                durationMinutes: amount,
+                topics: words,
+                questions,
+                referenceUrl: httpUrl.optional(),
+              })
+              .passthrough(),
+          ]),
+        )
         .max(100)
         .optional(),
       topics: words,
-      questions: words,
+      questions,
       applicationRoute: text().optional(),
     })
     .passthrough(),
   TECH_STACK: z
     .object({
+      ...publicationFields,
       languages: words,
       frameworks: words,
       platforms: words,
@@ -119,6 +157,7 @@ export const factDataSchemas = {
     ),
   WORK_MODE: z
     .object({
+      ...publicationFields,
       city: text().optional(),
       mode: z.enum(["ONSITE", "HYBRID", "REMOTE", "UNKNOWN"]).optional(),
       officeDaysPerWeek: z.number().int().min(0).max(7).optional(),
@@ -127,6 +166,7 @@ export const factDataSchemas = {
     .passthrough(),
   REFERRAL: z
     .object({
+      ...publicationFields,
       route: text().optional(),
       contactContext: text(10000).optional(),
       responseNotes: text(10000).optional(),
@@ -134,8 +174,8 @@ export const factDataSchemas = {
       instructions: text(20000).optional(),
     })
     .passthrough(),
-  CULTURE: z.object({}).passthrough(),
-  OTHER: z.object({}).passthrough(),
+  CULTURE: z.object(publicationFields).passthrough(),
+  OTHER: z.object(publicationFields).passthrough(),
 } satisfies Record<(typeof companyCategories)[number], z.ZodType>;
 const jsonObject = z
   .unknown()
@@ -200,6 +240,18 @@ export function validateFact(input: unknown) {
       },
     ]);
   const data = factDataSchemas[value.category].parse(value.data ?? {}) as Record<string, unknown>;
+  if (
+    data.publicationYear !== undefined &&
+    typeof data.publishedAt === "string" &&
+    data.publicationYear !== Number(data.publishedAt.slice(0, 4))
+  )
+    throw new z.ZodError([
+      {
+        code: "custom",
+        path: ["data", "publicationYear"],
+        message: "Publication year must match the source publication date.",
+      },
+    ]);
   return {
     ...value,
     data,

@@ -167,14 +167,7 @@ export default async function CompanyPage({
         <div className="order-first min-w-0 space-y-5 lg:order-last">
           <div id="research" className="scroll-mt-6">
             <Panel title="Gathered research">
-              {company.facts?.length ? (
-                <CompanyResearch facts={company.facts} preferences={preferences} />
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  No sourced research saved yet. Gather information from official careers pages or
-                  community reports and keep each source with its notes.
-                </p>
-              )}
+              <CompanyResearch facts={company.facts ?? []} preferences={preferences} />
             </Panel>
           </div>
           <div id="openings" className="scroll-mt-6">
