@@ -119,6 +119,22 @@ test("company search and separate city sections work on mobile", async ({ page }
   await page.goto("/companies");
   await expect(page.locator("#bengaluru article")).toHaveCount(8);
   await expect(page.locator("#hyderabad article")).toHaveCount(6);
+  const cities = page.getByRole("navigation", { name: "Filter by city" });
+  await cities.getByRole("link", { name: /^Hyderabad/ }).click();
+  await expect(page).toHaveURL(/\/companies\?view=grid&city=Hyderabad$/);
+  await expect(page.locator("#hyderabad article")).toHaveCount(6);
+  await expect(page.locator("#bengaluru")).toHaveCount(0);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
+    true,
+  );
+  await page.getByRole("link", { name: "Compare", exact: true }).click();
+  await expect(page).toHaveURL(/view=compare&city=Hyderabad$/);
+  const rows = page.getByRole("table").locator("tbody tr");
+  await expect(rows).toHaveCount(6);
+  await expect(rows.first().getByRole("link")).toHaveAttribute("href", /\?city=Hyderabad$/);
+  await cities.getByRole("link", { name: /^All cities/ }).click();
+  await expect(page).toHaveURL(/\/companies\?view=compare$/);
+  await page.goto("/companies");
   await page.getByRole("searchbox", { name: "Search companies" }).fill("Atlassian");
   await page.getByRole("button", { name: "Search", exact: true }).click();
   await expect(page).toHaveURL(/q=Atlassian/);

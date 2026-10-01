@@ -47,6 +47,36 @@ export function ViewSwitcher({
   );
 }
 
+/** City chips with company counts; `city: null` is the "All cities" option. */
+export function CityFilter({
+  active,
+  options,
+}: {
+  active: string | null;
+  options: { city: string | null; label: string; count: number; href: string }[];
+}) {
+  return (
+    <nav aria-label="Filter by city" className="flex flex-wrap gap-2">
+      {options.map((option) => (
+        <Link
+          key={option.label}
+          href={option.href}
+          aria-current={active === option.city ? "page" : undefined}
+          className={cn(
+            "flex min-h-9 items-center gap-2 rounded-full px-3.5 text-sm font-medium hover:no-underline",
+            active === option.city
+              ? "bg-selected text-selected-foreground"
+              : "border border-border text-muted-foreground hover:text-foreground",
+          )}
+        >
+          {option.label}
+          <span className="tabular-nums opacity-70">{option.count}</span>
+        </Link>
+      ))}
+    </nav>
+  );
+}
+
 /* ───────── Grid (2B with compensation extras) ───────── */
 
 export function CompanyGridCard({
@@ -155,10 +185,13 @@ export function CompareTable({
   companies,
   scaleMax,
   basePath,
+  linkQuery = "",
 }: {
   companies: CompanySummary[];
   scaleMax: number;
   basePath: string;
+  /** Appended to company links, e.g. "?city=Hyderabad" so the company page follows the filter. */
+  linkQuery?: string;
 }) {
   const [key, setKey] = useState<SortKey>("pay");
   const sorted = useMemo(
@@ -229,7 +262,7 @@ export function CompareTable({
                 >
                   <td>
                     <Link
-                      href={`${basePath}/${company.id}`}
+                      href={`${basePath}/${company.id}${linkQuery}`}
                       className="font-medium text-foreground"
                     >
                       {company.name}
@@ -288,9 +321,12 @@ export function CompareTable({
 export function PipelineBoard({
   companies,
   basePath,
+  linkQuery = "",
 }: {
   companies: CompanySummary[];
   basePath: string;
+  /** Appended to company links, e.g. "?city=Hyderabad" so the company page follows the filter. */
+  linkQuery?: string;
 }) {
   const moving = companies.some((company) => company.stage !== "Not started");
   return (
@@ -327,7 +363,7 @@ export function PipelineBoard({
                 {rows.map((company) => (
                   <Link
                     key={company.id}
-                    href={`${basePath}/${company.id}`}
+                    href={`${basePath}/${company.id}${linkQuery}`}
                     className="block rounded-2xl border border-border bg-card p-3 text-foreground hover:border-primary hover:no-underline"
                   >
                     <p className="text-sm font-medium">{company.name}</p>
