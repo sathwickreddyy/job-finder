@@ -42,6 +42,16 @@ describe("company application references", () => {
     expect(activity.openings).toHaveLength(1);
   });
 
+  it("retains saved openings across unlisted and remote locations for the company page", () => {
+    const activity = companyActivity(amazon, "Bengaluru", records, [
+      { company: "AWS", location: "Remote" },
+      { company: "Amazon India", location: "Chennai" },
+      { company: "Amazon Consulting Partners", location: "Bengaluru" },
+    ]);
+    expect(activity.allOpenings.map((job) => job.location)).toEqual(["Remote", "Chennai"]);
+    expect(activity.openings).toHaveLength(0);
+  });
+
   it("keeps applications without a city visible in the unlocated section", () => {
     const activity = companyActivity(amazon, "Location not recorded", records, [
       { company: "AWS", location: "" },

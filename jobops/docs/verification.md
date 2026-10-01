@@ -2,6 +2,15 @@
 
 Verified October 1, 2026 (Asia/Kolkata), on macOS with Node 24, Next.js 16.3.8, React 19.3, Tailwind CSS 4.3.3 and local PostgreSQL 17.
 
+## Clickable company cards and dedicated company pages
+
+- Each directory card is one keyboard-accessible link to `/companies/{slug}?city={city}`. Careers and resume actions live on the company page; there are no nested interactive controls inside the directory link.
+- The detail page combines portal notes, careers/website links, aliases, source-labelled locations and research, all company openings/application records, and separate city resume references. The clicked city's resume reference appears first. Missing companies return 404.
+- 138 unit tests, strict TypeScript and ESLint passed. All ten targeted company browser/API integration tests passed, including mouse/Enter navigation, mobile fit, resume persistence/revision behavior, submitted-file retention, sourced API research on the detail page and exact README payloads.
+- The mobile detail screenshot was inspected at a 390-pixel viewport. Gathered research leads the mobile content; the careers action remains at the top. No personal database records were changed by this verification.
+- The production build passed in `.next-e2e`. The live LAN directory and Google/Amazon detail pages returned HTTP 200; the directory contains company links and the Open careers action appears on the company page.
+- Company REST mutations and resume-reference saves invalidate both the directory and corresponding detail page. README browser-agent guidance now directs agents to verify research on the company page.
+
 ## Company ingestion and LAN delivery
 
 - Strict TypeScript, ESLint, 137 unit tests across 21 files and Git whitespace checks passed.

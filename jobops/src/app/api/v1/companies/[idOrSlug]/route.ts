@@ -15,6 +15,7 @@ export async function PATCH(request: Request, context: Context) {
   try {
     const result = await patchCompany((await context.params).idOrSlug, await companyJson(request));
     revalidatePath("/companies");
+    revalidatePath(`/companies/${result.company.slug}`);
     return companyResponse({ ...result.company, outcome: result.outcome, changes: result.changes });
   } catch (error) {
     return companyApiError(error);

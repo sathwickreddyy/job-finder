@@ -27,6 +27,7 @@ export async function POST(request: Request) {
   try {
     const result = await upsertCompany(await companyJson(request));
     revalidatePath("/companies");
+    revalidatePath(`/companies/${result.company.slug}`);
     return companyResponse(
       { ...result.company, outcome: result.outcome, changes: result.changes },
       result.outcome === "created" ? 201 : 200,

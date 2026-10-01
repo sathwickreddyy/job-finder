@@ -48,6 +48,7 @@ export async function saveCompanyResume(_state: ActionState, form: FormData): Pr
         });
     });
     revalidatePath("/companies");
+    revalidatePath(`/companies/${value.companyId}`);
     return {
       success: value.resumeId
         ? "Resume linked. This card follows its current revision."

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { Company } from "./catalog";
+import type { CompaniesData } from "./read";
 
 export const companyCities = ["Bengaluru", "Hyderabad"] as const;
 export type CompanyCity = string;
@@ -22,12 +23,24 @@ export function companyActivity<
     records,
     localRecords,
     sent: localRecords.filter((row) => row.appliedAt !== null).length,
+    allOpenings: jobs.filter(matchesCompany),
     openings: jobs.filter((row) => matchesCompany(row) && matchesLocation(row)),
   };
 }
 
 export function companyResumeKey(companyId: string, city: CompanyCity) {
   return `companyResume:${companyId}:${city}`;
+}
+
+export function companyResumeReference(company: Company, city: CompanyCity, data: CompaniesData) {
+  const activity = companyActivity(company, city, data.records, data.openings);
+  const latest = activity.localRecords.find((row) => row.version);
+  const reference = data.references.find((row) => row.key === companyResumeKey(company.id, city));
+  const familyId =
+    typeof reference?.value.resumeId === "string"
+      ? reference.value.resumeId
+      : latest?.version?.familyId;
+  return { activity, reference, family: data.families.find((row) => row.id === familyId) };
 }
 
 export const companyResumeSchema = z.object({

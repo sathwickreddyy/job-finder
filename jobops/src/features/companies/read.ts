@@ -78,6 +78,7 @@ export async function readCompanies() {
       cities: [...new Set(present.map((location) => location.city))],
       focus: row.focus,
       careersUrl: row.careersUrl ?? "",
+      websiteUrl: row.websiteUrl ?? "",
       portalNote: row.portalNote,
       locationSource: present.find((location) => location.sourceUrl)?.sourceUrl ?? "",
       locations: present,

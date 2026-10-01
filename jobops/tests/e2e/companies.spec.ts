@@ -45,21 +45,24 @@ test("city cards follow current resumes while applications preserve the submitte
   const hyderabad = page.locator("#hyderabad article");
   await expect(bengaluru).toHaveCount(1);
   await expect(hyderabad).toHaveCount(1);
-  await bengaluru.locator("summary").click();
+  await expect(bengaluru.getByRole("link")).toHaveCount(0);
+  await bengaluru.click({ position: { x: 20, y: 20 } });
+  await expect(page).toHaveURL(/\/companies\/amazon\?city=Bengaluru$/);
+  const applications = page.locator("#applications");
+  const bengaluruResume = page.locator("#resume-bengaluru");
+  const hyderabadResume = page.locator("#resume-hyderabad");
   await expect(
-    bengaluru.locator('a[href^="/applications/"]').filter({ hasText: role }),
+    applications.locator('a[href^="/applications/"]').filter({ hasText: role }),
   ).toBeVisible();
-  await expect(bengaluru.locator(`a[href="${familyPath}?version=${originalId}"]`)).toHaveText(
+  await expect(applications.locator(`a[href="${familyPath}?version=${originalId}"]`)).toHaveText(
     "Submitted: company-original.pdf (Original)",
   );
-  await bengaluru.getByLabel("Resume for Amazon in Bengaluru").selectOption(familyId);
-  await bengaluru.getByRole("button", { name: "Save resume reference" }).click();
-  await expect(bengaluru.getByRole("status")).toContainText("Resume linked");
+  await bengaluruResume.getByLabel("Resume for Amazon in Bengaluru").selectOption(familyId);
+  await bengaluruResume.getByRole("button", { name: "Save resume reference" }).click();
+  await expect(bengaluruResume.getByRole("status")).toContainText("Resume linked");
   await page.reload();
-  await bengaluru.locator("summary").click();
-  await expect(bengaluru.getByLabel("Resume for Amazon in Bengaluru")).toHaveValue(familyId);
-  await hyderabad.locator("summary").click();
-  await expect(hyderabad.getByLabel("Resume for Amazon in Hyderabad")).toHaveValue("");
+  await expect(bengaluruResume.getByLabel("Resume for Amazon in Bengaluru")).toHaveValue(familyId);
+  await expect(hyderabadResume.getByLabel("Resume for Amazon in Hyderabad")).toHaveValue("");
 
   await page.goto(`${familyPath}?upload=1#upload-version`);
   await page.getByLabel("Version label", { exact: true }).fill("Company revision");
@@ -70,20 +73,18 @@ test("city cards follow current resumes while applications preserve the submitte
   await expect(
     page.getByRole("heading", { name: "Selected version: Company revision", exact: true }),
   ).toBeVisible();
-  await page.goto("/companies?q=Amazon");
+  await page.goto("/companies/amazon?city=Bengaluru");
   await expect(
-    bengaluru.getByRole("link", { name: "Current resume: Company revision", exact: true }),
+    bengaluruResume.getByRole("link", { name: "Current resume: Company revision", exact: true }),
   ).toHaveAttribute("href", familyPath);
-  await bengaluru.locator("summary").click();
-  await expect(bengaluru.locator(`a[href="${familyPath}?version=${originalId}"]`)).toHaveText(
+  await expect(applications.locator(`a[href="${familyPath}?version=${originalId}"]`)).toHaveText(
     "Submitted: company-original.pdf (Original)",
   );
-  await bengaluru.getByLabel("Resume for Amazon in Bengaluru").selectOption("");
-  await bengaluru.getByRole("button", { name: "Save resume reference" }).click();
-  await expect(bengaluru.getByRole("status")).toContainText("Resume reference cleared");
+  await bengaluruResume.getByLabel("Resume for Amazon in Bengaluru").selectOption("");
+  await bengaluruResume.getByRole("button", { name: "Save resume reference" }).click();
+  await expect(bengaluruResume.getByRole("status")).toContainText("Resume reference cleared");
   await page.reload();
-  await bengaluru.locator("summary").click();
-  await expect(bengaluru.getByLabel("Resume for Amazon in Bengaluru")).toHaveValue("");
+  await expect(bengaluruResume.getByLabel("Resume for Amazon in Bengaluru")).toHaveValue("");
 });
 
 test("company search and separate city sections work on mobile", async ({ page }) => {
@@ -102,4 +103,22 @@ test("company search and separate city sections work on mobile", async ({ page }
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
     true,
   );
+  await page.getByRole("link", { name: "View Atlassian in Bengaluru", exact: true }).focus();
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(/\/companies\/atlassian\?city=Bengaluru$/);
+  await expect(page.getByRole("heading", { name: "Atlassian", exact: true })).toBeVisible();
+  await page.screenshot({
+    path: test.info().outputPath("company-detail-mobile.png"),
+    fullPage: true,
+  });
+  await expect(page.getByRole("link", { name: "Open careers", exact: true })).toHaveAttribute(
+    "href",
+    "https://www.atlassian.com/company/careers/all-jobs",
+  );
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
+    true,
+  );
+  await page.getByRole("link", { name: "All companies", exact: true }).click();
+  await expect(page).toHaveURL(/\/companies$/);
+  expect((await page.goto("/companies/not-a-recorded-company"))?.status()).toBe(404);
 });

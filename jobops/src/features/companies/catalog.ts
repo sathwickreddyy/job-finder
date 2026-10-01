@@ -7,6 +7,7 @@ export type Company = {
   cities: string[];
   focus: string;
   careersUrl: string;
+  websiteUrl?: string;
   locationSource: string;
   portalNote: string;
   facts?: (typeof companyFacts.$inferSelect)[];

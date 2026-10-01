@@ -105,14 +105,15 @@ test("company upsert preserves identity, sourced history and omitted values", as
   await page.goto(`/companies?q=${encodeURIComponent(input.name)}`);
   const card = page.locator("#bengaluru article").filter({ hasText: input.name });
   await expect(card).toHaveCount(1);
-  await card.locator("summary").click();
-  await expect(card.getByText("Reported offer", { exact: true })).toBeVisible();
-  await expect(card.getByText("community reported · leetcode", { exact: true })).toBeVisible();
-  await expect(card.getByRole("link", { name: "leetcode.com", exact: true })).toHaveAttribute(
+  await card.click();
+  await expect(page).toHaveURL(new RegExp(`/companies/${input.slug}\\?city=Bengaluru$`));
+  await expect(page.getByText("Reported offer", { exact: true })).toBeVisible();
+  await expect(page.getByText("community reported · leetcode", { exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "leetcode.com", exact: true })).toHaveAttribute(
     "href",
     "https://leetcode.com/discuss/post/1",
   );
-  await expect(card.getByText("50,00,000", { exact: true })).toBeVisible();
+  await expect(page.getByText("50,00,000", { exact: true })).toBeVisible();
   const detail = await request.get(`${endpoint}/${input.slug}`);
   expect((await detail.json()).facts[0].observations).toHaveLength(2);
   const list = await request.get(endpoint, { params: { city: "Bangalore", q: input.name } });

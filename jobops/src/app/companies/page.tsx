@@ -1,5 +1,4 @@
 import { Button, PageHeader } from "@/components/ui";
-import { getDisplayPreferences } from "@/features/candidate/preferences";
 import { CompanyCard } from "@/features/companies/card";
 import { companyCities } from "@/features/companies/domain";
 import { readCompanies } from "@/features/companies/read";
@@ -9,11 +8,7 @@ export default async function CompaniesPage({
 }: {
   searchParams: Promise<{ q?: string }>;
 }) {
-  const [data, preferences, query] = await Promise.all([
-    readCompanies(),
-    getDisplayPreferences(),
-    searchParams,
-  ]);
+  const [data, query] = await Promise.all([readCompanies(), searchParams]);
   const search = query.q?.trim().toLowerCase() ?? "";
   const filtered = data.companies.filter((company) =>
     `${company.name} ${company.aliases.join(" ")} ${company.focus} ${(company.facts ?? []).map((fact) => `${fact.title} ${fact.summary}`).join(" ")}`
@@ -75,13 +70,7 @@ export default async function CompaniesPage({
             </div>
             <div className="grid items-start gap-4 md:grid-cols-2 lg:grid-cols-3">
               {cityCompanies.map((company) => (
-                <CompanyCard
-                  key={company.id}
-                  company={company}
-                  city={city}
-                  data={data}
-                  preferences={preferences}
-                />
+                <CompanyCard key={company.id} company={company} city={city} data={data} />
               ))}
             </div>
             {!cityCompanies.length && (

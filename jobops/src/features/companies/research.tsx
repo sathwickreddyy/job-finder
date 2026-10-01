@@ -53,14 +53,14 @@ export function CompanyResearch({
   const categories = [...new Set(facts.map((fact) => fact.category))];
   return (
     <section className="space-y-4 border-t border-border pt-4" aria-label="Company research">
-      <h4 className="text-sm font-semibold">
+      <h3 className="text-sm font-semibold">
         Company research · {facts.length} sourced {facts.length === 1 ? "note" : "notes"}
-      </h4>
+      </h3>
       {categories.map((category) => (
         <div key={category} className="space-y-3">
-          <h5 className="text-xs font-semibold capitalize text-muted-foreground">
+          <h4 className="text-xs font-semibold capitalize text-muted-foreground">
             {label(category)}
-          </h5>
+          </h4>
           {facts
             .filter((fact) => fact.category === category)
             .map((fact) => (
