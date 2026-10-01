@@ -3,70 +3,62 @@ import { PageHeader, Panel, Field, Button } from "@/components/ui";
 import { addJob } from "@/features/jobs/actions";
 export default function NewJob() {
   return (
-    <>
+    <div className="mx-auto max-w-3xl">
       <PageHeader
-        title="Add job"
-        description="Save the source and description now so you can return even if the listing disappears."
+        title="Save a job description"
+        description="Bring back the exact company, role, source link and full description."
       />
-      <Panel className="max-w-4xl">
+      <Panel>
         <ActionForm action={addJob}>
-          <div className="form-grid">
+          <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Company" name="company" required maxLength={200} />
             <Field label="Role / title" name="title" required maxLength={300} />
-            <Field label="Location" name="location" />
-            <Field label="Original job URL" name="url" type="url" required />
-            <Field label="Source" name="source">
-              <select name="source" id="source">
-                {[
-                  "MANUAL",
-                  "COMPANY_CAREERS",
-                  "NAUKRI",
-                  "LINKEDIN",
-                  "INSTAHYRE",
-                  "WELLFOUND",
-                  "CUTSHORT",
-                  "OTHER",
-                ].map((v) => (
-                  <option key={v}>{v}</option>
-                ))}
-              </select>
-            </Field>
-            <Field label="Work mode" name="workMode">
-              <select name="workMode" id="workMode">
-                {["UNKNOWN", "REMOTE", "HYBRID", "ONSITE"].map((v) => (
-                  <option key={v}>{v}</option>
-                ))}
-              </select>
-            </Field>
-            <Field
-              label="Minimum experience (years)"
-              name="experienceMin"
-              type="number"
-              min="0"
-              step="0.5"
-            />
-            <Field
-              label="Maximum experience (years)"
-              name="experienceMax"
-              type="number"
-              min="0"
-              step="0.5"
-            />
-            <Field label="Posted date" name="postedAt" type="date" />
-            <Field label="Employment type" name="employmentType" defaultValue="FULL_TIME" />
-            <Field label="Minimum salary" name="salaryMin" type="number" min="0" />
-            <Field label="Maximum salary" name="salaryMax" type="number" min="0" />
-            <Field label="Currency" name="currency" placeholder="INR" />
           </div>
+          <Field label="Original job URL" name="url" type="url" required />
           <Field label="Job description" name="description">
-            <textarea id="description" name="description" rows={10} />
+            <textarea
+              id="description"
+              name="description"
+              required
+              rows={12}
+              maxLength={100000}
+              placeholder="Paste the complete description from the original listing."
+            />
           </Field>
-          <Field label="Notes" name="notes">
-            <textarea id="notes" name="notes" />
-          </Field>
+          <details>
+            <summary className="cursor-pointer font-medium">Location and extra details</summary>
+            <div className="mt-4 space-y-4">
+              <Field
+                label="Location"
+                name="location"
+                placeholder="Bengaluru, Pune, remote in India…"
+              />
+              <Field label="Source" name="source">
+                <select id="source" name="source">
+                  <option value="">Detect from job link</option>
+                  {[
+                    "LINKEDIN",
+                    "NAUKRI",
+                    "INSTAHYRE",
+                    "CUTSHORT",
+                    "HIRIST",
+                    "COMPANY_CAREERS",
+                    "OTHER",
+                  ].map((source) => (
+                    <option key={source} value={source}>
+                      {source.replaceAll("_", " ")}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Notes" name="notes">
+                <textarea id="notes" name="notes" rows={3} />
+              </Field>
+            </div>
+          </details>
           <Button>Save job</Button>
         </ActionForm>
       </Panel>
-    </>
+    </div>
   );
 }

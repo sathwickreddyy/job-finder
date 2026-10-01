@@ -1,10 +1,13 @@
-import { and, count, desc, eq, ilike, inArray, or } from "drizzle-orm";
+import { and, count, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   activityLogs,
   applications,
+  applicationEvents,
   jobResumeMatches,
+  jobSnapshots,
   jobs,
+  resumeAssessments,
   resumes,
   resumeVersions,
 } from "@/db/schema";
@@ -46,7 +49,7 @@ export async function listResumes(search = "", includeArchived = false) {
 export async function getResume(id: string) {
   const [resume] = await db.select().from(resumes).where(eq(resumes.id, id));
   if (!resume) return undefined;
-  const [versions, usage] = await Promise.all([
+  const [versions, usage, assessments] = await Promise.all([
     db
       .select()
       .from(resumeVersions)
@@ -57,6 +60,9 @@ export async function getResume(id: string) {
         id: applications.id,
         versionId: applications.resumeVersionId,
         status: applications.status,
+        source: applications.source,
+        appliedAt: applications.appliedAt,
+        outreachSent: sql<boolean>`exists (select 1 from ${applicationEvents} where ${applicationEvents.applicationId}=${applications.id} and ${applicationEvents.eventType}='OUTREACH_SENT')`,
         company: jobs.company,
         title: jobs.title,
       })
@@ -64,8 +70,16 @@ export async function getResume(id: string) {
       .innerJoin(resumeVersions, eq(applications.resumeVersionId, resumeVersions.id))
       .innerJoin(jobs, eq(applications.jobId, jobs.id))
       .where(eq(resumeVersions.resumeId, id)),
+    db
+      .select({ assessment: resumeAssessments, snapshot: jobSnapshots, job: jobs })
+      .from(resumeAssessments)
+      .innerJoin(resumeVersions, eq(resumeAssessments.versionId, resumeVersions.id))
+      .innerJoin(jobSnapshots, eq(resumeAssessments.snapshotId, jobSnapshots.id))
+      .innerJoin(jobs, eq(jobSnapshots.jobId, jobs.id))
+      .where(eq(resumeVersions.resumeId, id))
+      .orderBy(desc(resumeAssessments.createdAt)),
   ]);
-  return { ...resume, versions, usage };
+  return { ...resume, versions, usage, assessments };
 }
 
 export async function uploadResumeVersion(input: {
@@ -73,6 +87,7 @@ export async function uploadResumeVersion(input: {
   versionLabel: string;
   file: File;
   makeCurrent: boolean;
+  changeNotes?: string;
   draft?: boolean;
   executor?: Parameters<Parameters<typeof db.transaction>[0]>[0];
 }) {
@@ -133,6 +148,7 @@ export async function uploadResumeVersion(input: {
         .values({
           resumeId: input.resumeId,
           versionLabel: input.versionLabel,
+          changeNotes: input.changeNotes ?? "",
           originalFilename: safeFilename(input.file.name),
           ...stored,
           extractedText,

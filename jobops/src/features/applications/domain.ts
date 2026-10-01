@@ -1,5 +1,23 @@
+import { indiaDayBoundary } from "@/features/mail/attention";
 import { applicationStages } from "@/db/schema";
 export type ApplicationStage = (typeof applicationStages)[number];
+export const recordMethods = ["DIRECT", "REFERRAL", "COLD_EMAIL", "LINKEDIN_MESSAGE"] as const;
+export const methodNames: Record<string, string> = {
+  DIRECT: "Direct application",
+  REFERRAL: "Referral",
+  COLD_EMAIL: "Cold email",
+  LINKEDIN_MESSAGE: "LinkedIn message",
+};
+export function recordIntent(method: string, sent: boolean) {
+  if (!recordMethods.includes(method as (typeof recordMethods)[number]))
+    throw new Error("Choose an application or outreach method.");
+  const applied = method === "DIRECT" && sent;
+  return {
+    applied,
+    status: applied ? ("APPLIED" as const) : ("PREPARING" as const),
+    eventType: !sent ? "ACTION_PLANNED" : applied ? "APPLICATION_SUBMITTED" : "OUTREACH_SENT",
+  };
+}
 export function jobStateForApplication(
   stage: ApplicationStage,
   previous: "NEW" | "REVIEWING" | "SHORTLISTED" | "IGNORED" | "PREPARING" | "APPLIED" | "CLOSED",
@@ -47,4 +65,11 @@ export function applicationTransition(
     summary:
       previous === next ? `Updated application in ${next}` : `Moved from ${previous} to ${next}`,
   };
+}
+
+export function recordSentAt(value: string, now = new Date()) {
+  const date = value ? indiaDayBoundary(value) : now;
+  if (!date) throw new Error("Use a valid sent date in India time.");
+  if (date > now) throw new Error("A sent date cannot be in the future.");
+  return date;
 }

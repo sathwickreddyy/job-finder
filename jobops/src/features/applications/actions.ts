@@ -12,7 +12,7 @@ import {
   resumeVersions,
 } from "@/db/schema";
 import { type ActionState, actionError, formString } from "@/lib/actions";
-import { applicationTransition, jobStateForApplication } from "./domain";
+import { applicationTransition, jobStateForApplication, recordSentAt } from "./domain";
 const inputSchema = z.object({
   jobId: z.uuid(),
   resumeVersionId: z.uuid().nullable(),
@@ -26,6 +26,7 @@ const inputSchema = z.object({
     .string()
     .refine((v) => !v || !Number.isNaN(new Date(v).valueOf()), "Use a valid follow-up date"),
   humanConfirmed: z.boolean(),
+  sentDate: z.string(),
 });
 function input(form: FormData) {
   return inputSchema.parse({
@@ -36,11 +37,13 @@ function input(form: FormData) {
     notes: formString(form, "notes"),
     nextActionAt: formString(form, "nextActionAt"),
     humanConfirmed: formString(form, "humanConfirmed") === "on",
+    sentDate: formString(form, "sentDate"),
   });
 }
 export async function createApplication(_state: ActionState, form: FormData): Promise<ActionState> {
   try {
     const data = input(form);
+    const sentAt = data.status === "APPLIED" ? recordSentAt(data.sentDate) : null;
     if (data.status === "APPLIED") applicationTransition("DRAFT", data.status, data.humanConfirmed);
     const id = await db.transaction(async (tx) => {
       const [job] = await tx.select().from(jobs).where(eq(jobs.id, data.jobId)).limit(1);
@@ -61,7 +64,7 @@ export async function createApplication(_state: ActionState, form: FormData): Pr
           notes: data.notes,
           applicationUrl: data.applicationUrl || null,
           nextActionAt: data.nextActionAt ? new Date(data.nextActionAt) : null,
-          appliedAt: data.status === "APPLIED" ? new Date() : null,
+          appliedAt: sentAt,
         })
         .returning();
       await tx.insert(applicationEvents).values({
@@ -74,6 +77,7 @@ export async function createApplication(_state: ActionState, form: FormData): Pr
         await tx.insert(applicationEvents).values({
           applicationId: app.id,
           eventType: "APPLICATION_SUBMITTED",
+          occurredAt: sentAt!,
           summary: "Human confirmed final submission",
           payload: { humanConfirmed: true },
         });
@@ -90,6 +94,7 @@ export async function createApplication(_state: ActionState, form: FormData): Pr
       return app.id;
     });
     revalidatePath("/applications");
+    revalidatePath("/companies");
     revalidatePath("/jobs");
     revalidatePath("/");
     return { redirect: `/applications/${id}` };
@@ -110,6 +115,17 @@ export async function updateApplication(_state: ActionState, form: FormData): Pr
       if (!previous) throw new Error("Application no longer exists.");
       if (previous.jobId !== data.jobId)
         throw new Error("The application's job cannot be changed.");
+      if (previous.appliedAt && previous.resumeVersionId !== data.resumeVersionId)
+        throw new Error(
+          "The resume used for a submitted application stays fixed. Record a separate action for another file.",
+        );
+      if (
+        ["REFERRAL", "COLD_EMAIL", "LINKEDIN_MESSAGE"].includes(previous.source) &&
+        data.status === "APPLIED"
+      )
+        throw new Error("Record a direct application separately from outreach.");
+      const firstSubmission = data.status === "APPLIED" && !previous.appliedAt;
+      const sentAt = firstSubmission ? recordSentAt(data.sentDate) : previous.appliedAt;
       const event = applicationTransition(previous.status, data.status, data.humanConfirmed);
       await tx
         .update(applications)
@@ -119,14 +135,14 @@ export async function updateApplication(_state: ActionState, form: FormData): Pr
           applicationUrl: data.applicationUrl || null,
           notes: data.notes,
           nextActionAt: data.nextActionAt ? new Date(data.nextActionAt) : null,
-          appliedAt:
-            data.status === "APPLIED" ? (previous.appliedAt ?? new Date()) : previous.appliedAt,
+          appliedAt: data.status === "APPLIED" ? sentAt : previous.appliedAt,
           updatedAt: new Date(),
         })
         .where(eq(applications.id, id));
       await tx.insert(applicationEvents).values({
         applicationId: id,
         eventType: event.eventType,
+        occurredAt: firstSubmission ? sentAt! : new Date(),
         summary: event.summary,
         payload: {
           ...event.payload,
@@ -152,6 +168,7 @@ export async function updateApplication(_state: ActionState, form: FormData): Pr
     });
     revalidatePath(`/applications/${id}`);
     revalidatePath("/applications");
+    revalidatePath("/companies");
     revalidatePath("/");
     return { success: "Application saved and event appended." };
   } catch (e) {

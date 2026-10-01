@@ -180,6 +180,7 @@ export const resumeVersions = pgTable(
     sha256: text("sha256").notNull(),
     extractedText: text("extracted_text").notNull().default(""),
     summary: text("summary"),
+    changeNotes: text("change_notes").notNull().default(""),
     skills: strings("skills"),
     keywords: strings("keywords"),
     experienceTags: strings("experience_tags"),
@@ -277,6 +278,32 @@ export const jobResumeMatches = pgTable(
   (t) => [
     uniqueIndex("job_resume_matches_pair_idx").on(t.jobId, t.resumeVersionId),
     check("job_resume_matches_score", sql`${t.score} >= 0 AND ${t.score} <= 100`),
+  ],
+);
+
+export const resumeAssessments = pgTable(
+  "resume_assessments",
+  {
+    id: id(),
+    versionId: uuid("version_id")
+      .notNull()
+      .references(() => resumeVersions.id, { onDelete: "restrict" }),
+    snapshotId: uuid("snapshot_id")
+      .notNull()
+      .references(() => jobSnapshots.id, { onDelete: "restrict" }),
+    source: text("source").notNull(),
+    method: text("method").notNull(),
+    score: real("score"),
+    findings: text("findings").notNull().default(""),
+    assessedAt: date("assessed_at").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index("resume_assessments_version_idx").on(t.versionId),
+    check(
+      "resume_assessments_score",
+      sql`${t.score} IS NULL OR (${t.score} >= 0 AND ${t.score} <= 100)`,
+    ),
   ],
 );
 
@@ -522,6 +549,121 @@ export const settings = pgTable("settings", {
   value: record("value"),
   updatedAt: updatedAt(),
 });
+
+export const companyCategories = [
+  "COMPENSATION",
+  "INTERVIEW",
+  "TECH_STACK",
+  "ROLE",
+  "WORK_MODE",
+  "REFERRAL",
+  "CULTURE",
+  "HIRING_SIGNAL",
+  "OTHER",
+] as const;
+export const companyVerificationStatuses = [
+  "VERIFIED",
+  "COMMUNITY_REPORTED",
+  "UNVERIFIED",
+  "STALE",
+] as const;
+export const companySourceKinds = [
+  "OFFICIAL",
+  "LEETCODE",
+  "LINKEDIN",
+  "COMMUNITY",
+  "OTHER",
+] as const;
+export const companyRecords = pgTable(
+  "companies",
+  {
+    id: id(),
+    slug: text("slug").notNull(),
+    name: text("name").notNull(),
+    aliases: strings("aliases"),
+    focus: text("focus").notNull().default(""),
+    websiteUrl: text("website_url"),
+    careersUrl: text("careers_url"),
+    portalNote: text("portal_note").notNull().default(""),
+    status: text("status").notNull().default("ACTIVE"),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    uniqueIndex("companies_slug_idx").on(t.slug),
+    check("companies_status_check", sql`${t.status} IN ('ACTIVE','ARCHIVED')`),
+  ],
+);
+
+export const companyLocations = pgTable(
+  "company_locations",
+  {
+    id: id(),
+    companyId: uuid("company_id")
+      .notNull()
+      .references(() => companyRecords.id, { onDelete: "cascade" }),
+    locationKey: text("location_key").notNull(),
+    city: text("city").notNull(),
+    state: text("state").notNull().default(""),
+    country: text("country").notNull().default("India"),
+    workModes: strings("work_modes"),
+    isPrimary: boolean("is_primary").notNull().default(false),
+    sourceUrl: text("source_url"),
+    verificationStatus: text("verification_status").notNull().default("UNVERIFIED"),
+    firstObservedAt: date("first_observed_at").notNull().defaultNow(),
+    lastObservedAt: date("last_observed_at").notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("company_locations_key_idx").on(t.companyId, t.locationKey),
+    index("company_locations_city_idx").on(t.city),
+  ],
+);
+
+export const companyFacts = pgTable(
+  "company_facts",
+  {
+    id: id(),
+    companyId: uuid("company_id")
+      .notNull()
+      .references(() => companyRecords.id, { onDelete: "cascade" }),
+    factKey: text("fact_key").notNull(),
+    category: text("category").notNull(),
+    title: text("title").notNull(),
+    summary: text("summary").notNull().default(""),
+    data: record("data"),
+    sourceUrl: text("source_url").notNull(),
+    sourceTitle: text("source_title").notNull().default(""),
+    sourceKind: text("source_kind").notNull().default("OTHER"),
+    verificationStatus: text("verification_status").notNull().default("UNVERIFIED"),
+    confidence: real("confidence"),
+    occurredAt: date("occurred_at"),
+    firstObservedAt: date("first_observed_at").notNull().defaultNow(),
+    lastObservedAt: date("last_observed_at").notNull().defaultNow(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    uniqueIndex("company_facts_key_idx").on(t.companyId, t.factKey),
+    index("company_facts_category_idx").on(t.companyId, t.category),
+    check(
+      "company_facts_confidence_check",
+      sql`${t.confidence} IS NULL OR (${t.confidence} >= 0 AND ${t.confidence} <= 1)`,
+    ),
+  ],
+);
+
+export const companyFactObservations = pgTable(
+  "company_fact_observations",
+  {
+    id: id(),
+    factId: uuid("fact_id")
+      .notNull()
+      .references(() => companyFacts.id, { onDelete: "cascade" }),
+    snapshot: record("snapshot"),
+    observedAt: date("observed_at").notNull().defaultNow(),
+  },
+  (t) => [index("company_fact_observations_fact_idx").on(t.factId, t.observedAt)],
+);
 
 export const gmailConnections = pgTable(
   "gmail_connections",

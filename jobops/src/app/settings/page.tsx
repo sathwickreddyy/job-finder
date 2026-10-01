@@ -1,16 +1,12 @@
 import Link from "next/link";
 import { db } from "@/db";
-import { candidateProfiles, gmailConnections, operators, settings } from "@/db/schema";
+import { candidateProfiles, gmailConnections, settings } from "@/db/schema";
 import { ActionForm } from "@/components/action-form";
 import { Button, Field, PageHeader, Panel } from "@/components/ui";
 import { CandidateForm } from "@/features/candidate/candidate-form";
-import {
-  saveAppPreferences,
-  saveJobPreferences,
-  saveMissionDefaults,
-} from "@/features/candidate/actions";
+import { saveAppPreferences, saveJobPreferences } from "@/features/candidate/actions";
 import { gmailConfiguration } from "@/services/mail/gmail";
-import { remotePreferences, safeMissionPriority } from "@/features/candidate/validation";
+import { remotePreferences } from "@/features/candidate/validation";
 
 export const dynamic = "force-dynamic";
 function list(value: unknown): string {
@@ -26,24 +22,21 @@ export default async function SettingsPage() {
   ]);
   const saved = Object.fromEntries(allSettings.map((entry) => [entry.key, entry.value]));
   const prefs = saved.jobPreferences ?? {};
-  const defaults = saved.missionDefaults ?? {};
   const appPrefs = saved.appPreferences ?? {};
   const gmail = gmailConfiguration();
   return (
     <>
       <PageHeader
         title="Settings"
-        description="Canonical facts, preferences, and controlled integrations for your workspace."
+        description="Your saved details, search preferences, display settings and mail connection."
       />
       <nav aria-label="Settings sections" className="section-links">
         {[
           ["Candidate", "candidate"],
-          ["Agent access", "workspace-access"],
           ["Job preferences", "job-preferences"],
           ["Standard answers", "standard-answers"],
           ["Storage", "storage"],
           ["Mail", "mail-integration"],
-          ["Mission defaults", "mission-defaults"],
           ["Export", "export"],
         ].map(([name, id]) => (
           <a href={`#${id}`} key={id}>
@@ -52,40 +45,11 @@ export default async function SettingsPage() {
         ))}
       </nav>
       <div className="stack">
-        <section id="workspace-access">
-          <Panel title="Agent API access">
-            <p className="text-sm text-muted-foreground">
-              {(process.env.JOBOPS_ACCESS_TOKEN?.length ?? 0) >= 32
-                ? "Workspace protection is enabled. Open any task to prepare access for your assistant."
-                : "Enable a private workspace key to use the agent API. You can already copy handoffs and record results manually."}{" "}
-              Keep this workspace key private; share only the access generated for a specific task
-              with your assistant.
-            </p>
-            <details className="mt-4 text-sm">
-              <summary>Local setup</summary>
-              <ol className="mt-3 list-decimal space-y-2 pl-5 text-muted-foreground">
-                <li>
-                  Generate a random key with <code>openssl rand -hex 32</code>.
-                </li>
-                <li>
-                  Save it as <code>JOBOPS_ACCESS_TOKEN</code> in your local <code>jobops/.env</code>
-                  , then restart the app.
-                </li>
-                <li>
-                  Unlock JobOps with that key in your browser. Keep it in your password manager.
-                </li>
-              </ol>
-            </details>
-            <Link href="/agent-guide" className="mt-4 inline-block text-sm text-link">
-              Read the agent guide →
-            </Link>
-          </Panel>
-        </section>
         <section id="candidate">
           <Panel title="Candidate profile">
             <p className="muted mb-5">
               Only supply facts you know. Compensation and unrelated metadata are excluded from
-              mission contexts.
+              copied prompts.
             </p>
             <CandidateForm candidate={candidate} />
           </Panel>
@@ -201,56 +165,7 @@ export default async function SettingsPage() {
             </Panel>
           </section>
         </div>
-        <section id="mission-defaults">
-          <Panel title="Mission defaults">
-            <ActionForm action={saveMissionDefaults}>
-              <div className="form-grid">
-                <Field name="operator" label="Preferred operator">
-                  <select
-                    id="operator"
-                    name="operator"
-                    defaultValue={String(defaults.operator ?? defaults.defaultOperator ?? "HUMAN")}
-                  >
-                    {operators.map((operator) => (
-                      <option key={operator}>{operator}</option>
-                    ))}
-                  </select>
-                </Field>
-                <Field name="priority" label="Priority">
-                  <select
-                    id="priority"
-                    name="priority"
-                    defaultValue={String(safeMissionPriority(defaults.priority))}
-                  >
-                    <option value="1">High</option>
-                    <option value="2">Normal</option>
-                    <option value="3">Low</option>
-                  </select>
-                </Field>
-                <Field
-                  name="maxResults"
-                  label="Discovery result limit"
-                  type="number"
-                  min={1}
-                  max={100}
-                  defaultValue={String(defaults.maxResults ?? defaults.maximumResults ?? 30)}
-                />
-                <Field
-                  name="freshnessDays"
-                  label="Job freshness (days)"
-                  type="number"
-                  min={1}
-                  max={365}
-                  defaultValue={String(defaults.freshnessDays ?? 7)}
-                />
-              </div>
-              <p className="notice notice-warning">
-                Submissions and external profile changes always require explicit approval.
-              </p>
-              <Button type="submit">Save mission defaults</Button>
-            </ActionForm>
-          </Panel>
-        </section>
+
         <Panel title="Application preferences">
           <ActionForm action={saveAppPreferences}>
             <div className="form-grid">
@@ -289,7 +204,7 @@ export default async function SettingsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {["jobs", "applications", "contacts", "missions", "candidate"].map((entity) => (
+                  {["jobs", "applications", "contacts", "candidate"].map((entity) => (
                     <tr key={entity}>
                       <td className="capitalize">{entity}</td>
                       <td>

@@ -1,3 +1,5 @@
+> Historical initial brief. The approved [simple job-search design](superpowers/specs/2026-10-01-simple-job-search-design.md) and current README supersede its task, mission and agent-API requirements.
+
 You are a senior staff-level full-stack engineer working autonomously on my machine.
 
 Your task is to create a brand-new production-quality project called **JobOps**, a personal career operating system for managing job discovery, applications, resumes, profiles, recruiting emails, and structured missions that can later be executed manually by me or by interactive computer-use products such as ChatGPT Work/Computer Use, Codex computer use, or Claude Cowork.

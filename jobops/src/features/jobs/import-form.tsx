@@ -2,6 +2,7 @@
 import { useActionState, useState } from "react";
 import Link from "next/link";
 import { Button, Field, Panel } from "@/components/ui";
+import { useLoadingTask } from "@/components/loading/overlay";
 import { previewJobs, commitJobs, type ImportState } from "./actions";
 const example = JSON.stringify(
   [
@@ -27,6 +28,8 @@ export function ImportForm() {
   const [preview, validate, pending] = useActionState<ImportState, FormData>(previewJobs, {});
   const [result, commit, saving] = useActionState<ImportState, FormData>(commitJobs, {});
   const [validatedText, setValidatedText] = useState("");
+  useLoadingTask(pending, "Checking jobs");
+  useLoadingTask(saving, "Saving jobs");
   const valid = preview.preview?.valid && validatedText === text + format;
   return (
     <div className="stack">

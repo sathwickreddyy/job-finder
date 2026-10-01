@@ -3,18 +3,31 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useSyncExternalStore, type ReactNode } from "react";
-import { BriefcaseBusiness, Home, Inbox, Moon, Settings2, Sun, UserRound } from "lucide-react";
+import {
+  BriefcaseBusiness,
+  Building2,
+  FileText,
+  Home,
+  Inbox,
+  Moon,
+  Search,
+  Sun,
+  UserRound,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
+import { LoadingProvider } from "@/components/loading/overlay";
 
 const navigation = [
-  { label: "Home", href: "/", icon: Home, routes: ["/tasks"] },
+  { label: "Home", href: "/", icon: Home, routes: [] },
   {
-    label: "Opportunities",
-    href: "/opportunities",
-    icon: BriefcaseBusiness,
-    routes: ["/jobs", "/applications", "/contacts", "/import"],
+    label: "Find openings",
+    href: "/find",
+    icon: Search,
+    routes: ["/jobs", "/opportunities", "/outreach"],
   },
-  { label: "Inbox", href: "/inbox", icon: Inbox, routes: ["/mail"] },
+  { label: "Resumes", href: "/resumes", icon: FileText, routes: ["/resume-prompt"] },
+  { label: "Companies", href: "/companies", icon: Building2, routes: [] },
+  { label: "Applications", href: "/applications", icon: BriefcaseBusiness, routes: [] },
 ];
 function subscribe(callback: () => void) {
   window.addEventListener("storage", callback);
@@ -47,86 +60,90 @@ export function AppShell({ children }: { children: ReactNode }) {
     }
     window.dispatchEvent(new Event("jobops-theme"));
   }
-  const profileActive = ["/my-profile", "/resumes", "/profiles"].some((p) =>
-    pathname.startsWith(p),
-  );
-  const navClass = (active: boolean) =>
-    cn(
-      "flex min-h-11 items-center gap-3 rounded-full px-4 py-2.5 text-sm font-medium transition-colors hover:bg-muted hover:no-underline",
-      active
-        ? "bg-selected text-selected-foreground"
-        : "text-muted-foreground hover:text-foreground",
-    );
-  if (pathname.startsWith("/gallery/simple")) return <main id="main">{children}</main>;
+  if (pathname.startsWith("/gallery/simple") || pathname.startsWith("/gallery/companies"))
+    return <main id="main">{children}</main>;
   return (
-    <div className="min-h-dvh md:grid md:grid-cols-[13rem_minmax(0,1fr)]">
-      <a className="skip-link" href="#main">
-        Skip to content
-      </a>
-      <aside className="surface flex flex-col gap-5 border-b border-border bg-rail p-4 md:sticky md:top-0 md:h-dvh md:border-r md:border-b-0 md:px-5 md:py-8">
-        <div className="flex items-center justify-between">
-          <Link
-            href="/"
-            className="flex items-center gap-2.5 px-2 text-xl font-semibold tracking-tight text-foreground hover:no-underline"
-          >
-            <span className="flex size-8 items-center justify-center rounded-xl bg-primary text-base text-primary-foreground">
-              J
-            </span>
-            JobOps
-          </Link>
-          <span className="text-xs text-muted-foreground md:hidden">India · IST</span>
-        </div>
-        <nav aria-label="Primary" className="flex flex-wrap gap-1 md:mt-6 md:flex-col">
-          {navigation.map(({ label, href, icon: Icon, routes }) => {
-            const active = pathname === href || routes.some((p) => pathname.startsWith(p));
-            return (
+    <LoadingProvider>
+      <div className="min-h-dvh bg-background text-foreground">
+        <a className="skip-link" href="#main">
+          Skip to content
+        </a>
+        <header className="border-b border-border bg-card">
+          <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-5 py-4 sm:px-8">
+            <Link
+              href="/"
+              className="flex items-center gap-3 text-lg font-semibold text-foreground hover:no-underline"
+            >
+              <span className="grid size-9 place-items-center rounded-xl bg-primary text-primary-foreground">
+                J
+              </span>
+              JobOps
+            </Link>
+            <nav
+              aria-label="Primary"
+              className="order-3 flex w-full gap-1 overflow-x-auto pb-1 md:order-none md:w-auto md:pb-0"
+            >
+              {navigation.map(({ label, href, icon: Icon, routes }) => {
+                const active =
+                  pathname === href || routes.some((route) => pathname.startsWith(route));
+                return (
+                  <Link
+                    key={href}
+                    href={href}
+                    aria-current={active ? "page" : undefined}
+                    className={cn(
+                      "morph flex min-h-11 shrink-0 items-center gap-2 px-4 text-sm font-medium hover:no-underline",
+                      active
+                        ? "bg-selected text-selected-foreground"
+                        : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                    )}
+                  >
+                    <Icon size={16} aria-hidden />
+                    {label}
+                  </Link>
+                );
+              })}
+            </nav>
+            <div className="flex items-center gap-1">
               <Link
-                key={href}
-                href={href}
-                className={navClass(active)}
-                aria-current={active ? "page" : undefined}
+                href="/inbox"
+                aria-label="Inbox"
+                className={cn(
+                  "morph grid size-10 place-items-center hover:bg-muted",
+                  pathname.startsWith("/inbox") || pathname.startsWith("/mail")
+                    ? "bg-selected text-selected-foreground"
+                    : "text-muted-foreground",
+                )}
               >
-                <Icon size={18} aria-hidden />
-                {label}
+                <Inbox size={18} aria-hidden />
               </Link>
-            );
-          })}
-        </nav>
-        <div className="flex flex-wrap items-center gap-1 md:mt-auto md:flex-col md:items-stretch">
-          <Link
-            href="/my-profile"
-            className={navClass(profileActive)}
-            aria-current={profileActive ? "page" : undefined}
-          >
-            <UserRound size={18} aria-hidden />
-            My profile
-          </Link>
-          <Link href="/settings" className={navClass(pathname === "/settings")}>
-            <Settings2 size={18} aria-hidden />
-            Settings
-          </Link>
-          <button
-            type="button"
-            onClick={toggleTheme}
-            className={cn(navClass(false), "text-left")}
-            aria-label={light ? "Use dark theme" : "Use colourful light theme"}
-          >
-            {light ? <Moon size={18} aria-hidden /> : <Sun size={18} aria-hidden />}
-            {light ? "Dark theme" : "Colourful light"}
-          </button>
-          <p className="mt-5 hidden px-3 text-xs leading-relaxed text-muted-foreground md:block">
-            Your search in India.
-            <br />
-            Your next move.
-          </p>
-        </div>
-      </aside>
-      <main
-        id="main"
-        className="mx-auto w-full min-w-0 max-w-7xl px-5 py-8 sm:px-8 lg:px-12 lg:py-12"
-      >
-        {children}
-      </main>
-    </div>
+              <Link
+                href="/my-profile"
+                aria-label="My sites & profile"
+                className={cn(
+                  "morph grid size-10 place-items-center hover:bg-muted",
+                  pathname.startsWith("/my-profile")
+                    ? "bg-selected text-selected-foreground"
+                    : "text-muted-foreground",
+                )}
+              >
+                <UserRound size={18} aria-hidden />
+              </Link>
+              <button
+                type="button"
+                onClick={toggleTheme}
+                className="morph grid size-10 place-items-center text-muted-foreground hover:bg-muted"
+                aria-label={light ? "Use dark theme" : "Use light theme"}
+              >
+                {light ? <Moon size={18} aria-hidden /> : <Sun size={18} aria-hidden />}
+              </button>
+            </div>
+          </div>
+        </header>
+        <main id="main" className="mx-auto w-full min-w-0 max-w-6xl px-5 py-8 sm:px-8 sm:py-10">
+          {children}
+        </main>
+      </div>
+    </LoadingProvider>
   );
 }

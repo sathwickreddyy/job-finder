@@ -18,9 +18,9 @@ export function MailReviewForm({
     <ActionForm action={reviewMailEvent}>
       <input type="hidden" name="eventId" value={event.id} />
       <div className="form-grid">
-        <Field name={`application-${event.id}`} label="Link to application">
+        <Field name={`application-${event.id}`} label="Link to record">
           <select id={`application-${event.id}`} name="applicationId" defaultValue={suggested}>
-            <option value="">Choose an application</option>
+            <option value="">Choose a record</option>
             {applications.map((application) => (
               <option key={application.id} value={application.id}>
                 {application.company} — {application.title} ({application.status})
@@ -28,7 +28,7 @@ export function MailReviewForm({
             ))}
           </select>
         </Field>
-        <Field name={`classification-${event.id}`} label="Reviewed classification">
+        <Field name={`classification-${event.id}`} label="Message category">
           <select id={`classification-${event.id}`} name="type" defaultValue={event.type}>
             {mailClassifications.map((type) => (
               <option key={type}>{type}</option>
@@ -36,22 +36,27 @@ export function MailReviewForm({
           </select>
         </Field>
       </div>
-      <label className="flex items-start gap-2 text-sm">
-        <input type="checkbox" name="updateStage" className="mt-1" />
-        <span>
-          Also update the application stage using this classification.
-          <span className="field-hint block">
-            Acknowledgement → Acknowledged; Assessment → Assessment; Interview → Recruiter screen;
-            Rejection → Rejected; Offer → Offer. Leave unchecked to append history only.
+      <details>
+        <summary className="cursor-pointer text-sm text-muted-foreground">
+          Also change the application stage
+        </summary>
+        <label className="mt-3 flex items-start gap-2 text-sm">
+          <input type="checkbox" name="updateStage" className="mt-1" />
+          <span>
+            Also update the application stage using this classification.
+            <span className="field-hint block">
+              Acknowledgement → Acknowledged; Assessment → Assessment; Interview → Recruiter screen;
+              Rejection → Rejected; Offer → Offer. Leave unchecked to append history only.
+            </span>
           </span>
-        </span>
-      </label>
+        </label>
+      </details>
       <div className="actions">
         <Button name="decision" value="APPEND" type="submit">
-          Append reviewed event
+          Link message
         </Button>
         <Button variant="outline" name="decision" value="DISMISS" type="submit">
-          Dismiss update
+          Keep unlinked
         </Button>
       </div>
     </ActionForm>

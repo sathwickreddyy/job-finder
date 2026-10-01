@@ -1,0 +1,2211 @@
+diff --git a/jobops/src/app/globals.css b/jobops/src/app/globals.css
+index b21a629..fcfe1e3 100644
+--- a/jobops/src/app/globals.css
++++ b/jobops/src/app/globals.css
+@@ -841,3 +841,18 @@
+     }
+   }
+ }
++
++/* Material 3 Expressive shape morph: a pill at rest that squares off while pressed. */
++@utility morph {
++  border-radius: 1.5rem;
++  transition:
++    border-radius 260ms cubic-bezier(0.42, 1.67, 0.21, 0.9),
++    background-color 150ms ease,
++    color 150ms ease;
++  &:active:not(:disabled) {
++    border-radius: 0.75rem;
++  }
++  @media (prefers-reduced-motion: reduce) {
++    transition: none;
++  }
++}
+diff --git a/jobops/src/components/action-form.tsx b/jobops/src/components/action-form.tsx
+index d290181..0d4c8a5 100644
+--- a/jobops/src/components/action-form.tsx
++++ b/jobops/src/components/action-form.tsx
+@@ -2,24 +2,36 @@
+ import { startTransition, useActionState, useEffect, useRef } from "react";
+ import { useRouter } from "next/navigation";
+ import type { ActionState } from "@/lib/actions";
++import { useLoading, useLoadingTask } from "@/components/loading/overlay";
++import { isNewLocation, labelForPath } from "@/components/loading/routes";
+ export function ActionForm({
+   action,
+   children,
+   className = "space-y-4",
++  pendingLabel = "Saving",
+ }: {
+   action: (state: ActionState, data: FormData) => Promise<ActionState>;
+   children: React.ReactNode;
+   className?: string;
++  /** Shown in the loading popup while the action runs. */
++  pendingLabel?: string;
+ }) {
+   const [state, formAction, pending] = useActionState(action, {});
+   const router = useRouter();
++  const loading = useLoading();
+   const handled = useRef<ActionState | null>(null);
++  useLoadingTask(pending, pendingLabel);
+   useEffect(() => {
+     if (handled.current === state) return;
+     handled.current = state;
+-    if (state.redirect) router.push(state.redirect);
++    if (state.redirect) {
++      // Keep the popup up from the save through the page it opens.
++      if (isNewLocation(state.redirect, window.location))
++        loading?.navigate(labelForPath(new URL(state.redirect, window.location.href).pathname));
++      router.push(state.redirect);
++    }
+     // Server actions already revalidate their pages; another refresh can rerun this effect.
+-  }, [state, router]);
++  }, [state, router, loading]);
+   return (
+     <form
+       action={formAction}
+diff --git a/jobops/src/components/app-shell.tsx b/jobops/src/components/app-shell.tsx
+index 43644cc..89e1934 100644
+--- a/jobops/src/components/app-shell.tsx
++++ b/jobops/src/components/app-shell.tsx
+@@ -15,6 +15,7 @@ import {
+   UserRound,
+ } from "lucide-react";
+ import { cn } from "@/lib/utils";
++import { LoadingProvider } from "@/components/loading/overlay";
+ 
+ const navigation = [
+   { label: "Home", href: "/", icon: Home, routes: [] },
+@@ -62,85 +63,87 @@ export function AppShell({ children }: { children: ReactNode }) {
+   if (pathname.startsWith("/gallery/simple") || pathname.startsWith("/gallery/companies"))
+     return <main id="main">{children}</main>;
+   return (
+-    <div className="min-h-dvh bg-background text-foreground">
+-      <a className="skip-link" href="#main">
+-        Skip to content
+-      </a>
+-      <header className="border-b border-border bg-card">
+-        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-5 py-4 sm:px-8">
+-          <Link
+-            href="/"
+-            className="flex items-center gap-3 text-lg font-semibold text-foreground hover:no-underline"
+-          >
+-            <span className="grid size-9 place-items-center rounded-xl bg-primary text-primary-foreground">
+-              J
+-            </span>
+-            JobOps
+-          </Link>
+-          <nav
+-            aria-label="Primary"
+-            className="order-3 flex w-full gap-1 overflow-x-auto pb-1 md:order-none md:w-auto md:pb-0"
+-          >
+-            {navigation.map(({ label, href, icon: Icon, routes }) => {
+-              const active =
+-                pathname === href || routes.some((route) => pathname.startsWith(route));
+-              return (
+-                <Link
+-                  key={href}
+-                  href={href}
+-                  aria-current={active ? "page" : undefined}
+-                  className={cn(
+-                    "pressable flex min-h-11 shrink-0 items-center gap-2 rounded-full px-4 text-sm font-medium hover:no-underline",
+-                    active
+-                      ? "bg-selected text-selected-foreground"
+-                      : "text-muted-foreground hover:bg-muted hover:text-foreground",
+-                  )}
+-                >
+-                  <Icon size={16} aria-hidden />
+-                  {label}
+-                </Link>
+-              );
+-            })}
+-          </nav>
+-          <div className="flex items-center gap-1">
++    <LoadingProvider>
++      <div className="min-h-dvh bg-background text-foreground">
++        <a className="skip-link" href="#main">
++          Skip to content
++        </a>
++        <header className="border-b border-border bg-card">
++          <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-5 py-4 sm:px-8">
+             <Link
+-              href="/inbox"
+-              aria-label="Inbox"
+-              className={cn(
+-                "pressable grid size-10 place-items-center rounded-full hover:bg-muted",
+-                pathname.startsWith("/inbox") || pathname.startsWith("/mail")
+-                  ? "bg-selected text-selected-foreground"
+-                  : "text-muted-foreground",
+-              )}
++              href="/"
++              className="flex items-center gap-3 text-lg font-semibold text-foreground hover:no-underline"
+             >
+-              <Inbox size={18} aria-hidden />
++              <span className="grid size-9 place-items-center rounded-xl bg-primary text-primary-foreground">
++                J
++              </span>
++              JobOps
+             </Link>
+-            <Link
+-              href="/my-profile"
+-              aria-label="My sites & profile"
+-              className={cn(
+-                "pressable grid size-10 place-items-center rounded-full hover:bg-muted",
+-                pathname.startsWith("/my-profile")
+-                  ? "bg-selected text-selected-foreground"
+-                  : "text-muted-foreground",
+-              )}
+-            >
+-              <UserRound size={18} aria-hidden />
+-            </Link>
+-            <button
+-              type="button"
+-              onClick={toggleTheme}
+-              className="pressable grid size-10 place-items-center rounded-full text-muted-foreground hover:bg-muted"
+-              aria-label={light ? "Use dark theme" : "Use light theme"}
++            <nav
++              aria-label="Primary"
++              className="order-3 flex w-full gap-1 overflow-x-auto pb-1 md:order-none md:w-auto md:pb-0"
+             >
+-              {light ? <Moon size={18} aria-hidden /> : <Sun size={18} aria-hidden />}
+-            </button>
++              {navigation.map(({ label, href, icon: Icon, routes }) => {
++                const active =
++                  pathname === href || routes.some((route) => pathname.startsWith(route));
++                return (
++                  <Link
++                    key={href}
++                    href={href}
++                    aria-current={active ? "page" : undefined}
++                    className={cn(
++                      "morph flex min-h-11 shrink-0 items-center gap-2 px-4 text-sm font-medium hover:no-underline",
++                      active
++                        ? "bg-selected text-selected-foreground"
++                        : "text-muted-foreground hover:bg-muted hover:text-foreground",
++                    )}
++                  >
++                    <Icon size={16} aria-hidden />
++                    {label}
++                  </Link>
++                );
++              })}
++            </nav>
++            <div className="flex items-center gap-1">
++              <Link
++                href="/inbox"
++                aria-label="Inbox"
++                className={cn(
++                  "morph grid size-10 place-items-center hover:bg-muted",
++                  pathname.startsWith("/inbox") || pathname.startsWith("/mail")
++                    ? "bg-selected text-selected-foreground"
++                    : "text-muted-foreground",
++                )}
++              >
++                <Inbox size={18} aria-hidden />
++              </Link>
++              <Link
++                href="/my-profile"
++                aria-label="My sites & profile"
++                className={cn(
++                  "morph grid size-10 place-items-center hover:bg-muted",
++                  pathname.startsWith("/my-profile")
++                    ? "bg-selected text-selected-foreground"
++                    : "text-muted-foreground",
++                )}
++              >
++                <UserRound size={18} aria-hidden />
++              </Link>
++              <button
++                type="button"
++                onClick={toggleTheme}
++                className="morph grid size-10 place-items-center text-muted-foreground hover:bg-muted"
++                aria-label={light ? "Use dark theme" : "Use light theme"}
++              >
++                {light ? <Moon size={18} aria-hidden /> : <Sun size={18} aria-hidden />}
++              </button>
++            </div>
+           </div>
+-        </div>
+-      </header>
+-      <main id="main" className="mx-auto w-full min-w-0 max-w-6xl px-5 py-8 sm:px-8 sm:py-10">
+-        {children}
+-      </main>
+-    </div>
++        </header>
++        <main id="main" className="mx-auto w-full min-w-0 max-w-6xl px-5 py-8 sm:px-8 sm:py-10">
++          {children}
++        </main>
++      </div>
++    </LoadingProvider>
+   );
+ }
+diff --git a/jobops/src/components/loading/controller.ts b/jobops/src/components/loading/controller.ts
+new file mode 100644
+index 0000000..85ce408
+--- /dev/null
++++ b/jobops/src/components/loading/controller.ts
+@@ -0,0 +1,109 @@
++// Framework-free state for the app-wide loading popup. Progress is simulated, never measured.
++
++export type LoadingSnapshot = {
++  visible: boolean;
++  label: string;
++  progress: number;
++  closing: boolean;
++};
++
++export const LOADING_TIMING = {
++  showAfter: 200,
++  minVisible: 450,
++  fadeOut: 280,
++  trickleEvery: 180,
++  maxDuration: 15_000,
++  start: 0.08,
++  cap: 0.92,
++  step: 0.1,
++} as const;
++
++export const HIDDEN: LoadingSnapshot = { visible: false, label: "", progress: 0, closing: false };
++
++export type LoadingController = ReturnType<typeof createLoadingController>;
++
++export function createLoadingController() {
++  let snapshot = HIDDEN;
++  let latest = 0;
++  let active = 0;
++  let navigation = 0;
++  let shownAt = 0;
++  let timeouts: ReturnType<typeof setTimeout>[] = [];
++  let trickle: ReturnType<typeof setInterval> | undefined;
++  const listeners = new Set<() => void>();
++
++  const emit = (next: LoadingSnapshot) => {
++    snapshot = next;
++    listeners.forEach((listener) => listener());
++  };
++  const later = (ms: number, run: () => void) => {
++    timeouts.push(setTimeout(run, ms));
++  };
++  const clearTimers = () => {
++    timeouts.forEach(clearTimeout);
++    timeouts = [];
++    clearInterval(trickle);
++    trickle = undefined;
++  };
++  const hide = () => {
++    clearTimers();
++    active = 0;
++    shownAt = 0;
++    emit(HIDDEN);
++  };
++
++  function start(label: string) {
++    clearTimers();
++    const task = ++latest;
++    active = task;
++    const visible = snapshot.visible;
++    emit({ visible, label, progress: LOADING_TIMING.start, closing: false });
++    if (!visible)
++      later(LOADING_TIMING.showAfter, () => {
++        shownAt = Date.now();
++        emit({ ...snapshot, visible: true });
++      });
++    trickle = setInterval(() => {
++      const { progress } = snapshot;
++      emit({
++        ...snapshot,
++        progress: progress + (LOADING_TIMING.cap - progress) * LOADING_TIMING.step,
++      });
++    }, LOADING_TIMING.trickleEvery);
++    later(LOADING_TIMING.maxDuration, hide);
++    return task;
++  }
++
++  function finish(task: number) {
++    if (!task || task !== active) return;
++    clearTimers();
++    active = 0;
++    if (!snapshot.visible) return hide();
++    const wait = Math.max(0, LOADING_TIMING.minVisible - (Date.now() - shownAt));
++    later(wait, () => {
++      emit({ ...snapshot, progress: 1, closing: true });
++      later(LOADING_TIMING.fadeOut, hide);
++    });
++  }
++
++  return {
++    start,
++    finish,
++    /** Starts a page change; `arrived` finishes the most recent one. */
++    navigate(label: string) {
++      navigation = start(label);
++      return navigation;
++    },
++    arrived() {
++      finish(navigation);
++    },
++    reset: hide,
++    subscribe(listener: () => void) {
++      listeners.add(listener);
++      return () => {
++        listeners.delete(listener);
++      };
++    },
++    getSnapshot: () => snapshot,
++  };
++}
+diff --git a/jobops/src/components/loading/overlay.tsx b/jobops/src/components/loading/overlay.tsx
+new file mode 100644
+index 0000000..0eb6eec
+--- /dev/null
++++ b/jobops/src/components/loading/overlay.tsx
+@@ -0,0 +1,124 @@
++"use client";
++
++import {
++  createContext,
++  Suspense,
++  useContext,
++  useEffect,
++  useState,
++  useSyncExternalStore,
++  type ReactNode,
++} from "react";
++import { usePathname, useSearchParams } from "next/navigation";
++import { cn } from "@/lib/utils";
++import {
++  createLoadingController,
++  HIDDEN,
++  type LoadingController,
++  type LoadingSnapshot,
++} from "./controller";
++import { formNavigationTarget, labelForPath, navigationTarget } from "./routes";
++
++const LoadingContext = createContext<LoadingController | null>(null);
++
++export function useLoading() {
++  return useContext(LoadingContext);
++}
++
++/** Shows the popup while `active` is true (for example a form's pending state). */
++export function useLoadingTask(active: boolean, label: string) {
++  const loading = useLoading();
++  useEffect(() => {
++    if (!loading || !active) return;
++    const task = loading.start(label);
++    return () => loading.finish(task);
++  }, [loading, active, label]);
++}
++
++/** Loader A from /gallery/home: a dialog with a Material linear progress bar over a blurred page. */
++function LoadingPopup({ snapshot }: { snapshot: LoadingSnapshot }) {
++  if (!snapshot.visible) return null;
++  return (
++    <div
++      className={cn(
++        "fixed inset-0 z-50 grid place-items-center bg-scrim backdrop-blur-md",
++        snapshot.closing ? "animate-fade-out" : "animate-fade-in",
++      )}
++    >
++      <div
++        role="status"
++        aria-live="polite"
++        className="w-[min(360px,calc(100vw-32px))] animate-pop rounded-panel border border-border bg-popover p-6 shadow-surface"
++      >
++        <div className="flex items-center gap-3">
++          <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary font-semibold text-primary-foreground">
++            J
++          </span>
++          <p className="m-0 font-semibold">{snapshot.label}</p>
++        </div>
++        <div
++          role="progressbar"
++          aria-label={snapshot.label}
++          className="mt-5 h-1 overflow-hidden rounded-full bg-selected"
++        >
++          <div
++            className="h-full rounded-full bg-primary transition-[width] duration-200 ease-out"
++            style={{ width: `${snapshot.progress * 100}%` }}
++          />
++        </div>
++      </div>
++    </div>
++  );
++}
++
++function NavigationTracker({ loading }: { loading: LoadingController }) {
++  const pathname = usePathname();
++  const search = useSearchParams().toString();
++  useEffect(() => {
++    function onClick(event: MouseEvent) {
++      const anchor = (event.target as Element | null)?.closest?.("a[href]");
++      if (!(anchor instanceof HTMLAnchorElement)) return;
++      const url = navigationTarget(event, anchor, window.location);
++      if (url) loading.navigate(labelForPath(url.pathname));
++    }
++    function onSubmit(event: SubmitEvent) {
++      // Forms with their own handling (ActionForm, server actions) prevent the native submit.
++      if (event.defaultPrevented || !(event.target instanceof HTMLFormElement)) return;
++      if (formNavigationTarget(event.target, window.location)) loading.navigate("Searching");
++    }
++    function onPopState() {
++      loading.navigate(labelForPath(window.location.pathname));
++    }
++    function onPageShow(event: PageTransitionEvent) {
++      if (event.persisted) loading.reset();
++    }
++    document.addEventListener("click", onClick, true);
++    document.addEventListener("submit", onSubmit);
++    window.addEventListener("popstate", onPopState);
++    window.addEventListener("pageshow", onPageShow);
++    return () => {
++      document.removeEventListener("click", onClick, true);
++      document.removeEventListener("submit", onSubmit);
++      window.removeEventListener("popstate", onPopState);
++      window.removeEventListener("pageshow", onPageShow);
++    };
++  }, [loading]);
++  useEffect(() => {
++    loading.arrived();
++  }, [loading, pathname, search]);
++  return null;
++}
++
++export function LoadingProvider({ children }: { children: ReactNode }) {
++  const [loading] = useState(createLoadingController);
++  const snapshot = useSyncExternalStore(loading.subscribe, loading.getSnapshot, () => HIDDEN);
++  return (
++    <LoadingContext.Provider value={loading}>
++      <div inert={snapshot.visible}>{children}</div>
++      <Suspense fallback={null}>
++        <NavigationTracker loading={loading} />
++      </Suspense>
++      <LoadingPopup snapshot={snapshot} />
++    </LoadingContext.Provider>
++  );
++}
+diff --git a/jobops/src/components/loading/routes.ts b/jobops/src/components/loading/routes.ts
+new file mode 100644
+index 0000000..d83ce96
+--- /dev/null
++++ b/jobops/src/components/loading/routes.ts
+@@ -0,0 +1,72 @@
++// Decides which clicks and form submits are in-app page changes, and how to name them.
++
++const pageLabels: Record<string, string> = {
++  "": "Home",
++  find: "Find openings",
++  jobs: "Jobs",
++  resumes: "Resumes",
++  "resume-prompt": "Resume review",
++  companies: "Companies",
++  applications: "Applications",
++  inbox: "Inbox",
++  mail: "Inbox",
++  "my-profile": "My profile",
++  "profile-prompt": "Profile prompt",
++  contacts: "Contacts",
++  outreach: "Outreach",
++  opportunities: "Opportunities",
++  settings: "Settings",
++  import: "Import",
++  today: "Today",
++  profiles: "Profiles",
++  gallery: "Gallery",
++};
++
++export function labelForPath(pathname: string) {
++  const page = pageLabels[pathname.split("/")[1] ?? ""];
++  return page ? `Opening ${page}` : "Loading";
++}
++
++type Here = { href: string };
++type ClickLike = {
++  button: number;
++  metaKey: boolean;
++  ctrlKey: boolean;
++  shiftKey: boolean;
++  altKey: boolean;
++};
++type AnchorLike = { href: string; target: string; hasAttribute(name: string): boolean };
++type FormLike = { action: string; method: string; target: string };
++
++function appUrl(href: string, here: Here) {
++  let url: URL;
++  try {
++    url = new URL(href, here.href);
++  } catch {
++    return null;
++  }
++  if (url.origin !== new URL(here.href).origin || url.pathname.startsWith("/api/")) return null;
++  return url;
++}
++
++/** True when the URL is a different page or query from the current one; hashes are ignored. */
++export function isNewLocation(href: string, here: Here) {
++  const url = new URL(href, here.href);
++  const current = new URL(here.href);
++  return url.pathname !== current.pathname || url.search !== current.search;
++}
++
++export function navigationTarget(click: ClickLike, anchor: AnchorLike, here: Here) {
++  if (click.button !== 0 || click.metaKey || click.ctrlKey || click.shiftKey || click.altKey)
++    return null;
++  if (anchor.hasAttribute("download") || anchor.hasAttribute("data-no-loading")) return null;
++  if (anchor.target && anchor.target !== "_self") return null;
++  const url = appUrl(anchor.href, here);
++  return url && isNewLocation(url.href, here) ? url : null;
++}
++
++export function formNavigationTarget(form: FormLike, here: Here) {
++  if (form.method.toLowerCase() !== "get") return null;
++  if (form.target && form.target !== "_self") return null;
++  return appUrl(form.action, here);
++}
+diff --git a/jobops/src/components/ui/button.tsx b/jobops/src/components/ui/button.tsx
+index 5102fff..75679e7 100644
+--- a/jobops/src/components/ui/button.tsx
++++ b/jobops/src/components/ui/button.tsx
+@@ -3,7 +3,7 @@ import { Slot } from "@radix-ui/react-slot";
+ import { cva, type VariantProps } from "class-variance-authority";
+ import { cn } from "@/lib/utils";
+ const buttonVariants = cva(
+-  "pressable inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-full text-sm font-medium disabled:pointer-events-none disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary",
++  "morph inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium disabled:pointer-events-none disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary",
+   {
+     variants: {
+       variant: {
+@@ -17,7 +17,7 @@ const buttonVariants = cva(
+       },
+       size: {
+         default: "min-h-11 px-6 py-2",
+-        sm: "h-8 rounded-full px-3 text-xs",
++        sm: "h-8 px-3 text-xs",
+         lg: "h-10 px-6",
+         icon: "h-9 w-9",
+       },
+diff --git a/jobops/src/features/jobs/import-form.tsx b/jobops/src/features/jobs/import-form.tsx
+index f3e2a6f..e614eb5 100644
+--- a/jobops/src/features/jobs/import-form.tsx
++++ b/jobops/src/features/jobs/import-form.tsx
+@@ -2,6 +2,7 @@
+ import { useActionState, useState } from "react";
+ import Link from "next/link";
+ import { Button, Field, Panel } from "@/components/ui";
++import { useLoadingTask } from "@/components/loading/overlay";
+ import { previewJobs, commitJobs, type ImportState } from "./actions";
+ const example = JSON.stringify(
+   [
+@@ -27,6 +28,8 @@ export function ImportForm() {
+   const [preview, validate, pending] = useActionState<ImportState, FormData>(previewJobs, {});
+   const [result, commit, saving] = useActionState<ImportState, FormData>(commitJobs, {});
+   const [validatedText, setValidatedText] = useState("");
++  useLoadingTask(pending, "Checking jobs");
++  useLoadingTask(saving, "Saving jobs");
+   const valid = preview.preview?.valid && validatedText === text + format;
+   return (
+     <div className="stack">
+diff --git a/jobops/src/features/workspace/embeds.tsx b/jobops/src/features/workspace/embeds.tsx
+new file mode 100644
+index 0000000..15f0dd0
+--- /dev/null
++++ b/jobops/src/features/workspace/embeds.tsx
+@@ -0,0 +1,376 @@
++"use client";
++
++import { useEffect, useId, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
++import { ArrowUpRight, FileText, Globe, Lock, X } from "lucide-react";
++import { cn } from "@/lib/utils";
++import {
++  contributionChart,
++  favicon,
++  githubAvatar,
++  linkedInBadgeDocument,
++  type LinkKind,
++  type ProfileLink,
++} from "./profile-links";
++
++export type ResumeRef = {
++  id: string;
++  familyId: string;
++  name: string;
++  label: string;
++  filename: string;
++};
++export type PreviewTarget = {
++  key: string;
++  kind: LinkKind | "resume";
++  title: string;
++  handle: string;
++  url: string;
++  host: string;
++};
++
++export function previewTargets(links: ProfileLink[], resume: ResumeRef | null): PreviewTarget[] {
++  const order: LinkKind[] = ["portfolio", "github", "linkedin", "medium", "other"];
++  const targets: PreviewTarget[] = [...links]
++    .sort((a, b) => order.indexOf(a.kind) - order.indexOf(b.kind))
++    .map((link) => ({
++      key: link.url,
++      kind: link.kind,
++      title: link.name,
++      handle: link.handle,
++      url: link.url,
++      host: link.host,
++    }));
++  if (resume)
++    targets.splice(1, 0, {
++      key: resume.id,
++      kind: "resume",
++      title: "Resume",
++      handle: resume.label,
++      url: `/api/resumes/${resume.id}/file`,
++      host: resume.filename,
++    });
++  return targets;
++}
++
++/** Remote favicons, avatars and charts; next/image would proxy them through the server. */
++export function RemoteImage({
++  fallback = null,
++  ...props
++}: React.ComponentProps<"img"> & { fallback?: ReactNode }) {
++  const image = useRef<HTMLImageElement>(null);
++  const [failed, setFailed] = useState(false);
++  useEffect(() => {
++    // An image can fail before hydration attaches onError.
++    const element = image.current;
++    if (element?.complete && element.naturalWidth === 0) setFailed(true);
++  }, []);
++  if (failed) return <>{fallback}</>;
++  return (
++    // eslint-disable-next-line @next/next/no-img-element, jsx-a11y/alt-text
++    <img
++      ref={image}
++      loading="lazy"
++      referrerPolicy="no-referrer"
++      {...props}
++      onError={() => setFailed(true)}
++    />
++  );
++}
++
++export function TargetIcon({ target, className }: { target: PreviewTarget; className?: string }) {
++  if (target.kind === "resume")
++    return <FileText aria-hidden className={cn("text-primary", className)} />;
++  return (
++    <RemoteImage
++      src={favicon(target.host)}
++      alt=""
++      className={cn("rounded", className)}
++      fallback={<Globe aria-hidden className={cn("text-muted-foreground", className)} />}
++    />
++  );
++}
++
++function subscribeTheme(callback: () => void) {
++  window.addEventListener("jobops-theme", callback);
++  return () => window.removeEventListener("jobops-theme", callback);
++}
++function useLightTheme() {
++  return useSyncExternalStore(
++    subscribeTheme,
++    () => document.documentElement.dataset.theme === "light",
++    () => false,
++  );
++}
++
++/** A live page rendered at desktop width and scaled down, so it reads like a screenshot. */
++export function ScaledFrame({
++  src,
++  title,
++  width = 1280,
++}: {
++  src: string;
++  title: string;
++  width?: number;
++}) {
++  const box = useRef<HTMLDivElement>(null);
++  const [scale, setScale] = useState(0.4);
++  useEffect(() => {
++    const element = box.current;
++    if (!element) return;
++    const observer = new ResizeObserver(([entry]) => setScale(entry.contentRect.width / width));
++    observer.observe(element);
++    return () => observer.disconnect();
++  }, [width]);
++  return (
++    <div ref={box} className="absolute inset-0 overflow-hidden">
++      <iframe
++        src={src}
++        title={title}
++        loading="lazy"
++        tabIndex={-1}
++        aria-hidden
++        sandbox="allow-scripts allow-same-origin"
++        referrerPolicy="no-referrer"
++        className="pointer-events-none absolute left-0 top-0 origin-top-left border-0 bg-background"
++        style={{ width, height: `${100 / scale}%`, transform: `scale(${scale})` }}
++      />
++    </div>
++  );
++}
++
++export function AddressBar({ target, children }: { target: PreviewTarget; children?: ReactNode }) {
++  const external = target.kind !== "resume";
++  return (
++    <div className="flex items-center gap-2 border-b border-border px-3 py-2.5">
++      <div className="flex min-w-0 flex-1 items-center gap-2 rounded-full bg-background px-3.5 py-1.5 text-sm text-muted-foreground">
++        {external ? <Lock size={13} aria-hidden /> : <FileText size={13} aria-hidden />}
++        <span className="truncate">
++          {external
++            ? target.url.replace(/^https?:\/\/(www\.)?/, "").replace(/\/$/, "")
++            : target.host}
++        </span>
++      </div>
++      {children}
++      <a
++        href={target.url}
++        target="_blank"
++        rel="noreferrer"
++        aria-label={`Open ${target.title} in a new tab`}
++        className="pressable grid size-9 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
++      >
++        <ArrowUpRight size={17} aria-hidden />
++      </a>
++    </div>
++  );
++}
++
++function OpenLink({ target, label }: { target: PreviewTarget; label: string }) {
++  return (
++    <a
++      href={target.url}
++      target="_blank"
++      rel="noreferrer"
++      className="morph inline-flex min-h-10 items-center gap-2 bg-primary px-5 text-sm font-medium text-primary-foreground hover:bg-primary-hover hover:no-underline"
++    >
++      {label}
++      <ArrowUpRight size={16} aria-hidden />
++    </a>
++  );
++}
++
++function NoEmbed({ target, reason }: { target: PreviewTarget; reason: string }) {
++  return (
++    <div className="grid size-full place-items-center p-8 text-center">
++      <div className="max-w-sm">
++        <TargetIcon target={target} className="mx-auto size-10" />
++        <p className="mt-4 text-lg font-semibold">{target.handle}</p>
++        <p className="mt-2 text-sm text-muted-foreground">{reason}</p>
++        <div className="mt-5">
++          <OpenLink target={target} label={`Open ${target.title}`} />
++        </div>
++      </div>
++    </div>
++  );
++}
++
++/** LinkedIn's official badge, isolated in an opaque-origin sandbox; see the spec, section 4.2. */
++function LinkedInBadgeFrame({ target, theme }: { target: PreviewTarget; theme: "light" | "dark" }) {
++  const frame = useRef<HTMLIFrameElement>(null);
++  const [status, setStatus] = useState<"loading" | "ready" | "failed">("loading");
++  useEffect(() => {
++    function onMessage(event: MessageEvent) {
++      if (event.source !== frame.current?.contentWindow) return;
++      const data = event.data as { type?: unknown; ok?: unknown } | null;
++      if (data?.type === "linkedin-badge") setStatus(data.ok === true ? "ready" : "failed");
++    }
++    window.addEventListener("message", onMessage);
++    const timer = window.setTimeout(
++      () => setStatus((current) => (current === "loading" ? "failed" : current)),
++      7000,
++    );
++    return () => {
++      window.removeEventListener("message", onMessage);
++      window.clearTimeout(timer);
++    };
++  }, []);
++  if (status === "failed")
++    return (
++      <NoEmbed
++        target={target}
++        reason="LinkedIn's official badge did not load here, and LinkedIn blocks full-page previews."
++      />
++    );
++  return (
++    <iframe
++      ref={frame}
++      title="LinkedIn profile badge"
++      sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox"
++      srcDoc={linkedInBadgeDocument(target.handle, theme)}
++      className="size-full border-0"
++    />
++  );
++}
++function LinkedInBadge({ target }: { target: PreviewTarget }) {
++  const theme = useLightTheme() ? "light" : "dark";
++  return <LinkedInBadgeFrame key={theme} target={target} theme={theme} />;
++}
++
++export function GitHubPreview({
++  target,
++  compact = false,
++}: {
++  target: PreviewTarget;
++  compact?: boolean;
++}) {
++  return (
++    <div
++      className={cn(
++        "flex size-full flex-col",
++        compact ? "gap-4" : "gap-6 overflow-auto p-6 sm:p-8",
++      )}
++    >
++      <div className="flex items-center gap-4">
++        <RemoteImage
++          src={githubAvatar(target.handle)}
++          alt=""
++          className={cn("rounded-full border border-border", compact ? "size-12" : "size-16")}
++          fallback={
++            <span
++              aria-hidden
++              className={cn(
++                "grid shrink-0 place-items-center rounded-full bg-selected font-semibold text-selected-foreground",
++                compact ? "size-12" : "size-16",
++              )}
++            >
++              {target.handle.slice(0, 1).toUpperCase()}
++            </span>
++          }
++        />
++        <div className="min-w-0">
++          <p className={cn("truncate font-semibold", compact ? "text-base" : "text-xl")}>
++            {target.handle}
++          </p>
++          <p className="text-sm text-muted-foreground">github.com/{target.handle}</p>
++        </div>
++      </div>
++      <figure className="min-w-0">
++        <RemoteImage
++          src={contributionChart(target.handle)}
++          alt={`GitHub contributions for ${target.handle} over the last year`}
++          className="w-full [:root:not([data-theme=light])_&]:hue-rotate-180 [:root:not([data-theme=light])_&]:invert"
++          fallback={
++            <p className="text-sm text-muted-foreground">Contribution graph unavailable.</p>
++          }
++        />
++        <figcaption className="mt-2 text-xs text-muted-foreground">
++          Public contributions, last 12 months
++        </figcaption>
++      </figure>
++      {!compact && (
++        <div>
++          <OpenLink target={target} label="Open GitHub" />
++        </div>
++      )}
++    </div>
++  );
++}
++
++/** Full-size, interactive preview for one target. */
++export function PreviewBody({ target }: { target: PreviewTarget }) {
++  if (target.kind === "portfolio")
++    return (
++      <iframe
++        src={target.url}
++        title={`${target.title} preview`}
++        loading="lazy"
++        sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox"
++        referrerPolicy="no-referrer"
++        className="size-full border-0 bg-background"
++      />
++    );
++  if (target.kind === "resume")
++    return (
++      <iframe
++        src={`${target.url}#view=FitH`}
++        title={`${target.title} preview`}
++        className="size-full border-0 bg-background"
++      />
++    );
++  if (target.kind === "github") return <GitHubPreview target={target} />;
++  if (target.kind === "linkedin") return <LinkedInBadge target={target} />;
++  return (
++    <NoEmbed
++      target={target}
++      reason={`${target.title} blocks previews inside other sites. Open it to see your latest posts.`}
++    />
++  );
++}
++
++export function PreviewDialog({
++  target,
++  onClose,
++}: {
++  target: PreviewTarget | null;
++  onClose: () => void;
++}) {
++  const dialog = useRef<HTMLDialogElement>(null);
++  const titleId = useId();
++  useEffect(() => {
++    const element = dialog.current;
++    if (target && element && !element.open) element.showModal();
++    if (!target && element?.open) element.close();
++  }, [target]);
++  return (
++    <dialog
++      ref={dialog}
++      aria-labelledby={titleId}
++      onClose={onClose}
++      onClick={(event) => event.target === dialog.current && dialog.current?.close()}
++      className="m-auto h-[min(82dvh,860px)] max-h-none w-[min(1100px,calc(100vw-32px))] max-w-none animate-pop overflow-hidden rounded-panel border border-border bg-card p-0 text-foreground backdrop:bg-scrim backdrop:backdrop-blur-sm"
++    >
++      {target && (
++        <div className="flex h-full flex-col">
++          <div className="flex items-center gap-3 px-5 pt-4">
++            <TargetIcon target={target} className="size-5" />
++            <h2 id={titleId} className="m-0 text-base font-semibold">
++              {target.title}
++              <span className="ml-2 font-normal text-muted-foreground">{target.handle}</span>
++            </h2>
++            <button
++              type="button"
++              onClick={() => dialog.current?.close()}
++              aria-label="Close preview"
++              className="pressable ml-auto grid size-9 place-items-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
++            >
++              <X size={18} aria-hidden />
++            </button>
++          </div>
++          <AddressBar target={target} />
++          <div className="min-h-0 flex-1">
++            <PreviewBody target={target} />
++          </div>
++        </div>
++      )}
++    </dialog>
++  );
++}
+diff --git a/jobops/src/features/workspace/home.tsx b/jobops/src/features/workspace/home.tsx
+index b9a661a..2c14f91 100644
+--- a/jobops/src/features/workspace/home.tsx
++++ b/jobops/src/features/workspace/home.tsx
+@@ -1,8 +1,9 @@
+ import Link from "next/link";
+-import { ArrowRight, Search } from "lucide-react";
+-import { Button } from "@/components/ui/button";
+ import { ActivityChart } from "./activity-chart";
+-import { JobSiteCards, SiteCards } from "./sites";
++import { IdentityCard } from "./identity-card";
++import { ProfileMosaic } from "./profile-mosaic";
++import { profileLinks } from "./profile-links";
++import { JobSiteCards } from "./sites";
+ import type { WorkspaceData } from "./read";
+ export function WorkspaceHome({ data }: { data: WorkspaceData }) {
+   const stats = [
+@@ -28,43 +29,31 @@ export function WorkspaceHome({ data }: { data: WorkspaceData }) {
+   const sources = data.openings.length
+     ? [...new Set(data.openings.map((job) => job.source))]
+     : ["LinkedIn", "Naukri", "Other sites"];
++  const links = profileLinks(data.sites);
+   return (
+     <div className="space-y-9">
+-      <section className="flex flex-wrap items-center justify-between gap-6">
+-        <div>
+-          <p className="mb-2 text-sm text-muted-foreground">Your job search in India</p>
+-          <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
+-            {data.name ? `${data.name}, find your next role.` : "Find your next role."}
+-          </h1>
+-          <p className="mt-3 max-w-xl text-base text-muted-foreground">
+-            Your sites, your resumes, and a clear place to start.
+-          </p>
+-        </div>
+-        <Button asChild className="min-h-12 px-7">
+-          <Link href="/find">
+-            <Search size={18} aria-hidden />
+-            Find openings
+-            <ArrowRight size={17} aria-hidden />
+-          </Link>
+-        </Button>
+-      </section>
+-      <section>
++      <IdentityCard identity={data.identity} links={links} resume={data.currentResume} />
++      <section aria-labelledby="home-profiles">
+         <div className="mb-4 flex items-center justify-between gap-3">
+-          <h2 className="text-xl font-semibold">Your online presence</h2>
++          <h2 id="home-profiles" className="text-xl font-semibold">
++            Your profiles
++          </h2>
+           <Link href="/my-profile" className="text-sm text-link">
+             Manage links
+           </Link>
+         </div>
+-        <SiteCards sites={data.sites} />
++        <ProfileMosaic links={links} resume={data.currentResume} />
+       </section>
+-      <section>
++      <section aria-labelledby="home-sites">
+         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+-          <h2 className="text-xl font-semibold">Places to find openings</h2>
++          <h2 id="home-sites" className="text-xl font-semibold">
++            Places to find openings
++          </h2>
+           <Link href="/companies" className="text-sm text-link">
+             Browse Bengaluru & Hyderabad companies
+           </Link>
+         </div>
+-        <JobSiteCards />
++        <JobSiteCards role={data.identity.searchRole} city={data.identity.searchCity} />
+       </section>
+       <section className="space-y-4">
+         <div>
+diff --git a/jobops/src/features/workspace/identity-card.tsx b/jobops/src/features/workspace/identity-card.tsx
+new file mode 100644
+index 0000000..3c8067d
+--- /dev/null
++++ b/jobops/src/features/workspace/identity-card.tsx
+@@ -0,0 +1,163 @@
++"use client";
++
++import Link from "next/link";
++import {
++  ArrowUpRight,
++  BriefcaseBusiness,
++  FileText,
++  Globe,
++  MapPin,
++  Search,
++  UserRound,
++} from "lucide-react";
++import { Button } from "@/components/ui";
++import { RemoteImage, type ResumeRef } from "./embeds";
++import { experienceLabel, headline, type Identity } from "./identity";
++import { favicon, githubAvatar, type ProfileLink } from "./profile-links";
++
++// One orchestrated entrance: 70 ms between items, using the --animate-enter token.
++const stagger = (index: number) => ({ animationDelay: `${index * 70}ms` });
++
++function Initial({ identity }: { identity: Identity }) {
++  return (
++    <span
++      aria-hidden
++      className="grid size-20 shrink-0 place-items-center rounded-full bg-selected text-xl font-semibold text-selected-foreground"
++    >
++      {identity.name ? identity.name.slice(0, 1).toUpperCase() : <UserRound size={30} />}
++    </span>
++  );
++}
++
++function Avatar({ links, identity }: { links: ProfileLink[]; identity: Identity }) {
++  const github = links.find((link) => link.kind === "github");
++  if (!github) return <Initial identity={identity} />;
++  return (
++    <RemoteImage
++      src={githubAvatar(github.handle)}
++      alt=""
++      className="size-20 shrink-0 rounded-full border border-border"
++      fallback={<Initial identity={identity} />}
++    />
++  );
++}
++
++function LinkChip({ link }: { link: ProfileLink }) {
++  return (
++    <a
++      href={link.url}
++      target="_blank"
++      rel="noreferrer"
++      aria-label={`${link.name}, ${link.handle} (opens in a new tab)`}
++      className="pressable inline-flex min-h-9 max-w-full items-center gap-2 rounded-full border border-border bg-background px-3 text-sm text-foreground hover:border-primary hover:no-underline"
++    >
++      <RemoteImage
++        src={favicon(link.host)}
++        alt=""
++        className="size-4 rounded-sm"
++        fallback={<Globe size={16} aria-hidden className="shrink-0 text-muted-foreground" />}
++      />
++      <span className="truncate">{link.kind === "portfolio" ? "Portfolio" : link.handle}</span>
++      <ArrowUpRight size={14} className="shrink-0 text-muted-foreground" aria-hidden />
++    </a>
++  );
++}
++
++function Facts({ identity, resume }: { identity: Identity; resume: ResumeRef | null }) {
++  const facts = [
++    identity.city && { icon: MapPin, text: identity.city },
++    identity.years !== null && { icon: BriefcaseBusiness, text: experienceLabel(identity.years) },
++    resume && {
++      icon: FileText,
++      text: `Current resume: ${resume.label}`,
++      href: `/resumes/${resume.familyId}?version=${resume.id}`,
++    },
++  ].filter(Boolean) as { icon: typeof MapPin; text: string; href?: string }[];
++  if (!facts.length) return null;
++  return (
++    <ul className="m-0 flex list-none flex-wrap gap-x-5 gap-y-2 p-0 text-sm text-muted-foreground">
++      {facts.map(({ icon: Icon, text, href }) => (
++        <li key={text} className="flex items-center gap-1.5">
++          <Icon size={15} aria-hidden />
++          {href ? (
++            <Link href={href} className="text-link">
++              {text}
++            </Link>
++          ) : (
++            text
++          )}
++        </li>
++      ))}
++    </ul>
++  );
++}
++
++/** Hero A from /gallery/home: who you are, in one card, with Find openings to the right. */
++export function IdentityCard({
++  identity,
++  links,
++  resume,
++}: {
++  identity: Identity;
++  links: ProfileLink[];
++  resume: ResumeRef | null;
++}) {
++  const role = headline(identity);
++  return (
++    <section className="rounded-panel border border-border bg-card p-6 shadow-surface sm:p-8">
++      <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
++        <div className="animate-enter" style={stagger(0)}>
++          <Avatar links={links} identity={identity} />
++        </div>
++        <div className="min-w-0 flex-1">
++          {identity.name ? (
++            <h1
++              className="m-0 animate-enter text-3xl font-semibold tracking-tight"
++              style={stagger(1)}
++            >
++              {identity.name}
++            </h1>
++          ) : (
++            <h1
++              className="m-0 animate-enter text-3xl font-semibold tracking-tight"
++              style={stagger(1)}
++            >
++              <Link href="/my-profile" className="text-link">
++                Add your name, role and city
++              </Link>
++            </h1>
++          )}
++          {role && (
++            <p className="mt-1 animate-enter text-lg text-muted-foreground" style={stagger(1)}>
++              {role}
++            </p>
++          )}
++          <div className="mt-4 animate-enter" style={stagger(2)}>
++            <Facts identity={identity} resume={resume} />
++          </div>
++          {identity.summary && (
++            <p
++              className="mt-4 line-clamp-2 max-w-2xl animate-enter text-sm text-muted-foreground"
++              style={stagger(3)}
++            >
++              {identity.summary}
++            </p>
++          )}
++          {links.length > 0 && (
++            <div className="mt-5 flex animate-enter flex-wrap gap-2" style={stagger(4)}>
++              {links.map((link) => (
++                <LinkChip key={link.url} link={link} />
++              ))}
++            </div>
++          )}
++        </div>
++        <Button asChild className="min-h-12 shrink-0 animate-enter px-7" style={stagger(2)}>
++          <Link href="/find">
++            <Search size={18} aria-hidden />
++            Find openings
++          </Link>
++        </Button>
++      </div>
++    </section>
++  );
++}
+diff --git a/jobops/src/features/workspace/identity.ts b/jobops/src/features/workspace/identity.ts
+new file mode 100644
+index 0000000..8371e09
+--- /dev/null
++++ b/jobops/src/features/workspace/identity.ts
+@@ -0,0 +1,49 @@
++// Who the user is, taken only from their stored candidate profile.
++
++export type Identity = {
++  name: string;
++  role: string;
++  company: string;
++  years: number | null;
++  city: string;
++  summary: string;
++  searchRole: string;
++  searchCity: string;
++};
++
++type CandidateFields = {
++  fullName: string | null;
++  preferredName: string | null;
++  currentRole: string | null;
++  currentCompany: string | null;
++  yearsOfExperience: number | null;
++  currentCity: string | null;
++  careerSummary: string | null;
++  desiredRoles: string[];
++  preferredLocations: string[];
++};
++
++export function firstSentence(text: string) {
++  return text.trim().split(/(?<=[.!?])\s+/)[0] ?? "";
++}
++
++export function identityFrom(person?: CandidateFields): Identity {
++  return {
++    name: person?.preferredName?.trim() || person?.fullName?.trim() || "",
++    role: person?.currentRole?.trim() ?? "",
++    company: person?.currentCompany?.trim() ?? "",
++    years: person?.yearsOfExperience ?? null,
++    city: person?.currentCity?.trim() ?? "",
++    summary: firstSentence(person?.careerSummary ?? ""),
++    searchRole: person?.desiredRoles[0]?.trim() || person?.currentRole?.trim() || "",
++    searchCity: person?.preferredLocations[0]?.trim() || person?.currentCity?.trim() || "",
++  };
++}
++
++export function headline(identity: Pick<Identity, "role" | "company">) {
++  return [identity.role, identity.company].filter(Boolean).join(" at ");
++}
++
++export function experienceLabel(years: number) {
++  return `${years} ${years === 1 ? "year" : "years"} experience`;
++}
+diff --git a/jobops/src/features/workspace/job-sites.ts b/jobops/src/features/workspace/job-sites.ts
+new file mode 100644
+index 0000000..b7cbb2d
+--- /dev/null
++++ b/jobops/src/features/workspace/job-sites.ts
+@@ -0,0 +1,64 @@
++// India-focused job sites. Only LinkedIn and Naukri have verified, stable search URLs.
++
++export type JobSite = {
++  name: string;
++  host: string;
++  bestFor: string;
++  url: string;
++  search?: (role: string, city: string) => string;
++};
++
++export const slug = (value: string) =>
++  value
++    .toLowerCase()
++    .replace(/[^a-z0-9]+/g, "-")
++    .replace(/^-|-$/g, "");
++
++export const jobSearchSites: JobSite[] = [
++  {
++    name: "LinkedIn",
++    host: "linkedin.com",
++    bestFor: "Openings, and referrals through people you know",
++    url: "https://www.linkedin.com/jobs/",
++    search: (role, city) =>
++      `https://www.linkedin.com/jobs/search/?keywords=${encodeURIComponent(role)}&location=${encodeURIComponent(city ? `${city}, India` : "India")}`,
++  },
++  {
++    name: "Naukri",
++    host: "naukri.com",
++    bestFor: "India's largest job board, where recruiters search profiles",
++    url: "https://www.naukri.com/",
++    search: (role, city) =>
++      city
++        ? `https://www.naukri.com/${slug(role)}-jobs-in-${slug(city)}`
++        : `https://www.naukri.com/${slug(role)}-jobs`,
++  },
++  {
++    name: "Instahyre",
++    host: "instahyre.com",
++    bestFor: "Curated tech roles where companies contact you",
++    url: "https://www.instahyre.com/",
++  },
++  {
++    name: "Cutshort",
++    host: "cutshort.io",
++    bestFor: "Startup and product-company tech roles",
++    url: "https://cutshort.io/",
++  },
++  {
++    name: "Hirist",
++    host: "hirist.tech",
++    bestFor: "Technology-only roles across Indian companies",
++    url: "https://www.hirist.tech/",
++  },
++];
++
++export function jobSiteAction(site: JobSite, role: string, city: string) {
++  if (site.search && role)
++    return {
++      href: site.search(role, city),
++      line: `“${role}” in ${city || "India"}`,
++      search: true,
++    };
++  return { href: site.url, line: `Open ${site.name}`, search: false };
++}
+diff --git a/jobops/src/features/workspace/profile-links.ts b/jobops/src/features/workspace/profile-links.ts
+new file mode 100644
+index 0000000..3aa3766
+--- /dev/null
++++ b/jobops/src/features/workspace/profile-links.ts
+@@ -0,0 +1,58 @@
++// Public profile links and the public embeds Home shows for them. Nothing here invents metrics.
++
++export type LinkKind = "linkedin" | "github" | "portfolio" | "medium" | "other";
++export type ProfileLink = {
++  kind: LinkKind;
++  name: string;
++  url: string;
++  handle: string;
++  host: string;
++};
++
++const linkOrder: LinkKind[] = ["linkedin", "github", "portfolio", "medium", "other"];
++
++export function profileLinks(sites: { name: string; url: string | null }[]): ProfileLink[] {
++  const links: ProfileLink[] = sites.flatMap((site) => {
++    if (!site.url) return [];
++    let url: URL;
++    try {
++      url = new URL(site.url);
++    } catch {
++      return [];
++    }
++    if (url.protocol !== "https:" && url.protocol !== "http:") return [];
++    const host = url.hostname.replace(/^www\./, "");
++    const kind: LinkKind = /(^|\.)linkedin\.com$/.test(host)
++      ? "linkedin"
++      : host === "github.com"
++        ? "github"
++        : /(^|\.)medium\.com$/.test(host)
++          ? "medium"
++          : /portfolio/i.test(site.name) || host.endsWith("github.io")
++            ? "portfolio"
++            : "other";
++    const segments = url.pathname.split("/").filter(Boolean);
++    const handle =
++      kind === "linkedin"
++        ? (segments[1] ?? host)
++        : kind === "github" || kind === "medium"
++          ? (segments[0] ?? host)
++          : `${host}${url.pathname.replace(/\/$/, "")}`;
++    return [{ kind, name: site.name, url: site.url, handle, host }];
++  });
++  return links.sort((a, b) => linkOrder.indexOf(a.kind) - linkOrder.indexOf(b.kind));
++}
++
++export const favicon = (host: string) =>
++  `https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=64`;
++export const githubAvatar = (handle: string) =>
++  `https://github.com/${encodeURIComponent(handle)}.png?size=160`;
++// Third-party SVG cannot read CSS tokens; this is the light-theme --primary value.
++export const contributionChart = (handle: string) =>
++  `https://ghchart.rshah.org/1a73e8/${encodeURIComponent(handle)}`;
++
++/** The LinkedIn badge page, run in a sandboxed iframe so LinkedIn's script never runs in JobOps. */
++export function linkedInBadgeDocument(vanity: string, theme: "light" | "dark") {
++  const safeVanity = vanity.replace(/[^A-Za-z0-9_%-]/g, "");
++  return `<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;min-height:100%;background:transparent}body{display:grid;place-items:center;font-family:system-ui,sans-serif}</style></head><body><div class="badge-base LI-profile-badge" data-locale="en_US" data-size="large" data-theme="${theme}" data-type="HORIZONTAL" data-vanity="${safeVanity}" data-version="v1"></div><script src="https://platform.linkedin.com/badges/js/profile.js" async defer></script><script>setTimeout(function(){parent.postMessage({type:"linkedin-badge",ok:!!document.querySelector(".LI-profile-badge iframe")},"*")},6000)</script></body></html>`;
++}
+diff --git a/jobops/src/features/workspace/profile-mosaic.tsx b/jobops/src/features/workspace/profile-mosaic.tsx
+new file mode 100644
+index 0000000..b7c6a62
+--- /dev/null
++++ b/jobops/src/features/workspace/profile-mosaic.tsx
+@@ -0,0 +1,192 @@
++"use client";
++
++import Link from "next/link";
++import { useState } from "react";
++import { ArrowUpRight, Expand, Plus } from "lucide-react";
++import { cn } from "@/lib/utils";
++import {
++  GitHubPreview,
++  PreviewDialog,
++  previewTargets,
++  ScaledFrame,
++  TargetIcon,
++  type PreviewTarget,
++  type ResumeRef,
++} from "./embeds";
++import type { LinkKind, ProfileLink } from "./profile-links";
++
++function Tile({
++  target,
++  onOpen,
++  className,
++  children,
++}: {
++  target: PreviewTarget;
++  onOpen: () => void;
++  className?: string;
++  children: React.ReactNode;
++}) {
++  return (
++    <article
++      className={cn(
++        "group relative flex min-h-0 flex-col overflow-hidden rounded-card border border-border bg-card transition-[border-color] hover:border-primary",
++        className,
++      )}
++    >
++      <div className="relative min-h-0 flex-1">{children}</div>
++      <div className="flex items-center gap-3 border-t border-border px-4 py-3">
++        <TargetIcon target={target} className="size-5 shrink-0" />
++        <div className="min-w-0 flex-1">
++          <h3 className="m-0 text-sm font-medium">{target.title}</h3>
++          <p className="m-0 truncate text-xs text-muted-foreground">{target.handle}</p>
++        </div>
++        <button
++          type="button"
++          onClick={onOpen}
++          aria-label={`Preview ${target.title}`}
++          className="morph inline-flex min-h-9 items-center gap-1.5 border-0 bg-selected px-3.5 text-sm font-medium text-selected-foreground after:absolute after:inset-0 after:content-['']"
++        >
++          <Expand size={14} aria-hidden />
++          Preview
++        </button>
++        <a
++          href={target.url}
++          target="_blank"
++          rel="noreferrer"
++          aria-label={`Open ${target.title} in a new tab`}
++          className="pressable relative z-10 grid size-9 place-items-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
++        >
++          <ArrowUpRight size={16} aria-hidden />
++        </a>
++      </div>
++    </article>
++  );
++}
++
++function ResumeThumbnail({ target }: { target: PreviewTarget }) {
++  return (
++    <iframe
++      src={`${target.url}#toolbar=0&navpanes=0&view=FitH`}
++      title="Resume thumbnail"
++      tabIndex={-1}
++      aria-hidden
++      className="pointer-events-none absolute inset-0 size-full border-0"
++    />
++  );
++}
++
++function TileBody({ target }: { target: PreviewTarget }) {
++  if (target.kind === "github")
++    return (
++      <div className="p-4">
++        <GitHubPreview target={target} compact />
++      </div>
++    );
++  if (target.kind === "resume" || target.kind === "portfolio")
++    return (
++      <div className="relative h-44 overflow-hidden">
++        {target.kind === "resume" ? (
++          <ResumeThumbnail target={target} />
++        ) : (
++          <ScaledFrame src={target.url} title={`${target.title} thumbnail`} />
++        )}
++      </div>
++    );
++  return (
++    <div className="flex h-full min-h-28 items-center gap-4 p-5">
++      <TargetIcon target={target} className="size-9" />
++      <p className="m-0 text-sm text-muted-foreground">
++        {target.kind === "linkedin"
++          ? "Shows LinkedIn's official profile badge."
++          : `${target.title} can't be previewed inside JobOps.`}
++      </p>
++    </div>
++  );
++}
++
++function AddTile({ title, detail, href }: { title: string; detail: string; href: string }) {
++  return (
++    <Link
++      href={href}
++      className="pressable flex min-h-28 items-center gap-4 rounded-card border border-dashed border-border p-5 text-foreground hover:border-primary hover:no-underline"
++    >
++      <span className="grid size-10 shrink-0 place-items-center rounded-2xl bg-selected text-selected-foreground">
++        <Plus size={18} aria-hidden />
++      </span>
++      <span className="min-w-0">
++        <span className="block text-sm font-medium">{title}</span>
++        <span className="block text-xs text-muted-foreground">{detail}</span>
++      </span>
++    </Link>
++  );
++}
++
++const expected: { kind: LinkKind; label: string }[] = [
++  { kind: "linkedin", label: "LinkedIn" },
++  { kind: "github", label: "GitHub" },
++  { kind: "portfolio", label: "Portfolio" },
++];
++
++/** Previews B from /gallery/home: live thumbnails; any tile expands into a preview dialog. */
++export function ProfileMosaic({
++  links,
++  resume,
++}: {
++  links: ProfileLink[];
++  resume: ResumeRef | null;
++}) {
++  const [open, setOpen] = useState<PreviewTarget | null>(null);
++  const targets = previewTargets(links, resume);
++  const featured =
++    targets.find((target) => target.kind === "portfolio") ??
++    targets.find((target) => target.kind === "resume");
++  const others = targets.filter((target) => target !== featured);
++  const missing = expected.filter(({ kind }) => !links.some((link) => link.kind === kind));
++  return (
++    <div>
++      <div className="grid gap-3 md:grid-cols-3">
++        {featured && (
++          <Tile
++            target={featured}
++            onOpen={() => setOpen(featured)}
++            className="md:col-span-2 md:row-span-2"
++          >
++            <div className="relative aspect-[16/10] md:aspect-auto md:h-full">
++              {featured.kind === "portfolio" ? (
++                <ScaledFrame src={featured.url} title="Portfolio thumbnail" />
++              ) : (
++                <ResumeThumbnail target={featured} />
++              )}
++            </div>
++          </Tile>
++        )}
++        {others.map((target) => (
++          <Tile
++            key={target.key}
++            target={target}
++            onOpen={() => setOpen(target)}
++            className={cn(target.kind === "linkedin" && "md:col-span-2")}
++          >
++            <TileBody target={target} />
++          </Tile>
++        ))}
++        {!resume && (
++          <AddTile
++            title="Upload your resume"
++            detail="Your current version will preview here."
++            href="/resumes"
++          />
++        )}
++        {missing.map(({ kind, label }) => (
++          <AddTile
++            key={kind}
++            title={`Add your ${label}`}
++            detail="It will preview here once added."
++            href="/my-profile#add-link"
++          />
++        ))}
++      </div>
++      <PreviewDialog target={open} onClose={() => setOpen(null)} />
++    </div>
++  );
++}
+diff --git a/jobops/src/features/workspace/read.ts b/jobops/src/features/workspace/read.ts
+index d47ed04..e007faa 100644
+--- a/jobops/src/features/workspace/read.ts
++++ b/jobops/src/features/workspace/read.ts
+@@ -11,6 +11,7 @@ import {
+   settings,
+ } from "@/db/schema";
+ 
++import { identityFrom } from "./identity";
+ import { jobPreferencesContext } from "./prompts";
+ 
+ // Real personal records shared by the home page and the read-only gallery.
+@@ -83,7 +84,18 @@ export async function readWorkspace() {
+     if (url && !publicSites.some((site) => site.url === url))
+       publicSites.push({ name: name!, url });
+   }
++  const current = versions.find((row) => row.isCurrent);
+   return {
++    identity: identityFrom(person),
++    currentResume: current
++      ? {
++          id: current.id,
++          familyId: current.familyId,
++          name: current.name,
++          label: current.label,
++          filename: current.filename,
++        }
++      : null,
+     name: person?.preferredName || person?.fullName?.split(" ")[0] || "",
+     role: person?.desiredRoles.join(", ") || person?.currentRole || "",
+     location: person?.preferredLocations.join(", ") || person?.currentCity || "India",
+diff --git a/jobops/src/features/workspace/sites.tsx b/jobops/src/features/workspace/sites.tsx
+index b2e5bce..d51cff4 100644
+--- a/jobops/src/features/workspace/sites.tsx
++++ b/jobops/src/features/workspace/sites.tsx
+@@ -1,18 +1,8 @@
+-import Link from "next/link";
+-import { ArrowUpRight, Building2, CodeXml, Globe } from "lucide-react";
++import { ArrowUpRight, Building2, CodeXml, Globe, Search } from "lucide-react";
++import { RemoteImage } from "./embeds";
++import { jobSearchSites, jobSiteAction } from "./job-sites";
++import { favicon } from "./profile-links";
+ 
+-export const jobSites = [
+-  {
+-    name: "LinkedIn India",
+-    url: "https://www.linkedin.com/jobs/search/?location=India",
+-    detail: "Openings & referrals",
+-    mark: "in",
+-  },
+-  { name: "Naukri", url: "https://www.naukri.com/", detail: "Recruiter discovery", mark: "n" },
+-  { name: "Instahyre", url: "https://www.instahyre.com/", detail: "Tech opportunities", mark: "i" },
+-  { name: "Cutshort", url: "https://cutshort.io/", detail: "Startup & tech roles", mark: "c" },
+-  { name: "Hirist", url: "https://www.hirist.tech/", detail: "Technology roles", mark: "h" },
+-];
+ export function SiteIcon({ name }: { name: string }) {
+   if (/linkedin/i.test(name))
+     return (
+@@ -23,79 +13,42 @@ export function SiteIcon({ name }: { name: string }) {
+   const Icon = /github/i.test(name) ? CodeXml : /portfolio/i.test(name) ? Globe : Building2;
+   return <Icon size={26} strokeWidth={1.7} aria-hidden />;
+ }
+-export function SiteCards({ sites }: { sites: { name: string; url: string | null }[] }) {
+-  const cards = [...sites];
+-  for (const name of ["LinkedIn", "GitHub", "Portfolio"])
+-    if (!cards.some((site) => site.name.toLowerCase().includes(name.toLowerCase())))
+-      cards.push({ name, url: null });
+-  return (
+-    <div className="grid gap-3 sm:grid-cols-3">
+-      {cards.map((site, index) => (
+-        <Link
+-          key={`${site.name}-${index}`}
+-          href={site.url || "/my-profile#add-link"}
+-          target={site.url ? "_blank" : undefined}
+-          rel={site.url ? "noreferrer" : undefined}
+-          className="pressable group flex gap-4 rounded-card border border-border bg-card p-5 text-foreground hover:border-primary hover:no-underline sm:flex-col sm:p-6"
+-        >
+-          <div className="flex items-center justify-between">
+-            <span className="grid size-12 shrink-0 place-items-center rounded-2xl bg-selected text-selected-foreground">
+-              <SiteIcon name={site.name} />
+-            </span>
+-            <ArrowUpRight
+-              size={18}
+-              className="hidden text-muted-foreground group-hover:text-primary sm:block"
+-              aria-hidden
+-            />
+-          </div>
+-          <div className="min-w-0">
+-            <h3 className="font-semibold">{site.name}</h3>
+-            <p className="mt-1 text-sm text-muted-foreground">
+-              {/linkedin/i.test(site.name)
+-                ? "Your experience & professional network"
+-                : /github/i.test(site.name)
+-                  ? "Evidence of the things you build"
+-                  : /portfolio/i.test(site.name)
+-                    ? "Your best work, in one place"
+-                    : "Showcase your work and experience"}
+-            </p>
+-            <p className="mt-3 text-sm font-medium text-link">
+-              {site.url ? "Open profile" : "Add your link"}
+-            </p>
+-          </div>
+-        </Link>
+-      ))}
+-    </div>
+-  );
+-}
+-export function JobSiteCards() {
++
++/** Job sites A from /gallery/home: the bottom line says exactly what the click opens. */
++export function JobSiteCards({ role, city }: { role: string; city: string }) {
+   return (
+     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+-      {jobSites.map((site) => (
+-        <a
+-          key={site.name}
+-          href={site.url}
+-          target="_blank"
+-          rel="noreferrer"
+-          className="pressable group flex items-center gap-3 rounded-card border border-border bg-card p-4 text-foreground hover:border-primary hover:no-underline lg:flex-col lg:items-start lg:p-5"
+-        >
+-          <span
+-            aria-hidden
+-            className="grid size-10 shrink-0 place-items-center rounded-xl bg-secondary text-xl font-semibold"
++      {jobSearchSites.map((site) => {
++        const action = jobSiteAction(site, role, city);
++        return (
++          <a
++            key={site.name}
++            href={action.href}
++            target="_blank"
++            rel="noreferrer"
++            className="pressable group flex flex-col rounded-card border border-border bg-card p-5 text-foreground hover:border-primary hover:no-underline"
+           >
+-            {site.mark}
+-          </span>
+-          <div>
+-            <h3 className="text-sm font-semibold">{site.name}</h3>
+-            <p className="mt-1 text-xs text-muted-foreground">{site.detail}</p>
+-          </div>
+-          <ArrowUpRight
+-            size={15}
+-            className="ml-auto text-muted-foreground group-hover:text-primary"
+-            aria-hidden
+-          />
+-        </a>
+-      ))}
++            <span className="grid size-12 place-items-center rounded-2xl bg-background">
++              <RemoteImage
++                src={favicon(site.host)}
++                alt=""
++                className="size-7 rounded"
++                fallback={<Globe size={24} aria-hidden className="text-muted-foreground" />}
++              />
++            </span>
++            <span className="mt-4 font-semibold">{site.name}</span>
++            <span className="mt-1 flex-1 text-sm text-muted-foreground">{site.bestFor}</span>
++            <span className="mt-5 flex items-start gap-1.5 border-t border-border pt-3 text-sm font-medium text-link">
++              {action.search ? (
++                <Search size={15} className="mt-0.5 shrink-0" aria-hidden />
++              ) : (
++                <ArrowUpRight size={15} className="mt-0.5 shrink-0" aria-hidden />
++              )}
++              <span>{action.line}</span>
++            </span>
++          </a>
++        );
++      })}
+     </div>
+   );
+ }
+diff --git a/jobops/src/styles/theme.css b/jobops/src/styles/theme.css
+index 83b2c1b..18c4796 100644
+--- a/jobops/src/styles/theme.css
++++ b/jobops/src/styles/theme.css
+@@ -108,3 +108,33 @@
+ @utility surface {
+   box-shadow: var(--surface-shadow);
+ }
++
++/* Motion from the approved /gallery/home options; reduced motion disables these in globals.css. */
++@theme {
++  --animate-enter: enter 560ms cubic-bezier(0.05, 0.7, 0.1, 1) both;
++  --animate-fade-in: fade-in 200ms ease-out both;
++  --animate-fade-out: fade-out 260ms ease-in both;
++  --animate-pop: pop 320ms cubic-bezier(0.05, 0.7, 0.1, 1) both;
++  @keyframes enter {
++    from {
++      opacity: 0;
++      transform: translateY(10px);
++    }
++  }
++  @keyframes fade-in {
++    from {
++      opacity: 0;
++    }
++  }
++  @keyframes fade-out {
++    to {
++      opacity: 0;
++    }
++  }
++  @keyframes pop {
++    from {
++      opacity: 0;
++      transform: scale(0.94);
++    }
++  }
++}
+diff --git a/jobops/tests/home-identity.test.ts b/jobops/tests/home-identity.test.ts
+new file mode 100644
+index 0000000..a3be10d
+--- /dev/null
++++ b/jobops/tests/home-identity.test.ts
+@@ -0,0 +1,67 @@
++import { describe, expect, it } from "vitest";
++import {
++  experienceLabel,
++  firstSentence,
++  headline,
++  identityFrom,
++} from "@/features/workspace/identity";
++
++const person = {
++  fullName: "Asha Rao",
++  preferredName: null,
++  currentRole: "Senior Software Engineer",
++  currentCompany: "Example Systems",
++  yearsOfExperience: 5,
++  currentCity: "Bengaluru",
++  careerSummary: "Builds payment platforms. Leads backend reviews.",
++  desiredRoles: [],
++  preferredLocations: [],
++};
++
++describe("home identity", () => {
++  it("prefers the preferred name and keeps the stored spelling", () => {
++    expect(identityFrom({ ...person, preferredName: "Asha" }).name).toBe("Asha");
++    expect(identityFrom({ ...person, fullName: "Rao, Asha" }).name).toBe("Rao, Asha");
++  });
++  it("searches desired roles and locations before current ones", () => {
++    const identity = identityFrom({
++      ...person,
++      desiredRoles: ["Platform Engineer"],
++      preferredLocations: ["Hyderabad"],
++    });
++    expect(identity.searchRole).toBe("Platform Engineer");
++    expect(identity.searchCity).toBe("Hyderabad");
++    expect(identityFrom(person).searchRole).toBe("Senior Software Engineer");
++    expect(identityFrom(person).searchCity).toBe("Bengaluru");
++  });
++  it("returns empty values instead of guesses when no profile exists", () => {
++    expect(identityFrom(undefined)).toEqual({
++      name: "",
++      role: "",
++      company: "",
++      years: null,
++      city: "",
++      summary: "",
++      searchRole: "",
++      searchCity: "",
++    });
++  });
++  it("joins only the headline parts that exist", () => {
++    expect(headline({ role: "Engineer", company: "Example" })).toBe("Engineer at Example");
++    expect(headline({ role: "Engineer", company: "" })).toBe("Engineer");
++    expect(headline({ role: "", company: "Example" })).toBe("Example");
++  });
++  it("words experience for one, many and fractional years", () => {
++    expect(experienceLabel(1)).toBe("1 year experience");
++    expect(experienceLabel(5)).toBe("5 years experience");
++    expect(experienceLabel(5.5)).toBe("5.5 years experience");
++  });
++  it("keeps only the first sentence of the summary", () => {
++    expect(firstSentence("Builds payment platforms. Leads backend reviews.")).toBe(
++      "Builds payment platforms.",
++    );
++    expect(firstSentence("Ships fast! Reviews code.")).toBe("Ships fast!");
++    expect(firstSentence("Version 2.5 of the platform")).toBe("Version 2.5 of the platform");
++    expect(firstSentence("")).toBe("");
++  });
++});
+diff --git a/jobops/tests/job-sites.test.ts b/jobops/tests/job-sites.test.ts
+new file mode 100644
+index 0000000..aefe539
+--- /dev/null
++++ b/jobops/tests/job-sites.test.ts
+@@ -0,0 +1,40 @@
++import { describe, expect, it } from "vitest";
++import { jobSearchSites, jobSiteAction } from "@/features/workspace/job-sites";
++
++const site = (name: string) => jobSearchSites.find((item) => item.name === name)!;
++
++describe("job site actions", () => {
++  it("opens a LinkedIn search for the role and city in India", () => {
++    expect(jobSiteAction(site("LinkedIn"), "Senior Backend Engineer", "Bengaluru")).toEqual({
++      href: "https://www.linkedin.com/jobs/search/?keywords=Senior%20Backend%20Engineer&location=Bengaluru%2C%20India",
++      line: "“Senior Backend Engineer” in Bengaluru",
++      search: true,
++    });
++  });
++  it("builds Naukri's slug URL", () => {
++    expect(jobSiteAction(site("Naukri"), "C++ / Backend Engineer", "Navi Mumbai").href).toBe(
++      "https://www.naukri.com/c-backend-engineer-jobs-in-navi-mumbai",
++    );
++  });
++  it("searches all of India when no city is stored", () => {
++    expect(jobSiteAction(site("LinkedIn"), "Platform Engineer", "")).toMatchObject({
++      href: "https://www.linkedin.com/jobs/search/?keywords=Platform%20Engineer&location=India",
++      line: "“Platform Engineer” in India",
++    });
++    expect(jobSiteAction(site("Naukri"), "Platform Engineer", "").href).toBe(
++      "https://www.naukri.com/platform-engineer-jobs",
++    );
++  });
++  it("opens home pages when there is no role or no search URL", () => {
++    expect(jobSiteAction(site("Naukri"), "", "Bengaluru")).toEqual({
++      href: "https://www.naukri.com/",
++      line: "Open Naukri",
++      search: false,
++    });
++    expect(jobSiteAction(site("Instahyre"), "Platform Engineer", "Pune")).toEqual({
++      href: "https://www.instahyre.com/",
++      line: "Open Instahyre",
++      search: false,
++    });
++  });
++});
+diff --git a/jobops/tests/loading-controller.test.ts b/jobops/tests/loading-controller.test.ts
+new file mode 100644
+index 0000000..96ede45
+--- /dev/null
++++ b/jobops/tests/loading-controller.test.ts
+@@ -0,0 +1,108 @@
++import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
++import { createLoadingController, LOADING_TIMING } from "@/components/loading/controller";
++
++describe("loading popup controller", () => {
++  beforeEach(() => vi.useFakeTimers());
++  afterEach(() => vi.useRealTimers());
++
++  it("never shows for tasks that finish within 200 ms", () => {
++    const loading = createLoadingController();
++    let shown = false;
++    loading.subscribe(() => (shown ||= loading.getSnapshot().visible));
++    const task = loading.start("Opening Companies");
++    vi.advanceTimersByTime(150);
++    loading.finish(task);
++    vi.advanceTimersByTime(2000);
++    expect(shown).toBe(false);
++    expect(loading.getSnapshot().visible).toBe(false);
++  });
++
++  it("appears at 200 ms with the task label", () => {
++    const loading = createLoadingController();
++    loading.start("Opening Companies");
++    vi.advanceTimersByTime(LOADING_TIMING.showAfter - 1);
++    expect(loading.getSnapshot().visible).toBe(false);
++    vi.advanceTimersByTime(1);
++    expect(loading.getSnapshot()).toMatchObject({ visible: true, label: "Opening Companies" });
++  });
++
++  it("stays at least 450 ms, completes to 100 % and then hides", () => {
++    const loading = createLoadingController();
++    const task = loading.start("Saving");
++    vi.advanceTimersByTime(300);
++    loading.finish(task);
++    vi.advanceTimersByTime(349);
++    expect(loading.getSnapshot()).toMatchObject({ visible: true, closing: false });
++    vi.advanceTimersByTime(1);
++    expect(loading.getSnapshot()).toMatchObject({ visible: true, closing: true, progress: 1 });
++    vi.advanceTimersByTime(LOADING_TIMING.fadeOut);
++    expect(loading.getSnapshot().visible).toBe(false);
++  });
++
++  it("trickles towards 92 % without reaching it", () => {
++    const loading = createLoadingController();
++    loading.start("Uploading resume");
++    vi.advanceTimersByTime(14_000);
++    const { progress } = loading.getSnapshot();
++    expect(progress).toBeGreaterThan(0.9);
++    expect(progress).toBeLessThanOrEqual(LOADING_TIMING.cap);
++  });
++
++  it("keeps the popup up when a new task replaces a visible one", () => {
++    const loading = createLoadingController();
++    const save = loading.start("Saving");
++    vi.advanceTimersByTime(300);
++    const open = loading.start("Opening Contacts");
++    expect(loading.getSnapshot()).toMatchObject({ visible: true, label: "Opening Contacts" });
++    loading.finish(save);
++    vi.advanceTimersByTime(2000);
++    expect(loading.getSnapshot().visible).toBe(true);
++    loading.finish(open);
++    vi.advanceTimersByTime(2000);
++    expect(loading.getSnapshot().visible).toBe(false);
++  });
++
++  it("restarts cleanly when a task begins while the popup is closing", () => {
++    const loading = createLoadingController();
++    const save = loading.start("Saving");
++    vi.advanceTimersByTime(300);
++    loading.finish(save);
++    vi.advanceTimersByTime(400);
++    expect(loading.getSnapshot().closing).toBe(true);
++    const task = loading.start("Opening Contacts");
++    expect(loading.getSnapshot()).toMatchObject({
++      visible: true,
++      closing: false,
++      label: "Opening Contacts",
++    });
++    loading.finish(task);
++    vi.advanceTimersByTime(2000);
++    expect(loading.getSnapshot().visible).toBe(false);
++  });
++
++  it("dismisses any task after 15 s so the page is never stuck", () => {
++    const loading = createLoadingController();
++    loading.start("Opening Companies");
++    vi.advanceTimersByTime(LOADING_TIMING.maxDuration);
++    expect(loading.getSnapshot().visible).toBe(false);
++  });
++
++  it("finishes only the latest navigation when the page arrives", () => {
++    const loading = createLoadingController();
++    loading.arrived();
++    loading.navigate("Opening Jobs");
++    loading.navigate("Opening Companies");
++    vi.advanceTimersByTime(300);
++    loading.arrived();
++    vi.advanceTimersByTime(2000);
++    expect(loading.getSnapshot().visible).toBe(false);
++  });
++
++  it("hides immediately on reset (back-forward cache restore)", () => {
++    const loading = createLoadingController();
++    loading.start("Searching");
++    vi.advanceTimersByTime(300);
++    loading.reset();
++    expect(loading.getSnapshot().visible).toBe(false);
++  });
++});
+diff --git a/jobops/tests/loading-routes.test.ts b/jobops/tests/loading-routes.test.ts
+new file mode 100644
+index 0000000..d622c1d
+--- /dev/null
++++ b/jobops/tests/loading-routes.test.ts
+@@ -0,0 +1,80 @@
++import { describe, expect, it } from "vitest";
++import {
++  formNavigationTarget,
++  isNewLocation,
++  labelForPath,
++  navigationTarget,
++} from "@/components/loading/routes";
++
++const here = { href: "http://127.0.0.1:3210/jobs?view=saved" };
++const click = { button: 0, metaKey: false, ctrlKey: false, shiftKey: false, altKey: false };
++const anchor = (href: string, target = "", attributes: string[] = []) => ({
++  href: new URL(href, here.href).href,
++  target,
++  hasAttribute: (name: string) => attributes.includes(name),
++});
++
++describe("navigationTarget", () => {
++  it("tracks a plain click on another page of the app", () => {
++    expect(navigationTarget(click, anchor("/companies"), here)?.pathname).toBe("/companies");
++    expect(navigationTarget(click, anchor("/jobs?view=all"), here)?.search).toBe("?view=all");
++  });
++  it("ignores clicks that open elsewhere or do not change the page", () => {
++    expect(navigationTarget({ ...click, metaKey: true }, anchor("/companies"), here)).toBeNull();
++    expect(navigationTarget({ ...click, ctrlKey: true }, anchor("/companies"), here)).toBeNull();
++    expect(navigationTarget({ ...click, shiftKey: true }, anchor("/companies"), here)).toBeNull();
++    expect(navigationTarget({ ...click, altKey: true }, anchor("/companies"), here)).toBeNull();
++    expect(navigationTarget({ ...click, button: 1 }, anchor("/companies"), here)).toBeNull();
++    expect(navigationTarget(click, anchor("/companies", "_blank"), here)).toBeNull();
++    expect(navigationTarget(click, anchor("/companies", "", ["download"]), here)).toBeNull();
++    expect(navigationTarget(click, anchor("/companies", "", ["data-no-loading"]), here)).toBeNull();
++    expect(navigationTarget(click, anchor("https://www.naukri.com/"), here)).toBeNull();
++    expect(navigationTarget(click, anchor("mailto:me@example.invalid"), here)).toBeNull();
++    expect(navigationTarget(click, anchor("/jobs?view=saved#top"), here)).toBeNull();
++  });
++  it("ignores file routes such as resume downloads", () => {
++    expect(navigationTarget(click, anchor("/api/resumes/1/file?download=1"), here)).toBeNull();
++  });
++  it("accepts an explicit _self target", () => {
++    expect(navigationTarget(click, anchor("/companies", "_self"), here)).not.toBeNull();
++  });
++});
++
++describe("formNavigationTarget", () => {
++  const form = (action: string, method = "get", target = "") => ({ action, method, target });
++  it("tracks same-origin GET search forms", () => {
++    expect(formNavigationTarget(form("http://127.0.0.1:3210/jobs"), here)).not.toBeNull();
++  });
++  it("ignores posts, new-tab forms, file routes and other sites", () => {
++    expect(formNavigationTarget(form("http://127.0.0.1:3210/jobs", "post"), here)).toBeNull();
++    expect(
++      formNavigationTarget(form("http://127.0.0.1:3210/jobs", "get", "_blank"), here),
++    ).toBeNull();
++    expect(formNavigationTarget(form("http://127.0.0.1:3210/api/export"), here)).toBeNull();
++    expect(formNavigationTarget(form("https://www.naukri.com/search"), here)).toBeNull();
++    expect(formNavigationTarget(form("javascript:throw new Error()"), here)).toBeNull();
++  });
++});
++
++describe("isNewLocation", () => {
++  it("is false for the page you are already on", () => {
++    expect(isNewLocation("/jobs?view=saved", here)).toBe(false);
++    expect(isNewLocation("/jobs?view=saved#notes", here)).toBe(false);
++  });
++  it("is true for a different path or query", () => {
++    expect(isNewLocation("/jobs", here)).toBe(true);
++    expect(isNewLocation("/contacts/1", here)).toBe(true);
++  });
++});
++
++describe("labelForPath", () => {
++  it("names the destination page", () => {
++    expect(labelForPath("/")).toBe("Opening Home");
++    expect(labelForPath("/companies/acme")).toBe("Opening Companies");
++    expect(labelForPath("/mail/123")).toBe("Opening Inbox");
++    expect(labelForPath("/my-profile")).toBe("Opening My profile");
++  });
++  it("falls back to Loading for unknown pages", () => {
++    expect(labelForPath("/something-new")).toBe("Loading");
++  });
++});
+diff --git a/jobops/tests/profile-links.test.ts b/jobops/tests/profile-links.test.ts
+new file mode 100644
+index 0000000..5600c72
+--- /dev/null
++++ b/jobops/tests/profile-links.test.ts
+@@ -0,0 +1,59 @@
++import { describe, expect, it } from "vitest";
++import { linkedInBadgeDocument, profileLinks } from "@/features/workspace/profile-links";
++
++describe("profile links", () => {
++  const links = profileLinks([
++    { name: "Medium", url: "https://medium.com/@writer" },
++    { name: "Portfolio", url: "https://writer.github.io/site/" },
++    { name: "GitHub", url: "https://github.com/writer" },
++    { name: "LinkedIn", url: "https://www.linkedin.com/in/writer-vanity/" },
++    { name: "Naukri", url: "https://www.naukri.com/mnjuser/profile" },
++  ]);
++
++  it("orders LinkedIn, GitHub, Portfolio, Medium, then other sites", () => {
++    expect(links.map((link) => link.kind)).toEqual([
++      "linkedin",
++      "github",
++      "portfolio",
++      "medium",
++      "other",
++    ]);
++  });
++  it("derives a readable handle for each kind", () => {
++    expect(links.map((link) => link.handle)).toEqual([
++      "writer-vanity",
++      "writer",
++      "writer.github.io/site",
++      "@writer",
++      "naukri.com/mnjuser/profile",
++    ]);
++    expect(links[0].host).toBe("linkedin.com");
++  });
++  it("treats any link named Portfolio as the portfolio", () => {
++    expect(profileLinks([{ name: "Portfolio 2", url: "https://example.invalid/me" }])[0].kind).toBe(
++      "portfolio",
++    );
++  });
++  it("skips missing, malformed and non-web links instead of failing", () => {
++    expect(
++      profileLinks([
++        { name: "Empty", url: null },
++        { name: "Broken", url: "https://" },
++        { name: "Mail", url: "mailto:me@example.invalid" },
++      ]),
++    ).toEqual([]);
++  });
++});
++
++describe("LinkedIn badge document", () => {
++  it("cannot be used to inject markup through the vanity name", () => {
++    const html = linkedInBadgeDocument('x"><script>alert(1)</script>', "dark");
++    expect(html).toContain('data-vanity="xscriptalert1script"');
++    expect(html.match(/<script/g)).toHaveLength(2);
++  });
++  it("follows the app theme and reports back to the parent", () => {
++    const html = linkedInBadgeDocument("writer-vanity", "light");
++    expect(html).toContain('data-theme="light"');
++    expect(html).toContain('type:"linkedin-badge"');
++  });
++});

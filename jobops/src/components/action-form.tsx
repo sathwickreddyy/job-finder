@@ -2,24 +2,36 @@
 import { startTransition, useActionState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import type { ActionState } from "@/lib/actions";
+import { useLoading, useLoadingTask } from "@/components/loading/overlay";
+import { isNewLocation, labelForPath } from "@/components/loading/routes";
 export function ActionForm({
   action,
   children,
   className = "space-y-4",
+  pendingLabel = "Saving",
 }: {
   action: (state: ActionState, data: FormData) => Promise<ActionState>;
   children: React.ReactNode;
   className?: string;
+  /** Shown in the loading popup while the action runs. */
+  pendingLabel?: string;
 }) {
   const [state, formAction, pending] = useActionState(action, {});
   const router = useRouter();
+  const loading = useLoading();
   const handled = useRef<ActionState | null>(null);
+  useLoadingTask(pending, pendingLabel);
   useEffect(() => {
     if (handled.current === state) return;
     handled.current = state;
-    if (state.redirect) router.push(state.redirect);
+    if (state.redirect) {
+      // Keep the popup up from the save through the page it opens.
+      if (isNewLocation(state.redirect, window.location))
+        loading?.navigate(labelForPath(new URL(state.redirect, window.location.href).pathname));
+      router.push(state.redirect);
+    }
     // Server actions already revalidate their pages; another refresh can rerun this effect.
-  }, [state, router]);
+  }, [state, router, loading]);
   return (
     <form
       action={formAction}

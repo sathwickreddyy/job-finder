@@ -62,7 +62,8 @@ export async function saveCandidate(_previous: ActionState, form: FormData): Pro
       });
     });
     revalidatePath("/settings");
-    revalidatePath("/missions/new");
+    revalidatePath("/find");
+    revalidatePath("/my-profile");
     revalidatePath("/");
     return { success: "Candidate profile saved. Unknown answers remain explicitly UNKNOWN." };
   } catch (error) {
@@ -107,9 +108,10 @@ export async function saveJobPreferences(
       });
     });
     revalidatePath("/settings");
-    revalidatePath("/missions/new");
+    revalidatePath("/find");
+    revalidatePath("/my-profile");
     revalidatePath("/");
-    return { success: "Job preferences saved for new discovery missions." };
+    return { success: "Job preferences saved for your search prompts." };
   } catch (error) {
     return actionError(error);
   }
@@ -147,7 +149,8 @@ export async function saveMissionDefaults(
       });
     });
     revalidatePath("/settings");
-    revalidatePath("/missions/new");
+    revalidatePath("/find");
+    revalidatePath("/my-profile");
     revalidatePath("/");
     return { success: "Mission defaults saved. External submissions still require approval." };
   } catch (error) {

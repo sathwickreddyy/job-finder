@@ -1,4 +1,9 @@
+import { stubExternalSites } from "./helpers/external-sites";
 import { expect, test } from "@playwright/test";
+
+test.beforeEach(async ({ page }) => {
+  await stubExternalSites(page);
+});
 
 test("candidate answers preserve explicit UNKNOWN", async ({ page }) => {
   await page.goto("/settings");
@@ -18,34 +23,28 @@ test("candidate answers preserve explicit UNKNOWN", async ({ page }) => {
   expect(answers["Are you authorized to work in India?"]).toBe("UNKNOWN");
 });
 
-test("profile differences become an explicit update mission", async ({ page }) => {
-  const suffix = Date.now().toString();
-  await page.goto("/profiles/new");
-  await page.getByLabel("Display name").fill(`Test portal ${suffix}`);
-  await page
-    .getByLabel("Profile URL", { exact: true })
-    .fill(`https://example.invalid/profile/${suffix}`);
-  await page
-    .getByLabel("Known state (JSON)")
-    .fill(JSON.stringify({ headline: "Engineer", skills: ["Java"] }));
-  await page.getByLabel("Target state (JSON)").fill(
-    JSON.stringify({
-      headline: "Senior Engineer",
-      skills: ["Java", "Kafka"],
-      workAuthorization: "UNKNOWN",
-    }),
+test("profile improvement prompt includes the saved link and showcase notes", async ({ page }) => {
+  const suffix = Date.now();
+  const name = `Project portfolio ${suffix}`;
+  const url = `https://example.invalid/portfolio/${suffix}`;
+  await page.goto("/my-profile");
+  const add = page.locator("#add-link");
+  await add.getByLabel("Profile name").fill(name);
+  await add.getByLabel("Profile URL").fill(url);
+  await add
+    .getByLabel("What would you like to improve or showcase?")
+    .fill("Show the measured impact of my developer tools project.");
+  await add.getByRole("button", { name: "Save profile link" }).click();
+  await expect(add.getByRole("status")).toContainText("Profile link saved");
+  const card = page
+    .locator("section")
+    .filter({ has: page.getByRole("heading", { name, exact: true }) })
+    .last();
+  await card.getByRole("link", { name: "Open improvement prompt" }).click();
+  await expect(page.getByRole("region", { name: "Your complete prompt" })).toContainText(url);
+  await expect(page.getByRole("region", { name: "Your complete prompt" })).toContainText(
+    "measured impact",
   );
-  await page.getByRole("button", { name: "Create profile", exact: true }).click();
-  await expect(page).toHaveURL(/\/profiles\/[0-9a-f-]+$/);
-  await expect(page.getByRole("heading", { name: "Known → target differences" })).toBeVisible();
-  await expect(page.locator("table")).toContainText("Senior Engineer");
-  await expect(page.locator("table")).not.toContainText("workAuthorization");
-  await page.getByRole("link", { name: "Create update mission", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Explicit profile differences" })).toBeVisible();
-  await page.getByRole("button", { name: "Create mission", exact: true }).click();
-  await expect(page).toHaveURL(/\/missions\/[0-9a-f-]+$/);
-  await page.getByRole("link", { name: "Agent view", exact: true }).click();
-  await expect(page.getByText("Senior Engineer", { exact: false }).first()).toBeVisible();
 });
 
 test("contact verification records evidence and company filters", async ({ page }) => {
@@ -71,7 +70,7 @@ test("contact verification records evidence and company filters", async ({ page 
   await expect(page.getByRole("link", { name: `Recruiter ${suffix}`, exact: true })).toBeVisible();
 });
 
-test("mail import requires review and appends timeline without changing stage", async ({
+test("linking imported mail appends history without changing the application stage", async ({
   page,
 }) => {
   const suffix = Date.now().toString();
@@ -95,14 +94,10 @@ test("mail import requires review and appends timeline without changing stage", 
   await expect(page).toHaveURL(/\/mail$/);
   await page.getByRole("link", { name: subject, exact: true }).click();
   await expect(page).toHaveURL(/\/mail\/[0-9a-f-]+$/);
-  await expect(
-    page.getByRole("button", { name: "Append reviewed event", exact: true }),
-  ).toBeVisible();
-  await page.getByLabel("Link to application").selectOption(applicationId);
-  await page.getByRole("button", { name: "Append reviewed event", exact: true }).click();
-  await expect(
-    page.getByText("This proposal was manually reviewed.", { exact: true }),
-  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Link message", exact: true })).toBeVisible();
+  await page.getByLabel("Link to record").selectOption(applicationId);
+  await page.getByRole("button", { name: "Link message", exact: true }).click();
+  await expect(page.getByText("Message linked to your record.", { exact: true })).toBeVisible();
   await page.goto(`/applications/${applicationId}`);
   await expect(page.getByLabel("Application stage")).toHaveValue(previousStage);
   await expect(page.locator(".timeline")).toContainText(subject);

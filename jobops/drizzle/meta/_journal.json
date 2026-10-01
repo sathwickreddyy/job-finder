@@ -22,6 +22,27 @@
       "when": 1790797297268,
       "tag": "0002_curved_molecule_man",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1790804375351,
+      "tag": "0003_sour_the_phantom",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1790835860308,
+      "tag": "0004_big_pretty_boy",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1790836075167,
+      "tag": "0005_canonical_company_location_keys",
+      "breakpoints": true
     }
   ]
 }

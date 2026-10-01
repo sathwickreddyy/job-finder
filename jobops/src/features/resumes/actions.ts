@@ -5,10 +5,19 @@ import { eq, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { db } from "@/db";
-import { activityLogs, jobResumeMatches, resumes, resumeVersions } from "@/db/schema";
+import {
+  activityLogs,
+  jobResumeMatches,
+  jobSnapshots,
+  resumeAssessments,
+  resumes,
+  resumeVersions,
+} from "@/db/schema";
 import { actionError, formString, type ActionState } from "@/lib/actions";
 import { retryResumeParsing, setCurrentResumeVersion, uploadResumeVersion } from "./service";
 import { MAX_UPLOAD_BYTES } from "@/services/storage";
+import { assessmentInput } from "./assessment";
+import { indiaDayBoundary } from "@/features/mail/attention";
 
 const familySchema = z.object({
   name: z.string().min(2).max(100),
@@ -18,6 +27,7 @@ const familySchema = z.object({
 const uuid = z.string().uuid();
 function refresh(id?: string) {
   revalidatePath("/resumes");
+  revalidatePath("/companies");
   revalidatePath("/");
   if (id) revalidatePath(`/resumes/${id}`);
 }
@@ -115,6 +125,7 @@ export async function uploadVersion(_state: ActionState, form: FormData): Promis
       versionLabel,
       file,
       makeCurrent: form.get("makeCurrent") === "on",
+      changeNotes: z.string().max(20000).parse(formString(form, "changeNotes")),
     });
     refresh(resumeId);
     return {
@@ -124,6 +135,64 @@ export async function uploadVersion(_state: ActionState, form: FormData): Promis
           : "PDF uploaded and preserved. Text extraction needs attention; download/preview and manual keyword editing remain available.",
       redirect: `/resumes/${resumeId}?version=${version.id}`,
     };
+  } catch (error) {
+    return actionError(error);
+  }
+}
+
+export async function saveChangeNotes(_state: ActionState, form: FormData): Promise<ActionState> {
+  try {
+    const id = z.uuid().parse(formString(form, "versionId"));
+    const changeNotes = z.string().max(20000).parse(formString(form, "changeNotes"));
+    const [version] = await db
+      .update(resumeVersions)
+      .set({ changeNotes })
+      .where(eq(resumeVersions.id, id))
+      .returning();
+    if (!version) throw new Error("This resume file no longer exists.");
+    refresh(version.resumeId);
+    return { success: "Bullet changes saved for this file." };
+  } catch (error) {
+    return actionError(error);
+  }
+}
+
+export async function saveAssessment(_state: ActionState, form: FormData): Promise<ActionState> {
+  try {
+    const input = assessmentInput.parse(
+      Object.fromEntries(
+        ["versionId", "snapshotId", "source", "method", "score", "assessedOn", "findings"].map(
+          (key) => [key, formString(form, key)],
+        ),
+      ),
+    );
+    const assessedAt = indiaDayBoundary(input.assessedOn)!;
+    if (assessedAt.valueOf() > Date.now())
+      throw new Error("An assessment date cannot be in the future.");
+    const familyId = await db.transaction(async (tx) => {
+      const [version] = await tx
+        .select()
+        .from(resumeVersions)
+        .where(eq(resumeVersions.id, input.versionId));
+      const [snapshot] = await tx
+        .select()
+        .from(jobSnapshots)
+        .where(eq(jobSnapshots.id, input.snapshotId));
+      if (!version || !snapshot || !snapshot.description.trim())
+        throw new Error("Choose an existing resume and a saved full job description.");
+      await tx.insert(resumeAssessments).values({
+        versionId: input.versionId,
+        snapshotId: input.snapshotId,
+        source: input.source,
+        method: input.method,
+        score: input.score,
+        findings: input.findings,
+        assessedAt,
+      });
+      return version.resumeId;
+    });
+    refresh(familyId);
+    return { success: "Assessment saved for this exact file and job description." };
   } catch (error) {
     return actionError(error);
   }

@@ -1,145 +1,139 @@
+import { stubExternalSites } from "./helpers/external-sites";
 import { expect, test } from "@playwright/test";
-import { PDFDocument, StandardFonts } from "pdf-lib";
-
-async function fictionalPdf(text: string) {
-  const doc = await PDFDocument.create();
-  const font = await doc.embedFont(StandardFonts.Helvetica);
-  doc.addPage().drawText(`Fictional resume for browser verification. ${text}`, {
-    x: 40,
-    y: 720,
-    size: 12,
-    font,
-  });
-  return Buffer.from(await doc.save());
+import { PDFDocument } from "pdf-lib";
+async function pdf(text: string) {
+  const document = await PDFDocument.create();
+  document.addPage().drawText(text);
+  return Buffer.from(await document.save());
+}
+async function upload(page: import("@playwright/test").Page, name: string, bytes: Buffer) {
+  await page.goto("/resumes");
+  const form = page.locator("#upload");
+  await form.getByLabel("Resume name").fill(name);
+  await form
+    .getByLabel("PDF file", { exact: true })
+    .setInputFiles({ name: "original.pdf", mimeType: "application/pdf", buffer: bytes });
+  await form.getByRole("button", { name: "Upload resume", exact: true }).click();
+  await expect(page).toHaveURL(/\/resumes\/[0-9a-f-]+/);
+  return new URL(page.url()).pathname;
 }
 
-test("resume vault preserves real PDFs, edits tags, switches versions and archives a family", async ({
-  page,
-  request,
-}) => {
-  const name = `Browser Test Resume ${Date.now()}`;
-  await page.goto("/resumes");
-  const creation = page.locator("#create-family");
-  await creation.getByLabel("Name", { exact: true }).fill(name);
-  await creation.getByLabel("Category", { exact: true }).fill("Browser verification");
-  await creation.getByLabel("Description").fill("Fictional test data, safe to archive.");
-  await creation.getByRole("button", { name: "Create Family", exact: true }).click();
-  await expect(page.getByRole("heading", { name, exact: true })).toBeVisible();
-  const familyPath = new URL(page.url()).pathname;
-  const first = await fictionalPdf("Python, Kafka and PostgreSQL");
-  await page.getByLabel("Version label", { exact: true }).fill("Browser v1");
-  await page
-    .getByLabel("PDF file", { exact: true })
-    .setInputFiles({ name: "fictional-v1.pdf", mimeType: "application/pdf", buffer: first });
-  await page.getByRole("button", { name: "Upload PDF", exact: true }).click();
-  await expect(
-    page.getByRole("heading", { name: "Selected version: Browser v1", exact: true }),
-  ).toBeVisible();
-  const keywords = page
-    .getByRole("heading", { name: "Keywords by category", exact: true })
-    .locator("..");
-  await expect(keywords).toContainText("PostgreSQL");
-  const previewPath = await page
-    .getByTitle(`PDF preview of ${name}, Browser v1`, { exact: true })
-    .getAttribute("src");
-  expect(previewPath).toBeTruthy();
-  const preview = await request.get(previewPath!);
-  expect(preview.status()).toBe(200);
-  expect(preview.headers()["content-type"]).toContain("application/pdf");
-  expect(preview.headers()["content-disposition"]).toContain("inline");
-  expect((await preview.body()).equals(first)).toBe(true);
-  const download = await request.get(`${previewPath}?download=1`);
-  expect(download.headers()["content-disposition"]).toContain("attachment");
-  expect((await download.body()).equals(first)).toBe(true);
-  await page.locator("summary").filter({ hasText: "View Extracted Text" }).click();
-  await expect(
-    page.locator("pre").filter({ hasText: "Fictional resume for browser verification." }),
-  ).toContainText("Python, Kafka and PostgreSQL");
-  await page.getByLabel("Keywords", { exact: true }).fill("Python, Kafka, Payment processing");
-  await page.getByLabel("Experience tags", { exact: true }).fill("Payments, mentoring");
-  await page.getByRole("button", { name: "Save Keywords and Tags", exact: true }).click();
-  await expect(keywords).toContainText("Payment processing");
-
-  const second = await fictionalPdf("Go, Kubernetes and Terraform");
-  await page.getByLabel("Version label", { exact: true }).fill("Browser v2");
-  await page
-    .getByLabel("PDF file", { exact: true })
-    .setInputFiles({ name: "fictional-v2.pdf", mimeType: "application/pdf", buffer: second });
-  await page.getByLabel("Make current", { exact: true }).uncheck();
-  await page.getByRole("button", { name: "Upload PDF", exact: true }).click();
-  await expect(
-    page.getByRole("heading", { name: "Selected version: Browser v2", exact: true }),
-  ).toBeVisible();
-  const history = page.getByRole("heading", { name: "Version History", exact: true }).locator("..");
-  await expect(history.getByRole("link", { name: "Browser v1", exact: true })).toBeVisible();
-  await expect(history.getByRole("link", { name: "Browser v2", exact: true })).toBeVisible();
-  await history.getByRole("button", { name: "Set Current Version", exact: true }).click();
-  await expect(
-    history.getByRole("link", { name: "Browser v2", exact: true }).locator(".."),
-  ).toContainText("Current");
-  await history.getByRole("link", { name: "Browser v1", exact: true }).click();
-  await expect(
-    page.getByRole("heading", { name: "Selected version: Browser v1", exact: true }),
-  ).toBeVisible();
-  await expect(page.getByLabel("Keywords", { exact: true })).toHaveValue(
-    "Python, Kafka, Payment processing",
-  );
-  await page.getByRole("button", { name: "Archive Family", exact: true }).click();
-  await expect(
-    page.getByRole("status").filter({ hasText: "Resume family archived." }),
-  ).toBeVisible();
-  await page.goto(`/resumes?q=${encodeURIComponent(name)}`);
-  await expect(
-    page.getByRole("heading", { name: "No matching resume families", exact: true }),
-  ).toBeVisible();
-  await page.getByLabel("Include archived", { exact: true }).check();
-  await page.getByRole("button", { name: "Filter", exact: true }).click();
-  await expect(page.getByRole("link", { name, exact: true })).toHaveAttribute("href", familyPath);
+test.beforeEach(async ({ page }) => {
+  await stubExternalSites(page);
 });
 
-test("a PDF parsing failure retains the original file and permits manual keywords", async ({
+test("resume files, bullet changes, exact usage and sourced assessments survive revisions", async ({
   page,
   request,
 }) => {
-  const name = `Browser Damaged PDF ${Date.now()}`;
-  await page.goto("/resumes");
-  const creation = page.locator("#create-family");
-  await creation.getByLabel("Name", { exact: true }).fill(name);
-  await creation.getByRole("button", { name: "Create Family", exact: true }).click();
-  await expect(page.getByRole("heading", { name, exact: true })).toBeVisible();
-  const damaged = Buffer.from("%PDF-1.7\n%%EOF\n");
-  await page.getByLabel("Version label", { exact: true }).fill("Preserved failed extraction");
+  const suffix = Date.now();
+  const company = `Browser Resume Role ${suffix}`;
+  const jobDescription = "Build Kafka and PostgreSQL services for an India-based platform team.";
+  await page.goto("/jobs/new");
+  await page.getByLabel("Company", { exact: true }).fill(company);
+  await page.getByLabel("Role / title").fill("Backend Engineer");
+  await page.getByLabel("Original job URL").fill(`https://example.invalid/india/${suffix}`);
+  await page.getByLabel("Job description", { exact: true }).fill(jobDescription);
+  await page.getByRole("button", { name: "Save job", exact: true }).click();
+  await expect(page).toHaveURL(/\/jobs\/[0-9a-f-]+$/);
+  const jobPath = new URL(page.url()).pathname;
+  const jobId = jobPath.split("/").at(-1)!;
+  const original = await pdf("Fictional original resume: Kafka PostgreSQL");
+  const familyPath = await upload(page, `Browser resume ${suffix}`, original);
+  const originalId = new URL(page.url()).searchParams.get("version")!;
+  const filePath = await page.locator("iframe").getAttribute("src");
+  expect((await (await request.get(filePath!)).body()).equals(original)).toBe(true);
+  expect((await (await request.get(`${filePath}?download=1`)).body()).equals(original)).toBe(true);
+  await page.getByRole("link", { name: "Bullet changes", exact: true }).click();
+  await page
+    .getByLabel("Changes for this file")
+    .fill("Original wording clarified; no new experience claimed.");
+  await page.getByRole("button", { name: "Save bullet changes" }).click();
+  await expect(page.getByRole("status")).toContainText("Bullet changes saved");
+  await page.reload();
+  await expect(page.getByLabel("Changes for this file")).toHaveValue(
+    "Original wording clarified; no new experience claimed.",
+  );
+  await page.getByRole("link", { name: "ATS assessment", exact: true }).click();
+  await page.getByLabel("Job description assessed", { exact: true }).selectOption({
+    label: await page
+      .getByLabel("Job description assessed", { exact: true })
+      .locator("option")
+      .filter({ hasText: company })
+      .innerText(),
+  });
+  await page.getByLabel("Assessed by").fill("Claude");
+  await page.getByLabel("Score out of 100 (optional)").fill("78");
+  await page.getByLabel("Scoring method").fill("Specific keyword and formatting rubric");
+  await page
+    .getByLabel("Findings")
+    .fill("Readable file; verify evidence for system design claims.");
+  await page.getByRole("button", { name: "Save assessment", exact: true }).click();
+  await expect(page.getByRole("status")).toContainText("Assessment saved");
+  await page.reload();
+  await expect(page.getByText("78/100", { exact: true })).toBeVisible();
+  await page.goto(`/applications/new?jobId=${jobId}`);
+  await page.getByLabel("Resume file used").selectOption(originalId);
+  await page.getByLabel("What happened?").selectOption("sent");
+  await page.getByRole("button", { name: "Save application record" }).click();
+  await expect(page).toHaveURL(/\/applications\/[0-9a-f-]+$/);
+  await page.goto(familyPath);
+  await page.getByRole("link", { name: "Upload revised PDF", exact: true }).click();
+  await page.getByLabel("Version label", { exact: true }).fill("Revised for backend");
+  const revised = await pdf("Fictional revised resume: clearer Kafka project bullet");
   await page
     .getByLabel("PDF file", { exact: true })
-    .setInputFiles({ name: "damaged.pdf", mimeType: "application/pdf", buffer: damaged });
+    .setInputFiles({ name: "revised.pdf", mimeType: "application/pdf", buffer: revised });
+  await page
+    .getByLabel("Bullet changes with this upload")
+    .fill("Clarified ownership of the existing Kafka project.");
   await page.getByRole("button", { name: "Upload PDF", exact: true }).click();
   await expect(
-    page.getByRole("heading", {
-      name: "Selected version: Preserved failed extraction",
-      exact: true,
-    }),
+    page.getByRole("heading", { name: "Selected version: Revised for backend", exact: true }),
   ).toBeVisible();
+  const revisedId = new URL(page.url()).searchParams.get("version")!;
+  expect(revisedId).not.toBe(originalId);
+  await page.getByRole("link", { name: "Bullet changes", exact: true }).click();
+  await expect(page.getByLabel("Changes for this file")).toHaveValue(
+    "Clarified ownership of the existing Kafka project.",
+  );
+  await page.getByLabel("Changes for this file").fill("Unsaved revision-only wording");
+  await page.locator(`a[href="${familyPath}?version=${originalId}&tab=changes"]`).click();
+  await expect(page.getByLabel("Changes for this file")).toHaveValue(
+    "Original wording clarified; no new experience claimed.",
+  );
+  await expect(page.getByRole("status")).toHaveCount(0);
+  await page.locator(`a[href="${familyPath}?version=${revisedId}&tab=changes"]`).click();
+  await expect(page.getByLabel("Changes for this file")).toHaveValue(
+    "Clarified ownership of the existing Kafka project.",
+  );
+  await page.goto(`${familyPath}?version=${originalId}&tab=usage`);
+  await expect(page.getByRole("heading", { name: company, exact: true })).toBeVisible();
+  await page.getByRole("link", { name: "File", exact: true }).click();
+  expect(
+    (await (await request.get(`/api/resumes/${originalId}/file`)).body()).equals(original),
+  ).toBe(true);
+  await page.goto(jobPath);
+  await page.getByText("Notes and saved description history", { exact: true }).click();
+  await page
+    .getByLabel("Updated job description")
+    .fill("Later description asking for an additional Kubernetes skill.");
+  await page.getByRole("button", { name: "Save description version" }).click();
+  await expect(page.getByRole("status")).toContainText("New snapshot saved");
+  await page.goto(`${familyPath}?version=${originalId}&tab=ats`);
+  await expect(page.getByText("78/100", { exact: true })).toBeVisible();
+  await expect(page.getByText(/This assessment uses an earlier job description/)).toBeVisible();
+  await page.getByText("Job description assessed", { exact: true }).first().click();
+  await expect(page.getByText(jobDescription, { exact: true })).toBeVisible();
+});
+
+test("a parsing failure still preserves the uploaded original", async ({ page, request }) => {
+  const bytes = Buffer.from("%PDF-1.7\n%%EOF\n");
+  await upload(page, `Damaged PDF ${Date.now()}`, bytes);
+  await page.getByText("Text extraction needs attention", { exact: true }).click();
   await expect(
-    page
-      .getByRole("status")
-      .filter({ hasText: "Text extraction failed. The original PDF was retained." }),
+    page.getByText(/Text extraction failed. The original PDF was retained/),
   ).toBeVisible();
-  const previewPath = await page
-    .getByTitle(`PDF preview of ${name}, Preserved failed extraction`)
-    .getAttribute("src");
-  const response = await request.get(`${previewPath}?download=1`);
-  expect(response.status()).toBe(200);
-  expect((await response.body()).equals(damaged)).toBe(true);
-  await page.getByLabel("Keywords", { exact: true }).fill("Python, Manual domain term");
-  await page.getByRole("button", { name: "Save Keywords and Tags", exact: true }).click();
-  await expect(
-    page.getByRole("heading", { name: "Keywords by category" }).locator(".."),
-  ).toContainText("Manual domain term");
-  await expect(
-    page.getByRole("button", { name: "Retry Text Extraction", exact: true }),
-  ).toBeVisible();
-  await page.getByRole("button", { name: "Archive Family", exact: true }).click();
-  await expect(
-    page.getByRole("status").filter({ hasText: "Resume family archived." }),
-  ).toBeVisible();
+  const path = await page.locator("iframe").getAttribute("src");
+  expect((await (await request.get(path!)).body()).equals(bytes)).toBe(true);
 });

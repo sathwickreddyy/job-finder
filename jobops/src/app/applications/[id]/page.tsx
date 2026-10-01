@@ -1,7 +1,7 @@
 import { displayDate, getDisplayPreferences } from "@/features/candidate/preferences";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { desc, eq, ilike, or } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
 import {
@@ -11,13 +11,13 @@ import {
   resumeVersions,
   applicationEvents,
   mailMessages,
-  missions,
-  contacts,
 } from "@/db/schema";
 import { PageHeader, Panel, Button, StatusBadge, Field } from "@/components/ui";
 import { ActionForm } from "@/components/action-form";
+import { RecordForm } from "@/features/applications/record-form";
 import { ApplicationForm } from "@/features/applications/form";
 import { addApplicationNote } from "@/features/applications/actions";
+import { methodNames } from "@/features/applications/domain";
 import { label } from "@/lib/utils";
 export default async function ApplicationDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -30,7 +30,7 @@ export default async function ApplicationDetail({ params }: { params: Promise<{ 
     .limit(1);
   if (!record) notFound();
   const { app, job } = record;
-  const [versions, events, mail, work, people] = await Promise.all([
+  const [versions, events, mail] = await Promise.all([
     db
       .select({ version: resumeVersions, family: resumes })
       .from(resumeVersions)
@@ -45,19 +45,15 @@ export default async function ApplicationDetail({ params }: { params: Promise<{ 
       .from(mailMessages)
       .where(eq(mailMessages.linkedApplicationId, id))
       .orderBy(desc(mailMessages.receivedAt)),
-    db
-      .select()
-      .from(missions)
-      .where(or(eq(missions.entityId, id), eq(missions.entityId, job.id)))
-      .orderBy(desc(missions.createdAt)),
-    db.select().from(contacts).where(ilike(contacts.company, job.company)),
   ]);
+  const outreach = ["REFERRAL", "COLD_EMAIL", "LINKEDIN_MESSAGE"].includes(app.source);
+  const sent = events.some((event) => event.eventType === "OUTREACH_SENT");
   const selected = versions.find((v) => v.version.id === app.resumeVersionId);
   const preferences = await getDisplayPreferences();
   return (
     <>
       <PageHeader
-        title={`${job.company} application`}
+        title={`${job.company} · ${methodNames[app.source] || "Application"}`}
         description={job.title}
         actions={
           <>
@@ -75,9 +71,15 @@ export default async function ApplicationDetail({ params }: { params: Promise<{ 
         }
       />
       <div className="mb-5 flex flex-wrap items-center gap-4">
-        <StatusBadge status={app.status} />
+        {outreach ? (
+          <span className="rounded-full bg-selected px-3 py-1 text-sm text-selected-foreground">
+            {sent ? "Sent" : "Preparing"}
+          </span>
+        ) : (
+          <StatusBadge status={app.status} />
+        )}
         <span className="text-muted-foreground">
-          Applied: {displayDate(app.appliedAt, preferences)}
+          {app.appliedAt ? `Applied: ${displayDate(app.appliedAt, preferences)}` : ""}
         </span>
         {selected && (
           <a
@@ -87,21 +89,56 @@ export default async function ApplicationDetail({ params }: { params: Promise<{ 
             Download selected resume
           </a>
         )}
-        <Link href={`/missions/new?type=FOLLOW_UP_REVIEW&entityType=APPLICATION&entityId=${id}`}>
-          Create follow-up review mission
-        </Link>
       </div>
-      <div className="split-layout">
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
         <div className="stack">
-          <Panel title="Application details">
-            <ApplicationForm
-              existing={app}
-              jobChoices={[{ id: job.id, label: `${job.company} — ${job.title}` }]}
-              versionChoices={versions.map((v) => ({
-                id: v.version.id,
-                label: `${v.family.name} / ${v.version.versionLabel}`,
-              }))}
-            />
+          <Panel title={outreach ? "Outreach details" : "Application details"}>
+            {outreach ? (
+              <>
+                <p className="text-sm text-muted-foreground">
+                  {sent
+                    ? "Your outreach is recorded as sent. Add replies or follow-up notes below."
+                    : "This outreach is a plan. After sending, update this record below."}{" "}
+                  <Link href={`/outreach?record=${app.id}`} className="text-link">
+                    Open outreach prompt
+                  </Link>{" "}
+                  ·{" "}
+                  <Link href={`/applications/new?jobId=${job.id}`} className="text-link">
+                    Record a direct application
+                  </Link>
+                </p>
+                {!sent && (
+                  <RecordForm
+                    jobId={job.id}
+                    method={app.source}
+                    existing={{
+                      id: app.id,
+                      versionId: app.resumeVersionId,
+                      url: app.applicationUrl,
+                      notes: app.notes,
+                      recipient: String(
+                        events.find((event) => typeof event.payload.recipient === "string")?.payload
+                          .recipient ?? "",
+                      ),
+                    }}
+                    jobChoices={[{ id: job.id, label: `${job.company} — ${job.title}` }]}
+                    versionChoices={versions.map(({ version, family }) => ({
+                      id: version.id,
+                      label: `${family.name} / ${version.versionLabel} / ${version.originalFilename}`,
+                    }))}
+                  />
+                )}
+              </>
+            ) : (
+              <ApplicationForm
+                existing={app}
+                jobChoices={[{ id: job.id, label: `${job.company} — ${job.title}` }]}
+                versionChoices={versions.map((v) => ({
+                  id: v.version.id,
+                  label: `${v.family.name} / ${v.version.versionLabel}`,
+                }))}
+              />
+            )}
           </Panel>
           <Panel title="Timeline">
             <div className="timeline">
@@ -112,11 +149,10 @@ export default async function ApplicationDetail({ params }: { params: Promise<{ 
                   <small>
                     {displayDate(e.occurredAt, preferences, true)} · {label(e.source)}
                   </small>
-                  {Object.keys(e.payload).length > 0 && (
-                    <details>
-                      <summary className="text-xs">Event data</summary>
-                      <pre>{JSON.stringify(e.payload, null, 2)}</pre>
-                    </details>
+                  {typeof e.payload.recipient === "string" && e.payload.recipient && (
+                    <p className="mt-2 text-sm text-muted-foreground">
+                      Recipient: {e.payload.recipient}
+                    </p>
                   )}
                 </article>
               ))}
@@ -141,32 +177,6 @@ export default async function ApplicationDetail({ params }: { params: Promise<{ 
               ))
             ) : (
               <p className="muted">Link imported mail to this application from Mail.</p>
-            )}
-          </Panel>
-          <Panel title="Related missions">
-            {work.length ? (
-              work.map((m) => (
-                <p key={m.id} className="mb-4">
-                  <Link href={`/missions/${m.id}`}>{m.title}</Link>
-                  <span className="mt-1 block">
-                    <StatusBadge status={m.status} />
-                  </span>
-                </p>
-              ))
-            ) : (
-              <p className="muted">No missions yet.</p>
-            )}
-          </Panel>
-          <Panel title="Company contacts">
-            {people.length ? (
-              people.map((c) => (
-                <p key={c.id}>
-                  <Link href={`/contacts/${c.id}`}>{c.name}</Link>
-                  <small className="block">{c.title}</small>
-                </p>
-              ))
-            ) : (
-              <Link href={`/contacts?company=${encodeURIComponent(job.company)}`}>Add contact</Link>
             )}
           </Panel>
         </div>

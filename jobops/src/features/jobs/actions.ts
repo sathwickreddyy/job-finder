@@ -32,6 +32,7 @@ export async function commitJobs(_state: ImportState, form: FormData): Promise<I
       strategy,
     );
     revalidatePath("/jobs");
+    revalidatePath("/companies");
     revalidatePath("/");
     return {
       summary,
@@ -43,15 +44,31 @@ export async function commitJobs(_state: ImportState, form: FormData): Promise<I
 }
 export async function addJob(_state: ActionState, form: FormData): Promise<ActionState> {
   try {
+    if (!formString(form, "description"))
+      throw new Error("Paste the full job description before saving.");
+    if (!formString(form, "source")) {
+      const host = new URL(formString(form, "url")).hostname.toLowerCase();
+      const provider = ["linkedin", "naukri", "instahyre", "cutshort", "hirist"].find(
+        (name) =>
+          host === `${name}.com` ||
+          host.endsWith(`.${name}.com`) ||
+          host === `${name}.io` ||
+          host.endsWith(`.${name}.io`) ||
+          host === `${name}.tech` ||
+          host.endsWith(`.${name}.tech`),
+      );
+      form.set("source", provider?.toUpperCase() || "COMPANY_CAREERS");
+    }
     const data = jobInputSchema.parse(
       Object.fromEntries([...form.entries()].map(([k, v]) => [k, v === "" ? undefined : v])),
     );
     const summary = await importJobRows([data], "skip");
     if (!summary.created)
       return {
-        error: "This job already exists. Open Jobs to review it, or use bulk import with merge.",
+        error: "This opening is already saved. Open Saved openings to review it.",
       };
     revalidatePath("/jobs");
+    revalidatePath("/companies");
     revalidatePath("/");
     return { redirect: `/jobs/${summary.ids[0]}` };
   } catch (e) {

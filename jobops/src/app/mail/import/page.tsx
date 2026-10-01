@@ -16,7 +16,7 @@ export default function MailImportPage() {
     <>
       <PageHeader
         title="Import recruiting mail"
-        description="Paste only job-related messages. Each message becomes a proposed event requiring review."
+        description="Paste job-related messages to read locally and optionally link to your records."
       />
       <Panel title="Structured message import">
         <ActionForm action={importMail}>
