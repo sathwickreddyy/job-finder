@@ -1,4 +1,9 @@
+import { stubExternalSites } from "./helpers/external-sites";
 import { expect, test } from "@playwright/test";
+
+test.beforeEach(async ({ page }) => {
+  await stubExternalSites(page);
+});
 
 test("retired agent API rejects reads and writes without exposing personal records", async ({
   request,

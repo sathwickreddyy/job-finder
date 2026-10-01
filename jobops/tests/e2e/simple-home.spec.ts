@@ -1,4 +1,9 @@
+import { stubExternalSites } from "./helpers/external-sites";
 import { expect, test } from "@playwright/test";
+
+test.beforeEach(async ({ page }) => {
+  await stubExternalSites(page);
+});
 
 test("spacious home leads directly to a complete editable discovery prompt", async ({
   page,
@@ -6,7 +11,7 @@ test("spacious home leads directly to a complete editable discovery prompt", asy
 }) => {
   await context.grantPermissions(["clipboard-read", "clipboard-write"]);
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: "Your online presence" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Your profiles" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Your search in numbers" })).toBeVisible();
   await expect(page.getByRole("link", { name: /Find openings/ }).last()).toBeVisible();
   await expect(page.getByText("Agent API access", { exact: true })).toHaveCount(0);
@@ -55,7 +60,10 @@ test("saved preferences and profile links persist and appear in the real home", 
   await expect(page.getByLabel("My working preferences")).toHaveValue(preference);
   await page.goto("/");
   await expect(
-    page.getByRole("link").filter({ has: page.getByRole("heading", { name, exact: true }) }),
+    page
+      .locator("article")
+      .filter({ has: page.getByRole("heading", { name, exact: true }) })
+      .getByRole("link", { name: `Open ${name} in a new tab`, exact: true }),
   ).toHaveAttribute("href", url);
   await page.goto("/find");
   await expect(page.getByRole("region", { name: "Your complete prompt" })).toContainText(

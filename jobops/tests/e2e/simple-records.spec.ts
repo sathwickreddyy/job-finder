@@ -1,4 +1,9 @@
+import { stubExternalSites } from "./helpers/external-sites";
 import { expect, test } from "@playwright/test";
+
+test.beforeEach(async ({ page }) => {
+  await stubExternalSites(page);
+});
 
 test("a saved job supports resume prompts, referral records and a separate direct application", async ({
   page,

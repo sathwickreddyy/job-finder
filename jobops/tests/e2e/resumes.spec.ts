@@ -1,3 +1,4 @@
+import { stubExternalSites } from "./helpers/external-sites";
 import { expect, test } from "@playwright/test";
 import { PDFDocument } from "pdf-lib";
 async function pdf(text: string) {
@@ -16,6 +17,10 @@ async function upload(page: import("@playwright/test").Page, name: string, bytes
   await expect(page).toHaveURL(/\/resumes\/[0-9a-f-]+/);
   return new URL(page.url()).pathname;
 }
+
+test.beforeEach(async ({ page }) => {
+  await stubExternalSites(page);
+});
 
 test("resume files, bullet changes, exact usage and sourced assessments survive revisions", async ({
   page,

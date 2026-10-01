@@ -1,5 +1,10 @@
+import { stubExternalSites } from "./helpers/external-sites";
 import { expect, test } from "@playwright/test";
 import { PDFDocument } from "pdf-lib";
+
+test.beforeEach(async ({ page }) => {
+  await stubExternalSites(page);
+});
 
 test("city cards follow current resumes while applications preserve the submitted file", async ({
   page,

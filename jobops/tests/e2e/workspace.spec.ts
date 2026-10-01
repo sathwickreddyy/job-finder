@@ -1,4 +1,9 @@
+import { stubExternalSites } from "./helpers/external-sites";
 import { expect, test } from "@playwright/test";
+
+test.beforeEach(async ({ page }) => {
+  await stubExternalSites(page);
+});
 
 test("candidate answers preserve explicit UNKNOWN", async ({ page }) => {
   await page.goto("/settings");

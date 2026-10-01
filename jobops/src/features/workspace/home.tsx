@@ -1,8 +1,9 @@
 import Link from "next/link";
-import { ArrowRight, Search } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { ActivityChart } from "./activity-chart";
-import { JobSiteCards, SiteCards } from "./sites";
+import { IdentityCard } from "./identity-card";
+import { ProfileMosaic } from "./profile-mosaic";
+import { profileLinks } from "./profile-links";
+import { JobSiteCards } from "./sites";
 import type { WorkspaceData } from "./read";
 export function WorkspaceHome({ data }: { data: WorkspaceData }) {
   const stats = [
@@ -28,43 +29,31 @@ export function WorkspaceHome({ data }: { data: WorkspaceData }) {
   const sources = data.openings.length
     ? [...new Set(data.openings.map((job) => job.source))]
     : ["LinkedIn", "Naukri", "Other sites"];
+  const links = profileLinks(data.sites);
   return (
     <div className="space-y-9">
-      <section className="flex flex-wrap items-center justify-between gap-6">
-        <div>
-          <p className="mb-2 text-sm text-muted-foreground">Your job search in India</p>
-          <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
-            {data.name ? `${data.name}, find your next role.` : "Find your next role."}
-          </h1>
-          <p className="mt-3 max-w-xl text-base text-muted-foreground">
-            Your sites, your resumes, and a clear place to start.
-          </p>
-        </div>
-        <Button asChild className="min-h-12 px-7">
-          <Link href="/find">
-            <Search size={18} aria-hidden />
-            Find openings
-            <ArrowRight size={17} aria-hidden />
-          </Link>
-        </Button>
-      </section>
-      <section>
+      <IdentityCard identity={data.identity} links={links} resume={data.currentResume} />
+      <section aria-labelledby="home-profiles">
         <div className="mb-4 flex items-center justify-between gap-3">
-          <h2 className="text-xl font-semibold">Your online presence</h2>
+          <h2 id="home-profiles" className="text-xl font-semibold">
+            Your profiles
+          </h2>
           <Link href="/my-profile" className="text-sm text-link">
             Manage links
           </Link>
         </div>
-        <SiteCards sites={data.sites} />
+        <ProfileMosaic links={links} resume={data.currentResume} />
       </section>
-      <section>
+      <section aria-labelledby="home-sites">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-xl font-semibold">Places to find openings</h2>
+          <h2 id="home-sites" className="text-xl font-semibold">
+            Places to find openings
+          </h2>
           <Link href="/companies" className="text-sm text-link">
             Browse Bengaluru & Hyderabad companies
           </Link>
         </div>
-        <JobSiteCards />
+        <JobSiteCards role={data.identity.searchRole} city={data.identity.searchCity} />
       </section>
       <section className="space-y-4">
         <div>

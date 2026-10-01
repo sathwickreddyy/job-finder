@@ -11,6 +11,7 @@ import {
   settings,
 } from "@/db/schema";
 
+import { identityFrom } from "./identity";
 import { jobPreferencesContext } from "./prompts";
 
 // Real personal records shared by the home page and the read-only gallery.
@@ -83,7 +84,18 @@ export async function readWorkspace() {
     if (url && !publicSites.some((site) => site.url === url))
       publicSites.push({ name: name!, url });
   }
+  const current = versions.find((row) => row.isCurrent);
   return {
+    identity: identityFrom(person),
+    currentResume: current
+      ? {
+          id: current.id,
+          familyId: current.familyId,
+          name: current.name,
+          label: current.label,
+          filename: current.filename,
+        }
+      : null,
     name: person?.preferredName || person?.fullName?.split(" ")[0] || "",
     role: person?.desiredRoles.join(", ") || person?.currentRole || "",
     location: person?.preferredLocations.join(", ") || person?.currentCity || "India",

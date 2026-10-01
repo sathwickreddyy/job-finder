@@ -1,6 +1,6 @@
 # Home redesign: identity, live profile previews and an app-wide loading popup
 
-Date: 2026-10-01 · Status: approved design, awaiting implementation plan
+Date: 2026-10-01 · Status: implemented and verified
 Gallery: `/gallery/home` (picks: Profile header A, Profile previews B, Job sites A, Loading popup A,
 Button feedback C)
 
@@ -73,8 +73,8 @@ button. Body by kind:
 - LinkedIn: the official badge (section 4.2), with an **Open LinkedIn** card if it fails.
 - Medium and others: "<Site> blocks previews inside other sites. Open it to see your latest posts." and **Open <Site>**.
 
-Escape, the close button and a click on the backdrop close the dialog; focus returns to the Preview
-button that opened it.
+Escape while focus is on JobOps dialog controls, the close button and a click on the backdrop close the dialog; focus returns to the Preview
+button that opened it. A cross-origin iframe can retain keyboard events after interaction, so Escape inside it may not reach the parent dialog; the close button and backdrop remain available. Long titles and handles wrap within the dialog header on mobile; the close button remains visible.
 
 ### 1.3 Places to find openings (Job sites A)
 
@@ -125,10 +125,11 @@ with no value, since progress is simulated.
 | Trigger                       | Detected by                                                                                                                       | Label                                 | Finishes when                    |
 | ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------- | -------------------------------- |
 | Link click inside the app     | Document click listener (capture phase)                                                                                           | "Opening <page>"                      | Pathname or search params change |
-| Back / forward                | `popstate`                                                                                                                        | "Opening <page>" for the new location | Pathname or search params change |
+| Back / forward                | `popstate` (only when pathname or search changes; hash-only history is ignored)                                                   | "Opening <page>" for the new location | Pathname or search params change |
 | Save in `ActionForm`          | `useLoadingTask(pending, label)`; label prop `pendingLabel`, default "Saving"                                                     | "Saving" or the form's label          | `pending` becomes false          |
 | Redirect after a save         | `ActionForm` starts a navigation task before `router.push(redirect)`                                                              | "Opening <page>"                      | Pathname or search params change |
 | Jobs import check             | `useLoadingTask(pending, "Checking jobs")` in `features/jobs/import-form.tsx`                                                     | "Checking jobs"                       | `pending` becomes false          |
+| Jobs import save              | `useLoadingTask(saving, "Saving jobs")` in `features/jobs/import-form.tsx`                                                        | "Saving jobs"                         | `saving` becomes false           |
 | Search and filter forms (GET) | Document `submit` listener (bubble phase) for forms whose submit was not prevented, `method` GET, same-origin action, no `target` | "Searching"                           | Page unload (full navigation)    |
 
 A link click is tracked only when all of these hold: primary button, no modifier keys, the anchor
@@ -148,8 +149,7 @@ Today, `profiles` Profiles, `gallery` Gallery. Unknown segments use "Loading".
 ### 2.3 Structure
 
 - `src/components/loading/controller.ts`: framework-free state machine
-  (`start(label) → token`, `finish(token)`, `reset()`, `subscribe`, `getSnapshot`) with injectable
-  timers and clock, so it is unit-tested with fake timers.
+  (`start(label) → token`, `finish(token)`, `reset()`, `subscribe`, `getSnapshot`) with timers and clock controlled by Vitest fake timers for deterministic unit tests.
 - `src/components/loading/routes.ts`: pure `navigationTarget(click, anchor, location)` filter and
   `labelForPath(pathname)`.
 - `src/components/loading/overlay.tsx`: `LoadingProvider` (context + `useSyncExternalStore`), the
@@ -169,7 +169,7 @@ between finite radii; the gallery demo animated from `rounded-full`, so its chan
 
 Applied to: `Button` (replacing `rounded-full` and `pressable` in `buttonVariants`; `size="sm"`
 keeps the same utility), the header nav pills, and the Inbox, My profile and theme icon buttons in
-`AppShell`. Cards and other `pressable` elements keep the existing 0.97 press scale. Existing hover
+`AppShell`, plus the new Preview and Open controls in the profile mosaic and preview dialog. Cards and other `pressable` elements keep the existing 0.97 press scale. Existing hover
 colours stay as they are.
 
 ## 4. Embeds, privacy and failure states
@@ -224,9 +224,9 @@ The badge theme follows the app theme.
 | `src/components/loading/*`                                                    | Section 2.3.                                                                                                                  |
 | `src/components/app-shell.tsx`                                                | Mount `LoadingProvider`; `morph` on header controls.                                                                          |
 | `src/components/action-form.tsx`                                              | `useLoadingTask`, optional `pendingLabel`, navigation task before redirect.                                                   |
-| `src/features/jobs/import-form.tsx`                                           | `useLoadingTask(pending, "Checking jobs")`.                                                                                   |
+| `src/features/jobs/import-form.tsx`                                           | `useLoadingTask(pending, "Checking jobs")` and `useLoadingTask(saving, "Saving jobs")`.                                       |
 | `src/components/ui/button.tsx`, `src/app/globals.css`, `src/styles/theme.css` | `morph` utility; motion tokens (`--ease-emphasized-decelerate`, `--ease-spring-fast`) and keyframes for enter, fade, pop.     |
-| `src/features/workspace/home-gallery/*`                                       | Gallery imports the production helpers and embeds; unchosen options stay local to the gallery.                                |
+| `src/features/workspace/home-gallery/*`                                       | Gallery stays unchanged as the approved visual reference; production helpers and embeds are implemented separately.           |
 
 All colours use existing theme tokens. No new dependencies.
 
@@ -235,7 +235,7 @@ All colours use existing theme tokens. No new dependencies.
 Unit (Vitest):
 
 - `profileLinks`: kind detection, handles for LinkedIn (`/in/<vanity>`), GitHub, Medium (`@user`)
-  and portfolio (host + path), ordering, links without URLs dropped.
+  and portfolio (host + path), ordering, links without URLs dropped; repeated saved URLs remain separate with distinct stable chip and preview keys.
 - `jobSiteAction`: LinkedIn and Naukri search URLs with encoding and slugs; no-role and no-city
   fallbacks; home pages for the other sites.
 - Loading controller with fake timers: hidden under 200 ms; visible after; minimum 450 ms; trickle
@@ -245,21 +245,23 @@ Unit (Vitest):
   fallback.
 - Identity formatting: name preference, headline join, experience wording, first-sentence summary.
 
-End-to-end (Playwright, isolated `jobops_e2e` database on port 3211). Third-party requests
+End-to-end (Playwright, isolated `jobops_e2e` database on port 3211). Service workers are blocked and browser-context routing covers new tabs as well as the main page. Third-party requests
 (Google favicons, GitHub avatar, ghchart, LinkedIn script, portfolio host) are fulfilled with local
 stubs, so tests never reach real sites. The test seed (`scripts/seed-test.ts`, isolated database
 only) gains fictional GitHub, portfolio and Medium links on `example`-style handles where missing;
 its existing fictional candidate ("Demo", Senior Backend Engineer, Bengaluru) and resume are reused.
 
 - Home shows the seeded name as `h1`, headline, facts and profile chips with handles.
-- The mosaic shows Portfolio, Resume and GitHub tiles; Preview opens the dialog, Escape closes it and
+- The mosaic shows Portfolio, Resume and GitHub tiles; Preview opens the dialog, Escape from the dialog controls closes it and
   focus returns to the Preview button.
 - LinkedIn and Naukri cards link to the search URLs for the seeded role and city.
 - Delaying the next page's RSC request by 1 s shows the popup with "Opening Companies", and it
-  disappears once the page arrives; an undelayed navigation never shows it.
+  disappears once the page arrives. The fast-task/no-popup check belongs to the loading-controller unit tests, because dev-server compilation makes browser timing unreliable.
 - A slow save (delayed server action response) shows "Saving", and the redirect continues the popup.
 - `simple-home.spec.ts` is updated from "Your online presence" to "Your profiles", and its
-  saved-link assertion targets the tile heading.
+  saved-link assertion targets the tile heading and its open-in-new-tab link.
+- Hash-only Back/Forward never starts a navigation popup.
+- Long profile handles keep the preview close button inside the dialog at 390 px.
 - No horizontal overflow at 390 px for `/` in either theme (the existing overflow sweep).
 
 ## 7. Out of scope

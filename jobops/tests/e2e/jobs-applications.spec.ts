@@ -1,4 +1,9 @@
+import { stubExternalSites } from "./helpers/external-sites";
 import { test, expect } from "@playwright/test";
+test.beforeEach(async ({ page }) => {
+  await stubExternalSites(page);
+});
+
 test("bulk JSON preview catches rows, skips duplicates and preserves changed snapshots", async ({
   page,
 }) => {
@@ -52,7 +57,7 @@ test("navigation and URL-persisted filters remain usable on small screens", asyn
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByRole("link", { name: "Home", exact: true }).click();
   await expect(page).toHaveURL(/\/$/);
-  await expect(page.getByRole("heading", { name: /find your next role/i })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Demo", exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: /Find openings/ }).last()).toBeVisible();
   await expect(
     page.getByRole("link", { name: "My sites & profile", exact: true }).first(),

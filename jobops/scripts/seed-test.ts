@@ -545,6 +545,27 @@ async function seed() {
         },
         notes: "Fictional example profile.",
       },
+      {
+        id: stableId(402),
+        provider: "OTHER",
+        displayName: "GitHub",
+        profileUrl: "https://github.com/demo-jobops",
+        notes: "Fictional profile for deterministic browser previews.",
+      },
+      {
+        id: stableId(403),
+        provider: "OTHER",
+        displayName: "Portfolio",
+        profileUrl: "https://portfolio.example.invalid/",
+        notes: "Fictional portfolio fulfilled locally by browser tests.",
+      },
+      {
+        id: stableId(404),
+        provider: "OTHER",
+        displayName: "Medium",
+        profileUrl: "https://medium.com/@demo-jobops",
+        notes: "Fictional writing profile for browser previews.",
+      },
     ])
     .onConflictDoNothing();
 

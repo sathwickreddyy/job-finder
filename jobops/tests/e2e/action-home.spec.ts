@@ -1,7 +1,12 @@
+import { stubExternalSites } from "./helpers/external-sites";
 import { expect, test } from "@playwright/test";
 import { eq } from "drizzle-orm";
 import { closeDatabase, db } from "../../src/db";
 import { mailMessages } from "../../src/db/schema";
+
+test.beforeEach(async ({ page }) => {
+  await stubExternalSites(page);
+});
 
 test.beforeEach(() => expect(new URL(process.env.DATABASE_URL!).pathname).toBe("/jobops_e2e"));
 test.afterAll(() => closeDatabase());

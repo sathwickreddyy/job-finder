@@ -1,3 +1,4 @@
+import { stubExternalSites } from "./helpers/external-sites";
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { expect, test, type APIRequestContext } from "@playwright/test";
@@ -14,6 +15,10 @@ async function create(request: APIRequestContext, data: Record<string, unknown>)
 }
 
 // This hook runs even after assertion failures and keeps the seeded directory stable.
+test.beforeEach(async ({ page }) => {
+  await stubExternalSites(page);
+});
+
 test.afterEach(async ({ request }) => {
   const response = await request.get(endpoint, {
     params: { q: `API company ${fixtureRun}`, status: "ACTIVE" },
