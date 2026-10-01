@@ -17,9 +17,9 @@ npm run db:migrate
 npm run dev
 ```
 
-Open [JobOps](http://127.0.0.1:3210). PostgreSQL binds to `127.0.0.1:5549`; the application binds to `127.0.0.1:3210`. These ports avoid the other local projects. A new workspace starts empty, ready for your own candidate information, resume and saved jobs. Starting the application or applying migrations never inserts sample data.
+Open [JobOps](http://127.0.0.1:3210). PostgreSQL binds to `127.0.0.1:5549`; the application listens on `0.0.0.0:3210` so you can also open `http://<your-private-LAN-IP>:3210`. These ports avoid the other local projects. No fictional candidate, resume, job or application records are inserted during normal setup.
 
-Use the exact origin configured in `APP_URL` when opening the application. If you change the application port or host, update both the launch command and `APP_URL`; update the Gmail callback too when Gmail is configured. Mutating requests from a different origin are rejected.
+With a local `APP_URL`, loopback and private IPv4/local IPv6 addresses at the configured port are accepted. Browser mutations must come from the exact origin you opened. Company API writes also accept ordinary local `curl` requests without an Origin header or access token. Other routes retain their origin checks. If you change the port, update the launch command and `APP_URL`; keep the Gmail callback on its configured origin.
 
 Fictional data is reserved for controlled demonstrations and the isolated browser-test database. `npm run db:seed` is an explicit opt-in command; do not run it as part of normal setup. Its candidate facts, companies, contacts, PDFs and messages are fictional. It preserves existing records and candidate configuration, but deliberately inserts missing examples. Unknown application answers remain `UNKNOWN` until you provide them.
 
@@ -73,7 +73,7 @@ External ATS-readiness estimates must name their source and method. They are not
 | Command                                   | Purpose                                                        |
 | ----------------------------------------- | -------------------------------------------------------------- |
 | `npm run dev`                             | Local workbench on port 3210                                   |
-| `npm run build` / `npm start`             | Production build / loopback production server                  |
+| `npm run build` / `npm start`             | Production build / LAN server on port 3210                     |
 | `npm run lint`                            | ESLint                                                         |
 | `npm run typecheck`                       | Strict TypeScript                                              |
 | `npm run test`                            | Vitest domain/security/storage/PDF tests                       |
@@ -94,7 +94,7 @@ Verified results and integration limits are recorded in [verification.md](docs/v
 | ------------------------------------------ | ------------------------------------------------------------------------------ |
 | `DATABASE_URL`                             | PostgreSQL connection; example targets the local Compose service               |
 | `APP_URL`                                  | Canonical origin; defaults to `http://127.0.0.1:3210`                          |
-| `JOBOPS_ACCESS_TOKEN`                      | 32+ characters required beyond loopback; optional browser unlock for local use |
+| `JOBOPS_ACCESS_TOKEN`                      | Optional browser unlock on the trusted LAN; 32+ characters required for public hosts. Local company API needs no token. |
 | `STORAGE_ROOT`                             | Default `./data/uploads`; persistent private local directory                   |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Optional Gmail web OAuth client                                                |
 | `GOOGLE_REDIRECT_URI`                      | Same-origin `/api/gmail/callback`; example in `.env.example`                   |
@@ -142,9 +142,9 @@ The original development fixtures were removed from the main local workspace aft
 
 ## Production and security
 
-V1 is a single-user local tool. Its default loopback binding and Host checks reduce accidental exposure; mutations require the configured origin. Setting a 32+ character access token protects pages, server actions, files, exports with an HttpOnly cookie. The cookie is Lax to permit Google OAuth return navigation, Secure on HTTPS, and expires after twelve hours. Rotating the token invalidates existing sessions. Gmail state/PKCE cookies are separate.
+V1 is a single-user tool for your trusted LAN. The dev/start scripts listen on all IPv4 interfaces. Host checks validate the target address; they do not authenticate a client's source IP, and forwarded headers do not establish trust. Your firewall and router define the network boundary. There is no ingestion token. Company API requests to a local target bypass the optional browser cookie; other pages, files and exports respect a configured access token. Browser mutations require the actual target origin. The cookie is Lax to permit Google OAuth return navigation, Secure on HTTPS, and expires after twelve hours. Rotating the token invalidates existing sessions. Gmail state/PKCE cookies are separate.
 
-For deployment, set the exact HTTPS `APP_URL`, a strong access token, production database credentials and Gmail callback, and place Next.js behind an HTTPS reverse proxy. Keep the application loopback-bound behind that proxy, preserve the canonical Host/Origin, restrict database/file access, use persistent storage, encrypted backups, and process supervision. A public service should replace the shared-token mechanism with mature authentication/authorization and rate limiting. No portal passwords, Google passwords, cookies from external websites or AI credentials are requested or stored.
+For public deployment, set the exact HTTPS `APP_URL`, a strong access token, production database credentials and Gmail callback, and place Next.js behind an HTTPS reverse proxy. Override the listener with `npm exec -- next start --hostname 127.0.0.1 --port 3210`, preserve the canonical Host/Origin, restrict database/file access, use persistent storage, encrypted backups, and process supervision. Public company API requests retain origin and access-cookie protection. A public service should replace the shared-token mechanism with mature authentication/authorization and rate limiting. No portal passwords, Google passwords, cookies from external websites or AI credentials are requested or stored.
 
 The local Compose password is development-only. Use a managed/private database or your own restricted PostgreSQL credentials for deployment. Filesystem storage assumes one persistent application instance; use the storage service boundary for R2/S3 before horizontal scaling. Do not publish Drizzle Studio, test servers, Compose PostgreSQL, uploads or backups.
 

@@ -3,7 +3,7 @@ import {
   accessCookie,
   credentialDigest,
   equalCredential,
-  isLoopback,
+  isLocalNetworkHost,
   safeOrigin,
 } from "@/lib/security";
 export function proxy(request: NextRequest) {
@@ -14,44 +14,54 @@ export function proxy(request: NextRequest) {
   const appUrl = new URL(process.env.APP_URL ?? "http://127.0.0.1:3210");
   let host: URL;
   try {
-    host = new URL(`http://${request.headers.get("host") ?? "invalid"}`);
+    const authority = request.headers.get("host");
+    if (!authority || /[\s/@?#]/.test(authority)) throw new Error("Invalid host");
+    // Use the actual Host, never X-Forwarded-Host or X-Forwarded-For.
+    host = new URL(`${request.nextUrl.protocol}//${authority}`);
   } catch {
     return new NextResponse("Invalid host", { status: 400 });
   }
-  if (
-    host.host !== appUrl.host &&
-    !(isLoopback(host.hostname) && isLoopback(appUrl.hostname) && host.port === appUrl.port)
-  )
+  const trustedLocalNetwork =
+    isLocalNetworkHost(appUrl.hostname) &&
+    isLocalNetworkHost(host.hostname) &&
+    host.port === appUrl.port;
+  if (host.host !== appUrl.host && !trustedLocalNetwork)
     return new NextResponse("Host is not allowed. Configure APP_URL for your deployment.", {
       status: 403,
     });
   const taskApi = /^\/api\/v1\/tasks\/[0-9a-f-]+(?:\/(?:updates|proposals|resume))?$/.test(
     request.nextUrl.pathname,
   );
-  if (taskApi && request.headers.has("next-action"))
+  const companyApi = /^\/api\/v1\/companies(?:\/[^/]+)?\/?$/.test(request.nextUrl.pathname);
+  if ((taskApi || companyApi) && request.headers.has("next-action"))
     return NextResponse.json(
-      { error: "Server actions are not available on the agent API." },
+      { error: "Server actions are not available on this API." },
       { status: 403 },
     );
   if (
-    !["GET", "HEAD", "OPTIONS"].includes(request.method) &&
-    !safeOrigin(request.headers.get("origin")) &&
-    !(taskApi && !request.headers.has("origin"))
+    (!["GET", "HEAD", "OPTIONS"].includes(request.method) ||
+      (companyApi && request.headers.has("origin"))) &&
+    !safeOrigin(request.headers.get("origin"), trustedLocalNetwork ? host.origin : appUrl.origin) &&
+    !((taskApi || (companyApi && trustedLocalNetwork)) && !request.headers.has("origin"))
   )
     return new NextResponse("Request origin is not allowed. Reload JobOps and retry.", {
       status: 403,
     });
   const token = process.env.JOBOPS_ACCESS_TOKEN;
-  if (!token && (!isLoopback(appUrl.hostname) || !isLoopback(host.hostname)))
-    return new NextResponse("Set JOBOPS_ACCESS_TOKEN before exposing JobOps beyond loopback.", {
-      status: 503,
-    });
+  if (!token && !trustedLocalNetwork)
+    return new NextResponse(
+      "Set JOBOPS_ACCESS_TOKEN before exposing JobOps beyond the local network.",
+      {
+        status: 503,
+      },
+    );
   if (token && token.length < 32)
     return new NextResponse("JOBOPS_ACCESS_TOKEN must contain at least 32 characters.", {
       status: 503,
     });
-  // Only these route handlers accept bearer access; each verifies a task-scoped credential.
+  // Retired task routes retain their credential checks; local company routes are LAN-trusted.
   if (taskApi) return NextResponse.next();
+  if (companyApi && trustedLocalNetwork) return NextResponse.next();
   if (
     token &&
     request.nextUrl.pathname !== "/unlock" &&
