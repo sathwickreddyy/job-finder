@@ -1,6 +1,5 @@
 import { Button, PageHeader } from "@/components/ui";
 import { getDisplayPreferences } from "@/features/candidate/preferences";
-import { companies } from "@/features/companies/catalog";
 import { CompanyCard } from "@/features/companies/card";
 import { companyCities } from "@/features/companies/domain";
 import { readCompanies } from "@/features/companies/read";
@@ -16,9 +15,19 @@ export default async function CompaniesPage({
     searchParams,
   ]);
   const search = query.q?.trim().toLowerCase() ?? "";
-  const filtered = companies.filter((company) =>
-    `${company.name} ${company.aliases.join(" ")} ${company.focus}`.toLowerCase().includes(search),
+  const filtered = data.companies.filter((company) =>
+    `${company.name} ${company.aliases.join(" ")} ${company.focus} ${(company.facts ?? []).map((fact) => `${fact.title} ${fact.summary}`).join(" ")}`
+      .toLowerCase()
+      .includes(search),
   );
+  const otherCities = [...new Set(data.companies.flatMap((company) => company.cities))]
+    .filter((city) => !companyCities.includes(city as "Bengaluru" | "Hyderabad"))
+    .sort();
+  const cities = [
+    ...companyCities,
+    ...otherCities,
+    ...(data.companies.some((company) => !company.cities.length) ? ["Location not recorded"] : []),
+  ];
   return (
     <div className="space-y-8">
       <PageHeader
@@ -27,9 +36,9 @@ export default async function CompaniesPage({
       />
       <div className="flex flex-wrap items-center justify-between gap-4">
         <nav className="flex gap-2" aria-label="Company cities">
-          {companyCities.map((city) => (
+          {cities.map((city) => (
             <Button variant="secondary" asChild key={city}>
-              <a href={`#${city.toLowerCase()}`}>{city}</a>
+              <a href={`#${city.toLowerCase().replaceAll(" ", "-")}`}>{city}</a>
             </Button>
           ))}
         </nav>
@@ -45,11 +54,13 @@ export default async function CompaniesPage({
           <Button variant="outline">Search</Button>
         </form>
       </div>
-      {companyCities.map((city) => {
-        const cityCompanies = filtered.filter((company) => company.cities.includes(city));
+      {cities.map((city) => {
+        const cityCompanies = filtered.filter((company) =>
+          city === "Location not recorded" ? !company.cities.length : company.cities.includes(city),
+        );
         return (
           <section
-            id={city.toLowerCase()}
+            id={city.toLowerCase().replaceAll(" ", "-")}
             key={city}
             className="scroll-mt-6"
             aria-labelledby={`${city}-heading`}
@@ -82,8 +93,8 @@ export default async function CompaniesPage({
         );
       })}
       <p className="text-xs text-muted-foreground">
-        Official careers and location sources reviewed on 1 October 2026. Check each role’s location
-        and availability on its careers portal.
+        Research includes its source and observation dates. Community reports reflect their authors’
+        experiences. Check each role’s current location and availability on its careers portal.
       </p>
     </div>
   );

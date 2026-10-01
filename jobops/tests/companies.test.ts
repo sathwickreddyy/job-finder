@@ -42,6 +42,15 @@ describe("company application references", () => {
     expect(activity.openings).toHaveLength(1);
   });
 
+  it("keeps applications without a city visible in the unlocated section", () => {
+    const activity = companyActivity(amazon, "Location not recorded", records, [
+      { company: "AWS", location: "" },
+    ]);
+    expect(activity.sent).toBe(1);
+    expect(activity.localRecords.map((row) => row.id)).toEqual(["missing"]);
+    expect(activity.openings).toHaveLength(1);
+  });
+
   it("accepts a role located in both cities without matching similarly named towns", () => {
     const activity = companyActivity(
       amazon,
@@ -55,17 +64,17 @@ describe("company application references", () => {
     expect(activity.localRecords.map((row) => row.id)).toEqual(["both"]);
   });
 
-  it("keeps each city’s resume reference separate and validates company presence", () => {
+  it("keeps each city’s resume reference separate and accepts DB-backed company identifiers", () => {
     expect(companyResumeKey("amazon", "Bengaluru")).toBe("companyResume:amazon:Bengaluru");
     expect(companyResumeKey("amazon", "Hyderabad")).toBe("companyResume:amazon:Hyderabad");
     expect(
       companyResumeSchema.safeParse({ companyId: "atlassian", city: "Hyderabad", resumeId: "" })
         .success,
-    ).toBe(false);
+    ).toBe(true);
     expect(
       companyResumeSchema.safeParse({ companyId: "unknown", city: "Bengaluru", resumeId: "" })
         .success,
-    ).toBe(false);
+    ).toBe(true);
     expect(
       companyResumeSchema.safeParse({ companyId: "amazon", city: "Hyderabad", resumeId: "invalid" })
         .success,
@@ -74,5 +83,26 @@ describe("company application references", () => {
       companyResumeSchema.safeParse({ companyId: "amazon", city: "Hyderabad", resumeId: "" })
         .success,
     ).toBe(true);
+  });
+
+  it("matches imported cities without interpreting their names as regex syntax", () => {
+    const activity = companyActivity(
+      amazon,
+      "Chennai",
+      [
+        { company: "AWS", location: "Chennai, India", appliedAt: new Date() },
+        { company: "AWS", location: "Chennaipattinam", appliedAt: new Date() },
+      ],
+      [],
+    );
+    expect(activity.sent).toBe(1);
+    expect(
+      companyActivity(
+        amazon,
+        "A+B",
+        [{ company: "AWS", location: "A+B, India", appliedAt: new Date() }],
+        [],
+      ).sent,
+    ).toBe(1);
   });
 });

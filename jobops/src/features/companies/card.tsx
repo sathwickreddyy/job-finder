@@ -7,6 +7,7 @@ import type { Company } from "./catalog";
 import { companyActivity, companyResumeKey, type CompanyCity } from "./domain";
 import { saveCompanyResume } from "./actions";
 import type { CompaniesData } from "./read";
+import { CompanyResearch } from "./research";
 
 export function CompanyCard({
   company,
@@ -28,6 +29,7 @@ export function CompanyCard({
       : latest?.version?.familyId;
   const family = data.families.find((row) => row.id === familyId);
   const key = `${company.id}-${city}`;
+  const location = company.locations?.find((place) => place.city === city);
   return (
     <article className="flex min-w-0 flex-col rounded-card border border-border bg-card p-5 text-foreground shadow-surface transition-[border-color] hover:border-primary">
       <div className="flex items-start gap-3">
@@ -42,7 +44,19 @@ export function CompanyCard({
           <p className="mt-1 text-sm text-muted-foreground">{company.focus}</p>
         </div>
       </div>
-      <p className="mt-4 text-xs text-muted-foreground">{new URL(company.careersUrl).hostname}</p>
+      <p className="mt-4 text-xs text-muted-foreground">
+        {company.careersUrl ? new URL(company.careersUrl).hostname : "Careers portal not recorded"}
+      </p>
+      {!!location?.workModes.length && (
+        <p className="mt-1 text-xs capitalize text-muted-foreground">
+          {location.workModes.map((mode) => mode.toLowerCase()).join(" · ")}
+        </p>
+      )}
+      {!!company.facts?.length && (
+        <p className="mt-2 text-xs text-primary">
+          {company.facts.length} sourced research {company.facts.length === 1 ? "note" : "notes"}
+        </p>
+      )}
       <div className="my-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
         <span>
           <strong className="text-lg tabular-nums">{activity.sent}</strong>{" "}
@@ -74,12 +88,18 @@ export function CompanyCard({
         </div>
       </div>
       <div className="mt-auto flex flex-wrap gap-2">
-        <Button asChild>
-          <a href={company.careersUrl} target="_blank" rel="noopener noreferrer">
-            Open careers
-            <ArrowUpRight size={15} aria-hidden />
-          </a>
-        </Button>
+        {company.careersUrl ? (
+          <Button asChild>
+            <a href={company.careersUrl} target="_blank" rel="noopener noreferrer">
+              Open careers
+              <ArrowUpRight size={15} aria-hidden />
+            </a>
+          </Button>
+        ) : (
+          <Button variant="outline" asChild>
+            <Link href="/jobs/new">Save an opening</Link>
+          </Button>
+        )}
       </div>
       <details id={`${key}-details`} className="mt-5 border-t border-border pt-2">
         <summary className="text-sm font-medium">
@@ -87,6 +107,7 @@ export function CompanyCard({
         </summary>
         <div className="mt-3 space-y-4">
           <p className="text-xs text-muted-foreground">{company.portalNote}</p>
+          <CompanyResearch facts={company.facts ?? []} preferences={preferences} />
           <Link href="/jobs/new" className="inline-block text-sm text-link">
             Save an opening from this portal
           </Link>
@@ -172,14 +193,19 @@ export function CompanyCard({
               ))}
             </div>
           )}
-          <a
-            href={company.locationSource}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-block text-xs text-link"
-          >
-            Official location source
-          </a>
+          {(location?.sourceUrl || company.locationSource) && (
+            <a
+              href={location?.sourceUrl || company.locationSource}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-block text-xs text-link"
+            >
+              Location source
+              {location
+                ? ` · ${location.verificationStatus.toLowerCase().replaceAll("_", " ")}`
+                : ""}
+            </a>
+          )}
         </div>
       </details>
     </article>

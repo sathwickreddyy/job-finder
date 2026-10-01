@@ -1,12 +1,16 @@
+import type { companyFacts, companyLocations } from "@/db/schema";
+
 export type Company = {
   id: string;
   name: string;
   aliases: string[];
-  cities: ("Bengaluru" | "Hyderabad")[];
+  cities: string[];
   focus: string;
   careersUrl: string;
   locationSource: string;
   portalNote: string;
+  facts?: (typeof companyFacts.$inferSelect)[];
+  locations?: (typeof companyLocations.$inferSelect)[];
 };
 
 // Official careers/location sources reviewed on 1 October 2026.

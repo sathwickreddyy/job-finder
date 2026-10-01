@@ -3,7 +3,7 @@
 import { and, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db";
-import { resumes, settings } from "@/db/schema";
+import { companyRecords, companyLocations, resumes, settings } from "@/db/schema";
 import { actionError, formString, type ActionState } from "@/lib/actions";
 import { companyResumeKey, companyResumeSchema } from "./domain";
 
@@ -16,6 +16,20 @@ export async function saveCompanyResume(_state: ActionState, form: FormData): Pr
     });
     const key = companyResumeKey(value.companyId, value.city);
     await db.transaction(async (tx) => {
+      const [company] = await tx
+        .select()
+        .from(companyRecords)
+        .where(and(eq(companyRecords.slug, value.companyId), eq(companyRecords.status, "ACTIVE")));
+      if (!company) throw new Error("This company is no longer active. Refresh the page.");
+      const locations = await tx
+        .select()
+        .from(companyLocations)
+        .where(eq(companyLocations.companyId, company.id));
+      if (
+        !locations.some((location) => location.city === value.city) &&
+        !(value.city === "Location not recorded" && locations.length === 0)
+      )
+        throw new Error("Choose a city recorded for this company. Refresh the page.");
       if (!value.resumeId) {
         await tx.delete(settings).where(eq(settings.key, key));
         return;

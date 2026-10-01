@@ -1,6 +1,22 @@
-# Simple job-search verification
+# JobOps verification
 
 Verified October 1, 2026 (Asia/Kolkata), on macOS with Node 24, Next.js 16.3.8, React 19.3, Tailwind CSS 4.3.3 and local PostgreSQL 17.
+
+## Company ingestion and LAN delivery
+
+- Strict TypeScript, ESLint, 137 unit tests across 21 files and Git whitespace checks passed.
+- The complete integration suite passed all 27 workflows. After final validation/documentation changes, all eight company API integration tests passed, including the exact JSON payloads embedded in README curl commands.
+- The final production build passed using `JOBOPS_BUILD_DIR=.next-e2e npm run build`, separate from the running personal dev server.
+- Additive company/location/fact/observation migrations applied successfully to both personal and marked isolated test databases. The existing eight real companies and 14 reviewed location records were preserved. No research, opening, salary or application activity was fabricated.
+- API integration covers idempotent POST, partial PATCH, recursively merged research, fact revision snapshots, city-only updates, ambiguous locations, renamed-company matching, archive, include/city filters, concurrent alias conflicts, batch rollback, body limits, source validation and OpenAPI export. Hydrated sourced research is also checked on the actual Companies page.
+- Resume/application browser workflows verify the approved separate Bengaluru/Hyderabad cards and preserve the exact submitted PDF while the preferred resume reference follows the current revision.
+- The live listener was verified as `*:3210`. Companies, company lists and OpenAPI returned HTTP 200 through both `http://127.0.0.1:3210` and `http://192.168.0.5:3210`. Both hosts returned eight Bengaluru and six Hyderabad companies, with `private, no-store` responses.
+- The personal fixture-cleanup preview found zero removable demo records. The normal seed command added nothing; the fictional test seed was deliberately invoked against the personal configuration and refused before connecting/writing. Test fixtures remain confined to the marked test database.
+- Host checks classify the requested target, not the client source. Local company ingestion needs no token; the trusted router/firewall remains the network boundary. Public-host authentication and browser-origin/server-action checks retain regression coverage.
+
+## Earlier simple-workflow delivery
+
+The results below describe the earlier delivery and its database audit at that time.
 
 ## Results
 

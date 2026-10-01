@@ -1,7 +1,8 @@
 # Company Ingestion API Design
 
 **Date:** 2026-10-01  
-**Status:** Approved; implementation and verification in progress  
+**Status:** Implemented and verified
+
 **Scope:** Persist company research and expose local-network REST endpoints that hydrate the JobOps Companies experience.
 
 ## Intent

@@ -1,8 +1,8 @@
 import { z } from "zod";
-import { companies, type Company } from "./catalog";
+import type { Company } from "./catalog";
 
 export const companyCities = ["Bengaluru", "Hyderabad"] as const;
-export type CompanyCity = (typeof companyCities)[number];
+export type CompanyCity = string;
 const normalize = (value: string) => value.trim().toLowerCase().replace(/\s+/g, " ");
 
 export function companyActivity<
@@ -11,14 +11,18 @@ export function companyActivity<
 >(company: Company, city: CompanyCity, applications: T[], jobs: J[]) {
   const names = [company.name, ...company.aliases].map(normalize);
   const matchesCompany = (row: { company: string }) => names.includes(normalize(row.company));
-  const location = city === "Bengaluru" ? /\b(?:bengaluru|bangalore)\b/i : /\bhyderabad\b/i;
+  const cityPattern =
+    city === "Bengaluru" ? "(?:bengaluru|bangalore)" : city.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const location = new RegExp(`(?:^|[^\\p{L}\\p{N}])${cityPattern}(?:$|[^\\p{L}\\p{N}])`, "iu");
   const records = applications.filter(matchesCompany);
-  const localRecords = records.filter((row) => location.test(row.location));
+  const matchesLocation = (row: { location: string }) =>
+    city === "Location not recorded" ? !row.location.trim() : location.test(row.location);
+  const localRecords = records.filter(matchesLocation);
   return {
     records,
     localRecords,
     sent: localRecords.filter((row) => row.appliedAt !== null).length,
-    openings: jobs.filter((row) => matchesCompany(row) && location.test(row.location)),
+    openings: jobs.filter((row) => matchesCompany(row) && matchesLocation(row)),
   };
 }
 
@@ -26,18 +30,8 @@ export function companyResumeKey(companyId: string, city: CompanyCity) {
   return `companyResume:${companyId}:${city}`;
 }
 
-export const companyResumeSchema = z
-  .object({
-    companyId: z.string(),
-    city: z.enum(companyCities),
-    resumeId: z.union([z.literal(""), z.uuid()]),
-  })
-  .refine(
-    (value) =>
-      companies.some(
-        (company) => company.id === value.companyId && company.cities.includes(value.city),
-      ),
-    {
-      message: "Choose a company listed in this city.",
-    },
-  );
+export const companyResumeSchema = z.object({
+  companyId: z.string().trim().min(1).max(150),
+  city: z.string().trim().min(1).max(200),
+  resumeId: z.union([z.literal(""), z.uuid()]),
+});

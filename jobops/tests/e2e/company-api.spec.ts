@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { readFile } from "node:fs/promises";
 import { expect, test, type APIRequestContext } from "@playwright/test";
 const endpoint = "/api/v1/companies";
 const fixtureRun = randomUUID();
@@ -330,4 +331,21 @@ test("schema is self-contained and typed for external ingestion clients", async 
   expect(contract.components.schemas.CompanyInput.required).toContain("slug");
   expect(contract.components.schemas.CompanyPatch.properties.slug).toBeUndefined();
   expect(contract.components.schemas.COMPENSATIONData.properties.fixedAnnual.minimum).toBe(0);
+});
+
+test("README curl payloads work unchanged against the company API", async ({ request }) => {
+  const readme = await readFile(new URL("../../README.md", import.meta.url), "utf8");
+  const examples = [...readme.matchAll(/--data-binary @- <<'JSON'\n([\s\S]*?)\nJSON/g)];
+  expect(examples).toHaveLength(2);
+  for (const example of examples) {
+    const data = JSON.parse(example[1]);
+    const response = await request.post(data.companies ? `${endpoint}/batch` : endpoint, { data });
+    expect(response.status(), await response.text()).toBe(200);
+  }
+  const google = await (await request.get(`${endpoint}/google`)).json();
+  expect(
+    google.facts.some(
+      (fact: { factKey: string }) => fact.factKey === "official-india-careers-portal",
+    ),
+  ).toBe(true);
 });
