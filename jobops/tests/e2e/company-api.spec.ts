@@ -71,11 +71,13 @@ test("company upsert preserves identity, sourced history and omitted values", as
         data: {
           publishedAt: "2024-12-31",
           role: "Software engineer",
-          outcome: "Offer",
+          outcome: "OFFER",
+          roundCount: 1,
           questions: ["Explain an LRU cache"],
           rounds: [
             {
               name: "Coding",
+              kind: "DSA",
               durationMinutes: 45,
               topics: ["Arrays"],
               questions: [
@@ -384,6 +386,26 @@ test("API rejects malformed, oversized, unsourced and elevated community evidenc
   ).toBe(403);
 });
 
+test("rejects compensation stored as text with the missing field named", async ({ request }) => {
+  const response = await request.post(endpoint, {
+    data: {
+      ...identity(),
+      facts: [
+        {
+          factKey: "offer",
+          category: "COMPENSATION",
+          title: "Offer",
+          sourceUrl: "https://leetcode.com/discuss/post/9",
+          data: { role: "SDE", currency: "INR", fixedAnnualOriginal: "31 LPA" },
+        },
+      ],
+    },
+  });
+  expect(response.status()).toBe(400);
+  const body = await response.json();
+  expect(body.issues.map((issue: { path: string }) => issue.path)).toContain("data.fixedAnnual");
+});
+
 test("schema is self-contained and typed for external ingestion clients", async ({ request }) => {
   const response = await request.get(`${endpoint}/schema`);
   expect(response.status()).toBe(200);
@@ -392,7 +414,15 @@ test("schema is self-contained and typed for external ingestion clients", async 
   expect(contract.openapi).toBe("3.1.0");
   expect(contract.components.schemas.CompanyInput.required).toContain("slug");
   expect(contract.components.schemas.CompanyPatch.properties.slug).toBeUndefined();
-  expect(contract.components.schemas.COMPENSATIONData.properties.fixedAnnual.minimum).toBe(0);
+  expect(contract.components.schemas.COMPENSATIONData.properties.fixedAnnual.exclusiveMinimum).toBe(
+    0,
+  );
+  expect(contract.components.schemas.COMPENSATIONData.required).toEqual(
+    expect.arrayContaining(["role", "currency"]),
+  );
+  expect(contract.components.schemas.INTERVIEWData.required).toEqual(
+    expect.arrayContaining(["role", "outcome", "roundCount", "rounds"]),
+  );
   expect(contract.components.schemas.COMPENSATIONData.properties.publicationYear.type).toBe(
     "integer",
   );

@@ -19,6 +19,15 @@ const input = {
   title: "Interview report",
   sourceUrl: "https://leetcode.com/discuss/post/1",
 };
+const conforming: Record<string, Record<string, unknown>> = {
+  COMPENSATION: { role: "SDE-2", currency: "INR", fixedAnnual: 3100000 },
+  INTERVIEW: {
+    role: "SDE-2",
+    outcome: "OFFER",
+    roundCount: 1,
+    rounds: [{ name: "Coding", kind: "DSA" }],
+  },
+};
 
 describe("structured company research", () => {
   it("uses publication metadata and never substitutes event or observation years", () => {
@@ -112,7 +121,7 @@ describe("structured company research", () => {
         validateFact({
           ...input,
           category,
-          data: { publishedAt: "2025-12-31", publicationYear: 2025 },
+          data: { ...conforming[category], publishedAt: "2025-12-31", publicationYear: 2025 },
         }).data.publicationYear,
       ).toBe(2025);
     for (const data of [
@@ -121,10 +130,13 @@ describe("structured company research", () => {
       { publishedAt: "2025-02-30" },
       { publishedAt: "2024-01-01", publicationYear: 2025 },
     ])
-      expect(() => validateFact({ ...input, data })).toThrow();
+      expect(() =>
+        validateFact({ ...input, data: { ...conforming.INTERVIEW, ...data } }),
+      ).toThrow();
   });
   it("accepts sourced structured questions alongside strings and validates their links", () => {
     const data = {
+      ...conforming.INTERVIEW,
       publicationYear: 2025,
       questions: [
         "Explain queues",
@@ -134,7 +146,14 @@ describe("structured company research", () => {
           topic: "System design",
         },
       ],
-      rounds: [{ name: "Coding", durationMinutes: 45, questions: [{ text: "Reverse a list" }] }],
+      rounds: [
+        {
+          name: "Coding",
+          kind: "DSA",
+          durationMinutes: 45,
+          questions: [{ text: "Reverse a list" }],
+        },
+      ],
     };
     expect(validateFact({ ...input, data }).data).toEqual(data);
     for (const questions of [
@@ -142,14 +161,18 @@ describe("structured company research", () => {
       [{ text: "Question", referenceUrl: "javascript:alert(1)" }],
       [{ question: "Use the documented text field" }],
     ])
-      expect(() => validateFact({ ...input, data: { questions } })).toThrow();
+      expect(() =>
+        validateFact({ ...input, data: { ...conforming.INTERVIEW, questions } }),
+      ).toThrow();
     expect(() =>
       validateFact({
         ...input,
         data: {
+          ...conforming.INTERVIEW,
           rounds: [
             {
               name: "Coding",
+              kind: "DSA",
               questions: [{ text: "Question", referenceUrl: "file:///tmp/private" }],
             },
           ],

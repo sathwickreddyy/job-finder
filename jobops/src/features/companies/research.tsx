@@ -293,11 +293,21 @@ export function CompanyResearch({
                     <ResearchValue value={fact.data.yearsExperience} />
                   </td>
                   {["fixedAnnual", "variableAnnual", "joiningBonus", "equity", "totalAnnual"].map(
-                    (key) => (
-                      <td key={key}>
-                        <Pay value={fact.data[key]} currency={fact.data.currency} />
-                      </td>
-                    ),
+                    (key) => {
+                      // Stock grants carry their own currency and are never converted.
+                      const grant =
+                        key === "equity" && fact.data.equity && typeof fact.data.equity === "object"
+                          ? (fact.data.equity as Record<string, unknown>)
+                          : undefined;
+                      return (
+                        <td key={key}>
+                          <Pay
+                            value={grant ? grant.amount : fact.data[key]}
+                            currency={grant ? grant.currency : fact.data.currency}
+                          />
+                        </td>
+                      );
+                    },
                   )}
                   <td>
                     <Reference fact={fact} preferences={preferences} />

@@ -67,18 +67,119 @@ describe("company ingestion validation", () => {
         }),
       ).toThrow();
   });
-  it("validates typed compensation while preserving future sourced information", () => {
+  const pay = {
+    factKey: "offer",
+    category: "COMPENSATION",
+    title: "Offer",
+    sourceUrl: "https://leetcode.com/discuss/1",
+  };
+  const paths = (run: () => unknown) => {
+    try {
+      run();
+    } catch (error) {
+      return (error as { issues: { path: (string | number)[] }[] }).issues.map((issue) =>
+        issue.path.join("."),
+      );
+    }
+    return [];
+  };
+  it("requires role, currency and a numeric annual amount for compensation", () => {
     const fact = validateFact({
-      factKey: "offer",
-      category: "COMPENSATION",
-      title: "Offer",
-      sourceUrl: "https://leetcode.com/discuss/1",
-      data: { fixedAnnual: 4500000, notes: { relocation: true } },
+      ...pay,
+      data: { role: "SDE-2", currency: "INR", fixedAnnual: 4500000, notes: { relocation: true } },
     });
-    expect(fact.data).toEqual({ fixedAnnual: 4500000, notes: { relocation: true } });
+    expect(fact.data).toMatchObject({ fixedAnnual: 4500000, notes: { relocation: true } });
     expect(fact.verificationStatus).toBe("COMMUNITY_REPORTED");
-    expect(() => validateFact({ ...fact, data: { fixedAnnual: -1 } })).toThrow();
-    expect(() => validateFact({ ...fact, data: { fixedAnnual: "45L" } })).toThrow();
+    expect(
+      paths(() => validateFact({ ...pay, data: { currency: "INR", fixedAnnual: 1 } })),
+    ).toContain("data.role");
+    expect(paths(() => validateFact({ ...pay, data: { role: "SDE", fixedAnnual: 1 } }))).toContain(
+      "data.currency",
+    );
+    expect(
+      paths(() => validateFact({ ...pay, data: { role: "SDE", currency: "inr", fixedAnnual: 1 } })),
+    ).toContain("data.currency");
+    expect(paths(() => validateFact({ ...pay, data: { role: "SDE", currency: "INR" } }))).toContain(
+      "data.fixedAnnual",
+    );
+    expect(() =>
+      validateFact({ ...pay, data: { role: "SDE", currency: "INR", fixedAnnual: 0 } }),
+    ).toThrow();
+    expect(() =>
+      validateFact({ ...pay, data: { role: "SDE", currency: "INR", fixedAnnual: "45L" } }),
+    ).toThrow();
+    expect(
+      validateFact({ ...pay, data: { role: "SDE", currency: "INR", totalAnnual: 5000000 } }).data
+        .totalAnnual,
+    ).toBe(5000000);
+  });
+  it("requires a numeric twin for every original text amount", () => {
+    const base = { role: "SDE", currency: "INR", fixedAnnual: 3100000 };
+    expect(
+      paths(() => validateFact({ ...pay, data: { ...base, joiningBonusOriginal: "3L" } })),
+    ).toContain("data.joiningBonus");
+    expect(
+      paths(() => validateFact({ ...pay, data: { ...base, variableOriginal: "10%" } })),
+    ).toContain("data.variableAnnual");
+    expect(() =>
+      validateFact({ ...pay, data: { ...base, variableOriginal: "10%", variablePercent: 10 } }),
+    ).not.toThrow();
+    expect(
+      paths(() => validateFact({ ...pay, data: { ...base, equityOriginal: "$58K over 4 years" } })),
+    ).toContain("data.equity");
+  });
+  it("keeps stock as a typed grant in its own currency", () => {
+    const base = { role: "SDE", currency: "INR", fixedAnnual: 3100000 };
+    const equity = { amount: 58000, currency: "USD", vestingYears: 4, type: "RSU" };
+    expect(validateFact({ ...pay, data: { ...base, equity } }).data.equity).toEqual(equity);
+    expect(() => validateFact({ ...pay, data: { ...base, equity: 58000 } })).toThrow();
+    expect(
+      paths(() => validateFact({ ...pay, data: { ...base, equity: { amount: 58000 } } })),
+    ).toContain("data.equity.currency");
+    const units = { units: 160, vestingYears: 4, type: "RSU" };
+    expect(validateFact({ ...pay, data: { ...base, equity: units } }).data.equity).toEqual(units);
+    expect(() =>
+      validateFact({ ...pay, data: { ...base, equity: { vestingYears: 4 } } }),
+    ).toThrow();
+    expect(() => validateFact({ ...pay, data: { ...base, variablePercent: 120 } })).toThrow();
+    expect(() =>
+      validateFact({ ...pay, data: { ...base, benefits: ["Relocation ₹1.5L"] } }),
+    ).not.toThrow();
+  });
+  it("requires typed rounds, a round count and an outcome for interviews", () => {
+    const interview = {
+      factKey: "loop",
+      category: "INTERVIEW",
+      title: "Loop",
+      sourceUrl: "https://leetcode.com/discuss/2",
+    };
+    const data = {
+      role: "SDE-2",
+      outcome: "OFFER",
+      roundCount: 3,
+      rounds: [
+        { name: "R1 — DSA", kind: "DSA" },
+        { name: "R2 — HLD", kind: "HLD" },
+      ],
+    };
+    expect(validateFact({ ...interview, data }).data.roundCount).toBe(3);
+    expect(
+      paths(() => validateFact({ ...interview, data: { ...data, outcome: "Offer" } })),
+    ).toContain("data.outcome");
+    expect(
+      paths(() =>
+        validateFact({ ...interview, data: { ...data, rounds: [{ name: "R1 — DSA" }] } }),
+      ),
+    ).toContain("data.rounds.0.kind");
+    expect(paths(() => validateFact({ ...interview, data: { ...data, rounds: [] } }))).toContain(
+      "data.rounds",
+    );
+    expect(paths(() => validateFact({ ...interview, data: { ...data, roundCount: 1 } }))).toContain(
+      "data.roundCount",
+    );
+    expect(
+      paths(() => validateFact({ ...interview, data: { ...data, role: undefined } })),
+    ).toContain("data.role");
   });
   it("rejects community verification elevation and unsafe source URLs", () => {
     expect(() =>
@@ -152,10 +253,18 @@ describe("company HTTP boundary", () => {
   it("exports a self-contained schema and typed category data", () => {
     const contract = companyContract();
     expect(contract.openapi).toBe("3.1.0");
-    expect(
-      (contract.components.schemas as Record<string, { properties?: Record<string, unknown> }>)
-        .COMPENSATIONData.properties?.fixedAnnual,
-    ).toMatchObject({ type: "number", minimum: 0 });
+    const schemas = contract.components.schemas as Record<
+      string,
+      { properties?: Record<string, unknown>; required?: string[] }
+    >;
+    expect(schemas.COMPENSATIONData.properties?.fixedAnnual).toMatchObject({
+      type: "number",
+      exclusiveMinimum: 0,
+    });
+    expect(schemas.COMPENSATIONData.required).toEqual(expect.arrayContaining(["role", "currency"]));
+    expect(schemas.INTERVIEWData.required).toEqual(
+      expect.arrayContaining(["role", "outcome", "roundCount", "rounds"]),
+    );
     expect(JSON.stringify(contract)).toContain("/api/v1/companies/batch");
   });
   it("redacts unexpected storage errors", async () => {

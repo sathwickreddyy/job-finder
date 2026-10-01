@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { companyCategories, companySourceKinds, companyVerificationStatuses } from "@/db/schema";
+import { interviewOutcomes, roundKinds } from "./metrics";
 
 export function normalizeIdentity(value: string) {
   return value.trim().toLowerCase().replace(/\s+/g, " ");
@@ -76,54 +77,123 @@ const roleFields = {
   status: text().optional(),
   openingUrl: httpUrl.optional(),
 };
+const positive = z.number().finite().positive();
+const currencyCode = z
+  .string()
+  .trim()
+  .regex(/^[A-Z]{3}$/, "Use an uppercase ISO 4217 currency code such as INR.");
+/**
+ * A stock grant, usually in dollars or units while cash pay is INR: the total grant (`amount`), the
+ * yearly value (`annualAmount`) or the number of units, in any combination. Values keep their own
+ * currency and are never converted.
+ */
+export const equitySchema = z
+  .object({
+    amount: positive.optional(),
+    annualAmount: positive.optional(),
+    units: z.number().int().positive().optional(),
+    currency: currencyCode.optional(),
+    vestingYears: z.number().positive().max(10).optional(),
+    type: z.enum(["RSU", "ESOP", "STOCK_BONUS", "OTHER"]).optional(),
+  })
+  .passthrough()
+  .superRefine((grant, context) => {
+    const valued = grant.amount !== undefined || grant.annualAmount !== undefined;
+    if (!valued && grant.units === undefined)
+      context.addIssue({
+        code: "custom",
+        path: ["amount"],
+        message: "Supply the total grant as amount, the yearly value as annualAmount, or units.",
+      });
+    if (valued && grant.currency === undefined)
+      context.addIssue({
+        code: "custom",
+        path: ["currency"],
+        message: "A stock value needs its own currency code, e.g. USD.",
+      });
+  });
+/** Original text amounts and the numeric fields that must accompany them. */
+export const compensationTwins = [
+  ["fixedAnnualOriginal", ["fixedAnnual"]],
+  ["totalAnnualOriginal", ["totalAnnual"]],
+  ["joiningBonusOriginal", ["joiningBonus"]],
+  ["variableOriginal", ["variableAnnual", "variablePercent"]],
+  ["equityOriginal", ["equity"]],
+] as const;
+const interviewRound = z
+  .object({
+    name: text().min(1),
+    kind: z.enum(roundKinds),
+    summary: text(10000).optional(),
+    durationMinutes: amount,
+    topics: words,
+    questions,
+    referenceUrl: httpUrl.optional(),
+  })
+  .passthrough();
 export const factDataSchemas = {
   COMPENSATION: z
     .object({
       ...publicationFields,
-      role: text().optional(),
+      role: text().min(1),
       level: text().optional(),
       yearsExperience: amount,
-      currency: text(12).optional(),
-      fixedAnnual: amount,
-      variableAnnual: amount,
-      joiningBonus: amount,
-      equity: amount,
-      totalAnnual: amount,
+      currency: currencyCode,
+      fixedAnnual: positive.optional(),
+      totalAnnual: positive.optional(),
+      // Zero records a report that explicitly says there is none.
+      variableAnnual: z.number().finite().nonnegative().optional(),
+      variablePercent: z.number().min(0).max(100).optional(),
+      joiningBonus: z.number().finite().nonnegative().optional(),
+      equity: equitySchema.optional(),
+      benefits: z.array(text(300).min(1)).max(50).optional(),
       vestingNotes: text(10000).optional(),
       offerDate: date.optional(),
       officeDaysPerWeek: z.number().int().min(0).max(7).optional(),
     })
-    .passthrough(),
+    .passthrough()
+    .superRefine(
+      (value, context) => {
+        if (!value || typeof value !== "object") return;
+        const data = value as Record<string, unknown>;
+        if (data.fixedAnnual === undefined && data.totalAnnual === undefined)
+          context.addIssue({
+            code: "custom",
+            path: ["fixedAnnual"],
+            message:
+              "Supply fixedAnnual or totalAnnual as a number in whole currency units per year, e.g. 3100000 for 31 LPA.",
+          });
+        for (const [original, numeric] of compensationTwins)
+          // A null original was cleared after review (its text moved to notes), so it needs no twin.
+          if (data[original] != null && numeric.every((key) => data[key] === undefined))
+            context.addIssue({
+              code: "custom",
+              path: [numeric[0]],
+              message: `${original} needs its numeric twin ${numeric.join(" or ")}.`,
+            });
+      },
+      // Report the missing amount together with other field errors, so writers fix everything at once.
+      { when: () => true },
+    ),
   INTERVIEW: z
     .object({
       ...publicationFields,
-      role: text().optional(),
+      role: text().min(1),
       level: text().optional(),
-      outcome: text().optional(),
-      roundCount: z.number().int().nonnegative().optional(),
-      rounds: z
-        .array(
-          z.union([
-            text(10000),
-            z
-              .object({
-                name: text().optional(),
-                summary: text(10000).optional(),
-                durationMinutes: amount,
-                topics: words,
-                questions,
-                referenceUrl: httpUrl.optional(),
-              })
-              .passthrough(),
-          ]),
-        )
-        .max(100)
-        .optional(),
+      yearsExperience: amount,
+      outcome: z.enum(interviewOutcomes),
+      outcomeNotes: text(10000).optional(),
+      roundCount: z.number().int().positive(),
+      rounds: z.array(interviewRound).min(1).max(100),
       topics: words,
       questions,
       applicationRoute: text().optional(),
     })
-    .passthrough(),
+    .passthrough()
+    .refine((value) => value.roundCount >= value.rounds.length, {
+      path: ["roundCount"],
+      message: "roundCount cannot be less than the number of described rounds.",
+    }),
   TECH_STACK: z
     .object({
       ...publicationFields,
@@ -239,7 +309,12 @@ export function validateFact(input: unknown) {
         message: "Community evidence cannot be labelled VERIFIED.",
       },
     ]);
-  const data = factDataSchemas[value.category].parse(value.data ?? {}) as Record<string, unknown>;
+  const parsed = factDataSchemas[value.category].safeParse(value.data ?? {});
+  if (!parsed.success)
+    throw new z.ZodError(
+      parsed.error.issues.map((issue) => ({ ...issue, path: ["data", ...issue.path] })),
+    );
+  const data = parsed.data as Record<string, unknown>;
   if (
     data.publicationYear !== undefined &&
     typeof data.publishedAt === "string" &&
