@@ -39,6 +39,7 @@ Do not commit secrets, personal resumes, generated databases, or local data.
 - Resumes are user-provided files. Preserve and preview originals and revised versions; track bullet changes, exact company/role usage, and source-labelled assessments for the specific resume and job description. Resume rewriting happens in the user's external assistant conversation.
 - Make on-demand email refresh, date-based grouping and urgent action items prominent. Start with this core workflow before adding other features.
 - Option A (spacious cards) was approved on 2026-10-01 for the simple prompt-first pages. The gallery remains available at `/gallery/simple`. Use shared Tailwind 4 theme tokens; avoid component-local palette literals.
+- Option B (compact cards) was approved on 2026-10-01 for Companies, with separate Bengaluru and Hyderabad sections. The live company gallery remains at `/gallery/companies`. Resume references follow a selected family’s current version; application records retain their exact submitted version.
 - Suggestions are editable starting points. Support custom goals and user-approved preferences supplied from existing assistant conversations. Do not assume access to ChatGPT or Claude memory.
 - Consolidate LinkedIn, GitHub, portfolio websites and job portals. Support profile improvements and project showcases through clear prompts and notes, without another task/proposal layer.
 - Provide a step-by-step walkthrough of finding an opening, saving its description, reviewing a resume and recording an application once the production flow is ready.

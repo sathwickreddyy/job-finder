@@ -58,7 +58,12 @@ export function WorkspaceHome({ data }: { data: WorkspaceData }) {
         <SiteCards sites={data.sites} />
       </section>
       <section>
-        <h2 className="mb-4 text-xl font-semibold">Places to find openings</h2>
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-xl font-semibold">Places to find openings</h2>
+          <Link href="/companies" className="text-sm text-link">
+            Browse Bengaluru & Hyderabad companies
+          </Link>
+        </div>
         <JobSiteCards />
       </section>
       <section className="space-y-4">

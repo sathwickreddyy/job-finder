@@ -27,6 +27,7 @@ const familySchema = z.object({
 const uuid = z.string().uuid();
 function refresh(id?: string) {
   revalidatePath("/resumes");
+  revalidatePath("/companies");
   revalidatePath("/");
   if (id) revalidatePath(`/resumes/${id}`);
 }

@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useSyncExternalStore, type ReactNode } from "react";
 import {
   BriefcaseBusiness,
+  Building2,
   FileText,
   Home,
   Inbox,
@@ -24,6 +25,7 @@ const navigation = [
     routes: ["/jobs", "/opportunities", "/outreach"],
   },
   { label: "Resumes", href: "/resumes", icon: FileText, routes: ["/resume-prompt"] },
+  { label: "Companies", href: "/companies", icon: Building2, routes: [] },
   { label: "Applications", href: "/applications", icon: BriefcaseBusiness, routes: [] },
 ];
 function subscribe(callback: () => void) {
@@ -57,7 +59,8 @@ export function AppShell({ children }: { children: ReactNode }) {
     }
     window.dispatchEvent(new Event("jobops-theme"));
   }
-  if (pathname.startsWith("/gallery/simple")) return <main id="main">{children}</main>;
+  if (pathname.startsWith("/gallery/simple") || pathname.startsWith("/gallery/companies"))
+    return <main id="main">{children}</main>;
   return (
     <div className="min-h-dvh bg-background text-foreground">
       <a className="skip-link" href="#main">

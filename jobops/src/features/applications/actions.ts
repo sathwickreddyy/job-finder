@@ -94,6 +94,7 @@ export async function createApplication(_state: ActionState, form: FormData): Pr
       return app.id;
     });
     revalidatePath("/applications");
+    revalidatePath("/companies");
     revalidatePath("/jobs");
     revalidatePath("/");
     return { redirect: `/applications/${id}` };
@@ -167,6 +168,7 @@ export async function updateApplication(_state: ActionState, form: FormData): Pr
     });
     revalidatePath(`/applications/${id}`);
     revalidatePath("/applications");
+    revalidatePath("/companies");
     revalidatePath("/");
     return { success: "Application saved and event appended." };
   } catch (e) {

@@ -32,6 +32,7 @@ export async function commitJobs(_state: ImportState, form: FormData): Promise<I
       strategy,
     );
     revalidatePath("/jobs");
+    revalidatePath("/companies");
     revalidatePath("/");
     return {
       summary,
@@ -67,6 +68,7 @@ export async function addJob(_state: ActionState, form: FormData): Promise<Actio
         error: "This opening is already saved. Open Saved openings to review it.",
       };
     revalidatePath("/jobs");
+    revalidatePath("/companies");
     revalidatePath("/");
     return { redirect: `/jobs/${summary.ids[0]}` };
   } catch (e) {
