@@ -12,12 +12,19 @@ import {
   saveChangeNotes,
   selectCurrentVersion,
   toggleArchive,
-  uploadVersion,
   retryParsing,
 } from "@/features/resumes/actions";
 import { displayDate, getDisplayPreferences } from "@/features/candidate/preferences";
 import { indiaDate } from "@/features/mail/attention";
-import { methodNames } from "@/features/applications/domain";
+import { resumePresentation } from "@/features/resumes/presentation";
+import {
+  DefaultBadge,
+  FileMark,
+  PdfPreview,
+  UseBadge,
+  UsagePanel,
+} from "@/features/resumes/file-ui";
+import { ResumeUploadDrawer } from "@/features/resumes/upload-drawer";
 export default async function ResumeDetail({
   params,
   searchParams,
@@ -42,10 +49,11 @@ export default async function ResumeDetail({
     resume.versions.find((file) => file.id === p.version) ??
     resume.versions.find((file) => file.isCurrent) ??
     resume.versions[0];
-  const tab = ["file", "changes", "usage", "ats"].includes(p.tab ?? "") ? p.tab! : "file";
+  const tab = ["file", "changes", "usage", "ats"].includes(p.tab ?? "") ? p.tab! : "usage";
   const path = (selectedTab: string, versionId = version?.id) =>
     `/resumes/${id}?${new URLSearchParams({ ...(versionId ? { version: versionId } : {}), tab: selectedTab })}`;
-  const usage = resume.usage.filter((record) => record.versionId === version?.id);
+  const presentation = resumePresentation(resume, prefs);
+  const selectedFile = presentation.files.find((file) => file.id === version?.id);
   const assessments = resume.assessments.filter(
     (record) => record.assessment.versionId === version?.id,
   );
@@ -57,90 +65,106 @@ export default async function ResumeDetail({
       <Link href="/resumes" className="text-sm text-link">
         All resumes
       </Link>
+      <p className="text-sm text-muted-foreground">
+        {resume.name}
+        {resume.isActive ? "" : " · Archived"}
+      </p>
       <PageHeader
-        title={resume.name}
-        description={`${resume.versions.length} files · Original and revised versions kept separately`}
+        title={version?.versionLabel ?? resume.name}
+        description={version?.originalFilename ?? "Upload your first PDF"}
         actions={
-          <Button asChild>
-            <Link href={`/resumes/${id}?upload=1#upload-version`}>Upload revised PDF</Link>
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            {version && (
+              <Button variant="outline" asChild>
+                <a href={`/api/resumes/${version.id}/file?download=1`}>Download PDF</a>
+              </Button>
+            )}
+            <ResumeUploadDrawer
+              key={`${p.version ?? "default"}-${p.upload ?? "closed"}`}
+              families={[{ id, name: resume.name }]}
+              familyId={id}
+              initialOpen={p.upload === "1" || !version}
+              label="Upload revised PDF"
+            />
+          </div>
         }
       />
-      <div className="grid items-start gap-5 lg:grid-cols-[280px_minmax(0,1fr)]">
-        <Panel title="Your files">
+      {selectedFile && (
+        <div className="flex flex-wrap gap-2">
+          <UseBadge file={selectedFile} />
+          {selectedFile.isDefault && <DefaultBadge />}
+        </div>
+      )}
+      <div className="grid overflow-hidden rounded-panel border border-border bg-card shadow-surface lg:grid-cols-[240px_minmax(0,1fr)]">
+        <aside
+          aria-label="Resume versions"
+          className="border-b border-border bg-rail/50 p-4 lg:border-b-0 lg:border-r"
+        >
+          <p className="mb-4 px-2 text-xs text-muted-foreground">Choose a file</p>
           <div className="space-y-2">
             {resume.versions.map((file) => (
               <Link
                 key={file.id}
                 href={path(tab, file.id)}
                 aria-current={version?.id === file.id ? "page" : undefined}
-                className={`pressable block rounded-xl border p-4 text-foreground hover:no-underline ${version?.id === file.id ? "border-primary bg-selected text-selected-foreground" : "border-border hover:bg-muted"}`}
+                className={`pressable flex gap-3 rounded-2xl border p-3 text-foreground hover:no-underline ${version?.id === file.id ? "border-primary bg-selected text-selected-foreground" : "border-border hover:bg-muted"}`}
               >
-                <strong className="block text-sm">{file.versionLabel}</strong>
-                <span className="mt-2 block break-all text-xs text-muted-foreground">
-                  {file.originalFilename}
-                </span>
-                <span className="mt-2 block text-xs text-muted-foreground">
-                  {displayDate(file.createdAt, prefs)}
-                  {file.isCurrent ? " · Default file" : ""}
+                <FileMark compact />
+                <span className="min-w-0">
+                  <strong className="block text-xs leading-relaxed">{file.versionLabel}</strong>
+                  <span className="mt-2 block text-xs text-muted-foreground">
+                    {displayDate(file.createdAt, prefs)}
+                    {file.isCurrent ? " · Default file" : ""}
+                  </span>
+                  <span className="mt-2 block text-[11px]">
+                    {resume.usage.filter((record) => record.versionId === file.id).length} linked
+                    record
+                    {resume.usage.filter((record) => record.versionId === file.id).length === 1
+                      ? ""
+                      : "s"}
+                  </span>
                 </span>
               </Link>
             ))}
           </div>
           {!resume.versions.length && (
-            <p className="text-sm text-muted-foreground">Upload a PDF below.</p>
+            <p className="text-sm text-muted-foreground">
+              Use Upload revised PDF to add your first file.
+            </p>
           )}
-        </Panel>
-        <div className="min-w-0 space-y-5">
+        </aside>
+        <div className="min-w-0 space-y-5 p-5 sm:p-6">
           <nav
-            className="flex flex-wrap gap-1 rounded-card border border-border bg-card p-3"
+            className="flex flex-wrap gap-1 rounded-full bg-rail p-1"
             aria-label="Resume details"
           >
             {[
-              ["file", "File"],
-              ["changes", "Bullet changes"],
-              ["usage", "Used for"],
-              ["ats", "ATS assessment"],
+              ["usage", "Applications"],
+              ["file", "PDF preview"],
+              ["changes", "Changes and assessments"],
             ].map(([key, label]) => (
               <Button
                 key={key}
-                variant={tab === key ? "secondary" : "ghost"}
-                className="px-3"
+                variant={
+                  tab === key || (tab === "ats" && key === "changes") ? "secondary" : "ghost"
+                }
+                className={`min-h-10 flex-1 rounded-full px-3 text-xs ${tab === key || (tab === "ats" && key === "changes") ? "bg-selected text-selected-foreground hover:bg-selected/80" : ""}`}
                 asChild
               >
-                <Link href={path(key)} aria-current={tab === key ? "page" : undefined}>
+                <Link
+                  href={path(key)}
+                  aria-current={
+                    tab === key || (tab === "ats" && key === "changes") ? "page" : undefined
+                  }
+                >
                   {label}
                 </Link>
               </Button>
             ))}
           </nav>
           {version && tab === "file" && (
-            <Panel title={`Selected version: ${version.versionLabel}`}>
-              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-                <p className="break-all text-sm text-muted-foreground">
-                  {version.originalFilename} · {(version.fileSize / 1024).toFixed(1)} KB
-                </p>
-                <Button variant="outline" asChild>
-                  <a href={`/api/resumes/${version.id}/file?download=1`}>Download PDF</a>
-                </Button>
-              </div>
-              <iframe
-                title={`PDF preview of ${resume.name}, ${version.versionLabel}`}
-                src={`/api/resumes/${version.id}/file`}
-                className="h-[650px] w-full rounded-xl bg-white"
-              />
-              <p className="mt-3 text-sm text-muted-foreground">
-                Viewer unavailable?{" "}
-                <a
-                  href={`/api/resumes/${version.id}/file`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-link"
-                >
-                  Open PDF in a new tab
-                </a>
-                .
-              </p>
+            <div>
+              {selectedFile && <PdfPreview file={selectedFile} height="h-[650px]" />}
               <Link
                 href={`/resume-prompt?resume=${version.id}`}
                 className="mt-5 inline-block text-sm text-link"
@@ -159,9 +183,9 @@ export default async function ResumeDetail({
                   </ActionForm>
                 </details>
               )}
-            </Panel>
+            </div>
           )}
-          {version && tab === "changes" && (
+          {version && (tab === "changes" || tab === "ats") && (
             <Panel title="Bullet changes">
               <p className="mb-4 text-sm text-muted-foreground">
                 Keep the original bullet, revised wording, reason and facts you confirmed with your
@@ -185,40 +209,32 @@ export default async function ResumeDetail({
               </ActionForm>
             </Panel>
           )}
-          {version && tab === "usage" && (
-            <Panel title="Company and role">
-              <p className="mb-4 text-sm text-muted-foreground">
-                The exact records linked to {version.originalFilename}.
+          {selectedFile && tab === "usage" && (
+            <div className="space-y-6">
+              <p className="text-sm text-muted-foreground">
+                Applications and outreach linked to this exact PDF.
               </p>
-              {usage.length ? (
-                <div className="divide-y divide-border">
-                  {usage.map((record) => (
-                    <Link
-                      key={record.id}
-                      href={`/applications/${record.id}`}
-                      className="block py-4 text-foreground"
-                    >
-                      <h3 className="font-semibold">{record.company}</h3>
-                      <p className="mt-1">{record.title}</p>
-                      <p className="mt-2 text-sm text-muted-foreground">
-                        {methodNames[record.source] || "Application"} ·{" "}
-                        {record.appliedAt
-                          ? `applied ${displayDate(record.appliedAt, prefs)}`
-                          : record.outreachSent
-                            ? "sent"
-                            : "preparing"}
-                      </p>
-                    </Link>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  No application or outreach record uses this file yet.
+              <UsagePanel file={selectedFile} timeline />
+              <details className="border-t border-border pt-5">
+                <summary className="text-sm font-medium">
+                  Bullet changes{version?.changeNotes ? "" : " · none recorded"}
+                </summary>
+                <p className="mt-3 whitespace-pre-wrap text-sm text-muted-foreground">
+                  {version?.changeNotes || "No changes recorded for this version."}
                 </p>
-              )}
-            </Panel>
+              </details>
+              <p className="text-xs text-muted-foreground">
+                {selectedFile.textExtracted
+                  ? "Selectable text extracted"
+                  : "Text extraction needs review"}{" "}
+                ·{" "}
+                {assessments.length
+                  ? `${assessments.length} saved assessments`
+                  : "No ATS assessment recorded"}
+              </p>
+            </div>
           )}
-          {version && tab === "ats" && (
+          {version && (tab === "changes" || tab === "ats") && (
             <div className="space-y-5">
               <Panel title="Assessments for this file">
                 <p className="mb-5 text-sm text-muted-foreground">
@@ -327,45 +343,13 @@ export default async function ResumeDetail({
           )}
           {!version && (
             <Panel>
-              <p className="text-muted-foreground">Upload the first PDF for this resume below.</p>
+              <p className="text-muted-foreground">
+                Use Upload revised PDF to add your first file.
+              </p>
             </Panel>
           )}
         </div>
       </div>
-      <details
-        id="upload-version"
-        open={p.upload === "1" || !version}
-        className="rounded-card border border-border bg-card p-6"
-      >
-        <summary className="cursor-pointer font-semibold">Upload another version</summary>
-        <div className="mt-5">
-          <ActionForm action={uploadVersion}>
-            <input type="hidden" name="resumeId" value={id} />
-            <Field
-              label="Version label"
-              name="versionLabel"
-              required
-              placeholder="Backend role · revised"
-            />
-            <Field label="PDF file" name="file">
-              <input id="file" name="file" type="file" accept="application/pdf,.pdf" required />
-            </Field>
-            <Field label="Bullet changes with this upload" name="upload-changeNotes">
-              <textarea
-                id="upload-changeNotes"
-                name="changeNotes"
-                rows={5}
-                placeholder="Paste the change log from your assistant."
-              />
-            </Field>
-            <label className="flex items-center gap-2">
-              <input type="checkbox" name="makeCurrent" defaultChecked />
-              Use this as my default file
-            </label>
-            <Button>Upload PDF</Button>
-          </ActionForm>
-        </div>
-      </details>
       <details className="rounded-card border border-border bg-card p-6">
         <summary className="cursor-pointer text-sm font-medium">
           Default file and archive settings

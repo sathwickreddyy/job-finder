@@ -8,7 +8,9 @@ async function pdf(text: string) {
 }
 async function upload(page: import("@playwright/test").Page, name: string, bytes: Buffer) {
   await page.goto("/resumes");
-  const form = page.locator("#upload");
+  await page.getByRole("button", { name: "Upload a resume", exact: true }).click();
+  const form = page.getByRole("dialog", { name: "Upload a resume", exact: true });
+  await form.getByLabel("Add this file to").selectOption("new");
   await form.getByLabel("Resume name").fill(name);
   await form
     .getByLabel("PDF file", { exact: true })
@@ -39,12 +41,19 @@ test("resume files, bullet changes, exact usage and sourced assessments survive 
   const jobPath = new URL(page.url()).pathname;
   const jobId = jobPath.split("/").at(-1)!;
   const original = await pdf("Fictional original resume: Kafka PostgreSQL");
-  const familyPath = await upload(page, `Browser resume ${suffix}`, original);
+  const resumeName = `Browser resume ${suffix}`;
+  const familyPath = await upload(page, resumeName, original);
   const originalId = new URL(page.url()).searchParams.get("version")!;
+  await expect(
+    page
+      .getByRole("navigation", { name: "Resume details" })
+      .getByRole("link", { name: "Applications", exact: true }),
+  ).toHaveAttribute("aria-current", "page");
+  await page.getByRole("link", { name: "PDF preview", exact: true }).click();
   const filePath = await page.locator("iframe").getAttribute("src");
   expect((await (await request.get(filePath!)).body()).equals(original)).toBe(true);
   expect((await (await request.get(`${filePath}?download=1`)).body()).equals(original)).toBe(true);
-  await page.getByRole("link", { name: "Bullet changes", exact: true }).click();
+  await page.getByRole("link", { name: "Changes and assessments", exact: true }).click();
   await page
     .getByLabel("Changes for this file")
     .fill("Original wording clarified; no new experience claimed.");
@@ -54,7 +63,7 @@ test("resume files, bullet changes, exact usage and sourced assessments survive 
   await expect(page.getByLabel("Changes for this file")).toHaveValue(
     "Original wording clarified; no new experience claimed.",
   );
-  await page.getByRole("link", { name: "ATS assessment", exact: true }).click();
+
   await page.getByLabel("Job description assessed", { exact: true }).selectOption({
     label: await page
       .getByLabel("Job description assessed", { exact: true })
@@ -78,22 +87,28 @@ test("resume files, bullet changes, exact usage and sourced assessments survive 
   await page.getByRole("button", { name: "Save application record" }).click();
   await expect(page).toHaveURL(/\/applications\/[0-9a-f-]+$/);
   await page.goto(familyPath);
-  await page.getByRole("link", { name: "Upload revised PDF", exact: true }).click();
+  await page.getByRole("button", { name: "Upload revised PDF", exact: true }).click();
   await page.getByLabel("Version label", { exact: true }).fill("Revised for backend");
   const revised = await pdf("Fictional revised resume: clearer Kafka project bullet");
   await page
     .getByLabel("PDF file", { exact: true })
     .setInputFiles({ name: "revised.pdf", mimeType: "application/pdf", buffer: revised });
+  await page.getByText("Bullet changes and default setting", { exact: true }).click();
+  await page.getByLabel("Use this as my default file").check();
   await page
     .getByLabel("Bullet changes with this upload")
     .fill("Clarified ownership of the existing Kafka project.");
   await page.getByRole("button", { name: "Upload PDF", exact: true }).click();
   await expect(
-    page.getByRole("heading", { name: "Selected version: Revised for backend", exact: true }),
+    page.getByRole("heading", { name: "Revised for backend", exact: true }),
   ).toBeVisible();
+  await expect(page).toHaveURL(
+    (url) =>
+      Boolean(url.searchParams.get("version")) && url.searchParams.get("version") !== originalId,
+  );
   const revisedId = new URL(page.url()).searchParams.get("version")!;
   expect(revisedId).not.toBe(originalId);
-  await page.getByRole("link", { name: "Bullet changes", exact: true }).click();
+  await page.getByRole("link", { name: "Changes and assessments", exact: true }).click();
   await expect(page.getByLabel("Changes for this file")).toHaveValue(
     "Clarified ownership of the existing Kafka project.",
   );
@@ -108,8 +123,14 @@ test("resume files, bullet changes, exact usage and sourced assessments survive 
     "Clarified ownership of the existing Kafka project.",
   );
   await page.goto(`${familyPath}?version=${originalId}&tab=usage`);
-  await expect(page.getByRole("heading", { name: company, exact: true })).toBeVisible();
-  await page.getByRole("link", { name: "File", exact: true }).click();
+  await expect(page.getByRole("link", { name: new RegExp(company) })).toBeVisible();
+  await page.goto("/resumes");
+  await page.getByRole("searchbox", { name: "Search rows resume list" }).fill(company);
+  await expect(page.locator("article")).toHaveCount(1);
+  await expect(page.locator("article")).toContainText("original.pdf");
+  await expect(page.locator("article")).not.toContainText("revised.pdf");
+  await page.goto(`${familyPath}?version=${originalId}&tab=usage`);
+  await page.getByRole("link", { name: "PDF preview", exact: true }).click();
   expect(
     (await (await request.get(`/api/resumes/${originalId}/file`)).body()).equals(original),
   ).toBe(true);
@@ -125,15 +146,52 @@ test("resume files, bullet changes, exact usage and sourced assessments survive 
   await expect(page.getByText(/This assessment uses an earlier job description/)).toBeVisible();
   await page.getByText("Job description assessed", { exact: true }).first().click();
   await expect(page.getByText(jobDescription, { exact: true })).toBeVisible();
+  await page.getByText("Default file and archive settings", { exact: true }).click();
+  await page.getByRole("button", { name: "Archive resume", exact: true }).click();
+  await expect(page.getByRole("status")).toContainText("Resume family archived");
+  await page.goto("/resumes");
+  await page.getByRole("searchbox", { name: "Search rows resume list" }).fill(resumeName);
+  await expect(page.locator("article")).toHaveCount(0);
+  await page.getByRole("link", { name: "Include archived resumes", exact: true }).click();
+  await page.getByRole("searchbox", { name: "Search rows resume list" }).fill(resumeName);
+  await expect(page.locator("article")).toHaveCount(2);
+  await expect(page.locator("article").first()).toContainText("Archived");
+  await expect(page.locator("article").first()).not.toContainText("Default for new records");
+  expect(
+    (await (await request.get(`/api/resumes/${originalId}/file`)).body()).equals(original),
+  ).toBe(true);
 });
 
 test("a parsing failure still preserves the uploaded original", async ({ page, request }) => {
   const bytes = Buffer.from("%PDF-1.7\n%%EOF\n");
   await upload(page, `Damaged PDF ${Date.now()}`, bytes);
+  await page.getByRole("link", { name: "PDF preview", exact: true }).click();
   await page.getByText("Text extraction needs attention", { exact: true }).click();
   await expect(
     page.getByText(/Text extraction failed. The original PDF was retained/),
   ).toBeVisible();
   const path = await page.locator("iframe").getAttribute("src");
   expect((await (await request.get(path!)).body()).equals(bytes)).toBe(true);
+});
+
+test("resume rows and upload drawer work on a narrow screen", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/resumes");
+  await expect(page.getByRole("heading", { name: "Your resumes", level: 1 })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  await page.getByRole("button", { name: "Upload a resume", exact: true }).click();
+  const drawer = page.getByRole("dialog", { name: "Upload a resume", exact: true });
+  await drawer.getByLabel("Add this file to").selectOption("new");
+  await drawer.getByLabel("Resume name").fill("Unsaved validation check");
+  await drawer
+    .getByLabel("PDF file", { exact: true })
+    .setInputFiles({ name: "wrong.txt", mimeType: "text/plain", buffer: Buffer.from("Not a PDF") });
+  await expect(drawer.getByRole("alert")).toHaveText("Choose a PDF file.");
+  await expect(drawer.getByRole("button", { name: "Upload resume", exact: true })).toBeDisabled();
+  await page.keyboard.press("Escape");
+  await expect(drawer).not.toBeVisible();
+  await expect(page.getByRole("button", { name: "Upload a resume", exact: true })).toBeFocused();
+  await page.locator("article").first().getByRole("link").first().click();
+  await expect(page.getByRole("navigation", { name: "Resume details" })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
 });

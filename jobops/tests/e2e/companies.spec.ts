@@ -16,12 +16,14 @@ test("city cards follow current resumes while applications preserve the submitte
   pdf.addPage().drawText("Fictional resume for the company directory test");
   const bytes = Buffer.from(await pdf.save());
   await page.goto("/resumes");
-  await page.locator("#upload").getByLabel("Resume name").fill(name);
-  await page
-    .locator("#upload")
+  await page.getByRole("button", { name: "Upload a resume", exact: true }).click();
+  const upload = page.getByRole("dialog", { name: "Upload a resume", exact: true });
+  await upload.getByLabel("Add this file to").selectOption("new");
+  await upload.getByLabel("Resume name").fill(name);
+  await upload
     .getByLabel("PDF file", { exact: true })
     .setInputFiles({ name: "company-original.pdf", mimeType: "application/pdf", buffer: bytes });
-  await page.locator("#upload").getByRole("button", { name: "Upload resume", exact: true }).click();
+  await upload.getByRole("button", { name: "Upload resume", exact: true }).click();
   await expect(page).toHaveURL(/\/resumes\/[0-9a-f-]+/);
   const familyPath = new URL(page.url()).pathname;
   const familyId = familyPath.split("/").at(-1)!;
@@ -101,10 +103,10 @@ test("city cards follow current resumes while applications preserve the submitte
   await page
     .getByLabel("PDF file", { exact: true })
     .setInputFiles({ name: "company-revised.pdf", mimeType: "application/pdf", buffer: bytes });
+  await page.getByText("Bullet changes and default setting", { exact: true }).click();
+  await page.getByLabel("Use this as my default file").check();
   await page.getByRole("button", { name: "Upload PDF", exact: true }).click();
-  await expect(
-    page.getByRole("heading", { name: "Selected version: Company revision", exact: true }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Company revision", exact: true })).toBeVisible();
   await page.goto("/companies/amazon?city=Bengaluru&tab=progress");
   await expect(
     bengaluruResume.getByRole("link", { name: "Current resume: Company revision", exact: true }),
