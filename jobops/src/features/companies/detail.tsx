@@ -725,12 +725,12 @@ export function SourcesSection({
   return (
     <Section
       id="sources"
-      title="All sourced research"
-      note="The raw tables behind every number above."
+      title="Recent sourced research"
+      note="The latest 10 community conversations and all official evidence. Metrics use all saved research."
     >
       <details className={cn(box, "group")}>
         <summary className="flex cursor-pointer list-none items-center justify-between text-sm font-medium [&::-webkit-details-marker]:hidden">
-          Show {facts.length} research {facts.length === 1 ? "note" : "notes"}
+          Show recent research ({facts.length} saved {facts.length === 1 ? "note" : "notes"})
           <ChevronDown
             size={18}
             aria-hidden

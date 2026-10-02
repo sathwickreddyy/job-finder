@@ -4,6 +4,8 @@ import {
   compensationAmount,
   interviewQuestions,
   publicationYear,
+  recentResearchFacts,
+  researchConversationKey,
   researchLabel,
   researchUrl,
   type ResearchFact,
@@ -245,14 +247,21 @@ export function CompanyResearch({
   facts: ResearchFact[];
   preferences: DisplayPreferences;
 }) {
-  const compensation = facts.filter((fact) => fact.category === "COMPENSATION");
-  const interviews = facts.filter((fact) => fact.category === "INTERVIEW");
+  const visibleFacts = recentResearchFacts(facts);
+  const conversationCount = new Set(
+    visibleFacts.filter((fact) => fact.sourceKind !== "OFFICIAL").map(researchConversationKey),
+  ).size;
+  const totalConversations = new Set(
+    facts.filter((fact) => fact.sourceKind !== "OFFICIAL").map(researchConversationKey),
+  ).size;
+  const compensation = visibleFacts.filter((fact) => fact.category === "COMPENSATION");
+  const interviews = visibleFacts.filter((fact) => fact.category === "INTERVIEW");
   const questions = interviews.flatMap((fact) =>
     interviewQuestions(fact).map((question) => ({ fact, question })),
   );
   const otherCategories = [
     ...new Set(
-      facts
+      visibleFacts
         .filter((fact) => !["COMPENSATION", "INTERVIEW"].includes(fact.category))
         .map((fact) => fact.category),
     ),
@@ -260,68 +269,13 @@ export function CompanyResearch({
   return (
     <section className="min-w-0 space-y-7" aria-label="Company research">
       <p className="text-sm text-muted-foreground">
-        {facts.length
-          ? facts.length + " sourced " + (facts.length === 1 ? "report" : "reports") + ". "
+        {visibleFacts.length
+          ? `${conversationCount} community ${conversationCount === 1 ? "conversation" : "conversations"}${totalConversations > conversationCount ? ` shown of ${totalConversations} saved` : ""}. `
           : "No sourced research saved yet. "}
-        Years refer to source publication. Missing details stay unrecorded; community reports are
+        Interviews first; newest publication first. Up to 10 community conversations per company.
+        Official evidence is separate. Missing details stay unrecorded; community reports are
         labelled. Scroll across each table for all columns.
       </p>
-      <div className="space-y-3">
-        <ResearchTable
-          title="Compensation"
-          columns={[
-            "Published year",
-            "Report / role / level",
-            "Experience (years)",
-            "Fixed / year",
-            "Variable / year",
-            "Joining bonus",
-            "Equity (as reported)",
-            "Total / year",
-            "Reference",
-          ]}
-          empty="No compensation reports recorded."
-        >
-          {compensation.length
-            ? compensation.map((fact) => (
-                <tr key={fact.id}>
-                  <td>{publicationYear(fact.data)}</td>
-                  <td>
-                    <Report fact={fact} />
-                  </td>
-                  <td>
-                    <ResearchValue value={fact.data.yearsExperience} />
-                  </td>
-                  {["fixedAnnual", "variableAnnual", "joiningBonus", "equity", "totalAnnual"].map(
-                    (key) => {
-                      // Stock grants carry their own currency and are never converted.
-                      const grant =
-                        key === "equity" && fact.data.equity && typeof fact.data.equity === "object"
-                          ? (fact.data.equity as Record<string, unknown>)
-                          : undefined;
-                      return (
-                        <td key={key}>
-                          <Pay
-                            value={grant ? grant.amount : fact.data[key]}
-                            currency={grant ? grant.currency : fact.data.currency}
-                          />
-                        </td>
-                      );
-                    },
-                  )}
-                  <td>
-                    <Reference fact={fact} preferences={preferences} />
-                  </td>
-                </tr>
-              ))
-            : undefined}
-        </ResearchTable>
-        <p className="text-xs text-muted-foreground">
-          Annual INR amounts are shown in rupees and lakh (1 lakh/year = 1 LPA). Joining bonus is
-          one-time; equity follows the source’s stated value and vesting period. Totals are
-          recorded, never estimated.
-        </p>
-      </div>
       <ResearchTable
         title="Interview details"
         columns={[
@@ -412,13 +366,69 @@ export function CompanyResearch({
             ))
           : undefined}
       </ResearchTable>
+      <div className="space-y-3">
+        <ResearchTable
+          title="Compensation"
+          columns={[
+            "Published year",
+            "Report / role / level",
+            "Experience (years)",
+            "Fixed / year",
+            "Variable / year",
+            "Joining bonus",
+            "Equity (as reported)",
+            "Total / year",
+            "Reference",
+          ]}
+          empty="No compensation reports recorded."
+        >
+          {compensation.length
+            ? compensation.map((fact) => (
+                <tr key={fact.id}>
+                  <td>{publicationYear(fact.data)}</td>
+                  <td>
+                    <Report fact={fact} />
+                  </td>
+                  <td>
+                    <ResearchValue value={fact.data.yearsExperience} />
+                  </td>
+                  {["fixedAnnual", "variableAnnual", "joiningBonus", "equity", "totalAnnual"].map(
+                    (key) => {
+                      // Stock grants carry their own currency and are never converted.
+                      const grant =
+                        key === "equity" && fact.data.equity && typeof fact.data.equity === "object"
+                          ? (fact.data.equity as Record<string, unknown>)
+                          : undefined;
+                      return (
+                        <td key={key}>
+                          <Pay
+                            value={grant ? grant.amount : fact.data[key]}
+                            currency={grant ? grant.currency : fact.data.currency}
+                          />
+                        </td>
+                      );
+                    },
+                  )}
+                  <td>
+                    <Reference fact={fact} preferences={preferences} />
+                  </td>
+                </tr>
+              ))
+            : undefined}
+        </ResearchTable>
+        <p className="text-xs text-muted-foreground">
+          Annual INR amounts are shown in rupees and lakh (1 lakh/year = 1 LPA). Joining bonus is
+          one-time; equity follows the source’s stated value and vesting period. Totals are
+          recorded, never estimated.
+        </p>
+      </div>
       {otherCategories.map((category) => (
         <ResearchTable
           key={category}
           title={researchLabel(category).replace(/^./, (char) => char.toUpperCase())}
           columns={["Published year", "Report", "Details", "Reference"]}
         >
-          {facts
+          {visibleFacts
             .filter((fact) => fact.category === category)
             .map((fact) => (
               <tr key={fact.id}>

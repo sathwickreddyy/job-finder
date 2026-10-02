@@ -24,6 +24,39 @@ export function publicationYear(data: Record<string, unknown>): string {
   return "Not recorded";
 }
 
+export function researchConversationKey(fact: ResearchFact): string {
+  const post =
+    fact.sourceKind === "LEETCODE"
+      ? fact.sourceUrl.match(/\/discuss\/(?:post|compensation|interview-experience)\/(\d+)(?:\/|$)/)
+      : null;
+  return post ? "leetcode:" + post[1] : fact.sourceKind + ":" + fact.sourceUrl;
+}
+
+export function recentResearchFacts(facts: ResearchFact[], limit = 10): ResearchFact[] {
+  function published(fact: ResearchFact): number {
+    const date = fact.data.publishedAt;
+    if (typeof date === "string" && /^\d{4}-\d{2}-\d{2}(?:T|$)/.test(date)) {
+      const timestamp = Date.parse(date);
+      if (Number.isFinite(timestamp)) return timestamp;
+    }
+    const year = publicationYear(fact.data);
+    return year === "Not recorded" ? -Infinity : Date.UTC(Number(year), 0, 1);
+  }
+  const ordered = [...facts].sort((a, b) => {
+    const left = published(a);
+    const right = published(b);
+    return left === right ? a.factKey.localeCompare(b.factKey) : left > right ? -1 : 1;
+  });
+  const conversations = new Set<string>();
+  for (const fact of ordered) {
+    if (fact.sourceKind !== "OFFICIAL" && conversations.size < limit)
+      conversations.add(researchConversationKey(fact));
+  }
+  return ordered.filter(
+    (fact) => fact.sourceKind === "OFFICIAL" || conversations.has(researchConversationKey(fact)),
+  );
+}
+
 export function compensationAmount(value: unknown, currency: unknown): string {
   if (typeof value !== "number" || !Number.isFinite(value)) return "Not recorded";
   const amount = value.toLocaleString("en-IN", { maximumFractionDigits: 2 });

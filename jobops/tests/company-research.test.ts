@@ -3,6 +3,7 @@ import {
   compensationAmount,
   interviewQuestions,
   publicationYear,
+  recentResearchFacts,
   researchUrl,
   type ResearchFact,
 } from "@/features/companies/research-data";
@@ -30,6 +31,52 @@ const conforming: Record<string, Record<string, unknown>> = {
 };
 
 describe("structured company research", () => {
+  it("orders by original publication, ignoring later edits, events and ingestion", () => {
+    const older = {
+      ...report({ publishedAt: "2024-08-19", editedAt: "2026-10-01" }),
+      factKey: "old",
+      occurredAt: new Date("2026-09-30"),
+      lastObservedAt: new Date("2026-10-01"),
+    };
+    const recent = { ...report({ publishedAt: "2026-09-24" }), factKey: "recent" };
+    const yearOnly = { ...report({ publicationYear: 2025 }), factKey: "year" };
+    const undated = { ...report({ occurredAt: "2026-10-01" }), factKey: "undated" };
+    const facts = [older, undated, recent, yearOnly];
+    expect(recentResearchFacts(facts).map((fact) => fact.factKey)).toEqual([
+      "recent",
+      "year",
+      "old",
+      "undated",
+    ]);
+    expect(facts[0]).toBe(older);
+  });
+  it("caps distinct conversations, retaining linked categories and separate official evidence", () => {
+    const facts = Array.from({ length: 11 }, (_, index) => ({
+      ...report({ publishedAt: `2026-09-${String(index + 1).padStart(2, "0")}` }),
+      factKey: `post-${index + 1}`,
+      sourceKind: "LEETCODE" as const,
+      sourceUrl: `https://leetcode.com/discuss/post/${index + 1}/source/`,
+      category: "INTERVIEW" as const,
+    }));
+    const compensation = {
+      ...facts[10],
+      factKey: "compensation-11",
+      sourceUrl: "https://leetcode.com/discuss/compensation/11/offer",
+      category: "COMPENSATION" as const,
+    };
+    const official = {
+      ...report({}),
+      factKey: "official",
+      sourceKind: "OFFICIAL" as const,
+      sourceUrl: "https://example.com/careers",
+    };
+    const selected = recentResearchFacts([...facts, compensation, official]);
+    expect(selected).toHaveLength(12);
+    expect(selected).not.toContain(facts[0]);
+    expect(selected).toContain(facts[10]);
+    expect(selected).toContain(compensation);
+    expect(selected).toContain(official);
+  });
   it("uses publication metadata and never substitutes event or observation years", () => {
     expect(publicationYear({ publicationYear: 2024 })).toBe("2024");
     expect(publicationYear({ publishedAt: "2025-12-31T23:30:00-05:00" })).toBe("2025");
