@@ -97,8 +97,8 @@ export function payExtras(metrics: CompanyMetrics) {
 }
 
 export const companyViews = [
-  { id: "grid", label: "Grid", icon: LayoutGrid },
   { id: "compare", label: "Compare", icon: Rows3 },
+  { id: "grid", label: "Grid", icon: LayoutGrid },
   { id: "pipeline", label: "Pipeline", icon: Columns3 },
 ] as const;
 export type CompanyView = (typeof companyViews)[number]["id"];

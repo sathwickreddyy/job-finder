@@ -47,7 +47,7 @@ test("city cards follow current resumes while applications preserve the submitte
   await page.getByRole("button", { name: "Save application record" }).click();
   await expect(page).toHaveURL(/\/applications\/[0-9a-f-]+$/);
 
-  await page.goto("/companies?q=Amazon");
+  await page.goto("/companies?view=grid&q=Amazon");
   const bengaluru = page.locator("#bengaluru article");
   const hyderabad = page.locator("#hyderabad article");
   await expect(bengaluru).toHaveCount(1);
@@ -124,6 +124,13 @@ test("city cards follow current resumes while applications preserve the submitte
 test("company search and separate city sections work on mobile", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/companies");
+  await expect(page.getByRole("link", { name: "Compare", exact: true })).toHaveAttribute(
+    "aria-current",
+    "page",
+  );
+  await expect(page.getByRole("table")).toBeVisible();
+  await expect(page.locator("#bengaluru")).toHaveCount(0);
+  await page.goto("/companies?view=grid");
   await expect(page.locator("#bengaluru article")).toHaveCount(8);
   await expect(page.locator("#hyderabad article")).toHaveCount(6);
   const cities = page.getByRole("navigation", { name: "Filter by city" });
@@ -141,7 +148,7 @@ test("company search and separate city sections work on mobile", async ({ page }
   await expect(rows.first().getByRole("link")).toHaveAttribute("href", /\?city=Hyderabad$/);
   await cities.getByRole("link", { name: /^All cities/ }).click();
   await expect(page).toHaveURL(/\/companies\?view=compare$/);
-  await page.goto("/companies");
+  await page.goto("/companies?view=grid");
   await page.getByRole("searchbox", { name: "Search companies" }).fill("Atlassian");
   await page.getByRole("button", { name: "Search", exact: true }).click();
   await expect(page).toHaveURL(/q=Atlassian/);

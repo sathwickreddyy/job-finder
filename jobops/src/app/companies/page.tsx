@@ -27,7 +27,7 @@ export default async function CompaniesPage({
   const [data, query] = await Promise.all([readCompanies(), searchParams]);
   const view: CompanyView = companyViews.some((row) => row.id === query.view)
     ? (query.view as CompanyView)
-    : "grid";
+    : "compare";
   const search = query.q?.trim().toLowerCase() ?? "";
   const all = companySummaries(data);
   // One pay scale for every filter, so bars stay comparable as the list narrows.
@@ -68,8 +68,8 @@ export default async function CompaniesPage({
           <ViewSwitcher
             view={view}
             hrefs={{
-              grid: href({ view: "grid" }),
               compare: href({ view: "compare" }),
+              grid: href({ view: "grid" }),
               pipeline: href({ view: "pipeline" }),
             }}
           />
