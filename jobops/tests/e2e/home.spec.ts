@@ -135,12 +135,7 @@ test("profile previews open live content and close by Escape, button and backdro
   await page.mouse.click(4, 4);
   await expect(dialog).not.toBeVisible();
   await expect(github).toBeFocused();
-  await tile(page, "Medium").getByRole("button", { name: "Preview Medium", exact: true }).click();
-  await expect(dialog).toContainText("Medium blocks previews inside other sites.");
-  await expect(dialog.getByRole("link", { name: "Open Medium", exact: true })).toHaveAttribute(
-    "href",
-    "https://medium.com/@demo-jobops",
-  );
+  await expect(tile(page, "Medium")).toHaveCount(0);
 });
 
 test("open-in-new-tab controls keep the first external request inside local stubs", async ({

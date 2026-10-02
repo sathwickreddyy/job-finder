@@ -44,13 +44,13 @@ decelerate curve (560 ms). `prefers-reduced-motion` disables it through the exis
 Heading "Your profiles" with a "Manage links" link to `/my-profile`. A three-column grid at `md`
 (one column below):
 
-| Tile                   | Grid placement     | Content                                                                                                                      |
-| ---------------------- | ------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
-| Portfolio              | 2 columns × 2 rows | Live page rendered at 1280 px wide and scaled to fit (non-interactive thumbnail, `loading="lazy"`).                          |
-| Resume                 | 1 column           | First page of the current resume PDF (`#toolbar=0&navpanes=0&view=FitH`), non-interactive.                                   |
-| GitHub                 | 1 column           | Avatar, handle, `github.com/<handle>`, and the contribution graph image with caption "Public contributions, last 12 months". |
-| LinkedIn               | 2 columns          | LinkedIn icon and "Shows LinkedIn's official profile badge."                                                                 |
-| Medium and other links | 1 column each      | Site icon and "<Site> can't be previewed inside JobOps."                                                                     |
+| Tile        | Grid placement     | Content                                                                                                                      |
+| ----------- | ------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
+| Portfolio   | 2 columns × 2 rows | Live page rendered at 1280 px wide and scaled to fit (non-interactive thumbnail, `loading="lazy"`).                          |
+| Resume      | 1 column           | First page of the current resume PDF (`#toolbar=0&navpanes=0&view=FitH`), non-interactive.                                   |
+| GitHub      | 1 column           | Avatar, handle, `github.com/<handle>`, and the contribution graph image with caption "Public contributions, last 12 months". |
+| LinkedIn    | 2 columns          | LinkedIn icon and "Shows LinkedIn's official profile badge."                                                                 |
+| Other links | 1 column each      | Site icon and "<Site> can't be previewed inside JobOps." Medium links get no tile (2026-10-03); they stay as identity chips. |
 
 Every tile has a footer with the site icon, title as `h3`, handle, a **Preview** button and an
 open-in-new-tab icon link. The Preview button's hit area covers the whole tile; the external link sits
@@ -71,7 +71,7 @@ button. Body by kind:
 - Resume: same-origin iframe of `/api/resumes/<id>/file#view=FitH`.
 - GitHub: avatar, handle, contribution graph and **Open GitHub**.
 - LinkedIn: the official badge (section 4.2), with an **Open LinkedIn** card if it fails.
-- Medium and others: "<Site> blocks previews inside other sites. Open it to see your latest posts." and **Open <Site>**.
+- Other links: "<Site> blocks previews inside other sites. Open it to see your latest posts." and **Open <Site>**.
 
 Escape while focus is on JobOps dialog controls, the close button and a click on the backdrop close the dialog; focus returns to the Preview
 button that opened it. A cross-origin iframe can retain keyboard events after interaction, so Escape inside it may not reach the parent dialog; the close button and backdrop remain available. Long titles and handles wrap within the dialog header on mobile; the close button remains visible.

@@ -136,7 +136,11 @@ export function ProfileMosaic({
   resume: ResumeRef | null;
 }) {
   const [open, setOpen] = useState<PreviewTarget | null>(null);
-  const targets = previewTargets(links, resume);
+  // Medium cannot be framed; it stays in the identity card's link chips only.
+  const targets = previewTargets(
+    links.filter((link) => link.kind !== "medium"),
+    resume,
+  );
   const featured =
     targets.find((target) => target.kind === "portfolio") ??
     targets.find((target) => target.kind === "resume");
