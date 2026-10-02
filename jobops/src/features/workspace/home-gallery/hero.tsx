@@ -77,7 +77,7 @@ function Facts({ identity, resume }: { identity: Identity; resume: ResumeRef | n
     resume && {
       icon: FileText,
       text: `Current resume: ${resume.label}`,
-      href: `/resumes/${resume.familyId}`,
+      href: `/resumes?resume=${resume.familyId}`,
     },
   ].filter(Boolean) as { icon: typeof MapPin; text: string; href?: string }[];
   return (

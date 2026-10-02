@@ -125,7 +125,7 @@ export function ResumeLibrary({
                   <div className="min-w-0">
                     {detailLinks ? (
                       <Link
-                        href={`/resumes/${file.familyId}?version=${file.id}`}
+                        href={`/resumes?file=${file.id}`}
                         className="text-sm font-semibold text-foreground hover:text-primary"
                       >
                         {file.label}

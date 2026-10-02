@@ -58,7 +58,7 @@ test("home identity and search cards use real seeded current and desired roles",
       name: `Current resume: ${current.resume_versions.versionLabel}`,
       exact: true,
     }),
-  ).toHaveAttribute("href", `/resumes/${current.resumes.id}?version=${current.resume_versions.id}`);
+  ).toHaveAttribute("href", `/resumes?file=${current.resume_versions.id}`);
   await expect(
     page.getByRole("link", { name: "GitHub, demo-jobops (opens in a new tab)", exact: true }),
   ).toHaveAttribute("href", "https://github.com/demo-jobops");

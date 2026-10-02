@@ -24,10 +24,11 @@ test("city cards follow current resumes while applications preserve the submitte
     .getByLabel("PDF file", { exact: true })
     .setInputFiles({ name: "company-original.pdf", mimeType: "application/pdf", buffer: bytes });
   await upload.getByRole("button", { name: "Upload resume", exact: true }).click();
-  await expect(page).toHaveURL(/\/resumes\/[0-9a-f-]+/);
-  const familyPath = new URL(page.url()).pathname;
-  const familyId = familyPath.split("/").at(-1)!;
-  const originalId = new URL(page.url()).searchParams.get("version")!;
+  await expect(page).toHaveURL(/\/resumes\?file=[0-9a-f-]+/);
+  const originalId = new URL(page.url()).searchParams.get("file")!;
+  const familyId = (await page.locator("[data-resume-id]").getAttribute("data-resume-id"))!;
+  const familyPath = `/resumes?resume=${familyId}`;
+  const submittedPath = `/resumes?file=${originalId}`;
 
   await page.goto("/jobs/new");
   await page.getByLabel("Company", { exact: true }).fill("Amazon India");
@@ -88,7 +89,7 @@ test("city cards follow current resumes while applications preserve the submitte
   await expect(
     applications.locator('a[href^="/applications/"]').filter({ hasText: role }),
   ).toBeVisible();
-  await expect(applications.locator(`a[href="${familyPath}?version=${originalId}"]`)).toHaveText(
+  await expect(applications.locator(`a[href="${submittedPath}"]`)).toHaveText(
     "Submitted: company-original.pdf (Original)",
   );
   await bengaluruResume.getByLabel("Resume for Amazon in Bengaluru").selectOption(familyId);
@@ -98,7 +99,7 @@ test("city cards follow current resumes while applications preserve the submitte
   await expect(bengaluruResume.getByLabel("Resume for Amazon in Bengaluru")).toHaveValue(familyId);
   await expect(hyderabadResume.getByLabel("Resume for Amazon in Hyderabad")).toHaveValue("");
 
-  await page.goto(`${familyPath}?upload=1#upload-version`);
+  await page.goto(`${familyPath}&upload=1`);
   await page.getByLabel("Version label", { exact: true }).fill("Company revision");
   await page
     .getByLabel("PDF file", { exact: true })
@@ -111,7 +112,7 @@ test("city cards follow current resumes while applications preserve the submitte
   await expect(
     bengaluruResume.getByRole("link", { name: "Current resume: Company revision", exact: true }),
   ).toHaveAttribute("href", familyPath);
-  await expect(applications.locator(`a[href="${familyPath}?version=${originalId}"]`)).toHaveText(
+  await expect(applications.locator(`a[href="${submittedPath}"]`)).toHaveText(
     "Submitted: company-original.pdf (Original)",
   );
   await bengaluruResume.getByLabel("Resume for Amazon in Bengaluru").selectOption("");

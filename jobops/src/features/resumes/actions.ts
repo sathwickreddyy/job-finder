@@ -18,6 +18,7 @@ import { retryResumeParsing, setCurrentResumeVersion, uploadResumeVersion } from
 import { MAX_UPLOAD_BYTES } from "@/services/storage";
 import { assessmentInput } from "./assessment";
 import { indiaDayBoundary } from "@/features/mail/attention";
+import { resumeFamilyHref, resumeFileHref } from "./links";
 
 const familySchema = z.object({
   name: z.string().min(2).max(100),
@@ -73,7 +74,7 @@ export async function createResumeFamily(
     });
     refresh();
     return {
-      redirect: `/resumes/${family.id}`,
+      redirect: resumeFamilyHref(family.id),
       success: "Resume family created. Upload its first PDF version.",
     };
   } catch (error) {
@@ -133,7 +134,7 @@ export async function uploadVersion(_state: ActionState, form: FormData): Promis
         version.parsingStatus === "COMPLETED"
           ? "PDF uploaded and text extracted. Review the detected keywords below."
           : "PDF uploaded and preserved. Text extraction needs attention; download/preview and manual keyword editing remain available.",
-      redirect: `/resumes/${resumeId}?version=${version.id}`,
+      redirect: resumeFileHref(version.id),
     };
   } catch (error) {
     return actionError(error);

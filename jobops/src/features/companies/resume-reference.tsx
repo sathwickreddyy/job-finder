@@ -25,7 +25,7 @@ export function CompanyResumeReference({
       <h3 className="text-sm font-semibold">{city}</h3>
       {family ? (
         <div className="text-sm">
-          <Link href={`/resumes/${family.id}`} className="text-link">
+          <Link href={`/resumes?resume=${family.id}`} className="text-link">
             {family.version
               ? `Current resume: ${family.version.label}`
               : "Upload a current revision"}

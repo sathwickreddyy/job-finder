@@ -165,7 +165,7 @@ export function FileActions({ file }: { file: GalleryFile }) {
         </a>
       </Button>
       <Button size="sm" variant="ghost" asChild>
-        <Link href={`/resumes/${file.familyId}?version=${file.id}`}>
+        <Link href={`/resumes?file=${file.id}`}>
           Open file details
           <ArrowUpRight size={14} aria-hidden />
         </Link>

@@ -19,6 +19,7 @@ export function resumePresentation(
   return {
     id: family.id,
     name: family.name,
+    isArchived: !family.isActive,
     files: family.versions.map((file) => ({
       id: file.id,
       familyId: family.id,

@@ -74,9 +74,7 @@ export default async function ResumePrompt({
           </p>
         </div>
         <Button asChild>
-          <Link
-            href={file ? `/resumes/${file.familyId}?upload=1#upload-version` : "/resumes#upload"}
-          >
+          <Link href={file ? `/resumes?file=${file.id}&upload=1` : "/resumes?upload=1"}>
             Upload a resume version
           </Link>
         </Button>

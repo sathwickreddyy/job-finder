@@ -24,7 +24,12 @@ export type GalleryFile = {
   uses: ResumeUse[];
 };
 
-export type GalleryFamily = { id: string; name: string; files: GalleryFile[] };
+export type GalleryFamily = {
+  id: string;
+  name: string;
+  isArchived?: boolean;
+  files: GalleryFile[];
+};
 
 export function submittedCount(file: GalleryFile) {
   return file.uses.filter((record) => record.submitted).length;

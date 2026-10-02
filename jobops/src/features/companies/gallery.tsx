@@ -85,15 +85,12 @@ function CompanyCard({
           <FileText size={16} className="mt-0.5 shrink-0 text-primary" aria-hidden />
           {used ? (
             <div className="min-w-0">
-              <Link href={`/resumes/${used.familyId}?version=${used.id}`} className="text-link">
+              <Link href={`/resumes?file=${used.id}`} className="text-link">
                 {latest?.appliedAt ? "Submitted" : "Selected"}: {used.label}
               </Link>
               <p className="mt-1 truncate text-xs text-muted-foreground">{used.filename}</p>
               {current && current.id !== used.id && (
-                <Link
-                  href={`/resumes/${current.familyId}?version=${current.id}`}
-                  className="mt-2 block text-link"
-                >
+                <Link href={`/resumes?file=${current.id}`} className="mt-2 block text-link">
                   Current revision: {current.label}
                 </Link>
               )}

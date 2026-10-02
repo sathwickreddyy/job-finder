@@ -8,6 +8,7 @@ import { activityLogs, candidateProfiles, profiles, resumes, settings } from "@/
 import { actionError, formString, type ActionState } from "@/lib/actions";
 import { contextSchema, httpUrl } from "@/features/tasks/domain";
 import { uploadResumeVersion } from "@/features/resumes/service";
+import { resumeFileHref } from "@/features/resumes/links";
 import { MAX_UPLOAD_BYTES } from "@/services/storage";
 import { validatePdf } from "@/services/pdf";
 
@@ -196,7 +197,7 @@ export async function quickResumeUpload(_state: ActionState, form: FormData): Pr
       makeCurrent: true,
     });
     refresh();
-    return { success: "Resume saved.", redirect: `/resumes/${family.id}?version=${version.id}` };
+    return { success: "Resume saved.", redirect: resumeFileHref(version.id) };
   } catch (e) {
     if (createdId)
       await db

@@ -12,11 +12,13 @@ export function ResumeUploadDrawer({
   familyId,
   initialOpen = false,
   label = "Upload a resume",
+  className,
 }: {
   families: { id: string; name: string }[];
   familyId?: string;
   initialOpen?: boolean;
   label?: string;
+  className?: string;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const [open, setOpen] = useState(initialOpen);
@@ -32,6 +34,7 @@ export function ResumeUploadDrawer({
   return (
     <>
       <Button
+        className={className}
         onClick={() => {
           dialog.current?.showModal();
           setOpen(true);

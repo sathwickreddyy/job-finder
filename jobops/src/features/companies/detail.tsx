@@ -613,7 +613,7 @@ export function ProgressSection({
                 </span>
                 {row.version ? (
                   <Link
-                    href={`/resumes/${row.version.familyId}?version=${row.version.id}`}
+                    href={`/resumes?file=${row.version.id}`}
                     className="mt-1 block break-all text-xs text-link"
                   >
                     {row.appliedAt ? "Submitted" : "Selected"}: {row.version.filename} (
