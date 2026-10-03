@@ -43,6 +43,11 @@ const environment = {
   E2E_BASE_URL: "http://127.0.0.1:3211",
   GOOGLE_CLIENT_ID: "",
   GOOGLE_CLIENT_SECRET: "",
+  GOOGLE_REDIRECT_URI: "",
+  MICROSOFT_CLIENT_ID: "",
+  MICROSOFT_CLIENT_SECRET: "",
+  MICROSOFT_REDIRECT_URI: "",
+  MAIL_TOKEN_ENCRYPTION_KEY: "",
   GMAIL_TOKEN_ENCRYPTION_KEY: "",
 };
 function run(command: string, args: string[]) {
