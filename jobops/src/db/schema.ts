@@ -13,6 +13,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
+import { roundKinds } from "../lib/round-kinds";
 
 export const jobStatuses = [
   "NEW",
@@ -39,6 +40,8 @@ export const applicationStages = [
   "WITHDRAWN",
   "CLOSED",
 ] as const;
+export const roundOutcomes = ["SCHEDULED", "PASSED", "FAILED", "CANCELLED"] as const;
+export const closeReasons = ["REJECTED", "NO_REPLY", "WITHDREW", "ACCEPTED", "DECLINED"] as const;
 export const missionStatuses = [
   "DRAFT",
   "READY",
@@ -99,6 +102,9 @@ export const operatorEnum = pgEnum("operator", operators);
 export const profileProviderEnum = pgEnum("profile_provider", profileProviders);
 export const mailClassificationEnum = pgEnum("mail_classification", mailClassifications);
 export const contactVerificationEnum = pgEnum("contact_verification", contactVerificationStatuses);
+export const roundKindEnum = pgEnum("round_kind", roundKinds);
+export const roundOutcomeEnum = pgEnum("round_outcome", roundOutcomes);
+export const closeReasonEnum = pgEnum("application_close_reason", closeReasons);
 
 const id = () => uuid("id").primaryKey().defaultRandom();
 const createdAt = () => timestamp("created_at", { withTimezone: true }).notNull().defaultNow();
@@ -322,6 +328,8 @@ export const applications = pgTable(
     applicationUrl: text("application_url"),
     source: text("source").notNull().default("MANUAL"),
     nextActionAt: date("next_action_at"),
+    nextActionNote: text("next_action_note").notNull().default(""),
+    closedReason: closeReasonEnum("closed_reason"),
     notes: text("notes").notNull().default(""),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
@@ -357,6 +365,38 @@ export const applicationEvents = pgTable(
     ),
   ],
 );
+
+export const applicationRounds = pgTable(
+  "application_rounds",
+  {
+    id: id(),
+    applicationId: uuid("application_id")
+      .notNull()
+      .references(() => applications.id, { onDelete: "cascade" }),
+    kind: roundKindEnum("kind").notNull(),
+    name: text("name").notNull().default(""),
+    scheduledAt: date("scheduled_at"),
+    outcome: roundOutcomeEnum("outcome").notNull().default("SCHEDULED"),
+    position: integer("position").notNull(),
+    notes: text("notes").notNull().default(""),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    index("application_rounds_app_idx").on(t.applicationId, t.position),
+    // A second booked round would make "Cleared the round" ambiguous.
+    uniqueIndex("application_rounds_one_booked_idx")
+      .on(t.applicationId)
+      .where(sql`${t.outcome} = 'SCHEDULED'`),
+    check("application_rounds_position", sql`${t.position} >= 1`),
+  ],
+);
+
+export const queueSnoozes = pgTable("queue_snoozes", {
+  itemKey: text("item_key").primaryKey(),
+  until: date("until").notNull(),
+  createdAt: createdAt(),
+});
 
 export const profiles = pgTable("profiles", {
   id: id(),

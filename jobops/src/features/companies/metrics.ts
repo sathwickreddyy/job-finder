@@ -1,17 +1,8 @@
 import type { applicationStages } from "@/db/schema";
+import { roundKinds, type RoundKind } from "@/lib/round-kinds";
 import { publicationYear, researchUrl, type ResearchFact } from "./research-data";
 
-export const roundKinds = [
-  "ONLINE_ASSESSMENT",
-  "DSA",
-  "LLD",
-  "HLD",
-  "BEHAVIORAL",
-  "HIRING_MANAGER",
-  "DOMAIN",
-  "OTHER",
-] as const;
-export type RoundKind = (typeof roundKinds)[number];
+export { roundKinds, type RoundKind };
 export const roundFamilies = ["Coding", "Design", "People", "Other"] as const;
 export type RoundFamily = (typeof roundFamilies)[number];
 
