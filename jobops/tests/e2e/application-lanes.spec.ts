@@ -196,3 +196,62 @@ test("a wrongly matched email can be dismissed from its lane", async ({ page }) 
       .getByRole("button", { name: /not added yet/ }),
   ).toHaveCount(0);
 });
+
+test("linking a drawer reply to a closed record closes the drawer and opens that lane", async ({
+  page,
+}) => {
+  const company = `Closed Lane ${Date.now()}`;
+  const subject = `${company} late update`;
+  const { applicationId } = await seedRecord({ company, source: "DIRECT", sentDaysAgo: 5 });
+  await page.goto(`/applications/${applicationId}`);
+  await page.getByRole("button", { name: "Rejected", exact: true }).click();
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Saved: Rejected." })).toBeVisible();
+  await seedMail({ subject, classification: "INTERVIEW" });
+  await page.goto("/applications");
+  await expect(lane(page, company)).toHaveCount(0);
+  await page.getByRole("button", { name: /^(Emails|Connect inboxes)/ }).click();
+  const drawer = page.getByRole("dialog", { name: "Emails" });
+  const card = drawer
+    .getByRole("region", { name: /^Replies we couldn't match/ })
+    .getByRole("listitem")
+    .filter({ hasText: subject });
+  await card.getByLabel("Record for this message").selectOption(applicationId);
+  await card.getByRole("button", { name: "Link and update", exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`open=${applicationId}&mail=`));
+  await expect(drawer).toBeHidden();
+  await expect(page.getByRole("region", { name: `${company} timeline` })).toBeVisible();
+  await expect(page.getByText(`Linking mail: ${subject}`)).toBeVisible();
+});
+
+test("saving on a lane far down the page keeps it in view", async ({ page }) => {
+  const stamp = Date.now();
+  for (let index = 0; index < 14; index += 1)
+    await seedRecord({ company: `Filler ${index} ${stamp}`, source: "DIRECT", sentDaysAgo: 2 });
+  const company = `Far Lane ${stamp}`;
+  const { applicationId } = await seedRecord({ company, source: "DIRECT", sentDaysAgo: 0 });
+  await page.setViewportSize({ width: 1280, height: 640 });
+  await page.goto(`/applications?open=${applicationId}`);
+  const detail = page.getByRole("region", { name: `${company} timeline` });
+  const heard = detail.getByRole("button", { name: "Heard back", exact: true });
+  await heard.scrollIntoViewIfNeeded();
+  expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
+  await heard.click();
+  await detail.getByRole("button", { name: "Save", exact: true }).click();
+  const saved = page.getByRole("status").filter({ hasText: "Saved: Heard back." });
+  await expect(saved).toBeVisible();
+  await expect(page).toHaveURL(new RegExp(`/applications\\?open=${applicationId}$`));
+  await expect(saved).toBeInViewport();
+});
+
+test("clicking empty space inside the Emails drawer keeps it open", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 2000 });
+  await page.goto("/applications?emails=1");
+  const drawer = page.getByRole("dialog", { name: "Emails" });
+  await expect(drawer).toBeVisible();
+  const box = (await drawer.boundingBox())!;
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height - 10);
+  await expect(drawer).toBeVisible();
+  await page.mouse.click(Math.max(5, box.x - 40), box.y + box.height / 2);
+  await expect(drawer).toBeHidden();
+});

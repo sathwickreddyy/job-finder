@@ -86,11 +86,7 @@ export default async function Applications({
         description="Every company on one calendar: what happened, where it stands and what to do next."
         actions={
           <>
-            <EmailsDrawer
-              count={decisions}
-              connected={connections.length > 0}
-              initialOpen={view.emails}
-            >
+            <EmailsDrawer count={decisions} connected={connections.length > 0}>
               <EmailsPanel
                 data={triage}
                 records={recordOptions}

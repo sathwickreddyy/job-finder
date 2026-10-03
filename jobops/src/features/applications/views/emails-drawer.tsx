@@ -8,21 +8,26 @@ import { Button } from "@/components/ui";
 export function EmailsDrawer({
   count,
   connected,
-  initialOpen,
   children,
 }: {
   count: number;
   connected: boolean;
-  initialOpen: boolean;
   children: ReactNode;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
+  const search = params.toString();
+  const wanted = params.get("emails") === "1" || params.get("tab") === "emails";
+  // The URL decides: ?emails=1 opens the drawer and any navigation away from it, such as
+  // "Link and update" continuing into a lane, closes it.
   useEffect(() => {
-    if (initialOpen && !dialog.current?.open) dialog.current?.showModal();
-  }, [initialOpen]);
+    const node = dialog.current;
+    if (!node) return;
+    if (wanted && !node.open) node.showModal();
+    else if (!wanted && node.open) node.close();
+  }, [wanted, search]);
   function onClose() {
     if (!["emails", "tab", "notice"].some((key) => params.has(key))) return;
     const next = new URLSearchParams(params);
@@ -55,19 +60,22 @@ export function EmailsDrawer({
         aria-label="Emails"
         className="mt-0 mr-0 ml-auto h-dvh max-h-none w-[min(30rem,100vw)] max-w-none overflow-y-auto border-l border-border bg-card p-0 text-foreground shadow-surface backdrop:bg-scrim"
       >
-        <header className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-border bg-card px-5 py-4">
-          <h2 className="m-0 text-lg font-semibold">Emails</h2>
-          <Button
-            type="button"
-            size="icon"
-            variant="ghost"
-            aria-label="Close emails"
-            onClick={() => dialog.current?.close()}
-          >
-            <X size={18} aria-hidden />
-          </Button>
-        </header>
-        <div className="p-5">{children}</div>
+        {/* Fills the panel so clicks on its empty space never count as backdrop clicks. */}
+        <div className="min-h-full">
+          <header className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-border bg-card px-5 py-4">
+            <h2 className="m-0 text-lg font-semibold">Emails</h2>
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              aria-label="Close emails"
+              onClick={() => dialog.current?.close()}
+            >
+              <X size={18} aria-hidden />
+            </Button>
+          </header>
+          <div className="p-5">{children}</div>
+        </div>
       </dialog>
     </>
   );

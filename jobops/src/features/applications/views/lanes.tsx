@@ -21,11 +21,12 @@ export function LanesChart({
 }: ChartView & { openKey: string | null; detail: ReactNode }) {
   const router = useRouter();
   const [readout, setReadout] = useState<string | null>(null);
-  const [showClosed, setShowClosed] = useState(() =>
-    lanes.some((lane) => lane.key === openKey && lane.group === "closed"),
-  );
+  const [showClosed, setShowClosed] = useState(false);
   const closed = lanes.filter((lane) => lane.group === "closed").length;
-  const visible = lanes.filter((lane) => lane.group !== "closed" || showClosed);
+  // The open lane always shows, even when it is closed and the rest of Closed is folded away.
+  const visible = lanes.filter(
+    (lane) => lane.group !== "closed" || showClosed || lane.key === openKey,
+  );
   return (
     <div className="flex flex-col gap-4">
       <p aria-live="polite" className="m-0 min-h-6 text-sm [overflow-wrap:anywhere]">
