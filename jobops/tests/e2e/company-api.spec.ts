@@ -152,7 +152,7 @@ test("company upsert preserves identity, sourced history and omitted values", as
     panel.getByText("Merge overlapping intervals", { exact: true }).last(),
   ).toBeVisible();
   await page.getByRole("tab", { name: "About & sources", exact: true }).click();
-  await panel.getByText(/^Show \d+ research notes?$/).click();
+  await panel.getByText(/^Show recent research \(\d+ saved notes?\)$/).click();
   await expect(page.getByText("Reported offer", { exact: true })).toBeVisible();
   const compensation = page.getByRole("table", { name: "Compensation", exact: true });
   await expect(compensation.getByRole("cell", { name: "2025", exact: true })).toBeVisible();
