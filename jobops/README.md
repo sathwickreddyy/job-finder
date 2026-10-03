@@ -19,7 +19,7 @@ npm run dev
 
 Open [JobOps](http://127.0.0.1:3210). PostgreSQL binds to `127.0.0.1:5549`; the application listens on `0.0.0.0:3210` so you can also open `http://<your-private-LAN-IP>:3210`. These ports avoid the other local projects. No fictional candidate, resume, job or application records are inserted during normal setup.
 
-With a local `APP_URL`, loopback, private IPv4/local IPv6 addresses and Tailscale IPv4 addresses (`100.64.0.0/10`) at the configured port are accepted. From another device on your tailnet, open `http://<this-computer's-Tailscale-IP>:3210`; you can keep `APP_URL=http://127.0.0.1:3210` for both local and Tailscale access. For device-name/MagicDNS URLs such as `http://m4-pro:3210`, set `JOBOPS_LOCAL_HOSTS=m4-pro,m4-pro.your-tailnet.ts.net` in `.env` and restart the server. These are exact hostname aliases (no URLs, ports or wildcards), accepted only with a local-address `APP_URL` and its configured port. The same alias list allows Next.js development resources and hot reload. Browser mutations must come from the exact origin you opened. Company API writes also accept ordinary local/tailnet `curl` requests without an Origin header or access token. Other routes retain their origin checks. Host checks classify the target address, not the caller; the host firewall and tailnet policy control who can reach the listener. If you change the port, update the launch command and `APP_URL`; keep the Gmail callback on its configured origin.
+With a local `APP_URL`, loopback, private IPv4/local IPv6 addresses and Tailscale IPv4 addresses (`100.64.0.0/10`) at the configured port are accepted. From another device on your tailnet, open `http://<this-computer's-Tailscale-IP>:3210`; you can keep `APP_URL=http://127.0.0.1:3210` for both local and Tailscale access. For device-name/MagicDNS URLs such as `http://m4-pro:3210`, set `JOBOPS_LOCAL_HOSTS=m4-pro,m4-pro.your-tailnet.ts.net` in `.env` and restart the server. These are exact hostname aliases (no URLs, ports or wildcards), accepted only with a local-address `APP_URL` and its configured port. The same alias list allows Next.js development resources and hot reload. Browser mutations must come from the exact origin you opened. Company API writes also accept ordinary local/tailnet `curl` requests without an Origin header or access token. Other routes retain their origin checks. Host checks classify the target address, not the caller; the host firewall and tailnet policy control who can reach the listener. If you change the port, update the launch command and `APP_URL`; keep both inbox callbacks on their configured origin.
 
 `npm run db:seed` adds no dummy data. The company migration preserves the eight existing real companies and reviewed official location links, without inventing openings, salaries or application activity. Fictional fixtures are restricted to `db:seed:test`, which refuses every database except the local, ownership-marked `jobops_e2e`. Unknown application answers remain `UNKNOWN` until you provide them.
 
@@ -145,7 +145,7 @@ Copy this instruction into your browser-control conversation:
 3. Choose one verified opening. Use **Save a job description** to store its company, role, original link and full description. Extra fields are optional.
 4. Choose **Review my resume** on that opening. Select the job and exact PDF, copy the prompt and attach the file to your assistant. Work through changes together. Upload the resulting PDF as a new version and save the bullet change log. If assessed, save its source, date, method and optional 0–100 estimate against the exact job description.
 5. Choose **Direct application** or **Referral / message**. Copy that prompt, agree on the final file or message with your assistant, and confirm the external submission or sending yourself. Then record what actually happened, its date and the exact resume used. A planned action stays planned; a sent referral does not count as an application.
-6. Open **Inbox** and refresh when you want replies. Connect Gmail first if you want live refresh; without a connection, you can import messages. Dates use India Standard Time, and **Needs attention** surfaces requests such as interviews and assessments. **Mark done** keeps the original message.
+6. Open **Applications → Emails** and choose **Refresh all inboxes** when you want replies. Connect Gmail and each personal Outlook account first; JSON import remains available without connections. Dates use India Standard Time. Link updates to a record, save a recruiter message as an opening, or dismiss noise; the original message remains available.
 
 Each activity has its own page. Editing a prompt does not submit anything. The app does not access assistant memory, call an LLM, send messages or operate external job sites.
 
@@ -158,7 +158,7 @@ Each activity has its own page. Editing a prompt does not submit anything. The a
 - **Resumes:** actual PDF upload/preview/download, original and revised files, byte-preserving version history, bullet changes, exact company/role usage and source-labelled assessments tied to the exact PDF and description. Missing scores remain missing. Older-description assessments are labelled. Files can be archived and their default version selected.
 - **Applications and outreach:** direct-application, referral, cold-email and LinkedIn prompts; simple planned/sent records with dates and optional recipient, link, notes and exact resume. Application stages and timelines track later outcomes. Submitted resume choices remain fixed.
 - **My sites & profile:** public profile/portfolio links, improvement notes, dedicated improvement prompts and reusable working preferences.
-- **Inbox:** on-demand read-only Gmail refresh, India date groups and filters, actionable-message reasons and reversible done/reopen controls. Linking mail appends history; stage changes are optional.
+- **Applications → Emails:** on-demand read-only Gmail and personal Outlook refresh, individual account status and three triage buckets. Link and record an outcome, save an opening, or dismiss mail with undo.
 - **Secondary settings:** candidate details, standard answers, preferences, display settings, storage, mail configuration, contacts and record exports.
 - **Interface:** shared Tailwind 4 tokens, Google-blue actions, neutral dark/light surfaces, press/focus feedback and reduced-motion support. The live A/B [gallery](http://127.0.0.1:3210/gallery/simple) remains available.
 
@@ -169,7 +169,7 @@ Previous task/mission/proposal entry pages redirect to Find openings. Their exte
 Next.js App Router, React, strict TypeScript, Tailwind CSS 4, owned UI primitives, Zod, Drizzle and PostgreSQL. Server pages read relational data; validated server actions persist transactional updates. Private local storage preserves original PDFs. The app has no external AI dependency.
 
 ```text
-src/app/                 Pages, downloads, exports and Gmail OAuth routes
+src/app/                 Pages, downloads, exports and provider-specific inbox OAuth routes
 src/components/          Navigation, prompt copy/edit controls and accessible forms
 src/features/workspace/  Shared real-record reads, cards, graphs and prompts
 src/features/            Jobs, applications, resumes, profiles, contacts and mail
@@ -207,16 +207,18 @@ Verified results and integration limits are recorded in [verification.md](docs/v
 
 ## Environment
 
-| Variable                                   | Required / behavior                                                                                                     |
-| ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------- |
-| `DATABASE_URL`                             | PostgreSQL connection; example targets the local Compose service                                                        |
-| `APP_URL`                                  | Canonical origin; defaults to `http://127.0.0.1:3210`                                                                   |
-| `JOBOPS_LOCAL_HOSTS`                       | Optional comma-separated exact LAN/MagicDNS hostname aliases; accepted only with a local-address `APP_URL` at its port. |
-| `JOBOPS_ACCESS_TOKEN`                      | Optional browser unlock on the trusted LAN; 32+ characters required for public hosts. Local company API needs no token. |
-| `STORAGE_ROOT`                             | Default `./data/uploads`; persistent private local directory                                                            |
-| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Optional Gmail web OAuth client                                                                                         |
-| `GOOGLE_REDIRECT_URI`                      | Same-origin `/api/gmail/callback`; example in `.env.example`                                                            |
-| `GMAIL_TOKEN_ENCRYPTION_KEY`               | Optional Gmail prerequisite: base64-encoded 32 random bytes                                                             |
+| Variable                                         | Required / behavior                                                                                                     |
+| ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`                                   | PostgreSQL connection; example targets the local Compose service                                                        |
+| `APP_URL`                                        | Canonical origin; defaults to `http://127.0.0.1:3210`                                                                   |
+| `JOBOPS_LOCAL_HOSTS`                             | Optional comma-separated exact LAN/MagicDNS hostname aliases; accepted only with a local-address `APP_URL` at its port. |
+| `JOBOPS_ACCESS_TOKEN`                            | Optional browser unlock on the trusted LAN; 32+ characters required for public hosts. Local company API needs no token. |
+| `STORAGE_ROOT`                                   | Default `./data/uploads`; persistent private local directory                                                            |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`       | Optional Gmail web OAuth client                                                                                         |
+| `GOOGLE_REDIRECT_URI`                            | Same-origin `/api/mail/gmail/callback`; example in `.env.example`                                                       |
+| `MICROSOFT_CLIENT_ID`, `MICROSOFT_CLIENT_SECRET` | Optional Outlook personal-account OAuth web client                                                                      |
+| `MICROSOFT_REDIRECT_URI`                         | Same-origin `/api/mail/outlook/callback`                                                                                |
+| `MAIL_TOKEN_ENCRYPTION_KEY`                      | Base64-encoded 32 random bytes; encrypts inbox tokens; legacy `GMAIL_TOKEN_ENCRYPTION_KEY` remains a fallback           |
 
 Use `.env`; do not commit it. Generate independent access/encryption secrets locally:
 
@@ -225,20 +227,29 @@ node -e 'console.log(require("node:crypto").randomBytes(32).toString("hex"))'
 node -e 'console.log(require("node:crypto").randomBytes(32).toString("base64"))'
 ```
 
-The first output can be `JOBOPS_ACCESS_TOKEN`; the second is `GMAIL_TOKEN_ENCRYPTION_KEY`. Keep the encryption key with your secure backups: changing it makes stored Gmail tokens unreadable.
+The first output can be `JOBOPS_ACCESS_TOKEN`; the second is `MAIL_TOKEN_ENCRYPTION_KEY` for a new installation. For an existing Gmail connection, copy the **exact existing bytes/value** from `GMAIL_TOKEN_ENCRYPTION_KEY` to the new variable; do not generate a replacement. The new name takes precedence and the legacy name remains a fallback. Keep the key with secure backups: changing its bytes makes stored inbox tokens unreadable.
 
-## Gmail read-only setup
+## Inbox read-only setup
 
-Mail import works with all Google variables empty. To connect a real account:
+JSON import works with provider credentials empty. OAuth setup is optional; configure only the providers you use. Set `APP_URL` to the canonical origin (locally `http://127.0.0.1:3210`), and use callbacks on that **same exact origin**. OAuth connect canonicalizes LAN/Tailscale aliases to `APP_URL` before setting sign-in cookies; use a reachable HTTPS origin for non-loopback OAuth. The old `/api/gmail/callback` route is retired: update the registered Google callback and `.env` together.
 
-1. Create a Google Cloud project, enable the Gmail API, configure OAuth consent, and add your account as a test user if the app is in testing mode.
-2. Create an OAuth **web application** client. Register exactly `http://127.0.0.1:3210/api/gmail/callback` locally (use your HTTPS domain in production).
-3. Set client ID/secret, redirect URI and the base64 encryption key in `.env`, then restart Next.js.
-4. Open Inbox → Mail connections → Connect Gmail read-only. Consent requests **only** `https://www.googleapis.com/auth/gmail.readonly`; state and PKCE protect the callback. Tokens are AES-256-GCM encrypted in PostgreSQL.
-5. Return to Inbox and choose **Refresh mail**. Sync is manual, inbound only, bounded to batches of 100, and continues with a cursor. The initial window is 30 days; later sync overlaps the last completed window for deduplication. Deterministic relevance/classification rules retain recruiting messages for review.
-6. Read a message and optionally use **Link message** to attach it to an existing record. Changing its stage is a separate optional control.
+**Gmail**
 
-Live OAuth and mailbox sync require your credentials and were not exercised against a real account. Configuration, encryption, broad-scope rejection, import and reviewed-event behavior are tested. Google classifies `gmail.readonly` as a restricted scope; review its verification requirements before publishing the integration. Testing-mode tokens may expire. Follow [Google's Gmail scopes documentation](https://developers.google.com/workspace/gmail/api/auth/scopes) and [web-server OAuth guidance](https://developers.google.com/identity/protocols/oauth2/web-server).
+1. Create a Google Cloud project, enable the Gmail API, and configure an External OAuth consent screen. Request only `https://www.googleapis.com/auth/gmail.readonly`.
+2. Create an OAuth **Web application** client and register `http://127.0.0.1:3210/api/mail/gmail/callback` (or the same path on your canonical HTTPS origin). Put its ID/secret and exact URI in `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`.
+3. For ongoing use, set publishing status to **In production**. Google documents seven-day refresh-token expiry for an External app left in **Testing** when it requests Gmail access; add your account as a test user while testing. Production status does not itself complete verification or guarantee consent without warnings: `gmail.readonly` is a restricted scope. Follow the applicable personal-use/verification guidance. See [Google OAuth token expiry](https://developers.google.com/identity/protocols/oauth2), [Gmail scope requirements](https://developers.google.com/workspace/gmail/api/auth/scopes), and [web-server OAuth setup](https://developers.google.com/identity/protocols/oauth2/web-server).
+
+**Outlook personal accounts (outlook.in and outlook.com)**
+
+1. Obtain access to a Microsoft Entra directory where you can register an app. Microsoft's current [registration guide](https://learn.microsoft.com/en-us/entra/identity-platform/quickstart-register-app) lists an Azure account with an active subscription, a workforce/external tenant and at least Application Developer access as prerequisites. Owning a personal Outlook account alone does not guarantee app-registration access.
+2. Register one app with account audience **Personal accounts only**, then add a **Web** redirect URI `http://127.0.0.1:3210/api/mail/outlook/callback` (or its canonical HTTPS equivalent). Create a client secret and put the application/client ID, secret **value**, and URI in `MICROSOFT_CLIENT_ID`, `MICROSOFT_CLIENT_SECRET`, `MICROSOFT_REDIRECT_URI`.
+3. Use delegated Microsoft Graph `Mail.Read` and `User.Read`, with `offline_access` in the authorization request. JobOps uses the `consumers` authority, PKCE, and an account-selection prompt. One registration serves both personal addresses: choose **Connect Outlook** again to select the second account. See [Microsoft's authorization-code flow](https://learn.microsoft.com/en-us/entra/identity-platform/v2-oauth2-auth-code-flow) and [delegated scopes/offline access](https://learn.microsoft.com/en-us/entra/identity-platform/scopes-oidc).
+
+Set the shared encryption key as described above and restart Next.js. Open **Applications → Emails**, choose **Connect Gmail**, then **Connect Outlook** once for each Outlook account. Check that all three addresses appear separately. Choose **Refresh all inboxes** to import recruiting mail on demand; access is read-only and nothing is sent. Tokens are AES-256-GCM encrypted in PostgreSQL.
+
+Each refresh reads at most four pages per inbox, checkpoints committed pages and retains a continuation cursor. The initial window is 30 days; later refreshes overlap the last completed window for deduplication. A failed inbox keeps partial imports and reports its own error while other inboxes complete. Refresh again when more messages remain, or reconnect an expired/revoked account after checking configuration. Account tags remain on imported mail even after disconnect. Deduplication uses provider + external message ID, so the same Message-ID delivered to both Outlook accounts is stored once with the first imported account's provenance.
+
+Settings → Mail connections removes local credentials and cursor only; mail/history remains. Also remove JobOps from your Google/Microsoft account permissions to revoke the provider grant. Live OAuth and actual inbox access require your credentials and have **not** been exercised in automated tests.
 
 ## Resume storage and backup
 
@@ -254,21 +265,21 @@ tar -czf backups/jobops-uploads.tar.gz data/uploads
 
 Run these commands from `jobops/`. The dump command targets the default Compose database; the archive command targets the default `STORAGE_ROOT`. If either location is customized, back up the configured database and actual storage directory instead. The Compose service must be running for `pg_dump`.
 
-Store backups outside Git and securely preserve your `.env` secrets separately. Keep the original `GMAIL_TOKEN_ENCRYPTION_KEY` to restore Gmail connections. Test restoration into a **separate** database/storage root before relying on backups; do not restore over live data without an explicit decision.
+Store backups outside Git and securely preserve your `.env` secrets separately. Keep the original encryption bytes (`MAIL_TOKEN_ENCRYPTION_KEY`, or legacy `GMAIL_TOKEN_ENCRYPTION_KEY`) to restore inbox connections. Test restoration into a **separate** database/storage root before relying on backups; do not restore over live data without an explicit decision.
 
 The original development fixtures were removed from the main local workspace after being backed up. The one-time `scripts/clean-demo.ts` utility recognizes only the initial development session, preserves later edits, checks references from retained records, and requires an exact preview digest before applying a transactional deletion. It saves private record/upload backups under ignored `data/backups/`. It does not reset the schema, run at startup, or touch `jobops_e2e`. It is not a general-purpose delete or reset command.
 
 ## Production and security
 
-V1 is a single-user tool for your trusted LAN. The dev/start scripts listen on all IPv4 interfaces. Host checks validate the target address; they do not authenticate a client's source IP, and forwarded headers do not establish trust. Your firewall and router define the network boundary. There is no ingestion token. Company API requests to a local target bypass the optional browser cookie; other pages, files and exports respect a configured access token. Browser mutations require the actual target origin. The cookie is Lax to permit Google OAuth return navigation, Secure on HTTPS, and expires after twelve hours. Rotating the token invalidates existing sessions. Gmail state/PKCE cookies are separate.
+V1 is a single-user tool for your trusted LAN. The dev/start scripts listen on all IPv4 interfaces. Host checks validate the target address; they do not authenticate a client's source IP, and forwarded headers do not establish trust. Your firewall and router define the network boundary. There is no ingestion token. Company API requests to a local target bypass the optional browser cookie; other pages, files and exports respect a configured access token. Browser mutations require the actual target origin. The cookie is Lax to permit inbox OAuth return navigation, Secure on HTTPS, and expires after twelve hours. Rotating the token invalidates existing sessions. Provider-specific state/PKCE cookies are separate.
 
-For public deployment, set the exact HTTPS `APP_URL`, a strong access token, production database credentials and Gmail callback, and place Next.js behind an HTTPS reverse proxy. Override the listener with `npm exec -- next start --hostname 127.0.0.1 --port 3210`, preserve the canonical Host/Origin, restrict database/file access, use persistent storage, encrypted backups, and process supervision. Public company API requests retain origin and access-cookie protection. A public service should replace the shared-token mechanism with mature authentication/authorization and rate limiting. No portal passwords, Google passwords, cookies from external websites or AI credentials are requested or stored.
+For public deployment, set the exact HTTPS `APP_URL`, a strong access token, production database credentials and inbox callbacks, and place Next.js behind an HTTPS reverse proxy. Override the listener with `npm exec -- next start --hostname 127.0.0.1 --port 3210`, preserve the canonical Host/Origin, restrict database/file access, use persistent storage, encrypted backups, and process supervision. Public company API requests retain origin and access-cookie protection. A public service should replace the shared-token mechanism with mature authentication/authorization and rate limiting. No portal passwords, Google passwords, cookies from external websites or AI credentials are requested or stored.
 
 The local Compose password is development-only. Use a managed/private database or your own restricted PostgreSQL credentials for deployment. Filesystem storage assumes one persistent application instance; use the storage service boundary for R2/S3 before horizontal scaling. Do not publish Drizzle Studio, test servers, Compose PostgreSQL, uploads or backups.
 
 ## Current limits
 
-- This is a single-user local app. Live Gmail OAuth and personal-mailbox refresh still need your credentials and have not been tested against your actual inbox.
+- This is a single-user local app. Live Gmail/Outlook OAuth and personal-mailbox refresh still need your credentials and have not been tested against your actual inbox.
 - Research, resume writing, applications and messages happen through your external assistant or by you. Saving a record never performs an external action.
 - There is no closed-app push notification service or automatic background mail refresh.
 - The app stores PDF resumes; OCR and document generation are not included.
