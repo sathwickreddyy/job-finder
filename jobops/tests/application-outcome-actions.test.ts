@@ -96,3 +96,14 @@ it("returns handled-source feedback without navigation or revalidation", async (
   expect(result).toEqual({ error: "This message has already been handled." });
   expect(mocks.revalidate).not.toHaveBeenCalled();
 });
+
+it("returns to a lane for a safe Applications path and ignores anything else", async () => {
+  const lane = `/applications?open=${id}`;
+  expect(await recordOutcome({}, form({ id, outcome: "heard", returnTo: lane }))).toEqual({
+    success: "Saved: Heard back.",
+    redirect: lane,
+  });
+  expect(
+    await recordOutcome({}, form({ id, outcome: "heard", returnTo: "https://evil.example" })),
+  ).toEqual({ success: "Saved: Heard back.", redirect: `/applications/${id}` });
+});

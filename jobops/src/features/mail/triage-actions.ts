@@ -3,6 +3,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { db } from "@/db";
+import { safeReturnTo, withNotice } from "@/features/applications/return-to";
 import { actionError, formString, type ActionState } from "@/lib/actions";
 import {
   dismissMessages,
@@ -21,7 +22,7 @@ function refresh(recordId?: string) {
     revalidatePath(path);
 }
 const emailsNotice = (notice: string) =>
-  `/applications?tab=emails&notice=${encodeURIComponent(notice)}`;
+  `/applications?emails=1&notice=${encodeURIComponent(notice)}`;
 
 export async function dismissMail(_state: ActionState, form: FormData): Promise<ActionState> {
   let destination: string;
@@ -32,11 +33,11 @@ export async function dismissMail(_state: ActionState, form: FormData): Promise<
       : z.array(z.uuid()).min(1).parse(form.getAll("mailId").map(String));
     const count = await db.transaction((tx) => dismissMessages(tx, { ids, noise }, new Date()));
     refresh();
-    destination = emailsNotice(
-      count
-        ? `Dismissed ${count} ${count === 1 ? "message" : "messages"}.`
-        : "These messages have already been handled.",
-    );
+    const notice = count
+      ? `Dismissed ${count} ${count === 1 ? "message" : "messages"}.`
+      : "These messages have already been handled.";
+    const back = safeReturnTo(formString(form, "returnTo"));
+    destination = back ? withNotice(back, notice) : emailsNotice(notice);
   } catch (error) {
     return actionError(error);
   }
@@ -71,10 +72,14 @@ export async function linkMailOnly(_state: ActionState, form: FormData): Promise
     const notice = linked
       ? "Message linked to your record."
       : "Message already linked to this record.";
+    const returnTo = formString(form, "returnTo");
+    const back = safeReturnTo(returnTo);
     destination =
-      formString(form, "returnTo") === "record"
+      returnTo === "record"
         ? `/applications/${recordId}?notice=${encodeURIComponent(notice)}`
-        : emailsNotice(notice);
+        : back
+          ? withNotice(back, notice)
+          : emailsNotice(notice);
   } catch (error) {
     return actionError(error);
   }

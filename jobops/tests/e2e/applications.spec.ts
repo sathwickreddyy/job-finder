@@ -127,7 +127,7 @@ test("recording outcomes walks an application from OA to an accepted offer", asy
   await expect(page.getByRole("button", { name: "Rejected", exact: true })).toHaveCount(0);
 });
 
-test("a quiet referral shows up in Next and leaves once a follow-up is recorded", async ({
+test("a quiet referral asks for a follow-up on its lane and recording one restarts its clock", async ({
   page,
 }) => {
   const company = `Quiet Co ${Date.now()}`;
@@ -138,25 +138,21 @@ test("a quiet referral shows up in Next and leaves once a follow-up is recorded"
     contact: "Fictional Contact",
   });
   await page.goto("/applications");
-  const slipped = page.getByRole("region", { name: /slipped past/ });
-  const pill = slipped.getByRole("link", { name: new RegExp(`${company}.*Record follow-up`) });
-  await expect(pill).toBeVisible();
-  await pill.click();
-  await expect(page).toHaveURL(new RegExp(`/applications/${applicationId}\\?outcome=followup`));
+  const row = page.getByRole("group", { name: company, exact: true });
+  await expect(row.getByTestId("lane-status")).toHaveText("Referral ask · 6 days quiet");
+  await row.getByRole("link", { name: /^I followed up/ }).click();
+  await expect(page).toHaveURL(new RegExp(`open=${applicationId}&outcome=followup$`));
   await expect(page.getByRole("button", { name: "Sent a follow-up", exact: true })).toHaveAttribute(
     "aria-expanded",
     "true",
   );
   await page.getByRole("button", { name: "Save", exact: true }).click();
-  await expect(page.getByRole("region", { name: "History" })).toContainText("Sent a follow-up");
-  await page.goto("/applications");
-  await expect(page.getByRole("link", { name: new RegExp(company) })).toHaveCount(0);
-  await page.goto(`/applications?tab=records&filter=waiting&q=${encodeURIComponent(company)}`);
-  await expect(page.getByRole("link", { name: company, exact: true })).toBeVisible();
-  await expect(page.getByText("0d of 5", { exact: true })).toBeVisible();
+  await expect(row.getByTestId("lane-status")).toHaveText("Referral ask · 0 of 5 days");
+  // The lane stays open after saving, so match the dot (named "…, Today"), not the chip.
+  await expect(row.getByRole("button", { name: /Sent a follow-up, Today/ })).toBeVisible();
 });
 
-test("a follow-up date appears today and snoozing hides it until undone", async ({ page }) => {
+test("a follow-up date for today puts the company under Needs you", async ({ page }) => {
   const company = `Follow Up Co ${Date.now()}`;
   const note = `Check portal ${company}`;
   const { applicationId } = await seedRecord({ company, source: "DIRECT", sentDaysAgo: 1 });
@@ -167,22 +163,9 @@ test("a follow-up date appears today and snoozing hides it until undone", async 
   await page.getByRole("button", { name: "Save follow-up", exact: true }).click();
   await expect(page.getByRole("button", { name: /^Follow up on/ })).toBeVisible();
   await page.goto("/applications");
-  const row = page.getByRole("listitem").filter({ hasText: note });
-  await expect(row).toHaveCount(1);
-  // A date-only follow-up stays in Today, including before its 09:00 IST time.
-  await expect(row).toContainText("9:00 am");
-  await expect(row.locator("xpath=preceding-sibling::li[h2][1]")).toContainText("Today");
-  await row.getByRole("button", { name: /Snooze/ }).click();
-  await expect(page.getByRole("status").filter({ hasText: "Snoozed for 2 days" })).toContainText(
-    note,
-  );
-  await expect(row).toHaveCount(0);
-  await page.reload();
-  await expect(row).toHaveCount(0);
-  await page.getByRole("button", { name: "Undo", exact: true }).click();
-  await expect(row).toHaveCount(1);
-  await page.reload();
-  await expect(row).toHaveCount(1);
+  const row = page.getByRole("group", { name: company, exact: true });
+  await expect(row.getByText("Today", { exact: true })).toBeVisible();
+  await expect(row.getByRole("link", { name: `Open: ${note}` })).toBeVisible();
 });
 
 test("a record staged by the old dropdown still offers the right next steps", async ({ page }) => {
@@ -197,9 +180,10 @@ test("a record staged by the old dropdown still offers the right next steps", as
   await expect(page.getByTestId("phase-label")).toHaveText("Interviewing");
   await expect(page.getByRole("button", { name: "Round scheduled", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Got an offer", exact: true })).toBeVisible();
-  await page.goto(`/applications?tab=records&filter=interviewing&q=${encodeURIComponent(company)}`);
-  await expect(page.getByRole("link", { name: company, exact: true })).toBeVisible();
-  await expect(page.getByText("No rounds recorded", { exact: true })).toBeVisible();
+  await page.goto("/applications");
+  await expect(
+    page.getByRole("group", { name: company, exact: true }).getByTestId("lane-status"),
+  ).toHaveText("Interviewing");
 });
 
 test("keyboard Cancel restores focus to its outcome chip", async ({ page }) => {
@@ -278,27 +262,6 @@ for (const clear of [false, true]) {
   });
 }
 
-test("snoozing an overdue pill keeps confirmation and Undo through reload", async ({ page }) => {
-  const company = `Overdue Snooze ${Date.now()}`;
-  await seedRecord({ company, source: "REFERRAL", sentDaysAgo: 6 });
-  await page.goto("/applications");
-  const slipped = page.getByRole("region", { name: /slipped past/ });
-  const pill = slipped.getByRole("link", { name: new RegExp(`${company}.*Record follow-up`) });
-  await expect(pill).toBeVisible();
-  const snooze = slipped.getByRole("button", { name: new RegExp(`Snooze.*${company}`) });
-  await snooze.click();
-  await expect(page.getByRole("status").filter({ hasText: "Snoozed for 2 days" })).toContainText(
-    company,
-  );
-  await expect(pill).toHaveCount(0);
-  await page.reload();
-  await expect(pill).toHaveCount(0);
-  await page.getByRole("button", { name: "Undo", exact: true }).click();
-  await expect(pill).toBeVisible();
-  await page.reload();
-  await expect(pill).toBeVisible();
-});
-
 test("keyboard Preparing success restores focus to Progress", async ({ page }) => {
   const { applicationId } = await seedRecord({
     company: `Preparing Focus ${Date.now()}`,
@@ -324,20 +287,17 @@ test("keyboard Preparing success restores focus to Progress", async ({ page }) =
 
 test("linking an assessment mail books the OA and clears the message", async ({ page }) => {
   const subject = `Assessment invite ${Date.now()}`;
+  const company = `Mail Link Co ${Date.now()}`;
   const { applicationId } = await seedRecord({
-    company: `Mail Link Co ${Date.now()}`,
+    company,
     source: "DIRECT",
     sentDaysAgo: 3,
   });
   await seedMail({ subject, classification: "ASSESSMENT", recordId: applicationId });
   await page.goto("/applications");
-  await expect(page.getByText(subject, { exact: true })).toBeVisible();
-  await page.goto("/applications?tab=emails");
   await page
-    .getByRole("region", { name: /Updates on your records/ })
-    .getByRole("listitem")
-    .filter({ hasText: subject })
-    .getByRole("link", { name: "Link and update", exact: true })
+    .getByRole("group", { name: company, exact: true })
+    .getByRole("link", { name: /^Link it/ })
     .click();
   await expect(page.getByText(`Linking mail: ${subject}`)).toBeVisible();
   await expect(page.getByRole("button", { name: "Got an OA", exact: true })).toHaveAttribute(
@@ -346,19 +306,21 @@ test("linking an assessment mail books the OA and clears the message", async ({ 
   );
   await page.getByLabel("Complete by (India time)").fill(istDay(4));
   await page.getByRole("button", { name: "Save", exact: true }).click();
-  const history = page.getByRole("region", { name: "History" });
-  await expect(history).toContainText("OA received");
-  await expect(history).toContainText(subject);
-  await page.goto("/applications?tab=emails");
+  await expect(page).toHaveURL(new RegExp(`/applications\\?open=${applicationId}$`));
+  await expect(page.getByRole("region", { name: "History" })).toContainText("OA received");
+  // Linked mail sits under its event on the lane; the record page lists the message itself.
+  await page.goto(`/applications/${applicationId}`);
+  await expect(page.getByRole("region", { name: "History" })).toContainText(subject);
+  await page.goto("/applications?emails=1");
   await expect(page.getByRole("link", { name: subject, exact: true })).toHaveCount(0);
 });
 
 test("a recruiter mail becomes a saved opening", async ({ page }) => {
   const subject = `SDE-3 role ${Date.now()}`;
   await seedMail({ subject, classification: "RECRUITER_OUTREACH" });
-  await page.goto("/applications?tab=emails");
+  await page.goto("/applications?emails=1");
   await page
-    .getByRole("region", { name: /New roles for you/ })
+    .getByRole("region", { name: /^New roles/ })
     .getByRole("listitem")
     .filter({ hasText: subject })
     .getByRole("link", { name: "Save as opening", exact: true })
@@ -370,7 +332,7 @@ test("a recruiter mail becomes a saved opening", async ({ page }) => {
   await page.getByRole("button", { name: "Save job", exact: true }).click();
   await expect(page).toHaveURL(/\/jobs\/[0-9a-f-]+\?savedFromMail=1$/);
   await captureSavedJob(new URL(page.url()).pathname.split("/").at(-1)!);
-  await page.goto("/applications?tab=emails");
+  await page.goto("/applications?emails=1");
   await expect(page.getByRole("link", { name: subject, exact: true })).toHaveCount(0);
 });
 
@@ -378,10 +340,10 @@ test("noise can be cleared in one action", async ({ page }) => {
   const subjects = [`Job alert one ${Date.now()}`, `Job alert two ${Date.now()}`];
   for (const subject of subjects)
     await seedMail({ subject, classification: "UNKNOWN", sender: "alerts@naukri.com" });
-  await page.goto("/applications?tab=emails");
+  await page.goto("/applications?emails=1");
   await page
-    .getByRole("region", { name: /Probably noise/ })
-    .getByRole("button", { name: /Dismiss all \d+/ })
+    .getByRole("region", { name: /^Job alerts and auto-replies/ })
+    .getByRole("button", { name: "Clear all", exact: true })
     .click();
   await expect(
     page.getByRole("status").filter({ hasText: /Dismissed \d+ messages/ }),
@@ -390,21 +352,32 @@ test("noise can be cleared in one action", async ({ page }) => {
     await expect(page.getByRole("link", { name: subject, exact: true })).toHaveCount(0);
 });
 
-test("the Emails tab describes missing configuration for both providers", async ({ page }) => {
-  await page.goto("/applications?tab=emails");
-  await expect(page.getByRole("button", { name: "Connect Gmail", exact: true })).toBeDisabled();
+test("the Emails drawer describes missing configuration for both providers", async ({ page }) => {
+  await page.goto("/applications?emails=1");
+  const gmail = page.getByRole("button", { name: "Connect Gmail", exact: true });
+  await expect(gmail).toBeDisabled();
+  await expect(gmail).toHaveAccessibleDescription("Gmail isn't set up on this computer yet.");
+  const outlook = page.getByRole("button", { name: "Connect Outlook", exact: true });
+  await expect(outlook).toBeDisabled();
+  await expect(outlook).toHaveAccessibleDescription("Outlook isn't set up on this computer yet.");
+  await page.getByText("Setup details").first().click();
   await expect(
-    page.getByText(
-      "Set GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI, MAIL_TOKEN_ENCRYPTION_KEY in .env",
-    ),
-  ).toBeVisible();
-  await expect(page.getByRole("button", { name: "Connect Outlook", exact: true })).toBeDisabled();
-  await expect(
-    page.getByText(
-      "Set MICROSOFT_CLIENT_ID, MICROSOFT_CLIENT_SECRET, MICROSOFT_REDIRECT_URI, MAIL_TOKEN_ENCRYPTION_KEY in .env",
-    ),
+    page.getByText(/Set GOOGLE_CLIENT_ID, .* in \.env, then restart the app\./),
   ).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Refresh all inboxes", exact: true }),
   ).toBeDisabled();
+});
+
+test("record history uses readable India-time dates and long notes collapse", async ({ page }) => {
+  const company = `Readable Co ${Date.now()}`;
+  const { applicationId } = await seedRecord({ company, source: "DIRECT", sentDaysAgo: 0 });
+  await page.goto(`/applications/${applicationId}`);
+  const history = page.getByRole("region", { name: "History" });
+  await expect(history).toContainText(/Today, \d{1,2}:\d{2} (am|pm)/);
+  await expect(history).not.toContainText("Asia/Kolkata");
+  await page.getByText("Edit details", { exact: true }).click();
+  await page.getByLabel("Notes").fill("A long note line\n".repeat(10));
+  await page.getByRole("button", { name: "Save details", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Show all", exact: true })).toBeVisible();
 });

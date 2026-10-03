@@ -53,6 +53,7 @@ export function OutcomeChips({
   mailId,
   mailError,
   selectionKey,
+  returnTo,
 }: {
   recordId: string;
   outcomes: OutcomeId[];
@@ -61,6 +62,7 @@ export function OutcomeChips({
   mailId?: string | null;
   mailError?: string;
   selectionKey?: string;
+  returnTo?: string;
   today: string;
   booked?: { name: string; scheduledAt: Date | null };
 }) {
@@ -99,7 +101,7 @@ export function OutcomeChips({
           {mailError}
         </p>
         <div className="flex flex-wrap gap-3 text-sm">
-          <Link href="/applications?tab=emails" className="text-link">
+          <Link href="/applications?emails=1" className="text-link">
             Back to Emails
           </Link>
           <Link href={`/applications/${recordId}#what-happened`} className="text-link">
@@ -166,6 +168,7 @@ export function OutcomeChips({
         >
           <input type="hidden" name="id" value={recordId} />
           <input type="hidden" name="outcome" value={open} />
+          {returnTo && <input type="hidden" name="returnTo" value={returnTo} />}
           {mailId !== undefined && mailId !== null && (
             <>
               <input type="hidden" name="mailIntent" value="link" />
@@ -304,10 +307,12 @@ export function PreparingControl({
   recordId,
   active,
   today,
+  returnTo,
 }: {
   recordId: string;
   active: boolean;
   today: string;
+  returnTo?: string;
 }) {
   const [confirmation, setConfirmation] = useState("");
   const [startedPreparing] = useState(active);
@@ -326,6 +331,7 @@ export function PreparingControl({
       {showForm && (
         <ActionForm action={recordAsSent} onSuccess={setConfirmation}>
           <input type="hidden" name="id" value={recordId} />
+          {returnTo && <input type="hidden" name="returnTo" value={returnTo} />}
           <h2 className="m-0 text-base font-semibold">Record it as sent</h2>
           <label className="block max-w-56 text-sm">
             Date sent (India time)

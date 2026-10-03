@@ -98,12 +98,16 @@ export function InboxStatus({
               >
                 Connect {config.label}
               </Button>
-              <p
-                id={`${config.slug}-configuration`}
-                className="m-0 text-xs text-muted-foreground [overflow-wrap:anywhere]"
-              >
-                Set {config.missing.join(", ")} in .env
+              <p id={`${config.slug}-configuration`} className="m-0 text-xs text-muted-foreground">
+                {config.label} isn&apos;t set up on this computer yet.
               </p>
+              <details className="text-xs text-muted-foreground">
+                <summary className="cursor-pointer">Setup details</summary>
+                <p className="m-0 mt-1 [overflow-wrap:anywhere]">
+                  Set {config.missing.join(", ")} in .env, then restart the app. See README › Inbox
+                  setup.
+                </p>
+              </details>
             </div>
           ),
         )}

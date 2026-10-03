@@ -82,7 +82,7 @@ test("three inbox addresses, account tags and long errors fit 390px with keyboar
 }) => {
   await seedInboxes();
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto("/applications?tab=emails");
+  await page.goto("/applications?emails=1");
   const list = page.getByRole("list", { name: "Connected inboxes" });
   await expect(list.getByRole("listitem")).toHaveCount(3);
   for (const email of emails) {
@@ -120,7 +120,7 @@ test("real all-failed refresh feedback survives revalidation and navigation with
   page,
 }) => {
   await seedInboxes();
-  await page.goto("/applications?tab=emails");
+  await page.goto("/applications?emails=1");
   await page.getByRole("button", { name: "Refresh all inboxes", exact: true }).focus();
   await page.keyboard.press("Enter");
   const failure = page.getByRole("alert").filter({ hasText: "No inbox refreshed." });
@@ -129,14 +129,11 @@ test("real all-failed refresh feedback survives revalidation and navigation with
     "0 arrived just now",
   );
   for (const email of emails) await expect(page.getByText(email, { exact: true })).toHaveCount(2);
-  await page
-    .getByRole("navigation", { name: "Applications", exact: true })
-    .getByRole("link", { name: /^Records/ })
-    .click();
-  await page
-    .getByRole("navigation", { name: "Applications", exact: true })
-    .getByRole("link", { name: /^Emails/ })
-    .click();
+  // Leave the drawer for the lanes, then come back through the header's Emails link.
+  await page.keyboard.press("Escape");
+  await expect(page).toHaveURL(/\/applications$/);
+  await page.getByRole("link", { name: "Emails", exact: true }).click();
+  await expect(page).toHaveURL(/\/applications\?emails=1$/);
   await expect(failure).toBeVisible();
   await page.reload();
   await expect(failure).toBeVisible();
@@ -146,7 +143,7 @@ test("typed successful refresh banner survives navigation and expires rather tha
   page,
 }) => {
   await seedInboxes();
-  await page.goto("/applications?tab=emails");
+  await page.goto("/applications?emails=1");
   await expect(
     page.getByRole("status").filter({ hasText: "messages need a decision" }),
   ).not.toContainText("arrived just now");
@@ -165,14 +162,11 @@ test("typed successful refresh banner survives navigation and expires rather tha
   await expect(page.getByRole("status").filter({ hasText: "arrived just now" })).toContainText(
     "3 arrived just now",
   );
-  await page
-    .getByRole("navigation", { name: "Applications", exact: true })
-    .getByRole("link", { name: /^Records/ })
-    .click();
-  await page
-    .getByRole("navigation", { name: "Applications", exact: true })
-    .getByRole("link", { name: /^Emails/ })
-    .click();
+  // Leave the drawer for the lanes, then come back through the header's Emails link.
+  await page.keyboard.press("Escape");
+  await expect(page).toHaveURL(/\/applications$/);
+  await page.getByRole("link", { name: "Emails", exact: true }).click();
+  await expect(page).toHaveURL(/\/applications\?emails=1$/);
   await expect(page.getByRole("status").filter({ hasText: "arrived just now" })).toBeVisible();
   await page.evaluate(() => {
     const key = "jobops:inbox-refresh";
@@ -189,7 +183,7 @@ test("a refresh after the last inbox was disconnected shows the concrete connect
   page,
 }) => {
   await seedInboxes();
-  await page.goto("/applications?tab=emails");
+  await page.goto("/applications?emails=1");
   await guard();
   await pool.query("DELETE FROM mail_connections WHERE id=ANY($1::uuid[])", [ids]);
   await page.getByRole("button", { name: "Refresh all inboxes", exact: true }).click();
@@ -234,7 +228,7 @@ test("Settings disconnect removes only the selected inbox and keeps its tagged m
   await expect(
     page.getByRole("link", { name: "Connect or refresh inboxes", exact: true }),
   ).toBeFocused();
-  await page.goto("/applications?tab=emails");
+  await page.goto("/applications?emails=1");
   await expect(page.getByText(emails[0], { exact: true })).toHaveCount(1);
   expect((await pool.query("SELECT id FROM mail_connections WHERE id=$1", [ids[0]])).rowCount).toBe(
     0,

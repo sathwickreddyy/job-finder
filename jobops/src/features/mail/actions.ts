@@ -21,7 +21,7 @@ export async function importMail(_previous: ActionState, form: FormData): Promis
     revalidatePath("/");
     return {
       success: `${result.imported} messages imported; ${result.duplicates} duplicates skipped. Open a message to link it to an existing record.`,
-      redirect: "/applications?tab=emails",
+      redirect: "/applications?emails=1",
     };
   } catch (error) {
     return actionError(error);

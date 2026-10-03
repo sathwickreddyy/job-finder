@@ -222,7 +222,7 @@ export function HeroSearch({ identity, links }: HeroProps) {
     { label: "Save a job description", href: "/jobs/new", icon: NotebookPen },
     { label: "Review your resume", href: "/resume-prompt", icon: FileText },
     { label: "Record an application", href: "/applications/new", icon: Send },
-    { label: "Refresh inbox", href: "/applications?tab=emails", icon: Inbox },
+    { label: "Refresh inbox", href: "/applications?emails=1", icon: Inbox },
   ];
   return (
     <section className="py-4">

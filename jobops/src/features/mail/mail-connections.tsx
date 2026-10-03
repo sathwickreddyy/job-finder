@@ -98,7 +98,7 @@ export function MailConnections({ connections }: { connections: Connection[] }) 
         </p>
       )}
       <div className="actions">
-        <Link ref={connect} href="/applications?tab=emails" className="button-secondary">
+        <Link ref={connect} href="/applications?emails=1" className="button-secondary">
           Connect or refresh inboxes
         </Link>
       </div>

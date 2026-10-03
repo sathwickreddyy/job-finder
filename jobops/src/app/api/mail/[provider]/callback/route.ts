@@ -62,7 +62,7 @@ export async function GET(
       "The inbox could not be connected. Check its read-only permissions and configuration, then reconnect.";
   }
   const response = NextResponse.redirect(
-    new URL(`/applications?tab=emails&notice=${encodeURIComponent(message)}`, app),
+    new URL(`/applications?emails=1&notice=${encodeURIComponent(message)}`, app),
   );
   const options = {
     maxAge: 0,

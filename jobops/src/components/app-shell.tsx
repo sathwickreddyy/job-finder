@@ -49,7 +49,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   const searchParams = useSearchParams();
   const emailsActive =
     pathname.startsWith("/mail") ||
-    (pathname === "/applications" && searchParams.get("tab") === "emails");
+    (pathname === "/applications" &&
+      (searchParams.get("emails") === "1" || searchParams.get("tab") === "emails"));
   const light = useSyncExternalStore(subscribe, snapshot, () => false);
   useEffect(() => {
     document.documentElement.dataset.theme = light ? "light" : "dark";
@@ -110,7 +111,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             </nav>
             <div className="flex items-center gap-1">
               <Link
-                href="/applications?tab=emails"
+                href="/applications?emails=1"
                 aria-label="Emails"
                 aria-current={emailsActive ? "page" : undefined}
                 className={cn(

@@ -33,7 +33,7 @@ export async function GET(
   if (!config.configured)
     return NextResponse.redirect(
       new URL(
-        `/applications?tab=emails&notice=${encodeURIComponent(`${provider.label} is not configured. Set ${config.missing.join(", ")}.`)}`,
+        `/applications?emails=1&notice=${encodeURIComponent(`${provider.label} is not configured. Set ${config.missing.join(", ")}.`)}`,
         app,
       ),
     );

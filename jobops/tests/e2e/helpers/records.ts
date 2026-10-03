@@ -49,6 +49,7 @@ export async function seedRecord(input: {
   source: "DIRECT" | "REFERRAL";
   sentDaysAgo: number | null;
   contact?: string;
+  title?: string;
   /** Simulates a stage set by the old dropdown. */
   status?: "APPLIED" | "TECHNICAL_INTERVIEW";
 }) {
@@ -58,7 +59,7 @@ export async function seedRecord(input: {
     .insert(jobs)
     .values({
       company: input.company,
-      title: "Backend Engineer",
+      title: input.title ?? "Backend Engineer",
       location: "Bengaluru",
       canonicalUrl: `https://example.invalid/jobs/${suffix}`,
       dedupeKey: `e2e-${suffix}`,

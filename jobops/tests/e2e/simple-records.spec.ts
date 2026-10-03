@@ -39,9 +39,10 @@ test("a saved job supports resume prompts, referral records and a separate direc
     "Referral recorded as sent",
   );
   await expect(page.getByText("Sent", { exact: true })).toBeVisible();
-  await page.goto(`/applications?tab=records&filter=all&q=${encodeURIComponent(company)}`);
-  await expect(page.getByText("Applied directly", { exact: true })).toHaveCount(0);
-  await expect(page.getByText(/Referral ask/).first()).toBeVisible();
+  await page.goto("/applications");
+  await expect(
+    page.getByRole("group", { name: company, exact: true }).getByTestId("lane-status"),
+  ).toHaveText(/^Referral ask/);
   await page.goto(`/applications/new?jobId=${jobId}`);
   await page.getByLabel("Resume file used").selectOption({ index: 1 });
   await page.getByLabel("What happened?").selectOption("sent");
@@ -58,8 +59,10 @@ test("a saved job supports resume prompts, referral records and a separate direc
   await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.getByRole("region", { name: "History" })).toContainText("DSA round scheduled");
   await expect(page.getByTestId("phase-label")).toHaveText(/Interviewing/);
-  await page.goto(`/applications?tab=records&filter=interviewing&q=${encodeURIComponent(company)}`);
-  await expect(page.getByRole("link", { name: company, exact: true })).toHaveCount(1);
+  await page.goto("/applications");
+  const lane = page.getByRole("group", { name: company, exact: true });
+  await expect(lane).toHaveCount(1);
+  await expect(lane.getByTestId("lane-status")).toHaveText("Interviewing · round 1");
   await page.goto(referralPath);
   await expect(page.getByText("Sent", { exact: true })).toBeVisible();
 });

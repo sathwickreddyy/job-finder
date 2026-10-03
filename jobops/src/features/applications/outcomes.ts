@@ -5,6 +5,7 @@ import { db } from "@/db";
 import { actionError, formString, type ActionState } from "@/lib/actions";
 import { applyOutcome } from "./outcome-service";
 import { outcomeDetail, outcomeMeta } from "./phase";
+import { safeReturnTo } from "./return-to";
 
 export async function recordOutcome(_state: ActionState, form: FormData): Promise<ActionState> {
   try {
@@ -40,7 +41,7 @@ export async function recordOutcome(_state: ActionState, form: FormData): Promis
       revalidatePath(path);
     return {
       success: `Saved: ${outcomeMeta[id].label}.`,
-      redirect: `/applications/${applicationId}`,
+      redirect: safeReturnTo(formString(form, "returnTo")) ?? `/applications/${applicationId}`,
     };
   } catch (error) {
     return actionError(error);

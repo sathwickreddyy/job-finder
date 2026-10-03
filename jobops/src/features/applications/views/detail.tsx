@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ExternalLink, FileText, Link2, Mail, NotebookPen } from "lucide-react";
+import { ExternalLink, FileText, Link2, NotebookPen } from "lucide-react";
 import { linkMailOnly, unlinkMail } from "@/features/mail/triage-actions";
 import { ActionForm } from "@/components/action-form";
 import { Button, Field } from "@/components/ui";
@@ -12,18 +12,20 @@ import { formatDay, formatDayTime, indiaDate, istClock, istDaysBetween } from ".
 import {
   availableOutcomes,
   canEditPlannedRecord,
-  historyTone,
   initialOutcome,
   isOutreach,
   methodLabel,
   phaseText,
   recordStateFrom,
 } from "../phase";
+import { clip, eventTone, type DotTone } from "../lanes";
 import type { ApplicationRecord } from "../read";
 import { updateApplicationDetails, updateRound } from "../record-actions";
 import { FollowUp } from "./follow-up";
 import { CompanyMark, PhaseBar, RoundLadder } from "./marks";
+import { NotesText } from "./notes-text";
 import { OutcomeChips, PreparingControl } from "./outcome-chips";
+import { Timeline } from "./timeline";
 
 type Choice = { id: string; label: string };
 
@@ -64,17 +66,18 @@ export function ApplicationDetail({
     ...record.events.map((event) => ({
       key: event.id,
       at: event.occurredAt,
-      text: event.summary,
-      tone: historyTone(event.eventType) as "good" | "bad" | "neutral" | "mail",
-      from: "",
-      href: "",
+      tone: eventTone(event.eventType, typeof event.payload.mailMessageId === "string"),
+      label: event.summary,
+      detail: "",
+      tags: [] as string[],
     })),
     ...record.linkedMail.map((mail) => ({
       key: mail.id,
       at: mail.receivedAt,
-      text: mail.subject,
-      tone: "mail" as const,
-      from: "",
+      tone: "mail" as DotTone,
+      label: clip(mail.subject, 200),
+      detail: "",
+      tags: [] as string[],
       href: `/mail/${mail.id}`,
     })),
     ...linked
@@ -83,13 +86,13 @@ export function ApplicationDetail({
         other.events.map((event) => ({
           key: event.id,
           at: event.occurredAt,
-          text: event.summary,
-          tone: historyTone(event.eventType) as "good" | "bad" | "neutral" | "mail",
-          from: methodLabel[other.source] ?? "Linked record",
-          href: "",
+          tone: eventTone(event.eventType, false),
+          label: event.summary,
+          detail: "",
+          tags: [methodLabel[other.source] ?? "Linked record"],
         })),
       ),
-  ].sort((a, b) => b.at.getTime() - a.at.getTime());
+  ];
   return (
     <div className="space-y-6">
       {notice && (
@@ -274,9 +277,7 @@ export function ApplicationDetail({
               <NotebookPen size={15} aria-hidden />
               Notes
             </h2>
-            <p className="m-0 text-sm whitespace-pre-wrap text-muted-foreground [overflow-wrap:anywhere]">
-              {record.notes || "No notes yet."}
-            </p>
+            <NotesText text={record.notes} />
             <details className="mt-3">
               <summary className="text-sm">Edit details</summary>
               <ActionForm
@@ -376,44 +377,7 @@ export function ApplicationDetail({
             <h2 id="history-heading" className="m-0 mb-3 text-base font-semibold">
               History
             </h2>
-            <ol className="m-0 list-none space-y-4 p-0">
-              {history.map((entry) => (
-                <li key={entry.key} className="grid grid-cols-[1.25rem_minmax(0,1fr)] gap-3">
-                  <span
-                    aria-hidden
-                    className={cn(
-                      "mt-0.5 grid size-5 place-items-center rounded-full",
-                      entry.tone === "mail"
-                        ? "bg-selected text-selected-foreground"
-                        : entry.tone === "good"
-                          ? "bg-success-soft text-success"
-                          : entry.tone === "bad"
-                            ? "bg-danger-soft text-destructive"
-                            : "bg-muted text-muted-foreground",
-                    )}
-                  >
-                    {entry.tone === "mail" ? (
-                      <Mail size={11} />
-                    ) : (
-                      <span className="size-1.5 rounded-full bg-current" />
-                    )}
-                  </span>
-                  <div className="min-w-0 [overflow-wrap:anywhere]">
-                    {entry.href ? (
-                      <Link href={entry.href} className="text-sm">
-                        {entry.text}
-                      </Link>
-                    ) : (
-                      <p className="m-0 text-sm">{entry.text}</p>
-                    )}
-                    <p className="m-0 text-xs text-muted-foreground">
-                      {displayDate(entry.at, preferences, true)}
-                      {entry.from && ` · ${entry.from}`}
-                    </p>
-                  </div>
-                </li>
-              ))}
-            </ol>
+            <Timeline entries={history} now={now} />
             <ActionForm action={addApplicationNote} feedback="inverse" className="mt-5 space-y-3">
               <input type="hidden" name="id" value={record.id} />
               <label className="block text-sm">

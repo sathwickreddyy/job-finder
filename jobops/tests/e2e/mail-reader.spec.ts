@@ -26,7 +26,7 @@ for (const path of [
 ]) {
   test(`${path} redirects and drops legacy filters`, async ({ page }) => {
     await page.goto(path);
-    await expect(page).toHaveURL(/\/applications\?tab=emails$/);
+    await expect(page).toHaveURL(/\/applications\?emails=1$/);
     await expect(page.getByRole("link", { name: "Emails", exact: true })).toHaveAttribute(
       "aria-current",
       "page",
@@ -76,7 +76,7 @@ test("reader matches actual buckets: roles save, updates link, alerts only dismi
   await page.goto(`/mail/${update}`);
   await expect(page.getByRole("link", { name: "Link and update", exact: true })).toHaveAttribute(
     "href",
-    `/applications/${applicationId}?mail=${update}&outcome=heard#what-happened`,
+    `/applications?open=${applicationId}&mail=${update}&outcome=heard`,
   );
   await expect(page.getByRole("link", { name: "Save as opening", exact: true })).toHaveCount(0);
   await page.goto(`/mail/${alert}`);
@@ -142,7 +142,7 @@ test("reader dismiss keeps durable confirmation and Undo after its action disapp
   });
   await page.goto(`/mail/${mailId}`);
   await page.getByRole("button", { name: "Dismiss", exact: true }).click();
-  await expect(page).toHaveURL(/\/applications\?tab=emails&notice=/);
+  await expect(page).toHaveURL(/\/applications\?emails=1&notice=/);
   await expect(page.getByRole("status").filter({ hasText: "Dismissed 1 message." })).toBeVisible();
   await page.reload();
   await page.getByRole("button", { name: "Undo last dismiss" }).click();
@@ -177,7 +177,7 @@ for (const classification of [
     await expect(page.getByRole("button", { name: "Link", exact: true })).toHaveCount(0);
     await expect(page.getByRole("link", { name: "Save as opening", exact: true })).toHaveCount(0);
     await expect(page.getByLabel("Record for this message")).toHaveCount(0);
-    await page.goto("/applications?tab=emails");
+    await page.goto("/applications?emails=1");
     await expect(page.locator(`a[href='/mail/${id}']`)).toHaveCount(0);
   });
 }
@@ -189,7 +189,7 @@ test("unverified Gmail callback returns to Emails without connecting an inbox", 
   expect(response.status()).toBe(307);
   const destination = new URL(response.headers().location);
   expect(destination.pathname).toBe("/applications");
-  expect(destination.searchParams.get("tab")).toBe("emails");
+  expect(destination.searchParams.get("emails")).toBe("1");
   expect(destination.searchParams.get("notice")).toContain("could not be verified");
 });
 
@@ -206,13 +206,15 @@ test("reader wraps a long unbroken admitted subject at 390px", async ({ page }) 
 });
 
 test("unconfigured Gmail gives a reachable reason and keeps JSON import", async ({ page }) => {
-  await page.goto("/applications?tab=emails");
+  await page.goto("/applications?emails=1");
   await expect(page.getByRole("button", { name: "Connect Gmail", exact: true })).toBeDisabled();
   await expect(
     page.getByRole("button", { name: "Connect Gmail", exact: true }),
-  ).toHaveAccessibleDescription(
-    "Set GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI, MAIL_TOKEN_ENCRYPTION_KEY in .env",
-  );
+  ).toHaveAccessibleDescription("Gmail isn't set up on this computer yet.");
+  await page.getByText("Setup details").first().click();
+  await expect(
+    page.getByText(/Set GOOGLE_CLIENT_ID, .* in \.env, then restart the app\./),
+  ).toBeVisible();
   await expect(page.getByRole("link", { name: "Import messages", exact: true })).toHaveAttribute(
     "href",
     "/mail/import",

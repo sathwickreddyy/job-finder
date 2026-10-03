@@ -1,3 +1,4 @@
+import { laneHref } from "@/features/applications/navigation";
 import type { OutcomeId } from "@/features/applications/phase";
 import type { QueueMail } from "@/features/applications/queue";
 import type { MailClassification } from "@/services/mail/classifier";
@@ -55,8 +56,10 @@ export function linkHref(
   message: { id: string; classification: MailClassification },
   recordId: string,
 ): string {
-  const outcome = suggestedOutcome[message.classification];
-  return `/applications/${recordId}?mail=${message.id}${outcome ? `&outcome=${outcome}` : ""}#what-happened`;
+  return laneHref(recordId, {
+    mail: message.id,
+    outcome: suggestedOutcome[message.classification],
+  });
 }
 
 export type TriageInput = {

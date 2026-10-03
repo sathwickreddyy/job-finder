@@ -11,19 +11,19 @@ export function WorkspaceHome({ data }: { data: WorkspaceData }) {
     {
       label: "Applications sent",
       value: data.applications.filter((app) => app.appliedAt).length,
-      href: "/applications?tab=records&filter=active",
+      href: "/applications",
     },
     {
       label: "Interview stage",
       value: data.applications.filter(
         (app) => app.status.includes("INTERVIEW") || app.status === "RECRUITER_SCREEN",
       ).length,
-      href: "/applications?tab=records&filter=interviewing",
+      href: "/applications",
     },
     {
       label: "Offers",
       value: data.applications.filter((app) => app.status === "OFFER").length,
-      href: "/applications?tab=records&filter=interviewing",
+      href: "/applications",
     },
   ];
   const sources = data.openings.length
@@ -133,7 +133,7 @@ export function WorkspaceHome({ data }: { data: WorkspaceData }) {
             or referral and the exact resume you used.
           </li>
           <li>
-            <Link href="/applications?tab=emails" className="text-link">
+            <Link href="/applications?emails=1" className="text-link">
               Refresh your inboxes
             </Link>{" "}
             when you want to check replies and deadlines.

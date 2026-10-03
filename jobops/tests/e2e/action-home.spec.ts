@@ -17,8 +17,8 @@ test("emails triage dismisses a message and undo restores it", async ({ page }) 
   const subject = `Interview test ${Date.now()}`;
   const mailId = await seedMail({ subject, classification: "INTERVIEW" });
   await page.goto(`/inbox?view=attention&q=${encodeURIComponent(subject)}`);
-  await expect(page).toHaveURL(/\/applications\?tab=emails$/);
-  const updates = page.getByRole("region", { name: /Updates on your records/ });
+  await expect(page).toHaveURL(/\/applications\?emails=1$/);
+  const updates = page.getByRole("region", { name: /^Replies we couldn't match/ });
   const message = updates.getByRole("link", { name: subject, exact: true });
   await expect(message).toBeVisible();
   await updates
@@ -46,20 +46,20 @@ test("core pages fit a phone and preserve the selected theme", async ({ page }) 
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
   await expect(page.getByRole("link", { name: /Applications sent$/ })).toHaveAttribute(
     "href",
-    "/applications?tab=records&filter=active",
+    "/applications",
   );
   await expect(page.getByRole("link", { name: "Emails", exact: true })).toHaveAttribute(
     "href",
-    "/applications?tab=emails",
+    "/applications?emails=1",
   );
   await expect(page.locator("a").filter({ hasText: "Refresh your inboxes" })).toHaveAttribute(
     "href",
-    "/applications?tab=emails",
+    "/applications?emails=1",
   );
   for (const label of ["Interview stage", "Offers"]) {
     await expect(page.getByRole("link", { name: new RegExp(`${label}$`) })).toHaveAttribute(
       "href",
-      "/applications?tab=records&filter=interviewing",
+      "/applications",
     );
   }
   for (const path of [
@@ -69,9 +69,9 @@ test("core pages fit a phone and preserve the selected theme", async ({ page }) 
     "/resumes",
     "/resume-prompt",
     "/applications",
-    "/applications?tab=records&filter=all",
+    "/applications?open=00000000-0000-4000-8000-000000000000",
     "/my-profile",
-    "/applications?tab=emails",
+    "/applications?emails=1",
   ]) {
     await page.goto(path);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
