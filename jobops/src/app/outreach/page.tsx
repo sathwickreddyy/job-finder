@@ -3,7 +3,13 @@ import { notFound } from "next/navigation";
 import { z } from "zod";
 import { desc, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { applications, applicationEvents, resumes, resumeVersions } from "@/db/schema";
+import {
+  applications,
+  applicationEvents,
+  mailMessages,
+  resumes,
+  resumeVersions,
+} from "@/db/schema";
 import { Button, PageHeader, Panel } from "@/components/ui";
 import { PromptPanel } from "@/components/prompt-panel";
 import { RecordForm } from "@/features/applications/record-form";
@@ -11,6 +17,7 @@ import { getJobContext } from "@/features/workspace/job-context";
 import { outreachPrompt } from "@/features/workspace/prompts";
 import { readWorkspace } from "@/features/workspace/read";
 import { methodNames } from "@/features/applications/domain";
+import { canEditPlannedRecord, recordStateFrom } from "@/features/applications/phase";
 export default async function Outreach({
   searchParams,
 }: {
@@ -31,7 +38,18 @@ export default async function Outreach({
         .where(eq(applicationEvents.applicationId, existing.id))
         .orderBy(desc(applicationEvents.occurredAt))
     : [];
-  const sent = history.some((event) => event.eventType === "OUTREACH_SENT");
+  const linkedMail = existing
+    ? await db
+        .select({
+          classification: mailMessages.classification,
+          receivedAt: mailMessages.receivedAt,
+        })
+        .from(mailMessages)
+        .where(eq(mailMessages.linkedApplicationId, existing.id))
+    : [];
+  const editable =
+    !existing ||
+    canEditPlannedRecord(recordStateFrom({ ...existing, events: history, linkedMail }, [], []));
   const [context, data, versions] = await Promise.all([
     getJobContext(existing?.jobId ?? p.job),
     readWorkspace(),
@@ -74,9 +92,9 @@ export default async function Outreach({
               data.context,
             )}
           />
-          {sent && existing ? (
+          {!editable && existing ? (
             <Panel>
-              <p>This outreach is already recorded as sent.</p>
+              <p>Continue updates from this outreach record.</p>
               <Link
                 href={`/applications/${existing.id}`}
                 className="mt-3 inline-block text-sm text-link"

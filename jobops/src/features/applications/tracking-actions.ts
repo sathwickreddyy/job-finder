@@ -4,9 +4,17 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { db } from "@/db";
-import { activityLogs, applicationEvents, applications, jobs, resumeVersions } from "@/db/schema";
+import {
+  activityLogs,
+  applicationEvents,
+  applications,
+  jobs,
+  mailMessages,
+  resumeVersions,
+} from "@/db/schema";
 import { actionError, formString, type ActionState } from "@/lib/actions";
 import { methodNames, recordIntent, recordMethods, recordSentAt } from "./domain";
+import { canEditPlannedRecord, recordStateFrom } from "./phase";
 export async function recordAction(_state: ActionState, form: FormData): Promise<ActionState> {
   let destination: string;
   try {
@@ -39,7 +47,20 @@ export async function recordAction(_state: ActionState, form: FormData): Promise
     const intent = recordIntent(data.method, data.state === "sent");
     const sentAt = data.state === "sent" ? recordSentAt(data.date) : null;
     const id = await db.transaction(async (tx) => {
-      const [job] = await tx.select().from(jobs).where(eq(jobs.id, data.jobId));
+      // Existing writers share application → job lock order with the outcome service.
+      const [previous] = data.recordId
+        ? await tx
+            .select()
+            .from(applications)
+            .where(eq(applications.id, data.recordId))
+            .for("update")
+        : [];
+      if (
+        data.recordId &&
+        (!previous || previous.jobId !== data.jobId || previous.source !== data.method)
+      )
+        throw new Error("This record does not match the selected opening and method.");
+      const [job] = await tx.select().from(jobs).where(eq(jobs.id, data.jobId)).for("update");
       if (!job) throw new Error("Choose an existing opening.");
       if (data.versionId) {
         const [version] = await tx
@@ -58,21 +79,25 @@ export async function recordAction(_state: ActionState, form: FormData): Promise
         notes: data.notes,
       };
       let recordId: string;
-      if (data.recordId) {
-        const [previous] = await tx
-          .select()
-          .from(applications)
-          .where(eq(applications.id, data.recordId))
-          .for("update");
-        if (!previous || previous.jobId !== data.jobId || previous.source !== data.method)
-          throw new Error("This record does not match the selected opening and method.");
+      if (previous) {
         const history = await tx
-          .select({ type: applicationEvents.eventType })
+          .select({
+            eventType: applicationEvents.eventType,
+            occurredAt: applicationEvents.occurredAt,
+          })
           .from(applicationEvents)
           .where(eq(applicationEvents.applicationId, previous.id));
-        if (previous.appliedAt || history.some((event) => event.type === "OUTREACH_SENT"))
+        const linkedMail = await tx
+          .select({
+            classification: mailMessages.classification,
+            receivedAt: mailMessages.receivedAt,
+          })
+          .from(mailMessages)
+          .where(eq(mailMessages.linkedApplicationId, previous.id));
+        const state = recordStateFrom({ ...previous, events: history, linkedMail }, [], []);
+        if (!canEditPlannedRecord(state))
           throw new Error(
-            "This action is already recorded as sent. Add a timeline note for a follow-up.",
+            "This record has already been sent or closed. Open its record to add an outcome or note.",
           );
         await tx
           .update(applications)
