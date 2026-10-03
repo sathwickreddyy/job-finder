@@ -37,14 +37,13 @@ dates or mail. No AI model is called, nothing is sent, and there are no database
 
 Query parameters:
 
-| Param             | Meaning                                                                         |
-| ----------------- | ------------------------------------------------------------------------------- |
-| `open=<laneKey>`  | Expands that lane (§2.7). Kept across server-action revalidation.               |
-| `role=<recordId>` | Selected role inside an expanded lane with several records.                     |
-| `mail=<mailId>`   | With `open`: the matched mail being linked (§3).                                |
-| `outcome=<id>`    | With `open`: preselected outcome chip (validated against availability).         |
-| `emails=1`        | Opens the Emails drawer.                                                        |
-| `notice=<text>`   | Shown at the top of the drawer (OAuth callback and triage results), ≤300 chars. |
+| Param             | Meaning                                                                                                                                                                                         |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `open=<recordId>` | Expands the lane containing that record, with that role selected (§2.7). Kept across server-action revalidation. Any record link (`linkHref`, record picker) therefore lands on the right lane. |
+| `mail=<mailId>`   | With `open`: the matched mail being linked (§3).                                                                                                                                                |
+| `outcome=<id>`    | With `open`: preselected outcome chip (validated against availability).                                                                                                                         |
+| `emails=1`        | Opens the Emails drawer.                                                                                                                                                                        |
+| `notice=<text>`   | Shown at the top of the drawer (OAuth callback and triage results), ≤300 chars.                                                                                                                 |
 
 Legacy links: `?tab=emails` → `?emails=1`; any other `tab`, `filter`, `view` or `q` is ignored
 and the plain page renders.
@@ -94,13 +93,13 @@ dashed outline. No tinted panels for urgency; colour lives in dots, text and but
 
 Each dot is `{ at, tone, label, detail?, recordId, role?, via?, mailId? }`, drawn from:
 
-| Source                                                                                                                                                                                                                                                                                                                                                                                  | Tone                            |
-| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- |
-| Application events: `historyTone` good/bad; `APPLICATION_SENT`, `APPLICATION_SUBMITTED`, `OUTREACH_SENT`, `FOLLOW_UP_SENT` → sent; inbound replies and scheduling events (`REPLY_RECEIVED`, `ASSESSMENT_RECEIVED`, `INTERVIEW_SCHEDULED`, `ROUND_RESCHEDULED`) → mail when linked to mail, else note; everything else (`APPLICATION_CREATED`, `MANUAL_NOTE`, `MAIL_UNLINKED`, …) → note | good / bad / sent / mail / note |
-| Linked mail not already referenced by an event's `payload.mailMessageId`                                                                                                                                                                                                                                                                                                                | mail                            |
-| `SCHEDULED` round with `scheduled_at` ("Round N · <kind>", OA: "OA closes")                                                                                                                                                                                                                                                                                                             | upcoming                        |
-| Future follow-up date (`next_action_at`), labelled by `next_action_note` or "Follow up"                                                                                                                                                                                                                                                                                                 | upcoming                        |
-| Open mail whose triage suggests a record in this lane                                                                                                                                                                                                                                                                                                                                   | pending                         |
+| Source                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | Tone                            |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------- |
+| Application events, first match wins: `historyTone` bad → bad; `APPLICATION_SENT`, `APPLICATION_SUBMITTED`, `OUTREACH_SENT`, `FOLLOW_UP_SENT` → sent; `REPLY_RECEIVED`, `ASSESSMENT_RECEIVED`, `INTERVIEW_REQUESTED`, `INTERVIEW_SCHEDULED`, `ROUND_RESCHEDULED` → mail when `payload.mailMessageId` is set, else note; `historyTone` good → good; everything else → note. The dot label is a short phrase per event type ("Applied", "Got an OA", "Cleared the round"); the stored summary becomes the detail, clipped to 160 characters. | good / bad / sent / mail / note |
+| Linked mail not already referenced by an event's `payload.mailMessageId`                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | mail                            |
+| `SCHEDULED` round with `scheduled_at` ("Round N · <kind>", OA: "OA closes")                                                                                                                                                                                                                                                                                                                                                                                                                                                                | upcoming                        |
+| Future follow-up date (`next_action_at`), labelled by `next_action_note` or "Follow up"                                                                                                                                                                                                                                                                                                                                                                                                                                                    | upcoming                        |
+| Open mail whose triage suggests a record in this lane                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | pending                         |
 
 - `role` is set when the lane has two or more records. `via` is the method label for outreach
   records.
@@ -109,9 +108,9 @@ Each dot is `{ at, tone, label, detail?, recordId, role?, via?, mailId? }`, draw
 
 ### 2.4 Next column
 
-`buildQueue` runs unchanged over all records and triage mail. Mail items without a record (new roles, unmatched replies) belong to no lane and are counted by the Emails drawer instead. For each lane, the item with the
-lowest due rank (overdue < today < week) then earliest `dueAt` among the lane's records is its
-next step. It shows the due dot, a "when" phrase ("6 days late", "Today, 4:00 pm",
+`buildQueue` runs unchanged over all records and triage mail. Mail items without a record (new roles, unmatched replies) belong to no lane and are counted by the Emails drawer instead. Each record's next step is its matched, unhandled mail when there is any (linking it
+usually settles the rest), else its first queue item. The lane's next step is the record step with
+the lowest due rank (overdue < today < week < none) then earliest date. It shows the due dot, a "when" phrase ("6 days late", "Today, 4:00 pm",
 "Mon 6 Oct", "New email") and one action. With several open roles the role name prefixes the
 text.
 
@@ -159,12 +158,12 @@ column itself:
 
 ### 2.7 Expanded lane
 
-Selecting a company cell or dot sets `open=<laneKey>` (one lane at a time; selecting again
-closes it). The expansion sits under the lane row:
+Selecting a company cell or dot sets `open=<lead recordId>` (one lane at a time; selecting again
+closes it). The expansion is rendered on the server for that URL. The expansion sits under the lane row:
 
 - **Header line**: roles and cities, how each was sent, and **Open record** for the selected role.
-- **Role switcher** (two or more records): pills "<role> · <status label>" setting `role`;
-  default is the lead.
+- **Role switcher** (two or more records): pills "<role> · <status label>" linking to
+  `open=<that recordId>`; default is the lead.
 - **History**: one vertical timeline of the lane's dots, newest first, with a Today divider
   between upcoming and past entries. Entries carry role and method tags. A pending-mail entry
   offers **Link it**, **Link elsewhere** (existing record picker) and **Dismiss**.
@@ -249,7 +248,8 @@ Tailwind theme tokens only.
 
 ## 8. Errors and edge cases
 
-- A lane whose records all lack events still shows a dot from `applied_at` or creation time.
+- A record with no events still contributes a "Sent" dot at its applied/sent date when known; a
+  Preparing record with neither shows an empty track.
 - An invalid `open`, `role`, `mail` or `outcome` parameter is ignored. `mail` must pass the
   existing `readOpenMail` gate for that record.
 - A refresh with every inbox failing keeps lanes and existing mail visible and lists each error
@@ -283,9 +283,11 @@ Tailwind theme tokens only.
 
 ## 10. Delivery
 
-1. **Lanes**: §1, §2, §6 for Home and record redirects, with the current Emails view mounted
-   inside the drawer as is. Tabs removed.
-2. **Mail and drawer**: §3, §4, the remaining §6 links and redirects.
+1. **Lanes**: §1, §2, §6 for Home and record redirects, and §3's **Link it** / **Add to timeline**
+   so pending dots are actionable from the first release. The current Emails view is mounted
+   inside the drawer in one column. Tabs removed.
+2. **Mail and drawer**: §4, §3's **Link elsewhere** and **Dismiss** on lanes, and the remaining §6
+   links and redirects.
 3. **Record page**: §5.
 
 Each phase ships working and is committed separately.
