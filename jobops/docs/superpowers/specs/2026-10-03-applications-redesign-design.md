@@ -1,6 +1,7 @@
 # Applications redesign: a Next queue, real rounds and one inbox across three accounts
 
-Date: 2026-10-03 · Status: design approved; implementation not started
+Date: 2026-10-03 · Status: implemented. §1.1, §1.3 and the Next/Records/Emails tabs are superseded by
+`2026-10-03-applications-lanes-design.md`; the data model, outcomes, providers and queue rules stand.
 Gallery: `/gallery/applications` (picks: Next queue B, All records B, What happened? A, Emails tab C,
 Application page A)
 
