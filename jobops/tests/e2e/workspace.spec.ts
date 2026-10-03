@@ -23,7 +23,9 @@ test("candidate answers preserve explicit UNKNOWN", async ({ page }) => {
     }),
   );
   await page.getByRole("button", { name: "Save candidate profile", exact: true }).click();
-  await expect(page.getByRole("status")).toContainText("Candidate profile saved");
+  await expect(
+    page.getByRole("status").filter({ hasText: "Candidate profile saved" }),
+  ).toBeVisible();
   await page.reload();
   const answers = JSON.parse(
     await page.getByLabel("Standard application answers").inputValue(),

@@ -244,6 +244,8 @@ for (const clear of [false, true]) {
     }
     const toggle = page.getByRole("button", { name: clear ? /^Follow up on/ : "Set a follow-up" });
     await toggle.focus();
+    // The previous save can still leave the page inert while its popup fades out.
+    await expect(toggle).toBeFocused();
     await page.keyboard.press("Enter");
     if (!clear) await page.getByLabel("Follow-up date").fill(istDay(2));
     await page

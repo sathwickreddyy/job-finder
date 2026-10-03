@@ -52,6 +52,8 @@ test("saved preferences and profile links persist and appear in the real home", 
     .fill("Explain my project contribution with a working demo.");
   await add.getByRole("button", { name: "Save profile link" }).click();
   await expect(add.getByRole("status")).toContainText("Profile link saved");
+  // Wait for the app to accept editing after the first action revalidates the page.
+  await expect(page.locator("[inert]")).toHaveCount(0);
   const prefs = page.locator("#preferences");
   await prefs.getByLabel("My working preferences").fill(preference);
   await prefs.getByRole("button", { name: "Save preferences" }).click();
