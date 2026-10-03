@@ -5,6 +5,7 @@ import {
   formatDay,
   formatTime,
   formatWeekday,
+  indiaDate,
   istDayStart,
   istDaysBetween,
 } from "./dates";
@@ -554,4 +555,142 @@ export function buildLanes(input: {
         : nextRank(a.next) - nextRank(b.next) || nextTime(a.next) - nextTime(b.next)) ||
       b.lastActivity - a.lastActivity,
   );
+}
+
+/* ---------- Calendar (spec §2.6) ---------- */
+
+const DAY = 86_400_000;
+const IST_OFFSET = 19_800_000;
+export type LaneWindow = { start: number; end: number; ticks: number[] };
+
+/** Two days before the oldest open dot to the end of the 7th IST day after today; 2–12 weeks wide. */
+export function laneWindow(lanes: Lane[], now: Date): LaneWindow {
+  const today = istDayStart(now).getTime();
+  const end = today + 8 * DAY;
+  const times = lanes
+    .filter((lane) => lane.group !== "closed")
+    .flatMap((lane) => lane.dots.map((dot) => dot.at.getTime()));
+  const first = istDayStart(new Date(Math.min(today, ...times))).getTime() - 2 * DAY;
+  const start = Math.max(end - 84 * DAY, Math.min(end - 14 * DAY, first));
+  const step = (end - start) / DAY <= 21 ? 3 : 7;
+  const ticks: number[] = [];
+  let tick = start + DAY;
+  if (step === 7) while (new Date(tick + IST_OFFSET).getUTCDay() !== 1) tick += DAY;
+  for (; tick < end; tick += step * DAY) ticks.push(tick);
+  return { start, end, ticks };
+}
+
+export const positionOf = (window: LaneWindow, at: number) =>
+  Math.min(100, Math.max(0, ((at - window.start) / (window.end - window.start)) * 100));
+
+export type DotStack = { pct: number; earlier: boolean; dots: LaneDot[]; lead: LaneDot };
+const dotWeight: Record<DotTone, number> = {
+  pending: 6,
+  upcoming: 5,
+  bad: 4,
+  good: 3,
+  mail: 2,
+  sent: 1,
+  note: 0,
+};
+
+/** Dots closer than `gap` percent share a stack; anything before the window is one Earlier stack. */
+export function stackDots(dots: LaneDot[], window: LaneWindow, gap = 4.5): DotStack[] {
+  const stacks: Omit<DotStack, "lead">[] = [];
+  for (const dot of dots) {
+    const time = dot.at.getTime();
+    const earlier = time < window.start;
+    const pct = positionOf(window, time);
+    const last = stacks.at(-1);
+    if (last && last.earlier === earlier && (earlier || pct - last.pct < gap)) last.dots.push(dot);
+    else stacks.push({ pct, earlier, dots: [dot] });
+  }
+  return stacks.map((stack) => ({
+    ...stack,
+    lead: stack.dots.reduce((best, dot) =>
+      dotWeight[dot.tone] > dotWeight[best.tone] ? dot : best,
+    ),
+  }));
+}
+
+/** "Today", "Today, 4:00 pm" for later today, else "3 Oct". */
+export function dayLabel(at: Date, now: Date) {
+  if (indiaDate(at) === indiaDate(now)) return at > now ? `Today, ${formatTime(at)}` : "Today";
+  return formatDay(at);
+}
+
+export type StackView = {
+  key: string;
+  pct: number;
+  tone: DotTone;
+  count: number;
+  label: string;
+  lines: string[];
+};
+export type LaneView = {
+  key: string;
+  company: string;
+  leadId: string;
+  status: LaneStatus;
+  group: LaneGroup;
+  next: LaneNext | null;
+  stacks: StackView[];
+  line: { from: number; to: number } | null;
+  dashed: { from: number; to: number } | null;
+};
+export type ChartView = {
+  lanes: LaneView[];
+  today: number;
+  ticks: { pct: number; label: string | null }[];
+};
+
+function dotLine(dot: LaneDot, now: Date) {
+  const scope = [dot.role, dot.via].filter(Boolean).join(" · ");
+  return `${scope ? `${scope} · ` : ""}${dot.label}, ${dayLabel(dot.at, now)}${dot.detail ? ` (${dot.detail})` : ""}`;
+}
+
+/** Plain, serializable chart data for the client component. */
+export function laneViews(lanes: Lane[], window: LaneWindow, now: Date): ChartView {
+  const today = positionOf(window, now.getTime());
+  return {
+    today,
+    ticks: window.ticks.map((tick) => {
+      const pct = positionOf(window, tick);
+      return { pct, label: Math.abs(pct - today) > 5 ? formatDay(new Date(tick)) : null };
+    }),
+    lanes: lanes.map((lane) => {
+      const past = lane.dots.filter((dot) => dot.at <= now);
+      const future = lane.dots.filter((dot) => dot.at > now);
+      const first = lane.dots[0];
+      return {
+        key: lane.key,
+        company: lane.company,
+        leadId: lane.leadId,
+        status: lane.status,
+        group: lane.group,
+        next: lane.next,
+        stacks: stackDots(lane.dots, window).map((stack) => {
+          const lines = stack.dots.map((dot) => dotLine(dot, now));
+          return {
+            key: stack.dots[0].key,
+            pct: stack.pct,
+            tone: stack.lead.tone,
+            count: stack.dots.length,
+            lines,
+            label: `${stack.earlier ? "Earlier: " : ""}${lines.join("; ")}`,
+          };
+        }),
+        line:
+          first && past.length
+            ? {
+                from: positionOf(window, first.at.getTime()),
+                to: lane.group === "closed" ? positionOf(window, past.at(-1)!.at.getTime()) : today,
+              }
+            : null,
+        dashed: future.length
+          ? { from: today, to: positionOf(window, future.at(-1)!.at.getTime()) }
+          : null,
+      };
+    }),
+  };
 }
