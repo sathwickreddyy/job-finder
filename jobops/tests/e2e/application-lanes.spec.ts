@@ -1,0 +1,142 @@
+import { expect, test, type Page } from "@playwright/test";
+import { closeDatabase } from "../../src/db";
+import { stubExternalSites } from "./helpers/external-sites";
+import { cleanupRecords, istDay, seedRecord } from "./helpers/records";
+import { cleanupMailFixtures, guardMailFixtures, seedMail } from "./helpers/task13-mail";
+
+test.beforeEach(async ({ page }) => {
+  await stubExternalSites(page);
+});
+test.beforeEach(guardMailFixtures);
+test.afterEach(async () => {
+  await cleanupMailFixtures();
+  await cleanupRecords();
+});
+test.afterAll(() => closeDatabase());
+
+const lane = (page: Page, company: string) =>
+  page.getByRole("group", { name: company, exact: true });
+
+test("lanes show each company's status and put the ones that need you first", async ({ page }) => {
+  const stamp = Date.now();
+  const quiet = `Quiet Lane ${stamp}`;
+  const fresh = `Fresh Lane ${stamp}`;
+  await seedRecord({ company: fresh, source: "DIRECT", sentDaysAgo: 1 });
+  await seedRecord({ company: quiet, source: "DIRECT", sentDaysAgo: 9 });
+  await page.goto("/applications");
+  await expect(page.getByRole("tab")).toHaveCount(0);
+  await expect(lane(page, quiet).getByTestId("lane-status")).toHaveText("Quiet for 9 days");
+  await expect(lane(page, quiet).getByRole("link", { name: /^I followed up/ })).toBeVisible();
+  await expect(lane(page, fresh).getByTestId("lane-status")).toHaveText("Applied · yesterday");
+  const names = await page
+    .getByRole("group")
+    .evaluateAll((groups) => groups.map((group) => group.getAttribute("aria-label")));
+  expect(names.indexOf(quiet)).toBeGreaterThan(-1);
+  expect(names.indexOf(quiet)).toBeLessThan(names.indexOf(fresh));
+  await expect(page.getByText("Today", { exact: true }).first()).toBeVisible();
+});
+
+test("opening a lane records an OA without leaving the page", async ({ page }) => {
+  const company = `OA Lane ${Date.now()}`;
+  const { applicationId } = await seedRecord({ company, source: "DIRECT", sentDaysAgo: 2 });
+  await page.goto("/applications");
+  await lane(page, company)
+    .getByRole("link", { name: new RegExp(`^${company}`) })
+    .click();
+  await expect(page).toHaveURL(new RegExp(`/applications\\?open=${applicationId}$`));
+  const detail = page.getByRole("region", { name: `${company} timeline` });
+  await detail.getByRole("button", { name: "Got an OA", exact: true }).click();
+  await detail.getByLabel("Complete by (India time)").fill(istDay(3));
+  await detail.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Saved: Got an OA." })).toBeVisible();
+  await expect(page).toHaveURL(new RegExp(`/applications\\?open=${applicationId}$`));
+  await expect(lane(page, company).getByTestId("lane-status")).toHaveText("Interviewing · round 1");
+  await expect(lane(page, company).getByRole("button", { name: /OA closes/ })).toBeVisible();
+});
+
+test("two roles at one company share a lane and the role switcher scopes outcomes", async ({
+  page,
+}) => {
+  const company = `Two Roles ${Date.now()}`;
+  const first = await seedRecord({
+    company,
+    title: "Backend Engineer",
+    source: "DIRECT",
+    sentDaysAgo: 1,
+  });
+  const second = await seedRecord({
+    company,
+    title: "Platform Engineer",
+    source: "DIRECT",
+    sentDaysAgo: 3,
+  });
+  await page.goto("/applications");
+  await expect(lane(page, company)).toHaveCount(1);
+  await expect(lane(page, company).getByTestId("lane-status")).toHaveText(
+    "Applied · yesterday · +1 role",
+  );
+  await page.goto(`/applications?open=${first.applicationId}`);
+  const roles = page.getByRole("navigation", { name: "Roles" });
+  await roles.getByRole("link", { name: /Platform Engineer/ }).click();
+  await expect(page).toHaveURL(new RegExp(`open=${second.applicationId}$`));
+  const detail = page.getByRole("region", { name: `${company} timeline` });
+  await detail.getByRole("button", { name: "Rejected", exact: true }).click();
+  await detail.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(roles.getByRole("link", { name: /Platform Engineer.*Rejected/ })).toBeVisible();
+  await expect(lane(page, company).getByTestId("lane-status")).toHaveText("Applied · yesterday");
+});
+
+test("a matched assessment email waits on its lane until Link it adds the OA", async ({ page }) => {
+  const company = `Mail Lane ${Date.now()}`;
+  const subject = `${company} assessment invite`;
+  const { applicationId } = await seedRecord({ company, source: "DIRECT", sentDaysAgo: 2 });
+  const mailId = await seedMail({ subject, classification: "ASSESSMENT", recordId: applicationId });
+  await page.goto("/applications");
+  await expect(lane(page, company).getByTestId("lane-status")).toHaveText(
+    "Applied · 2 days · new email",
+  );
+  await expect(
+    lane(page, company).getByRole("button", { name: /Assessment invite · not added yet/ }),
+  ).toBeVisible();
+  await lane(page, company)
+    .getByRole("link", { name: /^Link it/ })
+    .click();
+  await expect(page).toHaveURL(new RegExp(`open=${applicationId}&mail=${mailId}&outcome=oa$`));
+  const detail = page.getByRole("region", { name: `${company} timeline` });
+  await expect(detail.getByRole("button", { name: "Got an OA", exact: true })).toHaveAttribute(
+    "aria-expanded",
+    "true",
+  );
+  await detail.getByLabel("Complete by (India time)").fill(istDay(4));
+  await detail.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`/applications\\?open=${applicationId}$`));
+  await expect(lane(page, company).getByRole("button", { name: /not added yet/ })).toHaveCount(0);
+  await expect(lane(page, company).getByRole("button", { name: /OA closes/ })).toBeVisible();
+});
+
+test("old and stale links still land somewhere useful, and phones scroll the chart not the page", async ({
+  page,
+}) => {
+  const company = `Phone Lane ${"Long name ".repeat(4)}${Date.now()}`;
+  await seedRecord({ company, source: "DIRECT", sentDaysAgo: 4 });
+  await page.goto("/applications?tab=records&filter=active");
+  await expect(lane(page, company)).toBeVisible();
+  await page.goto("/applications?open=00000000-0000-4000-8000-00000000dead");
+  await expect(lane(page, company)).toBeVisible();
+  await expect(page.getByRole("region", { name: /timeline$/ })).toHaveCount(0);
+  await page.goto("/applications?open=not-a-uuid&mail=x");
+  await expect(lane(page, company)).toBeVisible();
+  await page.goto("/applications?tab=emails");
+  await expect(page.getByRole("dialog", { name: "Emails" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog", { name: "Emails" })).toBeHidden();
+  await expect(page).toHaveURL(/\/applications$/);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/applications");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  expect(
+    await page
+      .getByTestId("lanes-chart")
+      .evaluate((element) => element.scrollWidth > element.clientWidth),
+  ).toBe(true);
+});
