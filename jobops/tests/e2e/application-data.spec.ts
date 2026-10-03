@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { AsyncLocalStorage } from "node:async_hooks";
 import { eq, inArray, sql } from "drizzle-orm";
 import { expect, test } from "@playwright/test";
 import { closeDatabase, db } from "../../src/db";
@@ -21,6 +22,9 @@ import {
 } from "../../src/features/applications/outcome-service";
 import type { OutcomeDetail } from "../../src/features/applications/phase";
 import { tsImport } from "tsx/esm/api";
+
+// Next captures AsyncLocalStorage on first import; bootstrap before any server-action load.
+Object.assign(globalThis, { AsyncLocalStorage });
 
 // Server actions import Next entrypoints; resolve them with the application TS loader.
 const actionLoader = { parentURL: import.meta.url, namespace: "retained-record-action-data" };
