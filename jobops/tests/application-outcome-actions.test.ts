@@ -24,8 +24,7 @@ afterEach(() => {
 
 function form(values: Record<string, string | undefined>) {
   const data = new FormData();
-  for (const [key, value] of Object.entries(values))
-    if (value !== undefined) data.set(key, value);
+  for (const [key, value] of Object.entries(values)) if (value !== undefined) data.set(key, value);
   return data;
 }
 
@@ -56,5 +55,44 @@ it("rejects an invalid timestamp or untimed interview before opening a transacti
     expect(await recordOutcome({}, form({ id, ...values }))).toHaveProperty("error");
   }
   expect(mocks.transaction).not.toHaveBeenCalled();
+  expect(mocks.revalidate).not.toHaveBeenCalled();
+});
+
+it("carries the exact source mail through the outcome transaction", async () => {
+  const mailId = "00000000-0000-4000-8000-000000000002";
+  await recordOutcome({}, form({ id, outcome: "heard", mailId }));
+  expect(mocks.applyOutcome.mock.calls[0][1]).toMatchObject({
+    applicationId: id,
+    mailMessageId: mailId,
+  });
+  mocks.transaction.mockClear();
+  expect(await recordOutcome({}, form({ id, outcome: "heard", mailId: "bad" }))).toHaveProperty(
+    "error",
+  );
+  expect(mocks.transaction).not.toHaveBeenCalled();
+});
+
+it("keeps explicit attachment intent from falling back to a manual write", async () => {
+  const result = await recordOutcome(
+    {},
+    form({ id, outcome: "heard", mailIntent: "link", mailId: "" }),
+  );
+  expect(result.error).toContain("source message is missing");
+  expect(mocks.transaction).not.toHaveBeenCalled();
+  expect(mocks.revalidate).not.toHaveBeenCalled();
+});
+
+it("returns handled-source feedback without navigation or revalidation", async () => {
+  mocks.applyOutcome.mockRejectedValue(new Error("This message has already been handled."));
+  const result = await recordOutcome(
+    {},
+    form({
+      id,
+      outcome: "heard",
+      mailIntent: "link",
+      mailId: "00000000-0000-4000-8000-000000000002",
+    }),
+  );
+  expect(result).toEqual({ error: "This message has already been handled." });
   expect(mocks.revalidate).not.toHaveBeenCalled();
 });

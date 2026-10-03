@@ -10,6 +10,9 @@ import {
   mailMessages,
   resumeVersions,
 } from "@/db/schema";
+import { requireOpenMail, resolveMail } from "@/features/mail/handling-service";
+export { resolveMail } from "@/features/mail/handling-service";
+import { requireRecordMail } from "@/features/mail/source-policy";
 import { roundKinds } from "@/lib/round-kinds";
 import { istDateTime } from "./dates";
 import { jobStateForApplication, recordIntent, recordSentAt } from "./domain";
@@ -50,13 +53,19 @@ async function recordEvidence(tx: Tx, id: string) {
 /** All writers take application → job/round locks; planning uses current, real evidence. */
 export async function applyOutcome(
   tx: Tx,
-  input: { applicationId: string; outcome: OutcomeId; detail: OutcomeDetail },
+  input: {
+    applicationId: string;
+    outcome: OutcomeId;
+    detail: OutcomeDetail;
+    mailMessageId?: string;
+  },
   now: Date,
 ) {
   const data = z
     .object({
       applicationId: z.uuid(),
       outcome: z.enum(outcomeIds),
+      mailMessageId: z.uuid().optional(),
       detail: z.object({
         kind: z.enum(roundKinds).optional(),
         at: z.date().optional(),
@@ -71,6 +80,10 @@ export async function applyOutcome(
   const app = await lockApplication(tx, data.applicationId);
   const [job] = await tx.select().from(jobs).where(eq(jobs.id, app.jobId)).for("update");
   if (!job) throw new Error("The linked opening no longer exists.");
+  if (data.mailMessageId) {
+    const { message, events } = await requireOpenMail(tx, data.mailMessageId);
+    await requireRecordMail(tx, message, events, app.id, "outcome");
+  }
   const rounds = await tx
     .select()
     .from(applicationRounds)
@@ -138,10 +151,11 @@ export async function applyOutcome(
           note: data.detail.note,
         },
         note: data.detail.note,
-        mailMessageId: null,
+        mailMessageId: data.mailMessageId ?? null,
       },
     })
     .returning({ id: applicationEvents.id });
+  if (data.mailMessageId) await resolveMail(tx, data.mailMessageId, app.id, now);
   await tx
     .update(jobs)
     .set({

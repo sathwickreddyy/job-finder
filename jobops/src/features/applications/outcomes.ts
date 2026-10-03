@@ -9,6 +9,12 @@ import { outcomeDetail, outcomeMeta } from "./phase";
 export async function recordOutcome(_state: ActionState, form: FormData): Promise<ActionState> {
   try {
     const applicationId = z.uuid().parse(formString(form, "id"));
+    const mailId = formString(form, "mailId");
+    if (formString(form, "mailIntent") === "link" && !mailId)
+      throw new Error(
+        "The source message is missing. Return to Emails or explicitly record an outcome manually.",
+      );
+    const mailMessageId = mailId ? z.uuid().parse(mailId) : undefined;
     const now = new Date();
     const optional = (key: string) => formString(form, key) || undefined;
     const { id, detail } = outcomeDetail(
@@ -23,7 +29,13 @@ export async function recordOutcome(_state: ActionState, form: FormData): Promis
       },
       now,
     );
-    await db.transaction((tx) => applyOutcome(tx, { applicationId, outcome: id, detail }, now));
+    await db.transaction((tx) =>
+      applyOutcome(
+        tx,
+        { applicationId, outcome: id, detail, ...(mailMessageId ? { mailMessageId } : {}) },
+        now,
+      ),
+    );
     for (const path of ["/applications", `/applications/${applicationId}`, "/companies", "/"])
       revalidatePath(path);
     return {
