@@ -16,3 +16,12 @@ describe("Gmail token encryption", () => {
     expect(() => encryptToken("secret")).toThrow("32-byte");
   });
 });
+it("decrypts the exact legacy ciphertext after switching key names", () => {
+  const key = Buffer.alloc(32, 3).toString("base64");
+  vi.stubEnv("MAIL_TOKEN_ENCRYPTION_KEY", "");
+  vi.stubEnv("GMAIL_TOKEN_ENCRYPTION_KEY", key);
+  const legacy = encryptToken("existing-refresh-token");
+  vi.stubEnv("MAIL_TOKEN_ENCRYPTION_KEY", key);
+  vi.stubEnv("GMAIL_TOKEN_ENCRYPTION_KEY", "");
+  expect(decryptToken(legacy)).toBe("existing-refresh-token");
+});

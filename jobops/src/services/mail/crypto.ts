@@ -1,10 +1,11 @@
 import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 function encryptionKey() {
-  const value = process.env.GMAIL_TOKEN_ENCRYPTION_KEY ?? "";
+  const value =
+    process.env.MAIL_TOKEN_ENCRYPTION_KEY || process.env.GMAIL_TOKEN_ENCRYPTION_KEY || "";
   const key = Buffer.from(value, "base64");
   if (key.length !== 32 || key.toString("base64") !== value)
     throw new Error(
-      "Configure GMAIL_TOKEN_ENCRYPTION_KEY with a base64-encoded 32-byte key before connecting Gmail.",
+      "Configure MAIL_TOKEN_ENCRYPTION_KEY with a base64-encoded 32-byte key before connecting mail.",
     );
   return key;
 }
@@ -30,7 +31,7 @@ export function encryptToken(value: string) {
 export function decryptToken(value: string) {
   const [version, nonce, tag, ciphertext] = value.split(":");
   if (version !== "v1" || !nonce || !tag || !ciphertext)
-    throw new Error("Gmail token storage is invalid. Reconnect Gmail.");
+    throw new Error("mail token storage is invalid. Reconnect the inbox.");
   try {
     const decipher = createDecipheriv("aes-256-gcm", encryptionKey(), Buffer.from(nonce, "base64"));
     decipher.setAuthTag(Buffer.from(tag, "base64"));
@@ -40,7 +41,7 @@ export function decryptToken(value: string) {
     ]).toString("utf8");
   } catch {
     throw new Error(
-      "The Gmail connection could not be decrypted. Restore the original encryption key or reconnect Gmail.",
+      "The mail connection could not be decrypted. Restore the original encryption key or reconnect the inbox.",
     );
   }
 }
