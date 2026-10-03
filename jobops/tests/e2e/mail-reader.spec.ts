@@ -208,7 +208,11 @@ test("reader wraps a long unbroken admitted subject at 390px", async ({ page }) 
 test("unconfigured Gmail gives a reachable reason and keeps JSON import", async ({ page }) => {
   await page.goto("/applications?tab=emails");
   await expect(page.getByRole("button", { name: "Connect Gmail", exact: true })).toBeDisabled();
-  await expect(page.getByText(/Gmail configuration is incomplete/)).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Connect Gmail", exact: true }),
+  ).toHaveAccessibleDescription(
+    "Set GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI, MAIL_TOKEN_ENCRYPTION_KEY in .env",
+  );
   await expect(page.getByRole("link", { name: "Import messages", exact: true })).toHaveAttribute(
     "href",
     "/mail/import",

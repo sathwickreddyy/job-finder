@@ -138,7 +138,7 @@ test("company upsert preserves identity, sourced history and omitted values", as
   expect(updated.facts[0].data.topics).toEqual(["trees"]);
   expect(updated.facts[0].observations).toHaveLength(2);
   expect(updated.changes.facts).toEqual(["offer-1"]);
-  await page.goto(`/companies?q=${encodeURIComponent(input.name)}`);
+  await page.goto(`/companies?view=grid&q=${encodeURIComponent(input.name)}`);
   const card = page.locator("#bengaluru article").filter({ hasText: input.name });
   await expect(card).toHaveCount(1);
   await card.click();
