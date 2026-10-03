@@ -7,6 +7,7 @@ import { bucketOf, type TriageInput } from "./triage";
 
 export type TriageMessage = TriageInput & {
   snippet: string;
+  accountEmail: string | null;
   record: { id: string; company: string; role: string } | null;
 };
 export type TriageData = {

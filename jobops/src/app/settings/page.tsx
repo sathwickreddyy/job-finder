@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { asc } from "drizzle-orm";
 import Link from "next/link";
 import { db } from "@/db";
 import { candidateProfiles, mailConnections, settings } from "@/db/schema";
@@ -6,7 +6,8 @@ import { ActionForm } from "@/components/action-form";
 import { Button, Field, PageHeader, Panel } from "@/components/ui";
 import { CandidateForm } from "@/features/candidate/candidate-form";
 import { saveAppPreferences, saveJobPreferences } from "@/features/candidate/actions";
-import { gmail as gmailProvider } from "@/services/mail/providers/gmail";
+import { disconnectInbox } from "@/features/mail/actions";
+import { displayDate, getDisplayPreferences } from "@/features/candidate/preferences";
 import { remotePreferences } from "@/features/candidate/validation";
 
 export const dynamic = "force-dynamic";
@@ -14,18 +15,23 @@ function list(value: unknown): string {
   return Array.isArray(value) ? value.join(", ") : "";
 }
 export default async function SettingsPage() {
-  const [[candidate], allSettings, connections] = await Promise.all([
+  const [[candidate], allSettings, connections, display] = await Promise.all([
     db.select().from(candidateProfiles).limit(1),
     db.select().from(settings),
     db
-      .select({ email: mailConnections.email, lastSyncedAt: mailConnections.lastSyncedAt })
+      .select({
+        id: mailConnections.id,
+        provider: mailConnections.provider,
+        email: mailConnections.email,
+        lastRefreshedAt: mailConnections.lastRefreshedAt,
+      })
       .from(mailConnections)
-      .where(eq(mailConnections.provider, "GMAIL")),
+      .orderBy(asc(mailConnections.createdAt), asc(mailConnections.id)),
+    getDisplayPreferences(),
   ]);
   const saved = Object.fromEntries(allSettings.map((entry) => [entry.key, entry.value]));
   const prefs = saved.jobPreferences ?? {};
   const appPrefs = saved.appPreferences ?? {};
-  const gmail = gmailProvider.configuration();
   return (
     <>
       <PageHeader
@@ -139,30 +145,53 @@ export default async function SettingsPage() {
             </Panel>
           </section>
           <section id="mail-integration">
-            <Panel title="Mail integration">
+            <Panel title="Mail connections">
               <p className="muted">
-                Gmail access is read-only. Imported messages and proposed updates always require
-                review.
+                Inbox access is read-only. Connect and refresh inboxes from Applications → Emails.
               </p>
-              <p className="mt-4">
-                {connections.length
-                  ? `Connected: ${connections.map((v) => v.email).join(", ")}`
-                  : "No Gmail account connected."}
+              <p className="muted mt-2 text-sm">
+                Disconnect removes local credentials only. Also remove JobOps from your Google or
+                Microsoft account permissions to revoke the grant; imported mail and history remain.
               </p>
-              {!gmail.configured && (
-                <p className="field-hint mt-2">
-                  Gmail configuration is incomplete. Mail JSON import works immediately.
-                </p>
+              {connections.length ? (
+                <ul className="m-0 mt-4 list-none space-y-3 p-0">
+                  {connections.map((connection) => (
+                    <li
+                      key={connection.id}
+                      className="flex min-w-0 flex-wrap items-center justify-between gap-3"
+                    >
+                      <span className="min-w-0 [overflow-wrap:anywhere]">
+                        <strong>{connection.email}</strong>{" "}
+                        <span className="muted">
+                          · {connection.provider === "OUTLOOK" ? "Outlook" : "Gmail"} · last
+                          refreshed {displayDate(connection.lastRefreshedAt, display, true)}
+                        </span>
+                      </span>
+                      <ActionForm
+                        action={disconnectInbox}
+                        className="contents"
+                        pendingLabel="Disconnecting"
+                        feedback="inverse"
+                      >
+                        <input type="hidden" name="connectionId" value={connection.id} />
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          aria-label={`Disconnect ${connection.email}`}
+                        >
+                          Disconnect
+                        </Button>
+                      </ActionForm>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="mt-4">No inbox connected.</p>
               )}
               <div className="actions mt-5">
                 <Link href="/applications?tab=emails" className="button-secondary">
-                  Open mail review
+                  Connect or refresh inboxes
                 </Link>
-                {gmail.configured && (
-                  <a href="/api/mail/gmail/connect" className="button">
-                    Connect Gmail read-only
-                  </a>
-                )}
               </div>
             </Panel>
           </section>

@@ -1,6 +1,5 @@
 "use server";
 
-import { and, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { db } from "@/db";
@@ -9,6 +8,7 @@ import { actionError, formString, type ActionState } from "@/lib/actions";
 import { refreshConnection } from "./refresh-service";
 import { disconnectConnection } from "@/services/mail/providers/connections";
 import { importMailRecords, mailImportSchema } from "./import";
+import { summarizeRefresh } from "./refresh-summary";
 
 export async function importMail(_previous: ActionState, form: FormData): Promise<ActionState> {
   try {
@@ -27,44 +27,43 @@ export async function importMail(_previous: ActionState, form: FormData): Promis
     return actionError(error);
   }
 }
-export async function syncGmail(_previous: ActionState, form: FormData): Promise<ActionState> {
+export async function refreshAllInboxes(_previous: ActionState): Promise<ActionState> {
+  void _previous;
   try {
-    const id = z.uuid().parse(formString(form, "connectionId"));
-    const [connection] = await db
-      .select()
-      .from(mailConnections)
-      .where(and(eq(mailConnections.id, id), eq(mailConnections.provider, "GMAIL")));
-    if (!connection) throw new Error("Connect Gmail read-only before syncing.");
-    const imported = await refreshConnection(connection);
+    const connections = await db.select().from(mailConnections);
+    if (!connections.length) throw new Error("Connect Gmail or Outlook before refreshing.");
+    // The service saves each inbox's status under its shared connection lock. Do not
+    // retry status writes here: that could overwrite a subsequent refresh's status.
+    const settled = await Promise.allSettled(connections.map(refreshConnection));
     revalidatePath("/applications");
+    revalidatePath("/settings");
     revalidatePath("/");
-    return {
-      success: `${imported.imported} recruiting messages imported; ${imported.duplicates} duplicates skipped.${imported.more ? " More messages remain. Sync again to continue from the next page." : " Refresh complete. Open Emails to read your messages."}`,
-    };
+    return summarizeRefresh(
+      connections.map((connection, index) => ({ email: connection.email, result: settled[index] })),
+    );
   } catch (error) {
     return actionError(error);
   }
 }
-export async function disconnectGmail(
+export async function disconnectInbox(
   _previous: ActionState,
   form: FormData,
 ): Promise<ActionState> {
   try {
     const id = z.uuid().parse(formString(form, "connectionId"));
-    await disconnectConnection(id);
-    await db.transaction(async (tx) => {
-      await tx.insert(activityLogs).values({
-        action: "GMAIL_DISCONNECTED",
-        entityType: "MAIL",
-        summary: "Local Gmail credentials removed. Imported messages retained.",
-      });
+    const removed = await disconnectConnection(id);
+    await db.insert(activityLogs).values({
+      action: "MAIL_DISCONNECTED",
+      entityType: "MAIL",
+      entityId: id,
+      summary: `Local credentials removed for ${removed.email}. Imported messages retained.`,
     });
     revalidatePath("/applications");
     revalidatePath("/settings");
     revalidatePath("/");
     return {
       success:
-        "Gmail credentials removed locally. Revoke JobOps access in your Google account to remove Google's grant.",
+        "Credentials removed locally; imported messages retained. Also remove JobOps from your Google or Microsoft account permissions.",
     };
   } catch (error) {
     return actionError(error);

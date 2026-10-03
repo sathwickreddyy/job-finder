@@ -8,6 +8,8 @@ import { linkHref, suggestedOutcome, type Bucket } from "@/features/mail/triage"
 import { dismissMail, linkMailOnly, undoDismiss } from "@/features/mail/triage-actions";
 import { formatDay } from "../dates";
 import { RecordPicker } from "./record-picker";
+import { accountTone } from "./inboxes";
+import { cn } from "@/lib/utils";
 
 const buckets: { id: Bucket; title: string; note: string }[] = [
   {
@@ -28,13 +30,14 @@ export function EmailsView({
   records,
   refresh,
   notice,
+  accountIndex,
 }: {
   data: TriageData;
   records: { id: string; label: string }[];
   refresh: ReactNode;
   notice?: string;
+  accountIndex: Record<string, number>;
 }) {
-  const open = data.messages.length;
   return (
     <div className="space-y-5">
       {notice && (
@@ -45,13 +48,7 @@ export function EmailsView({
           {notice}
         </p>
       )}
-      <div className="space-y-3 rounded-3xl bg-selected/60 px-5 py-4">
-        <p className="m-0 text-selected-foreground">
-          <strong className="tabular-nums">{open}</strong>{" "}
-          {open === 1 ? "message needs" : "messages need"} a decision
-        </p>
-        {refresh}
-      </div>
+      {refresh}
       <div className="grid gap-4 lg:grid-cols-3">
         {buckets.map((bucket) => {
           const rows = data.messages.filter((message) => message.bucket === bucket.id);
@@ -70,7 +67,12 @@ export function EmailsView({
               <p className="m-0 mt-0.5 text-xs text-muted-foreground">{bucket.note}</p>
               <ul className="m-0 mt-3 flex-1 list-none space-y-2 p-0">
                 {rows.map((message) => (
-                  <MailCard key={message.id} message={message} records={records} />
+                  <MailCard
+                    key={message.id}
+                    message={message}
+                    records={records}
+                    accountIndex={accountIndex}
+                  />
                 ))}
                 {!rows.length && (
                   <li className="rounded-2xl border border-dashed border-border px-3 py-5 text-center text-sm text-muted-foreground">
@@ -123,15 +125,31 @@ export function EmailsView({
 function MailCard({
   message,
   records,
+  accountIndex,
 }: {
+  accountIndex: Record<string, number>;
   message: TriageMessage;
   records: { id: string; label: string }[];
 }) {
   return (
     <li className="rounded-2xl bg-background/60 p-3 ring-1 ring-border">
-      <p className="m-0 flex items-center justify-between gap-2 text-xs text-muted-foreground">
-        <span className="truncate">{message.senderName || message.sender}</span>
-        <span className="tabular-nums">{formatDay(message.receivedAt)}</span>
+      {message.accountEmail && (
+        <p className="m-0 mb-1 flex min-w-0 items-start gap-1.5 text-xs text-muted-foreground">
+          <span
+            aria-hidden
+            className={cn(
+              "mt-1 size-2 shrink-0 rounded-full",
+              accountTone(accountIndex[message.accountEmail] ?? 3),
+            )}
+          />
+          <span className="min-w-0 [overflow-wrap:anywhere]">{message.accountEmail}</span>
+        </p>
+      )}
+      <p className="m-0 flex items-start justify-between gap-2 text-xs text-muted-foreground">
+        <span className="min-w-0 [overflow-wrap:anywhere]">
+          {message.senderName || message.sender}
+        </span>
+        <span className="shrink-0 tabular-nums">{formatDay(message.receivedAt)}</span>
       </p>
       <Link
         href={`/mail/${message.id}`}

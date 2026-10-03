@@ -389,3 +389,22 @@ test("noise can be cleared in one action", async ({ page }) => {
   for (const subject of subjects)
     await expect(page.getByRole("link", { name: subject, exact: true })).toHaveCount(0);
 });
+
+test("the Emails tab describes missing configuration for both providers", async ({ page }) => {
+  await page.goto("/applications?tab=emails");
+  await expect(page.getByRole("button", { name: "Connect Gmail", exact: true })).toBeDisabled();
+  await expect(
+    page.getByText(
+      "Set GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI, MAIL_TOKEN_ENCRYPTION_KEY in .env",
+    ),
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Connect Outlook", exact: true })).toBeDisabled();
+  await expect(
+    page.getByText(
+      "Set MICROSOFT_CLIENT_ID, MICROSOFT_CLIENT_SECRET, MICROSOFT_REDIRECT_URI, MAIL_TOKEN_ENCRYPTION_KEY in .env",
+    ),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Refresh all inboxes", exact: true }),
+  ).toBeDisabled();
+});
