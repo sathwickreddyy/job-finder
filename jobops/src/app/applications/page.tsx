@@ -8,11 +8,11 @@ import { buildLanes, laneViews, laneWindow, pendingMailFrom } from "@/features/a
 import { resolveLanesView } from "@/features/applications/navigation";
 import { buildQueue } from "@/features/applications/queue";
 import { readApplications } from "@/features/applications/read";
-import { EmailsView } from "@/features/applications/views/emails";
 import { EmailsDrawer } from "@/features/applications/views/emails-drawer";
 import { InboxStatus } from "@/features/applications/views/inboxes";
 import { LaneDetail } from "@/features/applications/views/lane-detail";
 import { LanesChart } from "@/features/applications/views/lanes";
+import { EmailsPanel } from "@/features/applications/views/mail-sections";
 import { readMailTriage, readOpenMail } from "@/features/mail/read";
 import { queueMailFrom } from "@/features/mail/triage";
 import { providers } from "@/services/mail/providers";
@@ -87,18 +87,18 @@ export default async function Applications({
               connected={connections.length > 0}
               initialOpen={view.emails}
             >
-              <EmailsView
+              <EmailsPanel
                 data={triage}
                 records={records.map((record) => ({
                   id: record.id,
                   label: `${record.companyName} · ${record.role}`,
                 }))}
-                refresh={
+                inboxes={
                   <InboxStatus
                     connections={connections}
                     configs={configs}
                     now={now}
-                    count={triage.messages.length}
+                    count={decisions}
                   />
                 }
                 accountIndex={Object.fromEntries(

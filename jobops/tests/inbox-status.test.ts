@@ -37,3 +37,19 @@ it("keeps Outlook connect available with two accounts and names every reconnect 
   expect(accountTone(1)).not.toBe(accountTone(2));
   expect(accountTone(3)).toBe("bg-chart-other");
 });
+
+it("explains an unconfigured provider in plain words and keeps the variables in Setup details", () => {
+  const html = renderToStaticMarkup(
+    createElement(InboxStatus, {
+      connections: [],
+      configs: [
+        { slug: "gmail", label: "Gmail", configured: false, missing: ["GOOGLE_CLIENT_ID"] },
+      ],
+      now: new Date(),
+      count: 0,
+    }),
+  );
+  expect(html).toContain("Gmail isn&#x27;t set up on this computer yet.");
+  expect(html).toMatch(/<details[^>]*><summary[^>]*>Setup details<\/summary>/);
+  expect(html).toContain("Set GOOGLE_CLIENT_ID in .env");
+});
