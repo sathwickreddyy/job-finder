@@ -1,7 +1,7 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { and, eq, sql } from "drizzle-orm";
 import { db, withDatabaseSession, type SessionDatabase } from "@/db";
-import { mailConnections, settings } from "@/db/schema";
+import { activityLogs, mailConnections, settings } from "@/db/schema";
 import { decryptToken, encryptToken } from "../crypto";
 import type { MailConnection, ProviderId, TokenSet } from "./types";
 
@@ -105,6 +105,13 @@ export async function disconnectConnection(id: string) {
     await database.transaction(async (tx) => {
       await tx.delete(settings).where(eq(settings.key, `mailCursor:${id}`));
       await tx.delete(mailConnections).where(eq(mailConnections.id, id));
+      await tx.insert(activityLogs).values({
+        action: "MAIL_DISCONNECTED",
+        entityType: "MAIL",
+        entityId: id,
+        summary: `Local credentials removed for ${current.email}. Imported messages retained.`,
+        metadata: { provider: current.provider, accountEmail: current.email },
+      });
     });
     return current;
   });

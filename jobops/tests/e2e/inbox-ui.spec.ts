@@ -91,13 +91,15 @@ test("three inbox addresses, account tags and long errors fit 390px with keyboar
   }
   await expect(list).toContainText("Set up Outlook below to reconnect.");
   await expect(
+    list.getByText(`Choose ${emails[1]} when you sign in again.`, { exact: true }),
+  ).toBeVisible();
+  await expect(
     page.getByRole("status").filter({ hasText: "messages need a decision" }),
   ).not.toContainText("arrived just now");
   const refresh = page.getByRole("button", { name: "Refresh all inboxes", exact: true });
   await refresh.focus();
   await expect(refresh).toBeFocused();
-  await page.keyboard.press("Tab");
-  await expect(page.getByRole("link", { name: "Import messages", exact: true })).not.toBeFocused();
+
   await expect
     .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth))
     .toBe(true);
@@ -107,6 +109,11 @@ test("three inbox addresses, account tags and long errors fit 390px with keyboar
   await page.reload();
   await expect(page.getByText(emails[0], { exact: true })).toHaveCount(1);
   await expect(page.getByText(emails[0], { exact: true })).toBeVisible();
+  const importLink = page.getByRole("link", { name: "Import messages", exact: true });
+  await importLink.focus();
+  await expect(importLink).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(/\/mail\/import$/);
 });
 
 test("real all-failed refresh feedback survives revalidation and navigation without losing mail", async ({
@@ -199,13 +206,34 @@ test("Settings disconnect removes only the selected inbox and keeps its tagged m
   await expect(
     page.getByText("Disconnect removes local credentials only.", { exact: false }),
   ).toBeVisible();
-  await page.getByRole("button", { name: `Disconnect ${emails[0]}`, exact: true }).click();
+  await page.getByRole("button", { name: `Disconnect ${emails[0]}`, exact: true }).focus();
+  // Hold the real coordination lock long enough to exercise the inert loading overlay.
+  await guard();
+  const blocker = await pool.connect();
+  await blocker.query("SELECT pg_advisory_lock(hashtextextended($1, 0))", [
+    `jobops-mail:${ids[0]}`,
+  ]);
+  try {
+    await page.keyboard.press("Enter");
+    await expect(
+      page.getByRole("progressbar", { name: "Disconnecting inbox", exact: true }),
+    ).toBeVisible();
+  } finally {
+    await blocker.query("SELECT pg_advisory_unlock_all()");
+    blocker.release();
+  }
   await expect(
     page.getByRole("button", { name: `Disconnect ${emails[0]}`, exact: true }),
   ).toHaveCount(0);
   await expect(
     page.getByRole("button", { name: `Disconnect ${emails[1]}`, exact: true }),
   ).toBeVisible();
+  await expect(
+    page.getByRole("status").filter({ hasText: `${emails[0]} disconnected locally.` }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "Connect or refresh inboxes", exact: true }),
+  ).toBeFocused();
   await page.goto("/applications?tab=emails");
   await expect(page.getByText(emails[0], { exact: true })).toHaveCount(1);
   expect((await pool.query("SELECT id FROM mail_connections WHERE id=$1", [ids[0]])).rowCount).toBe(
@@ -214,4 +242,26 @@ test("Settings disconnect removes only the selected inbox and keeps its tagged m
   expect(
     (await pool.query("SELECT id FROM mail_messages WHERE id=$1", [messageIds[0]])).rowCount,
   ).toBe(1);
+});
+
+test("last inbox disconnect announces the address and restores focus after revalidation", async ({
+  page,
+}) => {
+  await seedInboxes();
+  await guard();
+  await pool.query("DELETE FROM mail_connections WHERE id=ANY($1::uuid[])", [ids.slice(1)]);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/settings");
+  await page.getByRole("button", { name: `Disconnect ${emails[0]}`, exact: true }).focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByText("No inbox connected.", { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("status").filter({ hasText: `${emails[0]} disconnected locally.` }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "Connect or refresh inboxes", exact: true }),
+  ).toBeFocused();
+  await expect
+    .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth))
+    .toBe(true);
 });

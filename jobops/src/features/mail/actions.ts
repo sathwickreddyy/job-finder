@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { db } from "@/db";
-import { activityLogs, mailConnections } from "@/db/schema";
+import { mailConnections } from "@/db/schema";
 import { actionError, formString, type ActionState } from "@/lib/actions";
 import { refreshConnection } from "./refresh-service";
 import { disconnectConnection } from "@/services/mail/providers/connections";
@@ -52,18 +52,11 @@ export async function disconnectInbox(
   try {
     const id = z.uuid().parse(formString(form, "connectionId"));
     const removed = await disconnectConnection(id);
-    await db.insert(activityLogs).values({
-      action: "MAIL_DISCONNECTED",
-      entityType: "MAIL",
-      entityId: id,
-      summary: `Local credentials removed for ${removed.email}. Imported messages retained.`,
-    });
     revalidatePath("/applications");
     revalidatePath("/settings");
     revalidatePath("/");
     return {
-      success:
-        "Credentials removed locally; imported messages retained. Also remove JobOps from your Google or Microsoft account permissions.",
+      success: `${removed.email} disconnected locally. Imported messages retained. Also remove JobOps from your Google or Microsoft account permissions.`,
     };
   } catch (error) {
     return actionError(error);

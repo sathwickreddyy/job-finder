@@ -6,7 +6,7 @@ import { ActionForm } from "@/components/action-form";
 import { Button, Field, PageHeader, Panel } from "@/components/ui";
 import { CandidateForm } from "@/features/candidate/candidate-form";
 import { saveAppPreferences, saveJobPreferences } from "@/features/candidate/actions";
-import { disconnectInbox } from "@/features/mail/actions";
+import { MailConnections } from "@/features/mail/mail-connections";
 import { displayDate, getDisplayPreferences } from "@/features/candidate/preferences";
 import { remotePreferences } from "@/features/candidate/validation";
 
@@ -153,45 +153,15 @@ export default async function SettingsPage() {
                 Disconnect removes local credentials only. Also remove JobOps from your Google or
                 Microsoft account permissions to revoke the grant; imported mail and history remain.
               </p>
-              {connections.length ? (
-                <ul className="m-0 mt-4 list-none space-y-3 p-0">
-                  {connections.map((connection) => (
-                    <li
-                      key={connection.id}
-                      className="flex min-w-0 flex-wrap items-center justify-between gap-3"
-                    >
-                      <span className="min-w-0 [overflow-wrap:anywhere]">
-                        <strong>{connection.email}</strong>{" "}
-                        <span className="muted">
-                          · {connection.provider === "OUTLOOK" ? "Outlook" : "Gmail"} · last
-                          refreshed {displayDate(connection.lastRefreshedAt, display, true)}
-                        </span>
-                      </span>
-                      <ActionForm
-                        action={disconnectInbox}
-                        className="contents"
-                        pendingLabel="Disconnecting"
-                        feedback="inverse"
-                      >
-                        <input type="hidden" name="connectionId" value={connection.id} />
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          aria-label={`Disconnect ${connection.email}`}
-                        >
-                          Disconnect
-                        </Button>
-                      </ActionForm>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="mt-4">No inbox connected.</p>
-              )}
-              <div className="actions mt-5">
-                <Link href="/applications?tab=emails" className="button-secondary">
-                  Connect or refresh inboxes
-                </Link>
+              <div className="mt-4">
+                <MailConnections
+                  connections={connections.map((connection) => ({
+                    id: connection.id,
+                    email: connection.email,
+                    provider: connection.provider,
+                    lastRefreshedLabel: displayDate(connection.lastRefreshedAt, display, true),
+                  }))}
+                />
               </div>
             </Panel>
           </section>

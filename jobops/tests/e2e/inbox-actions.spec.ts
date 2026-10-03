@@ -27,6 +27,7 @@ let pool: Pool;
 let ids: string[] = [];
 let emails: string[] = [];
 let trigger: string | undefined;
+let triggerTable: "mail_connections" | "activity_logs" = "mail_connections";
 let owned = false;
 async function guard() {
   if (!process.env.DATABASE_URL || new URL(process.env.DATABASE_URL).pathname !== "/jobops_e2e")
@@ -73,6 +74,7 @@ async function lockWait() {
 
 test.beforeEach(async () => {
   owned = false;
+  triggerTable = "mail_connections";
   if (!process.env.DATABASE_URL || new URL(process.env.DATABASE_URL).pathname !== "/jobops_e2e")
     throw new Error("Refusing non-test database.");
   pool = new Pool({ connectionString: process.env.DATABASE_URL });
@@ -97,7 +99,7 @@ test.afterEach(async () => {
   if (owned) {
     await guard();
     if (trigger) {
-      await pool.query(`DROP TRIGGER IF EXISTS "${trigger}" ON mail_connections`);
+      await pool.query(`DROP TRIGGER IF EXISTS "${trigger}" ON ${triggerTable}`);
       await pool.query(`DROP FUNCTION IF EXISTS "${trigger}"()`);
       trigger = undefined;
     }
@@ -292,4 +294,61 @@ test("actual disconnect action waits for refresh then removes credentials/cursor
       ])
     ).rowCount,
   ).toBeGreaterThan(0);
+});
+
+test("disconnect audit failure rolls back credentials and cursor; retry commits one honest removal", async () => {
+  await guard();
+  const key = `mailCursor:${ids[0]}`;
+  await pool.query("INSERT INTO settings(key,value) VALUES ($1,$2::jsonb)", [
+    key,
+    JSON.stringify({ pageToken: "continue", startedAt: "2026-10-03T00:00:00Z" }),
+  ]);
+  const before = (await pool.query("SELECT * FROM mail_connections WHERE id=$1", [ids[0]])).rows;
+  const cursorBefore = (await pool.query("SELECT * FROM settings WHERE key=$1", [key])).rows;
+  trigger = `task17_audit_${randomUUID().replaceAll("-", "")}`;
+  triggerTable = "activity_logs";
+  await pool.query(
+    `CREATE FUNCTION "${trigger}"() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.entity_id = '${ids[0]}' AND NEW.action = 'MAIL_DISCONNECTED' THEN RAISE EXCEPTION 'audit rejected'; END IF; RETURN NEW; END $$`,
+  );
+  await pool.query(
+    `CREATE TRIGGER "${trigger}" BEFORE INSERT ON activity_logs FOR EACH ROW EXECUTE FUNCTION "${trigger}"()`,
+  );
+  const form = new FormData();
+  form.set("connectionId", ids[0]);
+  const rejected = await run(() => actions.disconnectInbox({}, form));
+  expect(rejected.error).toBeDefined();
+  expect(rejected.success).toBeUndefined();
+  expect((await pool.query("SELECT * FROM mail_connections WHERE id=$1", [ids[0]])).rows).toEqual(
+    before,
+  );
+  expect((await pool.query("SELECT * FROM settings WHERE key=$1", [key])).rows).toEqual(
+    cursorBefore,
+  );
+  expect(
+    (
+      await pool.query(
+        "SELECT id FROM activity_logs WHERE action='MAIL_DISCONNECTED' AND entity_id=$1",
+        [ids[0]],
+      )
+    ).rowCount,
+  ).toBe(0);
+  await guard();
+  await pool.query(`DROP TRIGGER "${trigger}" ON activity_logs`);
+  await pool.query(`DROP FUNCTION "${trigger}"()`);
+  trigger = undefined;
+  const removed = await run(() => actions.disconnectInbox({}, form));
+  expect(removed.error).toBeUndefined();
+  expect(removed.success).toContain(emails[0]);
+  expect((await pool.query("SELECT id FROM mail_connections WHERE id=$1", [ids[0]])).rowCount).toBe(
+    0,
+  );
+  expect((await pool.query("SELECT key FROM settings WHERE key=$1", [key])).rowCount).toBe(0);
+  expect(
+    (
+      await pool.query(
+        "SELECT id FROM activity_logs WHERE action='MAIL_DISCONNECTED' AND entity_id=$1",
+        [ids[0]],
+      )
+    ).rowCount,
+  ).toBe(1);
 });
