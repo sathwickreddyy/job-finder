@@ -528,6 +528,7 @@ export const mailMessages = pgTable(
     sender: text("sender").notNull(),
     senderName: text("sender_name").notNull().default(""),
     recipient: text("recipient").notNull().default(""),
+    accountEmail: text("account_email"),
     subject: text("subject").notNull(),
     snippet: text("snippet").notNull().default(""),
     receivedAt: date("received_at").notNull(),
@@ -705,19 +706,26 @@ export const companyFactObservations = pgTable(
   (t) => [index("company_fact_observations_fact_idx").on(t.factId, t.observedAt)],
 );
 
-export const gmailConnections = pgTable(
-  "gmail_connections",
+export const mailConnections = pgTable(
+  "mail_connections",
   {
     id: id(),
+    provider: text("provider").notNull().default("GMAIL"),
     email: text("email").notNull(),
     encryptedAccessToken: text("encrypted_access_token").notNull(),
     encryptedRefreshToken: text("encrypted_refresh_token"),
     tokenExpiresAt: date("token_expires_at"),
     lastSyncedAt: date("last_synced_at"),
+    lastRefreshedAt: date("last_refreshed_at"),
+    lastRefreshedCount: integer("last_refreshed_count"),
+    lastError: text("last_error"),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
-  (t) => [uniqueIndex("gmail_connections_email_idx").on(t.email)],
+  (t) => [
+    uniqueIndex("mail_connections_provider_email_idx").on(t.provider, t.email),
+    check("mail_connections_provider", sql`${t.provider} IN ('GMAIL', 'OUTLOOK')`),
+  ],
 );
 
 // New task workflow reuses missions; credentials and human decisions have separate trust boundaries.

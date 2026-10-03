@@ -185,7 +185,7 @@ for (const classification of [
 test("unverified Gmail callback returns to Emails without connecting an inbox", async ({
   page,
 }) => {
-  const response = await page.request.get("/api/gmail/callback", { maxRedirects: 0 });
+  const response = await page.request.get("/api/mail/gmail/callback", { maxRedirects: 0 });
   expect(response.status()).toBe(307);
   const destination = new URL(response.headers().location);
   expect(destination.pathname).toBe("/applications");

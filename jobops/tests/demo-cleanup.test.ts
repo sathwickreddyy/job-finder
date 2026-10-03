@@ -70,9 +70,9 @@ describe("initial fixture cleanup protection", () => {
     snapshot.settings = [
       { key: "jobPreferences", value: { desiredRoles: ["My role"] }, updated_at: originalDate },
     ];
-    snapshot.gmail_connections = [{ id: "gmail", created_at: originalDate }];
+    snapshot.mail_connections = [{ id: "gmail", created_at: originalDate }];
     const selected = planCleanup(snapshot);
     expect(selected.settings).toEqual([]);
-    expect(selected.gmail_connections).toEqual([]);
+    expect(selected.mail_connections).toEqual([]);
   });
 });

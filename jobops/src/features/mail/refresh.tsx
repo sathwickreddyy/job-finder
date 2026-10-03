@@ -1,22 +1,24 @@
+import { eq } from "drizzle-orm";
 import Link from "next/link";
 import { db } from "@/db";
-import { gmailConnections } from "@/db/schema";
+import { mailConnections } from "@/db/schema";
 import { ActionForm } from "@/components/action-form";
 import { Button } from "@/components/ui";
 import { syncGmail } from "./actions";
 import { validEncryptionKey } from "@/services/mail/crypto";
-import { gmailConfiguration } from "@/services/mail/gmail";
+import { gmail } from "@/services/mail/providers/gmail";
 import { displayDate, getDisplayPreferences } from "@/features/candidate/preferences";
 export async function MailRefresh({ compact = false }: { compact?: boolean }) {
   const connections = await db
     .select({
-      id: gmailConnections.id,
-      email: gmailConnections.email,
-      lastSyncedAt: gmailConnections.lastSyncedAt,
+      id: mailConnections.id,
+      email: mailConnections.email,
+      lastSyncedAt: mailConnections.lastSyncedAt,
     })
-    .from(gmailConnections);
+    .from(mailConnections)
+    .where(eq(mailConnections.provider, "GMAIL"));
   const preferences = await getDisplayPreferences();
-  const configuration = gmailConfiguration();
+  const configuration = gmail.configuration();
   const missing = [
     !configuration.clientId && "Google OAuth client ID",
     !configuration.clientSecret && "Google OAuth client secret",
@@ -32,7 +34,7 @@ export async function MailRefresh({ compact = false }: { compact?: boolean }) {
         </p>
         {configuration.configured ? (
           <Button asChild variant="outline">
-            <a href="/api/gmail/connect">Connect Gmail</a>
+            <a href="/api/mail/gmail/connect">Connect Gmail</a>
           </Button>
         ) : (
           <>

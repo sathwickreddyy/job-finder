@@ -26,3 +26,22 @@ export async function closeDatabase() {
   pool = undefined;
   database = undefined;
 }
+
+/** A reserved session lets advisory locks span multiple independent page commits. */
+export type SessionDatabase = Omit<typeof db, "$client">;
+export async function withDatabaseSession<T>(work: (database: SessionDatabase) => Promise<T>) {
+  database ??= createDatabase();
+  const client = await pool!.connect();
+  let broken = false;
+  try {
+    return await work(drizzle(client, { schema }));
+  } finally {
+    // Session locks must never leak into the pool, even if the callback throws.
+    try {
+      await client.query("SELECT pg_advisory_unlock_all()");
+    } catch {
+      broken = true;
+    }
+    client.release(broken);
+  }
+}

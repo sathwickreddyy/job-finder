@@ -20,7 +20,7 @@ export const tableNames = [
   "mail_events",
   "activity_logs",
   "settings",
-  "gmail_connections",
+  "mail_connections",
 ] as const;
 export type TableName = (typeof tableNames)[number];
 export type Snapshot = Record<TableName, Row[]>;

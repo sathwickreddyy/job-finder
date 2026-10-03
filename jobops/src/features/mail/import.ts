@@ -24,8 +24,15 @@ export const mailImportSchema = z
   .min(1)
   .max(200);
 export type MailImportRecords = z.infer<typeof mailImportSchema>;
-export async function importMailRecords(records: MailImportRecords, provider: "IMPORT" | "GMAIL") {
-  return db.transaction(async (tx) => {
+// A supplied transaction uses a savepoint; mail/events/logs commit with its outer checkpoint.
+export async function importMailRecords(
+  records: MailImportRecords,
+  provider: "IMPORT" | "GMAIL" | "OUTLOOK",
+  accountEmail?: string,
+  executor:
+    Pick<typeof db, "transaction"> | Parameters<Parameters<typeof db.transaction>[0]>[0] = db,
+) {
+  return executor.transaction(async (tx) => {
     let imported = 0;
     let duplicates = 0;
     const applicationOptions = await tx
@@ -48,7 +55,13 @@ export async function importMailRecords(records: MailImportRecords, provider: "I
       const classification = classifyMail(record);
       const [message] = await tx
         .insert(mailMessages)
-        .values({ ...record, externalId, provider, classification: classification.type })
+        .values({
+          ...record,
+          externalId,
+          provider,
+          accountEmail: accountEmail ?? null,
+          classification: classification.type,
+        })
         .onConflictDoNothing({ target: [mailMessages.provider, mailMessages.externalId] })
         .returning();
       if (!message) {
@@ -77,7 +90,7 @@ export async function importMailRecords(records: MailImportRecords, provider: "I
       action: "MAIL_IMPORTED",
       entityType: "MAIL",
       summary: `${imported} recruiting messages imported; ${duplicates} duplicates skipped`,
-      metadata: { provider, imported, duplicates },
+      metadata: { provider, accountEmail: accountEmail ?? null, imported, duplicates },
     });
     return { imported, duplicates };
   });

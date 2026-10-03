@@ -1,11 +1,12 @@
+import { eq } from "drizzle-orm";
 import Link from "next/link";
 import { db } from "@/db";
-import { candidateProfiles, gmailConnections, settings } from "@/db/schema";
+import { candidateProfiles, mailConnections, settings } from "@/db/schema";
 import { ActionForm } from "@/components/action-form";
 import { Button, Field, PageHeader, Panel } from "@/components/ui";
 import { CandidateForm } from "@/features/candidate/candidate-form";
 import { saveAppPreferences, saveJobPreferences } from "@/features/candidate/actions";
-import { gmailConfiguration } from "@/services/mail/gmail";
+import { gmail as gmailProvider } from "@/services/mail/providers/gmail";
 import { remotePreferences } from "@/features/candidate/validation";
 
 export const dynamic = "force-dynamic";
@@ -17,13 +18,14 @@ export default async function SettingsPage() {
     db.select().from(candidateProfiles).limit(1),
     db.select().from(settings),
     db
-      .select({ email: gmailConnections.email, lastSyncedAt: gmailConnections.lastSyncedAt })
-      .from(gmailConnections),
+      .select({ email: mailConnections.email, lastSyncedAt: mailConnections.lastSyncedAt })
+      .from(mailConnections)
+      .where(eq(mailConnections.provider, "GMAIL")),
   ]);
   const saved = Object.fromEntries(allSettings.map((entry) => [entry.key, entry.value]));
   const prefs = saved.jobPreferences ?? {};
   const appPrefs = saved.appPreferences ?? {};
-  const gmail = gmailConfiguration();
+  const gmail = gmailProvider.configuration();
   return (
     <>
       <PageHeader
@@ -157,7 +159,7 @@ export default async function SettingsPage() {
                   Open mail review
                 </Link>
                 {gmail.configured && (
-                  <a href="/api/gmail/connect" className="button">
+                  <a href="/api/mail/gmail/connect" className="button">
                     Connect Gmail read-only
                   </a>
                 )}
