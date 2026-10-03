@@ -46,7 +46,7 @@ export default async function MailMessagePage({ params }: { params: Promise<{ id
         title={message.subject}
         description={`${message.senderName || message.sender} · ${displayDate(message.receivedAt, preferences, true)}`}
         actions={
-          <Link href="/applications?tab=emails" className="button-secondary">
+          <Link href="/applications?emails=1" className="button-secondary">
             Back to Emails
           </Link>
         }

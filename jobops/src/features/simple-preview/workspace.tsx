@@ -314,7 +314,7 @@ export function SimpleWorkspace({
           </nav>
           <div className="flex items-center gap-2">
             <Button variant="ghost" asChild className="px-3">
-              <Link href="/applications?tab=emails">
+              <Link href="/applications?emails=1">
                 <Mail size={17} aria-hidden />
                 <span className="hidden sm:inline">Inbox</span>
                 <span className="sr-only sm:hidden">Inbox</span>

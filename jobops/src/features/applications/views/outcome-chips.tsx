@@ -101,7 +101,7 @@ export function OutcomeChips({
           {mailError}
         </p>
         <div className="flex flex-wrap gap-3 text-sm">
-          <Link href="/applications?tab=emails" className="text-link">
+          <Link href="/applications?emails=1" className="text-link">
             Back to Emails
           </Link>
           <Link href={`/applications/${recordId}#what-happened`} className="text-link">
