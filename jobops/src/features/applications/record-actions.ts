@@ -1,6 +1,7 @@
 "use server";
 import { eq, lt } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { z } from "zod";
 import { db } from "@/db";
 import { applications, queueSnoozes } from "@/db/schema";
@@ -53,6 +54,7 @@ export async function setFollowUp(_state: ActionState, form: FormData): Promise<
 }
 
 export async function snoozeQueueItem(_state: ActionState, form: FormData): Promise<ActionState> {
+  let destination: string;
   try {
     const key = queueKey.parse(formString(form, "key"));
     const title = formString(form, "title").slice(0, 200);
@@ -66,12 +68,12 @@ export async function snoozeQueueItem(_state: ActionState, form: FormData): Prom
         .onConflictDoUpdate({ target: queueSnoozes.itemKey, set: { until } });
     });
     revalidatePath("/applications");
-    return {
-      redirect: `/applications?tab=next&snoozed=${encodeURIComponent(key)}&title=${encodeURIComponent(title)}`,
-    };
+    destination = `/applications?tab=next&snoozed=${encodeURIComponent(key)}&title=${encodeURIComponent(title)}`;
   } catch (error) {
     return actionError(error);
   }
+  // The snoozed row unmounts during revalidation, so navigation must survive its form.
+  redirect(destination);
 }
 
 export async function unsnoozeQueueItem(_state: ActionState, form: FormData): Promise<ActionState> {
@@ -79,10 +81,10 @@ export async function unsnoozeQueueItem(_state: ActionState, form: FormData): Pr
     const key = queueKey.parse(formString(form, "key"));
     await db.delete(queueSnoozes).where(eq(queueSnoozes.itemKey, key));
     revalidatePath("/applications");
-    return { redirect: "/applications?tab=next" };
   } catch (error) {
     return actionError(error);
   }
+  redirect("/applications?tab=next");
 }
 
 export async function updateApplicationDetails(
