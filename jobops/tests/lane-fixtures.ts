@@ -1,4 +1,5 @@
-import type { LaneSource } from "@/features/applications/lanes";
+import { buildLanes, type LaneSource, type PendingMail } from "@/features/applications/lanes";
+import { buildQueue, type QueueMail } from "@/features/applications/queue";
 
 export const NOW = new Date("2026-10-03T10:30:00+05:30");
 export const at = (value: string) => new Date(`${value}+05:30`);
@@ -65,3 +66,15 @@ export function round(
     ...patch,
   };
 }
+
+export const lanesFor = (
+  records: LaneSource[],
+  pending: PendingMail[] = [],
+  mail: QueueMail[] = [],
+) =>
+  buildLanes({
+    records,
+    items: buildQueue({ records, mail, snoozes: new Map(), now: NOW }),
+    pending,
+    now: NOW,
+  });

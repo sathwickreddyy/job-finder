@@ -56,3 +56,14 @@ export function matchesFilter(record: QueueRecord, filter: RecordFilter, q: stri
       return phase !== "Closed";
   }
 }
+
+/** The Applications page with the lane holding this record expanded (spec §1). */
+export function laneHref(
+  recordId: string,
+  extra: { mail?: string | null; outcome?: string | null } = {},
+) {
+  const query = new URLSearchParams({ open: recordId });
+  if (extra.mail) query.set("mail", extra.mail);
+  if (extra.outcome) query.set("outcome", extra.outcome);
+  return `/applications?${query}`;
+}
