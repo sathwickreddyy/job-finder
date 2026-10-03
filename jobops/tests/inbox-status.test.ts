@@ -27,8 +27,12 @@ it("keeps Outlook connect available with two accounts and names every reconnect 
     }),
   );
   expect(html).toMatch(/<a href="\/api\/mail\/outlook\/connect"[^>]*>Connect Outlook<\/a>/);
-  for (const connection of connections)
+  for (const connection of connections) {
     expect(html).toContain(`aria-label="Reconnect ${connection.email}"`);
+    expect(html).toContain(`aria-describedby="reconnect-${connection.id}"`);
+    expect(html).toContain(`id="reconnect-${connection.id}"`);
+    expect(html).toContain(`Choose ${connection.email} when you sign in again.`);
+  }
   expect(accountTone(0)).not.toBe(accountTone(1));
   expect(accountTone(1)).not.toBe(accountTone(2));
   expect(accountTone(3)).toBe("bg-chart-other");

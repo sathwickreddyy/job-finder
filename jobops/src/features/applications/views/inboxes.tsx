@@ -51,19 +51,25 @@ export function InboxStatus({
                     (config) =>
                       config.slug === (connection.provider === "OUTLOOK" ? "outlook" : "gmail"),
                   )?.configured ? (
-                    <a
-                      href={`/api/mail/${connection.provider === "OUTLOOK" ? "outlook" : "gmail"}/connect`}
-                      className="text-link"
-                      aria-label={`Reconnect ${connection.email}`}
-                    >
-                      Reconnect
-                    </a>
+                    <>
+                      <a
+                        href={`/api/mail/${connection.provider === "OUTLOOK" ? "outlook" : "gmail"}/connect`}
+                        className="text-link"
+                        aria-label={`Reconnect ${connection.email}`}
+                        aria-describedby={`reconnect-${connection.id}`}
+                      >
+                        Reconnect
+                      </a>{" "}
+                    </>
                   ) : (
                     <span className="text-muted-foreground">
                       Set up {connection.provider === "OUTLOOK" ? "Outlook" : "Gmail"} below to
                       reconnect.
                     </span>
-                  )}
+                  )}{" "}
+                  <span id={`reconnect-${connection.id}`} className="text-muted-foreground">
+                    Choose {connection.email} when you sign in again.
+                  </span>
                 </>
               ) : (
                 <span className="text-muted-foreground tabular-nums">
