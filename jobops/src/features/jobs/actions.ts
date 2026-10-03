@@ -2,6 +2,8 @@
 import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
+import { saveMailOpening } from "@/features/mail/handled";
 import { db } from "@/db";
 import { jobs, jobSnapshots, jobResumeMatches, jobStatuses, activityLogs } from "@/db/schema";
 import { type ActionState, actionError, formString } from "@/lib/actions";
@@ -43,7 +45,11 @@ export async function commitJobs(_state: ImportState, form: FormData): Promise<I
   }
 }
 export async function addJob(_state: ActionState, form: FormData): Promise<ActionState> {
+  let savedFromMail: string | null = null;
   try {
+    const fromMailId = formString(form, "fromMailId");
+    if (form.has("fromMailId") && !z.uuid().safeParse(fromMailId).success)
+      throw new Error("The source message link is invalid. Return to Emails and choose a message.");
     if (!formString(form, "description"))
       throw new Error("Paste the full job description before saving.");
     if (!formString(form, "source")) {
@@ -62,18 +68,30 @@ export async function addJob(_state: ActionState, form: FormData): Promise<Actio
     const data = jobInputSchema.parse(
       Object.fromEntries([...form.entries()].map(([k, v]) => [k, v === "" ? undefined : v])),
     );
-    const summary = await importJobRows([data], "skip");
-    if (!summary.created)
-      return {
-        error: "This opening is already saved. Open Saved openings to review it.",
-      };
+    let jobId: string;
+    if (fromMailId) {
+      const saved = await db.transaction((tx) => saveMailOpening(tx, fromMailId, data));
+      jobId = saved.jobId;
+    } else {
+      const summary = await importJobRows([data], "skip");
+      if (!summary.created)
+        return { error: "This opening is already saved. Open Saved openings to review it." };
+      jobId = summary.ids[0];
+    }
     revalidatePath("/jobs");
     revalidatePath("/companies");
     revalidatePath("/");
-    return { redirect: `/jobs/${summary.ids[0]}` };
+    if (fromMailId) {
+      revalidatePath("/applications");
+      revalidatePath(`/mail/${fromMailId}`);
+      revalidatePath(`/jobs/${jobId}`);
+      savedFromMail = jobId;
+    } else return { redirect: `/jobs/${jobId}` };
   } catch (e) {
     return actionError(e);
   }
+  // Server navigation survives the source form disappearing during revalidation.
+  redirect(`/jobs/${savedFromMail}?savedFromMail=1`);
 }
 export async function changeJob(_state: ActionState, form: FormData): Promise<ActionState> {
   try {

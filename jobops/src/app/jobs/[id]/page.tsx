@@ -6,8 +6,15 @@ import { changeJob, updateJobDescription } from "@/features/jobs/actions";
 import { getJobContext } from "@/features/workspace/job-context";
 import { jobStatuses } from "@/db/schema";
 import { displayDate, getDisplayPreferences } from "@/features/candidate/preferences";
-export default async function JobDetail({ params }: { params: Promise<{ id: string }> }) {
+export default async function JobDetail({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ savedFromMail?: string }>;
+}) {
   const { id } = await params;
+  const { savedFromMail } = await searchParams;
   const context = await getJobContext(id);
   if (!context) notFound();
   const { job, snapshot, snapshots } = context;
@@ -17,6 +24,14 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
       <Link href="/jobs" className="text-sm text-link">
         All saved openings
       </Link>
+      {savedFromMail === "1" && (
+        <p
+          role="status"
+          className="rounded-2xl bg-foreground p-4 text-sm text-background shadow-surface"
+        >
+          Opening saved. The source email is handled and its attribution is kept in your notes.
+        </p>
+      )}
       <PageHeader
         title={job.title}
         description={`${job.company} · ${job.location || "Location not recorded"}`}
