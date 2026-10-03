@@ -292,3 +292,26 @@ describe("Outlook recruiting mail", () => {
     await expect(outlook.listRecruitingMail(connection)).rejects.toThrow(text);
   });
 });
+
+it("keeps a mail with many To recipients within the import display limit", async () => {
+  const addresses = Array.from({ length: 45 }, (_, i) => `candidate${i}@example.invalid`);
+  vi.spyOn(outlook, "accessToken").mockResolvedValue("access");
+  vi.stubGlobal(
+    "fetch",
+    vi
+      .fn()
+      .mockResolvedValue(
+        Response.json({
+          value: [
+            message({ toRecipients: addresses.map((address) => ({ emailAddress: { address } })) }),
+          ],
+        }),
+      ),
+  );
+  const page = await outlook.listRecruitingMail(connection);
+  expect(page.messages).toHaveLength(1);
+  expect(page.messages[0]).toMatchObject({
+    externalId: "<abc@mail.example>",
+    recipient: addresses.join(", ").slice(0, 999) + "…",
+  });
+});

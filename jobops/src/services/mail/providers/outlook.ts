@@ -1,3 +1,4 @@
+import { recipientPreview } from "./display-metadata";
 import { classifyMail } from "../classifier";
 import { accessTokenFor } from "./connections";
 import { oauthConfiguration, parseTokenResponse } from "./oauth";
@@ -199,10 +200,12 @@ export const outlook: MailProvider = {
         threadId: message.conversationId,
         sender: message.from?.emailAddress?.address ?? "unknown@outlook.invalid",
         senderName: message.from?.emailAddress?.name ?? "",
-        recipient: (message.toRecipients ?? [])
-          .map((entry) => entry.emailAddress?.address ?? "")
-          .filter(Boolean)
-          .join(", "),
+        recipient: recipientPreview(
+          (message.toRecipients ?? [])
+            .map((entry) => entry.emailAddress?.address ?? "")
+            .filter(Boolean)
+            .join(", "),
+        ),
         subject,
         snippet,
         bodyText,

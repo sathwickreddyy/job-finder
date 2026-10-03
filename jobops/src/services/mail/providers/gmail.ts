@@ -1,4 +1,5 @@
 import { classifyMail } from "../classifier";
+import { recipientPreview } from "./display-metadata";
 import { oauthConfiguration, parseTokenResponse } from "./oauth";
 import { accessTokenFor } from "./connections";
 import type { MailProvider, TokenSet } from "./types";
@@ -168,7 +169,7 @@ export const gmail: MailProvider = {
           provider: "GMAIL",
           sender: address?.[1] ?? from,
           senderName: address ? from.split("<")[0].trim().replace(/^"|"$/g, "") : "",
-          recipient: header("To"),
+          recipient: recipientPreview(header("To")),
           subject,
           snippet: message.snippet ?? "",
           bodyText,

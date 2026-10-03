@@ -113,3 +113,38 @@ it("keeps the frozen search query, continuation and at most five concurrent mess
   expect(peak).toBe(5);
   expect(page.nextCursor).toEqual({ pageToken: "next", query: "frozen query" });
 });
+
+it("keeps a mail with many To addresses within the import display limit", async () => {
+  const recipient = Array.from({ length: 45 }, (_, i) => `candidate${i}@example.invalid`).join(
+    ", ",
+  );
+  vi.spyOn(gmail, "accessToken").mockResolvedValue("access");
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (url: string) =>
+      Response.json(
+        url.includes("messages?")
+          ? { messages: [{ id: "many-recipients" }] }
+          : {
+              id: "many-recipients",
+              internalDate: "1700000000000",
+              payload: {
+                headers: [
+                  { name: "Subject", value: "Interview invitation" },
+                  { name: "From", value: "talent@example.invalid" },
+                  { name: "To", value: recipient },
+                ],
+              },
+            },
+      ),
+    ),
+  );
+  const page = await gmail.listRecruitingMail({ lastSyncedAt: null } as Parameters<
+    typeof gmail.listRecruitingMail
+  >[0]);
+  expect(page.messages).toHaveLength(1);
+  expect(page.messages[0]).toMatchObject({
+    externalId: "many-recipients",
+    recipient: recipient.slice(0, 999) + "…",
+  });
+});
