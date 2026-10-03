@@ -6,18 +6,21 @@ The approved spacious Option A is live. Home brings together your LinkedIn, GitH
 
 ## Local setup
 
-Requires Node.js 22.16+ (tested with 24), npm, and Docker Desktop. From the repository root:
+Requires Docker Desktop. The UI, API and PostgreSQL all run in Docker; no host Node.js server is needed. From the repository root:
 
 ```bash
-cd jobops
-cp .env.example .env
-docker compose up -d
-npm install
-npm run db:migrate
-npm run dev
+cp jobops/.env.example jobops/.env # First setup only; preserve an existing .env.
+docker compose up -d --build
+docker compose ps
 ```
 
 Open [JobOps](http://127.0.0.1:3210). PostgreSQL binds to `127.0.0.1:5549`; the application listens on `0.0.0.0:3210` so you can also open `http://<your-private-LAN-IP>:3210`. These ports avoid the other local projects. No fictional candidate, resume, job or application records are inserted during normal setup.
+
+Compose works from either the repository root or `jobops/`. It shows two services: `app` and `postgres`. The app waits for a healthy database, applies committed migrations, and starts the production Next.js server. Existing PostgreSQL data stays in the original `jobops_jobops_postgres` volume; existing PDFs stay in `jobops/data/uploads` (or the host `STORAGE_ROOT` configured in `jobops/.env`). Secrets are supplied at runtime from that file and excluded from the image build. Review pending migrations before upgrading an existing database, especially migrations that remove obsolete tables.
+
+Use `docker compose logs -f app` for startup errors, `docker compose up -d --build` after source changes, and `docker compose stop` to stop the whole application. Do not add `-v` to `docker compose down` unless you intend to delete the database volume.
+
+Node.js 22.16+ (tested with 24) and npm are only needed for optional host-side development and tests. For hot reload, run `npm install` in `jobops/`, stop the Docker app with `docker compose stop app`, then run `npm run dev`. Stop that process before returning to Docker so port 3210 is free. Normal use should use Docker only.
 
 With a local `APP_URL`, loopback, private IPv4/local IPv6 addresses and Tailscale IPv4 addresses (`100.64.0.0/10`) at the configured port are accepted. From another device on your tailnet, open `http://<this-computer's-Tailscale-IP>:3210`; you can keep `APP_URL=http://127.0.0.1:3210` for both local and Tailscale access. For device-name/MagicDNS URLs such as `http://m4-pro:3210`, set `JOBOPS_LOCAL_HOSTS=m4-pro,m4-pro.your-tailnet.ts.net` in `.env` and restart the server. These are exact hostname aliases (no URLs, ports or wildcards), accepted only with a local-address `APP_URL` and its configured port. The same alias list allows Next.js development resources and hot reload. Browser mutations must come from the exact origin you opened. Company API writes also accept ordinary local/tailnet `curl` requests without an Origin header or access token. Other routes retain their origin checks. Host checks classify the target address, not the caller; the host firewall and tailnet policy control who can reach the listener. If you change the port, update the launch command and `APP_URL`; keep both inbox callbacks on their configured origin.
 

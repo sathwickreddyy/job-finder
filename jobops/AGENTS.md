@@ -6,6 +6,10 @@ This directory contains the runnable JobOps application, a Next.js App Router mo
 PostgreSQL/Drizzle, private local PDF uploads, complete assistant prompts and direct application/outreach
 records. Legacy mission data remains stored, but its UI and agent endpoints are retired. There are no LLM calls or autonomous external submissions.
 
+Run the UI/API and PostgreSQL with `docker compose up -d --build` from the repository root or
+`jobops/`. Normal application use is Docker-only; do not start host UI/API/dev/test servers unless
+the user explicitly requests host-side development. Stop any project servers before switching to Docker.
+
 Run all application commands from the `jobops/` directory at the repository root:
 `npm run dev`, `build`, `lint`, `typecheck`, `test`, `test:e2e`, and
 `db:migrate` / `db:seed`. Browser tests use a separate marked `jobops_e2e`

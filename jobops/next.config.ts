@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 import { localHostAliases } from "./src/lib/local-hosts";
 const config: NextConfig = {
+  output: "standalone",
   distDir: process.env.JOBOPS_BUILD_DIR ?? ".next",
   agentRules: false,
   allowedDevOrigins: localHostAliases(),
