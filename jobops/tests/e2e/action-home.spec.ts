@@ -48,6 +48,16 @@ test("core pages fit a phone and preserve the selected theme", async ({ page }) 
   await page.getByRole("button", { name: "Use light theme", exact: true }).click();
   await page.reload();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+  await expect(page.getByRole("link", { name: /Applications sent$/ })).toHaveAttribute(
+    "href",
+    "/applications?tab=records&filter=active",
+  );
+  for (const label of ["Interview stage", "Offers"]) {
+    await expect(page.getByRole("link", { name: new RegExp(`${label}$`) })).toHaveAttribute(
+      "href",
+      "/applications?tab=records&filter=interviewing",
+    );
+  }
   for (const path of [
     "/",
     "/find",
@@ -55,6 +65,7 @@ test("core pages fit a phone and preserve the selected theme", async ({ page }) 
     "/resumes",
     "/resume-prompt",
     "/applications",
+    "/applications?tab=records&filter=all",
     "/my-profile",
     "/inbox",
   ]) {

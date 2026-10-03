@@ -11,19 +11,19 @@ export function WorkspaceHome({ data }: { data: WorkspaceData }) {
     {
       label: "Applications sent",
       value: data.applications.filter((app) => app.appliedAt).length,
-      href: "/applications?view=applied",
+      href: "/applications?tab=records&filter=active",
     },
     {
       label: "Interview stage",
       value: data.applications.filter(
         (app) => app.status.includes("INTERVIEW") || app.status === "RECRUITER_SCREEN",
       ).length,
-      href: "/applications?view=interviews",
+      href: "/applications?tab=records&filter=interviewing",
     },
     {
       label: "Offers",
       value: data.applications.filter((app) => app.status === "OFFER").length,
-      href: "/applications?view=offers",
+      href: "/applications?tab=records&filter=interviewing",
     },
   ];
   const sources = data.openings.length

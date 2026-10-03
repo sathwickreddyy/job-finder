@@ -70,14 +70,14 @@ test("contact verification records evidence and company filters", async ({ page 
   await expect(page.getByRole("link", { name: `Recruiter ${suffix}`, exact: true })).toBeVisible();
 });
 
-test("linking imported mail appends history without changing the application stage", async ({
+test("linking imported mail appends history without changing the application phase", async ({
   page,
 }) => {
   const suffix = Date.now().toString();
   const applicationId = "00000000-0000-4000-8000-000000000300";
   const subject = `Thank you for applying ${suffix}`;
   await page.goto(`/applications/${applicationId}`);
-  const previousStage = await page.getByLabel("Application stage").inputValue();
+  const previousPhase = await page.getByTestId("phase-label").innerText();
   await page.goto("/mail/import");
   await page.getByLabel("Messages (JSON array)").fill(
     JSON.stringify([
@@ -99,8 +99,8 @@ test("linking imported mail appends history without changing the application sta
   await page.getByRole("button", { name: "Link message", exact: true }).click();
   await expect(page.getByText("Message linked to your record.", { exact: true })).toBeVisible();
   await page.goto(`/applications/${applicationId}`);
-  await expect(page.getByLabel("Application stage")).toHaveValue(previousStage);
-  await expect(page.locator(".timeline")).toContainText(subject);
+  await expect(page.getByTestId("phase-label")).toHaveText(previousPhase);
+  await expect(page.getByRole("region", { name: "History" })).toContainText(subject);
   await page.goto("/mail?status=REVIEWED");
   await expect(page.getByRole("link", { name: subject, exact: true })).toBeVisible();
 });
