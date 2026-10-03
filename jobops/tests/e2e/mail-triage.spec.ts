@@ -407,7 +407,7 @@ test("Emails buckets dismiss with durable confirmation and Undo at 390px", async
     app.id,
   );
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto("/applications?tab=emails");
+  await page.goto("/applications?emails=1");
   const card = page
     .getByRole("listitem")
     .filter({ has: page.getByRole("link", { name: ack.subject, exact: true }) });

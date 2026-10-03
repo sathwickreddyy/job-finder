@@ -17,8 +17,8 @@ test("emails triage dismisses a message and undo restores it", async ({ page }) 
   const subject = `Interview test ${Date.now()}`;
   const mailId = await seedMail({ subject, classification: "INTERVIEW" });
   await page.goto(`/inbox?view=attention&q=${encodeURIComponent(subject)}`);
-  await expect(page).toHaveURL(/\/applications\?tab=emails$/);
-  const updates = page.getByRole("region", { name: /Updates on your records/ });
+  await expect(page).toHaveURL(/\/applications\?emails=1$/);
+  const updates = page.getByRole("region", { name: /^Replies we couldn't match/ });
   const message = updates.getByRole("link", { name: subject, exact: true });
   await expect(message).toBeVisible();
   await updates

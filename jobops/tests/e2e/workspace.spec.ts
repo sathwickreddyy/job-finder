@@ -105,7 +105,7 @@ test("linking imported mail appends history without changing the application pha
   );
   await page.getByRole("button", { name: "Import and classify messages", exact: true }).click();
   await expect.poll(() => captureImportedMail(`e2e-mail-${suffix}`)).toBeTruthy();
-  await expect(page).toHaveURL(/\/applications\?tab=emails$/);
+  await expect(page).toHaveURL(/\/applications\?emails=1$/);
   await page.getByRole("link", { name: subject, exact: true }).click();
   await expect(page).toHaveURL(/\/mail\/[0-9a-f-]+$/);
   await page.getByLabel("Record for this message").selectOption(applicationId);

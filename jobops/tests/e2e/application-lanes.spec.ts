@@ -140,3 +140,58 @@ test("old and stale links still land somewhere useful, and phones scroll the cha
       .evaluate((element) => element.scrollWidth > element.clientWidth),
   ).toBe(true);
 });
+
+test("the Emails drawer links an unmatched reply into its lane and clears alerts", async ({
+  page,
+}) => {
+  const company = `Drawer Lane ${Date.now()}`;
+  const subject = `${company} interview`;
+  const { applicationId } = await seedRecord({ company, source: "DIRECT", sentDaysAgo: 3 });
+  await seedMail({ subject, classification: "INTERVIEW" });
+  await seedMail({
+    subject: `${company} alert one`,
+    sender: "jobalerts@naukri.com",
+    classification: "UNKNOWN",
+  });
+  await seedMail({
+    subject: `${company} alert two`,
+    sender: "jobalerts@naukri.com",
+    classification: "UNKNOWN",
+  });
+  await page.goto("/applications");
+  await page.getByRole("button", { name: /^Emails/ }).click();
+  const drawer = page.getByRole("dialog", { name: "Emails" });
+  const unmatched = drawer.getByRole("region", { name: /^Replies we couldn't match/ });
+  const card = unmatched.getByRole("listitem").filter({ hasText: subject });
+  await card.getByLabel("Record for this message").selectOption(applicationId);
+  await card.getByRole("button", { name: "Link and update", exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`open=${applicationId}&mail=`));
+  await expect(page.getByText(`Linking mail: ${subject}`)).toBeVisible();
+  await page.goto("/applications?emails=1");
+  await drawer
+    .getByRole("region", { name: /^Job alerts and auto-replies/ })
+    .getByRole("button", { name: "Clear all", exact: true })
+    .click();
+  await expect(
+    page.getByRole("status").filter({ hasText: /Dismissed \d+ messages/ }),
+  ).toBeVisible();
+  await expect(drawer.getByText(`${company} alert one`)).toHaveCount(0);
+});
+
+test("a wrongly matched email can be dismissed from its lane", async ({ page }) => {
+  const company = `Dismiss Lane ${Date.now()}`;
+  const { applicationId } = await seedRecord({ company, source: "DIRECT", sentDaysAgo: 2 });
+  await seedMail({ subject: `${company} offer`, classification: "OFFER", recordId: applicationId });
+  await page.goto(`/applications?open=${applicationId}`);
+  const history = page
+    .getByRole("region", { name: `${company} timeline` })
+    .getByRole("region", { name: "History" });
+  await history.getByRole("button", { name: "Dismiss", exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`open=${applicationId}&notice=`));
+  await expect(page.getByRole("status").filter({ hasText: "Dismissed 1 message." })).toBeVisible();
+  await expect(
+    page
+      .getByRole("group", { name: company, exact: true })
+      .getByRole("button", { name: /not added yet/ }),
+  ).toHaveCount(0);
+});
