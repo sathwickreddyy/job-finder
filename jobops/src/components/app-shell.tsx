@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useSyncExternalStore, type ReactNode } from "react";
 import {
   BriefcaseBusiness,
@@ -46,6 +46,10 @@ function snapshot() {
 }
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const emailsActive =
+    pathname.startsWith("/mail") ||
+    (pathname === "/applications" && searchParams.get("tab") === "emails");
   const light = useSyncExternalStore(subscribe, snapshot, () => false);
   useEffect(() => {
     document.documentElement.dataset.theme = light ? "light" : "dark";
@@ -106,13 +110,12 @@ export function AppShell({ children }: { children: ReactNode }) {
             </nav>
             <div className="flex items-center gap-1">
               <Link
-                href="/inbox"
-                aria-label="Inbox"
+                href="/applications?tab=emails"
+                aria-label="Emails"
+                aria-current={emailsActive ? "page" : undefined}
                 className={cn(
                   "morph grid size-10 place-items-center hover:bg-muted",
-                  pathname.startsWith("/inbox") || pathname.startsWith("/mail")
-                    ? "bg-selected text-selected-foreground"
-                    : "text-muted-foreground",
+                  emailsActive ? "bg-selected text-selected-foreground" : "text-muted-foreground",
                 )}
               >
                 <Inbox size={18} aria-hidden />

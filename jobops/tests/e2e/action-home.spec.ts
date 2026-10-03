@@ -3,40 +3,36 @@ import { expect, test } from "@playwright/test";
 import { eq } from "drizzle-orm";
 import { closeDatabase, db } from "../../src/db";
 import { mailMessages } from "../../src/db/schema";
+import { cleanupMailFixtures, guardMailFixtures, seedMail } from "./helpers/task13-mail";
 
 test.beforeEach(async ({ page }) => {
   await stubExternalSites(page);
 });
 
-test.beforeEach(() => expect(new URL(process.env.DATABASE_URL!).pathname).toBe("/jobops_e2e"));
+test.beforeEach(guardMailFixtures);
+test.afterEach(cleanupMailFixtures);
 test.afterAll(() => closeDatabase());
 
-test("inbox surfaces dated actions and marking done preserves the original message", async ({
-  page,
-}) => {
+test("emails triage dismisses a message and undo restores it", async ({ page }) => {
   const subject = `Interview test ${Date.now()}`;
-  const [mail] = await db
-    .insert(mailMessages)
-    .values({
-      externalId: subject,
-      sender: "fictional@example.invalid",
-      subject,
-      receivedAt: new Date(),
-      classification: "INTERVIEW",
-      snippet: "Please confirm availability for your interview.",
-    })
-    .returning();
+  const mailId = await seedMail({ subject, classification: "INTERVIEW" });
   await page.goto(`/inbox?view=attention&q=${encodeURIComponent(subject)}`);
-  await expect(page.getByRole("heading", { name: "Today", exact: true })).toBeVisible();
-  await expect(page.getByRole("link", { name: subject, exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Mark done", exact: true }).click();
-  await expect(page.getByRole("link", { name: subject, exact: true })).not.toBeVisible();
-  await page.goto(`/inbox?q=${encodeURIComponent(subject)}`);
-  await expect(page.getByRole("link", { name: subject, exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Reopen action", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Mark done", exact: true })).toBeVisible();
+  await expect(page).toHaveURL(/\/applications\?tab=emails$/);
+  const updates = page.getByRole("region", { name: /Updates on your records/ });
+  const message = updates.getByRole("link", { name: subject, exact: true });
+  await expect(message).toBeVisible();
+  await updates
+    .getByRole("listitem")
+    .filter({ hasText: subject })
+    .getByRole("button", { name: "Dismiss", exact: true })
+    .click();
+  await expect(page.getByRole("status").filter({ hasText: "Dismissed 1 message." })).toBeVisible();
+  await expect(message).toHaveCount(0);
+  await page.reload();
+  await page.getByRole("button", { name: "Undo last dismiss" }).click();
+  await expect(message).toBeVisible();
   expect(
-    (await db.select().from(mailMessages).where(eq(mailMessages.id, mail.id)))[0].attentionState,
+    (await db.select().from(mailMessages).where(eq(mailMessages.id, mailId)))[0].attentionState,
   ).toBe("OPEN");
 });
 
@@ -51,6 +47,14 @@ test("core pages fit a phone and preserve the selected theme", async ({ page }) 
   await expect(page.getByRole("link", { name: /Applications sent$/ })).toHaveAttribute(
     "href",
     "/applications?tab=records&filter=active",
+  );
+  await expect(page.getByRole("link", { name: "Emails", exact: true })).toHaveAttribute(
+    "href",
+    "/applications?tab=emails",
+  );
+  await expect(page.locator("a").filter({ hasText: "Refresh your inboxes" })).toHaveAttribute(
+    "href",
+    "/applications?tab=emails",
   );
   for (const label of ["Interview stage", "Offers"]) {
     await expect(page.getByRole("link", { name: new RegExp(`${label}$`) })).toHaveAttribute(
@@ -67,7 +71,7 @@ test("core pages fit a phone and preserve the selected theme", async ({ page }) 
     "/applications",
     "/applications?tab=records&filter=all",
     "/my-profile",
-    "/inbox",
+    "/applications?tab=emails",
   ]) {
     await page.goto(path);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(

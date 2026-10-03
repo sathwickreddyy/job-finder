@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useLayoutEffect, useRef, useState } from "react";
 import {
   CalendarPlus,
@@ -49,11 +50,17 @@ export function OutcomeChips({
   requested,
   today,
   booked,
+  mailId,
+  mailError,
+  selectionKey,
 }: {
   recordId: string;
   outcomes: OutcomeId[];
   initial: OutcomeId | null;
   requested?: string;
+  mailId?: string | null;
+  mailError?: string;
+  selectionKey?: string;
   today: string;
   booked?: { name: string; scheduledAt: Date | null };
 }) {
@@ -70,11 +77,37 @@ export function OutcomeChips({
     );
   }, [open]);
   const [confirmation, setConfirmation] = useState("");
-  const [previousRequested, setPreviousRequested] = useState(requested);
-  if (requested !== previousRequested) {
-    setPreviousRequested(requested);
-    setOpen(initial);
+  const [completedSelection, setCompletedSelection] = useState<string | null>(null);
+  const requestKey = `${requested ?? ""}:${selectionKey ?? ""}`;
+  const [previousRequested, setPreviousRequested] = useState(requestKey);
+  if (requestKey !== previousRequested) {
+    setPreviousRequested(requestKey);
+    // The successful action redirects to this record without its selection query.
+    // Consume that exact completed selection once; explicit new selections still reset.
+    const cleanup = requestKey === ":" && completedSelection === previousRequested;
+    setCompletedSelection(null);
+    if (!cleanup) {
+      setConfirmation("");
+      setOpen(initial);
+    }
   }
+  // Keep the submitted panel mounted through revalidation so success/focus can finish.
+  if (mailError && !open && !confirmation)
+    return (
+      <div id="what-happened" className="scroll-mt-24 space-y-3">
+        <p role="alert" className="rounded-2xl bg-danger-soft p-3 text-sm text-destructive">
+          {mailError}
+        </p>
+        <div className="flex flex-wrap gap-3 text-sm">
+          <Link href="/applications?tab=emails" className="text-link">
+            Back to Emails
+          </Link>
+          <Link href={`/applications/${recordId}#what-happened`} className="text-link">
+            Record an outcome manually
+          </Link>
+        </div>
+      </div>
+    );
   if (!outcomes.length && !confirmation && !open) return null;
   const needs = open ? outcomeMeta[open].needs : undefined;
   return (
@@ -98,6 +131,7 @@ export function OutcomeChips({
               aria-expanded={open === id}
               onClick={() => {
                 setConfirmation("");
+                setCompletedSelection(null);
                 setOpen(open === id ? null : id);
               }}
               className={cn(
@@ -125,12 +159,19 @@ export function OutcomeChips({
           pendingLabel="Saving"
           onSuccess={(message) => {
             restoreChip.current = open;
+            setCompletedSelection(requestKey);
             setConfirmation(message);
             setOpen(null);
           }}
         >
           <input type="hidden" name="id" value={recordId} />
           <input type="hidden" name="outcome" value={open} />
+          {mailId !== undefined && mailId !== null && (
+            <>
+              <input type="hidden" name="mailIntent" value="link" />
+              <input type="hidden" name="mailId" value={mailId} />
+            </>
+          )}
           <p className="m-0 font-medium">{outcomeMeta[open].label}</p>
           {open === "rescheduled" && booked?.name && (
             <p className="m-0 text-sm text-muted-foreground">{booked.name}</p>

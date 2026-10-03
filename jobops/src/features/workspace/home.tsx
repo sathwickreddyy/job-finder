@@ -133,8 +133,8 @@ export function WorkspaceHome({ data }: { data: WorkspaceData }) {
             or referral and the exact resume you used.
           </li>
           <li>
-            <Link href="/inbox" className="text-link">
-              Refresh Inbox
+            <Link href="/applications?tab=emails" className="text-link">
+              Refresh your inboxes
             </Link>{" "}
             when you want to check replies and deadlines.
           </li>

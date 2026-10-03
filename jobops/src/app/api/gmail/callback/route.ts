@@ -33,7 +33,10 @@ export async function GET(request: NextRequest) {
     }
   }
   const response = NextResponse.redirect(
-    new URL(`/mail?notice=${encodeURIComponent(message)}`, process.env.APP_URL ?? request.url),
+    new URL(
+      `/applications?tab=emails&notice=${encodeURIComponent(message)}`,
+      process.env.APP_URL ?? request.url,
+    ),
   );
   response.cookies.set("jobops_gmail_state", "", { maxAge: 0, path: "/api/gmail" });
   response.cookies.set("jobops_gmail_verifier", "", { maxAge: 0, path: "/api/gmail" });

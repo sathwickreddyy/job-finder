@@ -1,5 +1,14 @@
 import { stubExternalSites } from "./helpers/external-sites";
 import { expect, test } from "@playwright/test";
+import { closeDatabase } from "../../src/db";
+import { cleanupRecords, seedRecord } from "./helpers/records";
+import { captureImportedMail, cleanupMailFixtures, guardMailFixtures } from "./helpers/task13-mail";
+test.beforeEach(guardMailFixtures);
+test.afterEach(async () => {
+  await cleanupMailFixtures();
+  await cleanupRecords();
+});
+test.afterAll(closeDatabase);
 
 test.beforeEach(async ({ page }) => {
   await stubExternalSites(page);
@@ -74,8 +83,12 @@ test("linking imported mail appends history without changing the application pha
   page,
 }) => {
   const suffix = Date.now().toString();
-  const applicationId = "00000000-0000-4000-8000-000000000300";
-  const subject = `Thank you for applying ${suffix}`;
+  const { applicationId } = await seedRecord({
+    company: `Imported Mail Co ${suffix}`,
+    source: "DIRECT",
+    sentDaysAgo: 3,
+  });
+  const subject = `Application update ${suffix}`;
   await page.goto(`/applications/${applicationId}`);
   const previousPhase = await page.getByTestId("phase-label").innerText();
   await page.goto("/mail/import");
@@ -86,21 +99,21 @@ test("linking imported mail appends history without changing the application pha
         sender: "recruiting@example.invalid",
         subject,
         receivedAt: new Date().toISOString(),
-        bodyText: "We received your application at Harbor Compute (Demo).",
+        bodyText: "Following up on your application with next steps.",
       },
     ]),
   );
   await page.getByRole("button", { name: "Import and classify messages", exact: true }).click();
-  await expect(page).toHaveURL(/\/mail$/);
+  await expect.poll(() => captureImportedMail(`e2e-mail-${suffix}`)).toBeTruthy();
+  await expect(page).toHaveURL(/\/applications\?tab=emails$/);
   await page.getByRole("link", { name: subject, exact: true }).click();
   await expect(page).toHaveURL(/\/mail\/[0-9a-f-]+$/);
-  await expect(page.getByRole("button", { name: "Link message", exact: true })).toBeVisible();
-  await page.getByLabel("Link to record").selectOption(applicationId);
-  await page.getByRole("button", { name: "Link message", exact: true }).click();
+  await page.getByLabel("Record for this message").selectOption(applicationId);
+  await page.getByRole("button", { name: "Link and update", exact: true }).click();
+  await expect(page.getByText(`Linking mail: ${subject}`)).toBeVisible();
+  await page.getByRole("button", { name: "Link without recording an outcome" }).click();
   await expect(page.getByText("Message linked to your record.", { exact: true })).toBeVisible();
   await page.goto(`/applications/${applicationId}`);
   await expect(page.getByTestId("phase-label")).toHaveText(previousPhase);
   await expect(page.getByRole("region", { name: "History" })).toContainText(subject);
-  await page.goto("/mail?status=REVIEWED");
-  await expect(page.getByRole("link", { name: subject, exact: true })).toBeVisible();
 });

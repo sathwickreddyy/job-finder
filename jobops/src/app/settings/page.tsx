@@ -153,7 +153,7 @@ export default async function SettingsPage() {
                 </p>
               )}
               <div className="actions mt-5">
-                <Link href="/mail" className="button-secondary">
+                <Link href="/applications?tab=emails" className="button-secondary">
                   Open mail review
                 </Link>
                 {gmail.configured && (

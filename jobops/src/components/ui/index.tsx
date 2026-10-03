@@ -11,7 +11,7 @@ export function PageHeader({
 }) {
   return (
     <header className="mb-7 flex flex-wrap items-start justify-between gap-4">
-      <div>
+      <div className="min-w-0 max-w-full [overflow-wrap:anywhere]">
         <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
         {description && (
           <p className="mt-2 max-w-3xl text-sm text-muted-foreground">{description}</p>

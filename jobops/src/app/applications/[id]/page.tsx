@@ -1,3 +1,4 @@
+import { readOpenMail } from "@/features/mail/read";
 import { notFound } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
@@ -14,7 +15,7 @@ export default async function ApplicationPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ outcome?: string }>;
+  searchParams: Promise<{ outcome?: string; mail?: string; notice?: string }>;
 }) {
   const { id } = await params;
   if (!z.uuid().safeParse(id).success) notFound();
@@ -29,6 +30,22 @@ export default async function ApplicationPage({
   ]);
   const record = records.find((row) => row.id === id);
   if (!record) notFound();
+  let mail = null;
+  let mailError: string | undefined;
+  if (query.mail !== undefined) {
+    if (!z.uuid().safeParse(query.mail).success)
+      mailError = "The source message link is invalid. Return to Emails to choose a message.";
+    else {
+      try {
+        mail = await readOpenMail(query.mail, record.id);
+      } catch (error) {
+        mailError =
+          error instanceof Error
+            ? error.message
+            : "The source message could not be loaded. Return to Emails.";
+      }
+    }
+  }
   return (
     <ApplicationDetail
       record={record}
@@ -40,6 +57,11 @@ export default async function ApplicationPage({
       preferences={preferences}
       now={new Date()}
       requested={query.outcome}
+      mail={mail}
+      mailIntent={query.mail}
+      mailError={mailError}
+      selectionKey={query.mail}
+      notice={query.notice?.slice(0, 300)}
     />
   );
 }
