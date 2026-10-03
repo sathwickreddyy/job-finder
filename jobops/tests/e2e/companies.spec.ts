@@ -55,6 +55,7 @@ test("city cards follow current resumes while applications preserve the submitte
   await expect(hyderabad).toHaveCount(1);
   await page.goto("/companies?view=compare&q=Amazon");
   await expect(page.getByRole("table")).toContainText("Amazon");
+  await expect(page.getByText(/^Shaded band/)).toBeVisible();
   await page.getByRole("button", { name: "Fewest rounds", exact: true }).click();
   await expect(page.getByRole("button", { name: "Fewest rounds", exact: true })).toHaveAttribute(
     "aria-pressed",
@@ -146,6 +147,7 @@ test("company search and separate city sections work on mobile", async ({ page }
   await expect(page).toHaveURL(/view=compare&city=Hyderabad$/);
   const rows = page.getByRole("table").locator("tbody tr");
   await expect(rows).toHaveCount(6);
+  await expect(page.getByText(/^Shaded band/)).toBeHidden();
   await expect(rows.first().getByRole("link")).toHaveAttribute("href", /\?city=Hyderabad$/);
   await cities.getByRole("link", { name: /^All cities/ }).click();
   await expect(page).toHaveURL(/\/companies\?view=compare$/);

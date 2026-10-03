@@ -232,13 +232,14 @@ export function CompareTable({
         ))}
       </div>
       <div className="overflow-x-auto rounded-card border border-border bg-card shadow-surface">
-        <table className="min-w-[980px]">
+        <table className="min-w-[720px] md:min-w-[980px]">
           <thead>
             <tr className="border-b border-border [&>th]:px-4 [&>th]:py-3 [&>th]:align-bottom">
               <th>Company</th>
-              <th className="w-[30%]">
+              <th className="md:w-[30%]">
                 Fixed pay, LPA
-                <span className="mt-1 flex justify-between pr-20 font-normal tabular-nums">
+                {/* The range bar needs width to read; phones get the plain range instead. */}
+                <span className="mt-1 hidden justify-between pr-20 font-normal tabular-nums md:flex">
                   <span>0</span>
                   <span>{lpa(scaleMax / 2)}</span>
                   <span>{lpa(scaleMax)}</span>
@@ -274,10 +275,10 @@ export function CompareTable({
                   <td>
                     {metrics.fixed ? (
                       <div className="flex items-center gap-3">
-                        <div className="flex-1">
+                        <div className="hidden flex-1 md:block">
                           <RangeBar stats={metrics.fixed} scaleMax={scaleMax} />
                         </div>
-                        <span className="w-16 text-right text-xs tabular-nums">
+                        <span className="whitespace-nowrap text-sm tabular-nums md:w-16 md:text-right md:text-xs">
                           {payRange(metrics.fixed)!.replace(" LPA", "").replace("₹", "")}
                         </span>
                       </div>
@@ -287,7 +288,7 @@ export function CompareTable({
                       </span>
                     )}
                   </td>
-                  <td className="text-sm tabular-nums">
+                  <td className="whitespace-nowrap text-sm tabular-nums">
                     {payRange(metrics.total)?.replace(" LPA", "").replace("₹", "") ?? (
                       <span className="text-muted-foreground">—</span>
                     )}
@@ -308,7 +309,7 @@ export function CompareTable({
           </tbody>
         </table>
       </div>
-      <p className="text-xs text-muted-foreground">
+      <p className="hidden text-xs text-muted-foreground md:block">
         Shaded band: middle half of reports. Tick: median. Whiskers: lowest to highest. Hover a dot
         for its level.
       </p>
