@@ -10,6 +10,7 @@ import { addDays, istDateTime, istDayStart } from "./dates";
 import { queueKeyPattern } from "./navigation";
 import { markRecordSent, updateRecordDetails, updateRecordRound } from "./outcome-service";
 import { SNOOZE_DAYS } from "./queue";
+import { safeReturnTo } from "./return-to";
 
 const httpUrl = z.union([
   z.literal(""),
@@ -147,7 +148,10 @@ export async function recordAsSent(_state: ActionState, form: FormData): Promise
     });
     await db.transaction((tx) => markRecordSent(tx, data, new Date()));
     refresh(data.id);
-    return { success: "Recorded as sent.", redirect: `/applications/${data.id}` };
+    return {
+      success: "Recorded as sent.",
+      redirect: safeReturnTo(formString(form, "returnTo")) ?? `/applications/${data.id}`,
+    };
   } catch (error) {
     return actionError(error);
   }
