@@ -1,15 +1,12 @@
 "use server";
-import { eq, lt } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 import { z } from "zod";
 import { db } from "@/db";
-import { applications, queueSnoozes } from "@/db/schema";
+import { applications } from "@/db/schema";
 import { actionError, formString, type ActionState } from "@/lib/actions";
-import { addDays, istDateTime, istDayStart } from "./dates";
-import { queueKeyPattern } from "./navigation";
+import { istDateTime } from "./dates";
 import { markRecordSent, updateRecordDetails, updateRecordRound } from "./outcome-service";
-import { SNOOZE_DAYS } from "./queue";
 import { safeReturnTo } from "./return-to";
 
 const httpUrl = z.union([
@@ -19,7 +16,6 @@ const httpUrl = z.union([
     .refine((value) => ["http:", "https:"].includes(new URL(value).protocol), "Use an http(s) URL"),
 ]);
 const day = z.union([z.literal(""), z.string().regex(/^\d{4}-\d{2}-\d{2}$/)]);
-const queueKey = z.string().regex(queueKeyPattern, "Unknown queue item.");
 function refresh(id?: string) {
   revalidatePath("/applications");
   if (id) revalidatePath(`/applications/${id}`);
@@ -52,40 +48,6 @@ export async function setFollowUp(_state: ActionState, form: FormData): Promise<
   } catch (error) {
     return actionError(error);
   }
-}
-
-export async function snoozeQueueItem(_state: ActionState, form: FormData): Promise<ActionState> {
-  let destination: string;
-  try {
-    const key = queueKey.parse(formString(form, "key"));
-    const title = formString(form, "title").slice(0, 200);
-    const now = new Date();
-    const until = addDays(istDayStart(now), SNOOZE_DAYS);
-    await db.transaction(async (tx) => {
-      await tx.delete(queueSnoozes).where(lt(queueSnoozes.until, now));
-      await tx
-        .insert(queueSnoozes)
-        .values({ itemKey: key, until })
-        .onConflictDoUpdate({ target: queueSnoozes.itemKey, set: { until } });
-    });
-    revalidatePath("/applications");
-    destination = `/applications?tab=next&snoozed=${encodeURIComponent(key)}&title=${encodeURIComponent(title)}`;
-  } catch (error) {
-    return actionError(error);
-  }
-  // The snoozed row unmounts during revalidation, so navigation must survive its form.
-  redirect(destination);
-}
-
-export async function unsnoozeQueueItem(_state: ActionState, form: FormData): Promise<ActionState> {
-  try {
-    const key = queueKey.parse(formString(form, "key"));
-    await db.delete(queueSnoozes).where(eq(queueSnoozes.itemKey, key));
-    revalidatePath("/applications");
-  } catch (error) {
-    return actionError(error);
-  }
-  redirect("/applications?tab=next");
 }
 
 export async function updateApplicationDetails(
