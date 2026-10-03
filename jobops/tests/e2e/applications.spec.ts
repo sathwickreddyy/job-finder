@@ -377,7 +377,7 @@ test("record history uses readable India-time dates and long notes collapse", as
   await expect(history).toContainText(/Today, \d{1,2}:\d{2} (am|pm)/);
   await expect(history).not.toContainText("Asia/Kolkata");
   await page.getByText("Edit details", { exact: true }).click();
-  await page.getByLabel("Notes").fill("A long note line\n".repeat(10));
+  await page.getByRole("textbox", { name: "Notes" }).fill("A long note line\n".repeat(10));
   await page.getByRole("button", { name: "Save details", exact: true }).click();
   await expect(page.getByRole("button", { name: "Show all", exact: true })).toBeVisible();
 });

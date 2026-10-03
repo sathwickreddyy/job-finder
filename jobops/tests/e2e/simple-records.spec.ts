@@ -1,4 +1,5 @@
 import { stubExternalSites } from "./helpers/external-sites";
+import { formatDay } from "../../src/features/applications/dates";
 import { istDay } from "./helpers/records";
 import { expect, test } from "@playwright/test";
 
@@ -95,7 +96,9 @@ test("a prepared action becomes sent in the same record with its actual date", a
   await page.getByRole("button", { name: "Save outreach record" }).click();
   await expect(page).toHaveURL(new RegExp(plannedPath + "$"));
   await expect(page.getByText("Sent", { exact: true })).toBeVisible();
-  await expect(page.getByRole("region", { name: "History" })).toContainText(istDay(-3));
+  await expect(page.getByRole("region", { name: "History" })).toContainText(
+    formatDay(new Date(`${istDay(-3)}T12:00:00+05:30`)),
+  );
   await page.reload();
   await expect(page.getByLabel("What happened?")).toHaveCount(0);
 

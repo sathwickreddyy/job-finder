@@ -159,7 +159,8 @@ test("the Emails drawer links an unmatched reply into its lane and clears alerts
     classification: "UNKNOWN",
   });
   await page.goto("/applications");
-  await page.getByRole("button", { name: /^Emails/ }).click();
+  // With no inbox connected the header button reads "Connect inboxes" (spec §1).
+  await page.getByRole("button", { name: /^(Emails|Connect inboxes)/ }).click();
   const drawer = page.getByRole("dialog", { name: "Emails" });
   const unmatched = drawer.getByRole("region", { name: /^Replies we couldn't match/ });
   const card = unmatched.getByRole("listitem").filter({ hasText: subject });
