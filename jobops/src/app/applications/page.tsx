@@ -72,6 +72,10 @@ export default async function Applications({
       }
     }
   }
+  const recordOptions = records.map((record) => ({
+    id: record.id,
+    label: `${record.companyName} · ${record.role}`,
+  }));
   const decisions = triage.messages.filter(
     (message) => message.bucket === "roles" || (message.bucket === "updates" && !message.record),
   ).length;
@@ -89,10 +93,7 @@ export default async function Applications({
             >
               <EmailsPanel
                 data={triage}
-                records={records.map((record) => ({
-                  id: record.id,
-                  label: `${record.companyName} · ${record.role}`,
-                }))}
+                records={recordOptions}
                 inboxes={
                   <InboxStatus
                     connections={connections}
@@ -135,6 +136,7 @@ export default async function Applications({
                 mail={mail}
                 mailIntent={view.mail ?? undefined}
                 mailError={mailError}
+                records={recordOptions}
               />
             ) : null
           }

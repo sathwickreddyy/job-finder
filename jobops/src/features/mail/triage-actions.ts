@@ -33,11 +33,11 @@ export async function dismissMail(_state: ActionState, form: FormData): Promise<
       : z.array(z.uuid()).min(1).parse(form.getAll("mailId").map(String));
     const count = await db.transaction((tx) => dismissMessages(tx, { ids, noise }, new Date()));
     refresh();
-    destination = emailsNotice(
-      count
-        ? `Dismissed ${count} ${count === 1 ? "message" : "messages"}.`
-        : "These messages have already been handled.",
-    );
+    const notice = count
+      ? `Dismissed ${count} ${count === 1 ? "message" : "messages"}.`
+      : "These messages have already been handled.";
+    const back = safeReturnTo(formString(form, "returnTo"));
+    destination = back ? withNotice(back, notice) : emailsNotice(notice);
   } catch (error) {
     return actionError(error);
   }

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { X } from "lucide-react";
 import { ActionForm } from "@/components/action-form";
 import { Button } from "@/components/ui";
-import { linkMailOnly } from "@/features/mail/triage-actions";
+import { dismissMail, linkMailOnly } from "@/features/mail/triage-actions";
 import { cn } from "@/lib/utils";
 import { formatDay, indiaDate } from "../dates";
 import type { Lane, LaneNext } from "../lanes";
@@ -19,6 +19,7 @@ import type { ApplicationRecord } from "../read";
 import { FollowUp } from "./follow-up";
 import { dueStyle } from "./lane-marks";
 import { OutcomeChips, PreparingControl } from "./outcome-chips";
+import { RecordPicker } from "./record-picker";
 import { Timeline } from "./timeline";
 
 export function LaneDetail({
@@ -29,6 +30,7 @@ export function LaneDetail({
   mail,
   mailIntent,
   mailError,
+  records,
 }: {
   lane: Lane;
   record: ApplicationRecord;
@@ -37,6 +39,7 @@ export function LaneDetail({
   mail: { id: string; subject: string; classification: string } | null;
   mailIntent?: string;
   mailError?: string;
+  records: { id: string; label: string }[];
 }) {
   const here = laneHref(record.id);
   const role = lane.roles.find((item) => item.recordId === record.id);
@@ -115,13 +118,41 @@ export function LaneDetail({
               href: dot.mailId && dot.tone !== "pending" ? `/mail/${dot.mailId}` : undefined,
               extra:
                 dot.tone === "pending" && dot.mailId ? (
-                  <Link
-                    href={laneHref(dot.recordId, { mail: dot.mailId, outcome: dot.outcome })}
-                    scroll={false}
-                    className="text-xs font-medium text-link"
-                  >
-                    {dot.outcome ? "Link it" : "Add to timeline"}
-                  </Link>
+                  <div className="mt-1.5 flex flex-col gap-1.5">
+                    <div className="flex flex-wrap items-center gap-3">
+                      <Link
+                        href={laneHref(dot.recordId, { mail: dot.mailId, outcome: dot.outcome })}
+                        scroll={false}
+                        className="text-xs font-medium text-link"
+                      >
+                        {dot.outcome ? "Link it" : "Add to timeline"}
+                      </Link>
+                      <ActionForm
+                        action={dismissMail}
+                        feedback="inverse"
+                        className="contents"
+                        pendingLabel="Dismissing"
+                      >
+                        <input type="hidden" name="mailId" value={dot.mailId} />
+                        <input type="hidden" name="returnTo" value={here} />
+                        <button className="border-0 bg-transparent p-0 text-xs font-medium text-muted-foreground hover:underline">
+                          Dismiss
+                        </button>
+                      </ActionForm>
+                    </div>
+                    <details className="text-xs">
+                      <summary className="cursor-pointer text-muted-foreground">
+                        Link elsewhere
+                      </summary>
+                      <div className="mt-1.5">
+                        <RecordPicker
+                          mailId={dot.mailId}
+                          outcome={dot.outcome}
+                          records={records.filter((option) => option.id !== dot.recordId)}
+                        />
+                      </div>
+                    </details>
+                  </div>
                 ) : undefined,
             }))}
           />

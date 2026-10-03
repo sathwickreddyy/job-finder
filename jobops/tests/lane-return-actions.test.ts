@@ -24,7 +24,7 @@ vi.mock("@/features/mail/handling-service", () => ({
 }));
 
 import { recordAsSent } from "@/features/applications/record-actions";
-import { linkMailOnly } from "@/features/mail/triage-actions";
+import { dismissMail, linkMailOnly } from "@/features/mail/triage-actions";
 
 const recordId = "00000000-0000-4000-8000-000000000001";
 const mailId = "00000000-0000-4000-8000-000000000002";
@@ -59,5 +59,13 @@ it("links mail and returns to the lane with the notice", async () => {
   await linkMailOnly({}, form({ mailId, recordId, returnTo: lane }));
   expect(mocks.redirect).toHaveBeenCalledWith(
     `/applications?open=${recordId}&notice=Message+linked+to+your+record.`,
+  );
+});
+
+it("dismisses from a lane and returns there", async () => {
+  mocks.dismissMessages.mockResolvedValue(1);
+  await dismissMail({}, form({ mailId, returnTo: lane }));
+  expect(mocks.redirect).toHaveBeenCalledWith(
+    `/applications?open=${recordId}&notice=Dismissed+1+message.`,
   );
 });

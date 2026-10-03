@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui";
+import { laneHref } from "@/features/applications/navigation";
 
 export function RecordPicker({
   mailId,
@@ -37,11 +38,7 @@ export function RecordPicker({
         size="sm"
         className="h-8 rounded-full px-3"
         disabled={!recordId}
-        onClick={() =>
-          router.push(
-            `/applications/${recordId}?mail=${mailId}${outcome ? `&outcome=${outcome}` : ""}#what-happened`,
-          )
-        }
+        onClick={() => router.push(laneHref(recordId, { mail: mailId, outcome }))}
       >
         Link and update
       </Button>
