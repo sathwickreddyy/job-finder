@@ -11,6 +11,8 @@ const record = (patch: Partial<ApplicationRecord> = {}): ApplicationRecord => ({
   id: "00000000-0000-4000-8000-000000000001",
   jobId: "00000000-0000-4000-8000-000000000010",
   company: "Oracle",
+  companyKey: "oracle",
+  companyName: "Oracle",
   role: "Software Engineer II",
   city: "Bengaluru",
   jobUrl: "https://example.com/job",

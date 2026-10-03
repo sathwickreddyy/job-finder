@@ -14,6 +14,7 @@ import {
 import { companyMetrics } from "@/features/companies/metrics";
 import type { ResearchFact } from "@/features/companies/research-data";
 import { phaseOf, recordStateFrom, type CloseReason, type Phase } from "./phase";
+import { companyResolver, normalizeCompany } from "./lanes";
 import type { QueueRecord } from "./queue";
 
 type EventRow = typeof applicationEvents.$inferSelect;
@@ -25,6 +26,8 @@ export type ApplicationRecord = Omit<QueueRecord, "events" | "rounds" | "linkedM
   rounds: RoundRow[];
   linkedMail: LinkedMail[];
   jobId: string;
+  companyKey: string;
+  companyName: string;
   city: string;
   jobUrl: string;
   applicationUrl: string | null;
@@ -39,8 +42,6 @@ export type ApplicationRecord = Omit<QueueRecord, "events" | "rounds" | "linkedM
   latest: { summary: string; at: Date } | null;
 };
 
-const normalize = (value: string) => value.trim().toLocaleLowerCase().replace(/\s+/g, " ");
-
 /** Research median round count per company name and alias; null when no research exists. */
 export function typicalRoundsByName(
   companies: { name: string; aliases: string[]; facts: ResearchFact[] }[],
@@ -49,9 +50,10 @@ export function typicalRoundsByName(
   for (const company of companies) {
     const rounds = companyMetrics(company.facts).typicalRounds;
     if (rounds === null) continue;
-    for (const name of [company.name, ...company.aliases]) counts.set(normalize(name), rounds);
+    for (const name of [company.name, ...company.aliases])
+      counts.set(normalizeCompany(name), rounds);
   }
-  return (name: string) => counts.get(normalize(name)) ?? null;
+  return (name: string) => counts.get(normalizeCompany(name)) ?? null;
 }
 
 /** Records on the same opening point at each other (spec §1.1). */
@@ -100,6 +102,7 @@ export async function readApplications() {
     })),
   );
   const linked = linkedRecordIds(rows.map(({ app }) => ({ id: app.id, jobId: app.jobId })));
+  const resolve = companyResolver(companies);
   const records: ApplicationRecord[] = rows.map(({ app, job, version }) => {
     const own = events.filter((event) => event.applicationId === app.id);
     const sent = own.find((event) => event.eventType === "OUTREACH_SENT");
@@ -125,6 +128,7 @@ export async function readApplications() {
       id: app.id,
       jobId: job.id,
       company: job.company,
+      ...resolve(job.company),
       role: job.title,
       city: job.location,
       jobUrl: job.canonicalUrl,
