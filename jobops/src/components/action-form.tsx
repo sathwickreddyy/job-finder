@@ -9,12 +9,17 @@ export function ActionForm({
   children,
   className = "space-y-4",
   pendingLabel = "Saving",
+  onSuccess,
+  feedback = "default",
 }: {
   action: (state: ActionState, data: FormData) => Promise<ActionState>;
   children: React.ReactNode;
   className?: string;
   /** Shown in the loading popup while the action runs. */
   pendingLabel?: string;
+  /** Retain confirmation in a parent when a successful inline panel closes. */
+  onSuccess?: (message: string) => void;
+  feedback?: "default" | "inverse";
 }) {
   const [state, formAction, pending] = useActionState(action, {});
   const router = useRouter();
@@ -24,6 +29,7 @@ export function ActionForm({
   useEffect(() => {
     if (handled.current === state) return;
     handled.current = state;
+    if (state.success) onSuccess?.(state.success);
     if (state.redirect) {
       // Keep the popup up from the save through the page it opens.
       if (isNewLocation(state.redirect, window.location))
@@ -31,7 +37,7 @@ export function ActionForm({
       router.push(state.redirect);
     }
     // Server actions already revalidate their pages; another refresh can rerun this effect.
-  }, [state, router, loading]);
+  }, [state, router, loading, onSuccess]);
   return (
     <form
       action={formAction}
@@ -55,10 +61,14 @@ export function ActionForm({
           {state.error}
         </div>
       )}
-      {state.success && (
+      {state.success && !onSuccess && (
         <div
           role="status"
-          className="rounded-lg border border-success/40 bg-success-soft p-3 text-sm text-success"
+          className={
+            feedback === "inverse"
+              ? "rounded-2xl bg-foreground p-3 text-sm text-background shadow-surface"
+              : "rounded-lg border border-success/40 bg-success-soft p-3 text-sm text-success"
+          }
         >
           {state.success}
         </div>
