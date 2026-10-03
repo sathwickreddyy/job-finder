@@ -46,3 +46,12 @@ export const formatDay = (value: Date) => day.format(value);
 export const formatTime = (value: Date) => time.format(value);
 export const formatDayTime = (value: Date) => `${day.format(value)}, ${time.format(value)}`;
 export const formatWeekday = (value: Date) => weekday.format(value);
+
+/** Relative refresh time with Asia/Kolkata day boundaries. */
+export function relativeTime(value: Date, now: Date) {
+  const minutes = Math.floor((now.getTime() - value.getTime()) / 60_000);
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes} min ago`;
+  if (indiaDate(value) === indiaDate(now)) return `today at ${formatTime(value)}`;
+  return formatDay(value);
+}

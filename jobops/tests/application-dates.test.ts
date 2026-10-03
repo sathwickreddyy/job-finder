@@ -1,6 +1,7 @@
 import { expect, it } from "vitest";
 import {
   addDays,
+  relativeTime,
   indiaDate,
   formatDay,
   formatTime,
@@ -60,4 +61,16 @@ it("formats displayed dates in IST with the requested readable labels", () => {
   expect(formatTime(value)).toBe("4:00 pm");
   expect(formatDayTime(value)).toBe("3 Oct, 4:00 pm");
   expect(formatWeekday(value)).toBe("Sat, 3 Oct");
+});
+
+it("describes refresh times using the IST calendar and clock", () => {
+  const now = new Date("2026-10-03T10:30:00+05:30");
+  expect(relativeTime(new Date("2026-10-03T10:29:40+05:30"), now)).toBe("just now");
+  expect(relativeTime(new Date("2026-10-03T10:05:00+05:30"), now)).toBe("25 min ago");
+  expect(relativeTime(new Date("2026-10-03T08:40:00+05:30"), now)).toBe("today at 8:40 am");
+  expect(relativeTime(new Date("2026-10-01T08:40:00+05:30"), now)).toBe("1 Oct");
+  expect(relativeTime(new Date("2026-10-03T10:31:00+05:30"), now)).toBe("just now");
+  expect(
+    relativeTime(new Date("2026-10-02T23:59:00+05:30"), new Date("2026-10-03T02:00:00+05:30")),
+  ).toBe("2 Oct");
 });
