@@ -136,14 +136,19 @@ column itself:
 
 - **Needs you**: lanes whose next step is overdue or today, by due rank then `dueAt`.
 - **In progress**: other open lanes, by next date ascending, then latest activity descending.
-- **Closed**: every record closed, by latest activity descending, collapsed by default.
+- **Closed**: every record closed, by latest activity descending, collapsed by default. A company
+  with matched, unhandled mail remains in **Needs you** until that mail is handled; its records
+  retain their closed status.
 
 ### 2.6 Axis and drawing
 
 - Window: from 2 days before the earliest dot on an open lane (and not after today) to the end of
   the 7th IST day after today. The window is at least 14 days wide (extended backwards) and at
   most 12 weeks (start clamped).
-- Dots before the start collapse into one "◂ earlier" stack at the left edge.
+- Dots before the start collapse into one **Earlier** stack at the left edge; dates beyond the
+  end collapse into a separate **Later** stack at the right edge. These edge stacks use a
+  second track row so they cannot cover events inside the window. Actual dates remain visible
+  in their preview; dates in another year include that year.
 - All day maths uses Asia/Kolkata.
 - Ticks: daily up to 10 days, every 3 days up to 21, else weekly. Tick labels within 5% of Today
   are hidden. Today is a `bg-review` line with a "Today" tag.
@@ -151,8 +156,11 @@ column itself:
   line from Today to the last upcoming dot, and dots positioned by time.
 - Dots within 4.5% of the chart width stack. A stack shows its most important dot (pending >
   upcoming > bad > good > mail > sent > note) with a count badge. Its readout lists every entry.
-- Hover or focus on a dot sets the readout: "<Company> · [<role> ·] <label>, <date> (<detail>)"
-  for each stacked entry. Dots are buttons with the same text as their accessible name.
+- Hover or focus on a dot opens a bounded, scrollable preview beside it: company and event
+  count in the header, then a separate row with label, India-time date/time, role/method and
+  detail for every event. The popup never changes chart layout, stays open while hovered and
+  dismisses with Escape. Dots retain their detailed accessible name; the preview is not a
+  live region, avoiding a second automatic announcement.
 - Phone: the chart scrolls sideways inside its card (min width 50rem) with the company column
   sticky on the left. The page itself never scrolls sideways.
 
@@ -212,7 +220,8 @@ Each card shows the inbox dot and address, received date and subject; the subjec
 
 - History renders with the shared vertical timeline: readable IST dates ("3 Oct, 4:19 pm",
   "Today, 9:12 am") instead of "2026-10-03 16:19 Asia/Kolkata".
-- Notes clamp to 4 lines with **Show all** / **Show less** when longer.
+- Notes clamp to 4 lines with **Show all** / **Show less** only when the rendered text
+  actually overflows those lines, measured again when the viewport changes.
 - Everything else is unchanged.
 
 ## 6. Routes and links

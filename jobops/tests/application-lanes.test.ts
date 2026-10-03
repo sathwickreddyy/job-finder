@@ -328,6 +328,40 @@ describe("pending mail", () => {
 });
 
 describe("next steps and groups", () => {
+  it("makes an automatic acknowledgement actionable even though noise is absent from the queue", () => {
+    const source = record({ sentAt: at("2026-09-20T12:00:00") });
+    const mail = {
+      id: uid(),
+      recordId: source.id,
+      subject: "We received your application",
+      classification: "APPLICATION_ACKNOWLEDGEMENT",
+      receivedAt: NOW,
+      outcome: null,
+    };
+    expect(lanesFor([source], [mail])[0].next).toMatchObject({
+      when: "New email",
+      action: "Add to timeline",
+      href: `/applications?open=${source.id}&mail=${mail.id}`,
+    });
+  });
+
+  it("keeps a closed company with matched mail visible and actionable until handled", () => {
+    const source = record({ phase: "Closed", status: "REJECTED", closedReason: "REJECTED" });
+    const mail = {
+      id: uid(),
+      recordId: source.id,
+      subject: "A new update",
+      classification: "INTERVIEW",
+      receivedAt: NOW,
+      outcome: "scheduled" as const,
+    };
+    const [lane] = lanesFor([source], [mail]);
+    expect(lane.group).toBe("needs");
+    expect(lane.status.label).toContain("Rejected");
+    expect(lane.next?.action).toBe("Link it");
+    expect(lanesFor([source])[0].group).toBe("closed");
+  });
+
   it("turns quiet records, booked rounds and matched mail into lane actions, mail first", () => {
     const quiet = record({
       company: "Flipkart",

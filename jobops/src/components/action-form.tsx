@@ -34,7 +34,9 @@ export function ActionForm({
       // Keep the popup up from the save through the page it opens.
       if (isNewLocation(state.redirect, window.location))
         loading?.navigate(labelForPath(new URL(state.redirect, window.location.href).pathname));
-      router.push(state.redirect);
+      const samePage =
+        new URL(state.redirect, window.location.href).pathname === window.location.pathname;
+      router.push(state.redirect, { scroll: !samePage });
     }
     // Server actions already revalidate their pages; another refresh can rerun this effect.
   }, [state, router, loading, onSuccess]);

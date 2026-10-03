@@ -4,6 +4,7 @@ import { useEffect, useRef, type ReactNode } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Inbox, Mail, X } from "lucide-react";
 import { Button } from "@/components/ui";
+import { focusAfterClose } from "./outcome-chips";
 
 export function EmailsDrawer({
   count,
@@ -15,6 +16,8 @@ export function EmailsDrawer({
   children: ReactNode;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const restoreOnClose = useRef(true);
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
@@ -26,9 +29,15 @@ export function EmailsDrawer({
     const node = dialog.current;
     if (!node) return;
     if (wanted && !node.open) node.showModal();
-    else if (!wanted && node.open) node.close();
+    else if (!wanted && node.open) {
+      // Continuing into a lane should leave focus available for that lane.
+      restoreOnClose.current = false;
+      node.close();
+    }
   }, [wanted, search]);
   function onClose() {
+    if (restoreOnClose.current) focusAfterClose(trigger.current);
+    restoreOnClose.current = true;
     if (!["emails", "tab", "notice"].some((key) => params.has(key))) return;
     const next = new URLSearchParams(params);
     for (const key of ["emails", "tab", "notice"]) next.delete(key);
@@ -36,7 +45,17 @@ export function EmailsDrawer({
   }
   return (
     <>
-      <Button variant="outline" aria-haspopup="dialog" onClick={() => dialog.current?.showModal()}>
+      <Button
+        ref={trigger}
+        variant="outline"
+        aria-haspopup="dialog"
+        onClick={() => {
+          const next = new URLSearchParams(params);
+          next.delete("tab");
+          next.set("emails", "1");
+          router.push(`${pathname}?${next}`, { scroll: false });
+        }}
+      >
         {connected ? <Mail size={16} aria-hidden /> : <Inbox size={16} aria-hidden />}
         {connected ? "Emails" : "Connect inboxes"}
         {count > 0 && (

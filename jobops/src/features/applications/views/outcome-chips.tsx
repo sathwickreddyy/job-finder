@@ -277,15 +277,27 @@ export function OutcomeChips({
 /** Keep local focus restoration compatible with the app's temporarily inert saving overlay. */
 export function focusAfterClose(target: HTMLElement | null) {
   if (!target) return;
+  function restore() {
+    target!.focus({ preventScroll: true });
+    // A collapsed form can leave its confirmation above the viewport. Reveal that local
+    // feedback rather than moving to the top of the route or preserving an empty position.
+    const feedback =
+      target!
+        .closest("#what-happened, section[aria-label='Progress']")
+        ?.querySelector<HTMLElement>("[role='status']") ?? target!;
+    const box = feedback.getBoundingClientRect();
+    if (box.top < 0 || box.bottom > window.innerHeight)
+      feedback.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }
   const inertParent = target.closest("[inert]");
   if (!inertParent) {
-    target.focus();
+    restore();
     return;
   }
   const observer = new MutationObserver(() => {
     if (!target.closest("[inert]")) {
       observer.disconnect();
-      target.focus();
+      restore();
     }
   });
   observer.observe(inertParent, { attributes: true, attributeFilter: ["inert"] });

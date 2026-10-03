@@ -51,6 +51,48 @@ describe("lane window", () => {
 });
 
 describe("stacked dots and chart views", () => {
+  it("keeps stack preview titles, dates and details separate", () => {
+    const id = uid();
+    const lanes = lanesFor([
+      record({
+        id,
+        events: [
+          event(id, "MANUAL_NOTE", NOW, {
+            summary: "Interview preparation saved: ownership and safety",
+          }),
+        ],
+      }),
+    ]);
+    const [stack] = laneViews(lanes, laneWindow(lanes, NOW), NOW).lanes[0].stacks;
+    expect(stack).toMatchObject({
+      entries: [
+        {
+          label: "Note",
+          when: "Today, 10:30 am",
+          detail: "Interview preparation saved: ownership and safety",
+        },
+      ],
+    });
+  });
+
+  it("gives dates beyond the window a separate Later stack with their real dates", () => {
+    const id = uid();
+    const lanes = lanesFor([
+      record({
+        id,
+        rounds: [
+          round(id, { scheduledAt: at("2026-10-10T18:00:00") }),
+          round(id, { scheduledAt: at("2026-12-01T11:00:00"), position: 2 }),
+          round(id, { scheduledAt: at("2027-01-02T11:00:00"), position: 3 }),
+        ],
+      }),
+    ]);
+    const view = laneViews(lanes, laneWindow(lanes, NOW), NOW).lanes[0];
+    expect(view.stacks.at(-1)).toMatchObject({ edge: "later", pct: 100, count: 2 });
+    expect(view.stacks.at(-1)?.label).toMatch(/^Later: /);
+    expect(view.stacks.at(-2)?.count).toBe(1);
+  });
+
   it("stacks dots minutes apart, leads with the more important one and reads out both", () => {
     const id = uid();
     const source = record({

@@ -5,6 +5,7 @@ import {
   formatDay,
   formatTime,
   formatWeekday,
+  formatWhen,
   indiaDate,
   istDayStart,
   istDaysBetween,
@@ -425,23 +426,25 @@ export function recordNext(
   pending: PendingMail[],
   now: Date,
 ): LaneNext | null {
-  const mine = pending.filter((mail) => mail.recordId === record.id);
-  const item =
-    items.find(
-      (entry) => entry.reason === "mail" && mine.some((mail) => entry.key === `mail:${mail.id}`),
-    ) ?? items.find((entry) => entry.recordId === record.id);
+  const mine = pending
+    .filter((mail) => mail.recordId === record.id)
+    .sort((a, b) => a.receivedAt.getTime() - b.receivedAt.getTime());
+  // Acknowledgements are noise in the global queue but still need a manual lane decision.
+  const mail = mine[0];
+  if (mail)
+    return {
+      recordId: record.id,
+      due: "today",
+      at: mail.receivedAt,
+      when: "New email",
+      text: clip(mail.subject, 120),
+      action: mail.outcome ? "Link it" : "Add to timeline",
+      href: laneHref(record.id, { mail: mail.id, outcome: mail.outcome }),
+    };
+  const item = items.find((entry) => entry.recordId === record.id);
   const href = laneHref(record.id);
   if (item) {
     const base = { recordId: record.id, due: item.due, at: item.dueAt, when: whenText(item, now) };
-    if (item.reason === "mail") {
-      const mail = mine.find((entry) => item.key === `mail:${entry.id}`)!;
-      return {
-        ...base,
-        text: clip(mail.subject, 120),
-        action: "Link it",
-        href: laneHref(record.id, { mail: mail.id, outcome: mail.outcome }),
-      };
-    }
     if (item.reason === "silence")
       return {
         ...base,
@@ -539,11 +542,14 @@ export function buildLanes(input: {
       status: laneStatus(records, now, pending.length > 0),
       dots: laneDots(records, pending, now),
       next,
-      group: closed
-        ? "closed"
-        : next?.due === "overdue" || next?.due === "today"
+      group:
+        pending.length > 0
           ? "needs"
-          : "active",
+          : closed
+            ? "closed"
+            : next?.due === "overdue" || next?.due === "today"
+              ? "needs"
+              : "active",
       lastActivity: Math.max(0, ...records.map(activityOf)),
     });
   }
@@ -583,7 +589,13 @@ export function laneWindow(lanes: Lane[], now: Date): LaneWindow {
 export const positionOf = (window: LaneWindow, at: number) =>
   Math.min(100, Math.max(0, ((at - window.start) / (window.end - window.start)) * 100));
 
-export type DotStack = { pct: number; earlier: boolean; dots: LaneDot[]; lead: LaneDot };
+export type DotStack = {
+  pct: number;
+  earlier: boolean;
+  later: boolean;
+  dots: LaneDot[];
+  lead: LaneDot;
+};
 const dotWeight: Record<DotTone, number> = {
   pending: 6,
   upcoming: 5,
@@ -594,16 +606,23 @@ const dotWeight: Record<DotTone, number> = {
   note: 0,
 };
 
-/** Dots closer than `gap` percent share a stack; anything before the window is one Earlier stack. */
+/** Nearby dots stack; out-of-window history and bookings get separate Earlier/Later stacks. */
 export function stackDots(dots: LaneDot[], window: LaneWindow, gap = 4.5): DotStack[] {
   const stacks: Omit<DotStack, "lead">[] = [];
   for (const dot of dots) {
     const time = dot.at.getTime();
     const earlier = time < window.start;
+    const later = time >= window.end;
     const pct = positionOf(window, time);
     const last = stacks.at(-1);
-    if (last && last.earlier === earlier && (earlier || pct - last.pct < gap)) last.dots.push(dot);
-    else stacks.push({ pct, earlier, dots: [dot] });
+    if (
+      last &&
+      last.earlier === earlier &&
+      last.later === later &&
+      (earlier || later || pct - last.pct < gap)
+    )
+      last.dots.push(dot);
+    else stacks.push({ pct, earlier, later, dots: [dot] });
   }
   return stacks.map((stack) => ({
     ...stack,
@@ -616,7 +635,9 @@ export function stackDots(dots: LaneDot[], window: LaneWindow, gap = 4.5): DotSt
 /** "Today", "Today, 4:00 pm" for later today, else "3 Oct". */
 export function dayLabel(at: Date, now: Date) {
   if (indiaDate(at) === indiaDate(now)) return at > now ? `Today, ${formatTime(at)}` : "Today";
-  return formatDay(at);
+  return indiaDate(at).slice(0, 4) === indiaDate(now).slice(0, 4)
+    ? formatDay(at)
+    : `${formatDay(at)} ${indiaDate(at).slice(0, 4)}`;
 }
 
 export type StackView = {
@@ -626,6 +647,15 @@ export type StackView = {
   count: number;
   label: string;
   lines: string[];
+  edge: "earlier" | "later" | null;
+  entries: {
+    key: string;
+    tone: DotTone;
+    label: string;
+    when: string;
+    detail: string;
+    scope: string;
+  }[];
 };
 export type LaneView = {
   key: string;
@@ -677,7 +707,19 @@ export function laneViews(lanes: Lane[], window: LaneWindow, now: Date): ChartVi
             tone: stack.lead.tone,
             count: stack.dots.length,
             lines,
-            label: `${stack.earlier ? "Earlier: " : ""}${lines.join("; ")}`,
+            edge: stack.earlier ? "earlier" : stack.later ? "later" : null,
+            entries: stack.dots.map((dot) => ({
+              key: dot.key,
+              tone: dot.tone,
+              label: dot.label,
+              when:
+                indiaDate(dot.at).slice(0, 4) === indiaDate(now).slice(0, 4)
+                  ? formatWhen(dot.at, now)
+                  : `${formatDay(dot.at)} ${indiaDate(dot.at).slice(0, 4)}, ${formatTime(dot.at)}`,
+              detail: dot.detail,
+              scope: [dot.role, dot.via].filter(Boolean).join(" · "),
+            })),
+            label: `${stack.earlier ? "Earlier: " : stack.later ? "Later: " : ""}${lines.join("; ")}`,
           };
         }),
         line:

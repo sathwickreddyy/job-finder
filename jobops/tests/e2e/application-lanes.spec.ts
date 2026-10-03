@@ -1,5 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
-import { closeDatabase } from "../../src/db";
+import { closeDatabase, db } from "../../src/db";
+import { applicationEvents, applications, applicationRounds } from "../../src/db/schema";
+import { eq } from "drizzle-orm";
 import { stubExternalSites } from "./helpers/external-sites";
 import { cleanupRecords, istDay, seedRecord } from "./helpers/records";
 import { cleanupMailFixtures, guardMailFixtures, seedMail } from "./helpers/task13-mail";
@@ -254,4 +256,263 @@ test("clicking empty space inside the Emails drawer keeps it open", async ({ pag
   await expect(drawer).toBeVisible();
   await page.mouse.click(Math.max(5, box.x - 40), box.y + box.height / 2);
   await expect(drawer).toBeHidden();
+});
+
+test("stack previews organize saved events without moving the chart and dismiss with Escape", async ({
+  page,
+}) => {
+  const company = `Preview Lane ${Date.now()}`;
+  const { applicationId } = await seedRecord({ company, source: "DIRECT", sentDaysAgo: 0 });
+  await page.goto(`/applications/${applicationId}`);
+  await page.getByRole("button", { name: "Heard back", exact: true }).click();
+  await page
+    .getByLabel("Note (optional)")
+    .fill("Interview preparation saved: ownership, evidence and next steps.");
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Saved: Heard back." })).toBeVisible();
+  await page.goto("/applications");
+  const chart = page.getByTestId("lanes-chart");
+  const dot = lane(page, company)
+    .getByRole("button", { name: /Applied/ })
+    .first();
+  await dot.scrollIntoViewIfNeeded();
+  const before = await chart.evaluate((el) => el.getBoundingClientRect().top + window.scrollY);
+  await dot.hover();
+  const preview = page.getByTestId("lane-preview");
+  await expect(preview).toBeVisible();
+  await expect(preview.getByRole("listitem")).toHaveCount(2);
+  await expect(preview.getByText(company, { exact: true })).toBeVisible();
+  await expect(preview.getByText("Heard back", { exact: true })).toBeVisible();
+  await expect(preview.getByText(/ownership, evidence/)).toBeVisible();
+  const after = await chart.evaluate((el) => el.getBoundingClientRect().top + window.scrollY);
+  expect(after).toBe(before);
+  await dot.focus();
+  await expect(preview).toBeVisible();
+  await expect(page.locator('[aria-live="polite"]').filter({ hasText: company })).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  await expect(preview).toBeHidden();
+  await expect(dot).toBeFocused();
+});
+
+test("keyboard saving a terminal outcome keeps focus within the lane", async ({ page }) => {
+  const company = `Keyboard Lane ${Date.now()}`;
+  const { applicationId } = await seedRecord({ company, source: "DIRECT", sentDaysAgo: 1 });
+  await page.goto(`/applications?open=${applicationId}&outcome=rejected`);
+  const detail = page.getByRole("region", { name: `${company} timeline` });
+  const save = detail.getByRole("button", { name: "Save", exact: true });
+  await save.focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("status").filter({ hasText: "Saved: Rejected." })).toBeVisible();
+  await expect(detail.getByRole("region", { name: "Progress", exact: true })).toBeFocused();
+});
+
+test("closing a deep-linked drawer returns focus to the header trigger", async ({ page }) => {
+  await page.goto("/applications?emails=1");
+  await expect(page.getByRole("dialog", { name: "Emails" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("button", { name: /^(Emails|Connect inboxes)/ })).toBeFocused();
+  await expect(page).toHaveURL(/\/applications$/);
+});
+
+test("phone scrolling keeps edge dots and their badges behind the company column", async ({
+  page,
+}) => {
+  const company = `Edge Lane ${Date.now()}`;
+  const { applicationId } = await seedRecord({ company, source: "DIRECT", sentDaysAgo: 200 });
+  await db.insert(applicationEvents).values({
+    applicationId,
+    eventType: "MANUAL_NOTE",
+    occurredAt: new Date(Date.now() - 200 * 86400000),
+    summary: "Another early event",
+  });
+  await seedMail({
+    subject: "Old role acknowledgement",
+    classification: "APPLICATION_ACKNOWLEDGEMENT",
+    recordId: applicationId,
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/applications");
+  const chart = page.getByTestId("lanes-chart");
+  const row = lane(page, company);
+  const earlier = row.getByRole("button", { name: /^Earlier:/ });
+  await earlier.scrollIntoViewIfNeeded();
+  const companyBox = (await row
+    .getByRole("link", { name: new RegExp(`^${company}`) })
+    .boundingBox())!;
+  const dotBox = (await earlier.boundingBox())!;
+  expect(dotBox.x).toBeGreaterThanOrEqual(companyBox.x + companyBox.width);
+  await chart.evaluate((element) => {
+    element.scrollLeft = 80;
+  });
+  const coverage = await row.evaluate((element) => {
+    const link = element.querySelector("a")!;
+    const box = link.getBoundingClientRect();
+    const buttons = [...element.querySelectorAll("button")];
+    return buttons
+      .flatMap((button) => [...button.querySelectorAll("span")])
+      .every((badge) => {
+        const b = badge.getBoundingClientRect();
+        if (b.left >= box.right || b.right <= box.left) return true;
+        const hit = document.elementFromPoint(
+          Math.min(box.right - 1, Math.max(box.left + 1, b.left + 1)),
+          b.top + b.height / 2,
+        );
+        return Boolean(hit && link.contains(hit));
+      });
+  });
+  expect(coverage).toBe(true);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+});
+
+test("notes only offer Show all when four rendered lines actually overflow", async ({ page }) => {
+  const company = `Notes Lane ${Date.now()}`;
+  const { applicationId } = await seedRecord({ company, source: "DIRECT", sentDaysAgo: 1 });
+  // Wide short text triggers the old character-count heuristic without overflowing four lines.
+  await db
+    .update(applications)
+    .set({ notes: "clear note ".repeat(33) })
+    .where(eq(applications.id, applicationId));
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  await page.goto(`/applications/${applicationId}`);
+  await expect(page.getByRole("button", { name: "Show all", exact: true })).toHaveCount(0);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.getByRole("button", { name: "Show all", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Show all", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Show less", exact: true })).toBeVisible();
+});
+
+test("Later stacks never cover an event at the end of this week's window", async ({ page }) => {
+  const company = `Future Lane ${Date.now()}`;
+  const { applicationId } = await seedRecord({ company, source: "DIRECT", sentDaysAgo: 0 });
+  const second = await seedRecord({
+    company,
+    title: "Platform Engineer",
+    source: "DIRECT",
+    sentDaysAgo: 0,
+  });
+  await db.insert(applicationRounds).values([
+    {
+      applicationId,
+      kind: "DSA",
+      position: 1,
+      scheduledAt: new Date(`${istDay(7)}T23:59:00+05:30`),
+    },
+    {
+      applicationId: second.applicationId,
+      kind: "DSA",
+      position: 2,
+      scheduledAt: new Date(`${istDay(60)}T11:00:00+05:30`),
+    },
+  ]);
+  await page.goto("/applications");
+  const row = lane(page, company);
+  const inside = row.getByRole("button", { name: /Round 1/ });
+  const later = row.getByRole("button", { name: /^Later:/ });
+  await inside.scrollIntoViewIfNeeded();
+  const a = (await inside.boundingBox())!;
+  const b = (await later.boundingBox())!;
+  const connector = inside.locator("..").locator(":scope > span[class*=border-dashed]");
+  const lineBox = (await connector.boundingBox())!;
+  expect(Math.abs(lineBox.y + lineBox.height / 2 - (a.y + a.height / 2))).toBeLessThanOrEqual(2);
+  expect(
+    a.x + a.width <= b.x || b.x + b.width <= a.x || a.y + a.height <= b.y || b.y + b.height <= a.y,
+  ).toBe(true);
+  await inside.hover();
+  await expect(
+    page.getByTestId("lane-preview").getByText("Round 1 · DSA", { exact: true }),
+  ).toBeVisible();
+  await later.hover();
+  await expect(
+    page.getByTestId("lane-preview").getByText("After this calendar window", { exact: false }),
+  ).toBeVisible();
+});
+
+test("short previews above a dot stay close enough to hover", async ({ page }) => {
+  const company = `Above Lane ${Date.now()}`;
+  await seedRecord({ company, source: "DIRECT", sentDaysAgo: 0 });
+  await page.setViewportSize({ width: 1280, height: 640 });
+  await page.goto("/applications");
+  const dot = lane(page, company).getByRole("button", { name: /^Applied/ });
+  await dot.scrollIntoViewIfNeeded();
+  await dot.evaluate((el) =>
+    window.scrollBy(0, el.getBoundingClientRect().top - (window.innerHeight - 80)),
+  );
+  await dot.hover();
+  const preview = page.getByTestId("lane-preview");
+  await expect(preview).toBeVisible();
+  const p = (await preview.boundingBox())!;
+  const d = (await dot.boundingBox())!;
+  expect(d.y - (p.y + p.height)).toBeLessThanOrEqual(16);
+  expect(d.y - (p.y + p.height)).toBeGreaterThanOrEqual(0);
+  await preview.hover();
+  await expect(preview).toBeVisible();
+});
+
+test("six saved notes can be read by scrolling the hover preview", async ({ page }) => {
+  const company = `Many Notes Lane ${Date.now()}`;
+  const { applicationId } = await seedRecord({ company, source: "DIRECT", sentDaysAgo: 0 });
+  const noteTime = Date.now();
+  await db.insert(applicationEvents).values(
+    Array.from({ length: 6 }, (_, index) => ({
+      applicationId,
+      eventType: "MANUAL_NOTE",
+      occurredAt: new Date(noteTime + index),
+      summary: `Preparation note ${index + 1}: ${"Verified evidence and next steps. ".repeat(3)}`,
+    })),
+  );
+  await page.goto("/applications");
+  const dot = lane(page, company).getByRole("button", { name: /Preparation note 6/ });
+  await dot.hover();
+  const preview = page.getByTestId("lane-preview");
+  await expect(preview.getByRole("listitem")).toHaveCount(7);
+  await preview.hover();
+  await preview.evaluate((el) => {
+    el.scrollTop = el.scrollHeight;
+  });
+  await expect(preview.getByText(/Preparation note 6/)).toBeInViewport();
+  await expect(preview).toBeVisible();
+  // The preview survives its own scrolling, but closes when its lane actually moves.
+  await page.evaluate(() => window.scrollBy(0, -30));
+  await expect(preview).toBeHidden();
+});
+
+test("matched acknowledgement on a closed company is actionable and stays closed after linking", async ({
+  page,
+}) => {
+  const company = `Closed Ack Lane ${Date.now()}`;
+  const { applicationId } = await seedRecord({ company, source: "DIRECT", sentDaysAgo: 1 });
+  await page.goto(`/applications/${applicationId}?outcome=rejected`);
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Saved: Rejected." })).toBeVisible();
+  const mailId = await seedMail({
+    subject: "Your application was received",
+    classification: "APPLICATION_ACKNOWLEDGEMENT",
+    recordId: applicationId,
+  });
+  await page.goto("/applications");
+  await expect(lane(page, company)).toBeVisible();
+  await expect(lane(page, company).getByTestId("lane-status")).toHaveText("Rejected");
+  await lane(page, company)
+    .getByRole("link", { name: /^Add to timeline/ })
+    .click();
+  await expect(page).toHaveURL(new RegExp(`open=${applicationId}&mail=${mailId}$`));
+  const detail = page.getByRole("region", { name: `${company} timeline` });
+  await detail.getByRole("button", { name: "Add to timeline", exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`open=${applicationId}&notice=`));
+  await expect(lane(page, company).getByTestId("lane-status")).toHaveText("Rejected");
+  await page.goto("/applications");
+  await expect(lane(page, company)).toHaveCount(0);
+});
+
+test("drawer focus stays on its trigger after a slow close navigation", async ({ page }) => {
+  await page.goto("/applications?emails=1");
+  await expect(page.getByRole("dialog", { name: "Emails" })).toBeVisible();
+  await page.route("**/applications?**", async (route) => {
+    if (route.request().headers().rsc === "1")
+      await new Promise((resolve) => setTimeout(resolve, 600));
+    await route.continue();
+  });
+  await page.keyboard.press("Escape");
+  await expect(page).toHaveURL(/\/applications$/);
+  await expect(page.getByRole("button", { name: /^(Emails|Connect inboxes)/ })).toBeFocused();
 });

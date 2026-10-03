@@ -158,7 +158,11 @@ export function LaneDetail({
           />
         </section>
       </div>
-      <div className="flex min-w-0 flex-col gap-4">
+      <section
+        aria-label="Progress"
+        tabIndex={-1}
+        className="flex min-w-0 flex-col gap-4 outline-offset-2"
+      >
         {role?.next && <NextBox next={role.next} />}
         {mail && (
           <div className="flex flex-col gap-2 rounded-2xl bg-selected px-4 py-3 text-sm text-selected-foreground [overflow-wrap:anywhere]">
@@ -202,7 +206,7 @@ export function LaneDetail({
             note={record.nextActionNote}
           />
         )}
-      </div>
+      </section>
     </section>
   );
 }

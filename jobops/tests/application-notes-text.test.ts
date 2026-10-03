@@ -3,10 +3,10 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { expect, it } from "vitest";
 import { NotesText } from "@/features/applications/views/notes-text";
 
-it("clamps long notes to four lines behind Show all", () => {
+it("clamps notes before the browser measures actual overflow", () => {
   const html = renderToStaticMarkup(createElement(NotesText, { text: "line\n".repeat(12) }));
   expect(html).toContain("line-clamp-4");
-  expect(html).toContain("Show all");
+  expect(html).not.toContain("Show all");
 });
 
 it("shows short notes in full and says when there are none", () => {
