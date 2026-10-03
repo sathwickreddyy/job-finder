@@ -1,18 +1,20 @@
 import Link from "next/link";
-import { Button, PageHeader } from "@/components/ui";
-import { matchesFilter, queueKeyPattern, resolveView } from "@/features/applications/navigation";
-import { buildQueue } from "@/features/applications/queue";
-import { readApplications } from "@/features/applications/read";
-import { NextView, SnoozeToast } from "@/features/applications/views/next";
-import { RecordsView } from "@/features/applications/views/records";
-import { ApplicationsTabs } from "@/features/applications/views/tabs";
-import { readMailTriage } from "@/features/mail/read";
-import { queueMailFrom } from "@/features/mail/triage";
-import { EmailsView } from "@/features/applications/views/emails";
-import { InboxStatus } from "@/features/applications/views/inboxes";
 import { asc } from "drizzle-orm";
+import { z } from "zod";
+import { Button, EmptyState, PageHeader } from "@/components/ui";
 import { db } from "@/db";
 import { mailConnections } from "@/db/schema";
+import { buildLanes, laneViews, laneWindow, pendingMailFrom } from "@/features/applications/lanes";
+import { resolveLanesView } from "@/features/applications/navigation";
+import { buildQueue } from "@/features/applications/queue";
+import { readApplications } from "@/features/applications/read";
+import { EmailsView } from "@/features/applications/views/emails";
+import { EmailsDrawer } from "@/features/applications/views/emails-drawer";
+import { InboxStatus } from "@/features/applications/views/inboxes";
+import { LaneDetail } from "@/features/applications/views/lane-detail";
+import { LanesChart } from "@/features/applications/views/lanes";
+import { readMailTriage, readOpenMail } from "@/features/mail/read";
+import { queueMailFrom } from "@/features/mail/triage";
 import { providers } from "@/services/mail/providers";
 
 export const dynamic = "force-dynamic";
@@ -21,17 +23,15 @@ export default async function Applications({
   searchParams,
 }: {
   searchParams: Promise<{
+    open?: string;
+    mail?: string;
+    outcome?: string;
+    emails?: string;
     tab?: string;
-    filter?: string;
-    view?: string;
-    q?: string;
-    snoozed?: string;
-    title?: string;
     notice?: string;
   }>;
 }) {
-  const params = await searchParams;
-  const view = resolveView(params);
+  const view = resolveLanesView(await searchParams);
   const now = new Date();
   const { records, snoozes } = await readApplications();
   const triage = await readMailTriage(records);
@@ -52,57 +52,109 @@ export default async function Applications({
     return { slug: provider.slug, label: provider.label, configured, missing };
   });
   const items = buildQueue({ records, mail: queueMailFrom(triage.messages), snoozes, now });
+  const lanes = buildLanes({ records, items, pending: pendingMailFrom(triage.messages), now });
+  const chart = laneViews(lanes, laneWindow(lanes, now), now);
+  const openRecord = view.open ? records.find((record) => record.id === view.open) : undefined;
+  const openLane = openRecord
+    ? lanes.find((lane) => lane.key === openRecord.companyKey)
+    : undefined;
+  let mail = null;
+  let mailError: string | undefined;
+  if (openRecord && view.mail !== null) {
+    if (!z.uuid().safeParse(view.mail).success)
+      mailError = "The source message link is invalid. Open Emails to choose a message.";
+    else {
+      try {
+        mail = await readOpenMail(view.mail, openRecord.id);
+      } catch (error) {
+        mailError =
+          error instanceof Error ? error.message : "The source message could not be loaded.";
+      }
+    }
+  }
+  const decisions = triage.messages.filter(
+    (message) => message.bucket === "roles" || (message.bucket === "updates" && !message.record),
+  ).length;
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-6">
       <PageHeader
         title="Applications"
-        description="What needs you next, where each record stands, and recruiting mail."
+        description="Every company on one calendar: what happened, where it stands and what to do next."
         actions={
-          <Button asChild>
-            <Link href="/applications/new">Record an application</Link>
-          </Button>
+          <>
+            <EmailsDrawer
+              count={decisions}
+              connected={connections.length > 0}
+              initialOpen={view.emails}
+            >
+              <EmailsView
+                data={triage}
+                records={records.map((record) => ({
+                  id: record.id,
+                  label: `${record.companyName} · ${record.role}`,
+                }))}
+                refresh={
+                  <InboxStatus
+                    connections={connections}
+                    configs={configs}
+                    now={now}
+                    count={triage.messages.length}
+                  />
+                }
+                accountIndex={Object.fromEntries(
+                  connections.map((connection, index) => [connection.email, index]),
+                )}
+                notice={view.emails ? view.notice : undefined}
+              />
+            </EmailsDrawer>
+            <Button asChild>
+              <Link href="/applications/new">Record an application</Link>
+            </Button>
+          </>
         }
       />
-      <ApplicationsTabs
-        active={view.tab}
-        counts={{
-          next: items.filter((item) => item.due !== "week").length,
-          records: records.filter((record) => matchesFilter(record, "active", "", now)).length,
-          emails: triage.messages.length,
-        }}
-      />
-      {view.tab === "next" && <NextView items={items} now={now} />}
-      {view.tab === "records" && (
-        <RecordsView records={records} filter={view.filter} q={view.q} now={now} />
+      {view.notice && !view.emails && (
+        <p
+          role="status"
+          className="m-0 rounded-2xl bg-foreground px-4 py-3 text-sm text-background shadow-surface"
+        >
+          {view.notice}
+        </p>
       )}
-      {view.tab === "emails" && (
-        <EmailsView
-          data={triage}
-          records={records.map((record) => ({
-            id: record.id,
-            label: `${record.company} — ${record.role}`,
-          }))}
-          refresh={
-            <InboxStatus
-              connections={connections}
-              configs={configs}
-              now={now}
-              count={triage.messages.length}
-            />
+      {records.length ? (
+        <LanesChart
+          {...chart}
+          openKey={openLane?.key ?? null}
+          detail={
+            openLane && openRecord ? (
+              <LaneDetail
+                lane={openLane}
+                record={openRecord}
+                now={now}
+                requested={view.outcome}
+                mail={mail}
+                mailIntent={view.mail ?? undefined}
+                mailError={mailError}
+              />
+            ) : null
           }
-          accountIndex={Object.fromEntries(
-            connections.map((connection, index) => [connection.email, index]),
-          )}
-          notice={params.notice?.slice(0, 300)}
+        />
+      ) : (
+        <EmptyState
+          title="No applications yet"
+          description="Find an opening, then record the application or referral you sent."
+          action={
+            <div className="flex flex-wrap justify-center gap-2">
+              <Button variant="outline" asChild>
+                <Link href="/find">Find openings</Link>
+              </Button>
+              <Button asChild>
+                <Link href="/applications/new">Record an application</Link>
+              </Button>
+            </div>
+          }
         />
       )}
-      <SnoozeToast
-        snoozed={
-          view.tab === "next" && params.snoozed && queueKeyPattern.test(params.snoozed)
-            ? { key: params.snoozed, title: (params.title ?? "").slice(0, 200) }
-            : undefined
-        }
-      />
     </div>
   );
 }

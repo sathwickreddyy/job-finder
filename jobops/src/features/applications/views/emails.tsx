@@ -49,7 +49,7 @@ export function EmailsView({
         </p>
       )}
       {refresh}
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="grid gap-4">
         {buckets.map((bucket) => {
           const rows = data.messages.filter((message) => message.bucket === bucket.id);
           return (
