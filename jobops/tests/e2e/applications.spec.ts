@@ -368,3 +368,16 @@ test("the Emails drawer describes missing configuration for both providers", asy
     page.getByRole("button", { name: "Refresh all inboxes", exact: true }),
   ).toBeDisabled();
 });
+
+test("record history uses readable India-time dates and long notes collapse", async ({ page }) => {
+  const company = `Readable Co ${Date.now()}`;
+  const { applicationId } = await seedRecord({ company, source: "DIRECT", sentDaysAgo: 0 });
+  await page.goto(`/applications/${applicationId}`);
+  const history = page.getByRole("region", { name: "History" });
+  await expect(history).toContainText(/Today, \d{1,2}:\d{2} (am|pm)/);
+  await expect(history).not.toContainText("Asia/Kolkata");
+  await page.getByText("Edit details", { exact: true }).click();
+  await page.getByLabel("Notes").fill("A long note line\n".repeat(10));
+  await page.getByRole("button", { name: "Save details", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Show all", exact: true })).toBeVisible();
+});
