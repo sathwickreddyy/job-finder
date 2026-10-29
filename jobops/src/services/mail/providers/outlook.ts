@@ -79,7 +79,12 @@ function safeNextLink(next: string): string {
   }
   if (
     url.origin !== graphOrigin ||
-    (url.pathname !== inboxPath && url.pathname !== "/v1.0/me/mailfolders/inbox/messages") ||
+    ![
+      inboxPath,
+      "/v1.0/me/mailfolders/inbox/messages",
+      "/v1.0/me/mailFolders('inbox')/messages",
+      "/v1.0/me/mailfolders('inbox')/messages",
+    ].includes(url.pathname) ||
     url.username ||
     url.password ||
     next.includes("#")

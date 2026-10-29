@@ -237,7 +237,12 @@ describe("Outlook recruiting mail", () => {
     });
     expect(messages[1].externalId).toBe("CaseSensitiveID");
   });
-  it.each([endpoint, "https://graph.microsoft.com/v1.0/me/mailfolders/inbox/messages"])(
+  it.each([
+    endpoint,
+    "https://graph.microsoft.com/v1.0/me/mailfolders/inbox/messages",
+    "https://graph.microsoft.com/v1.0/me/mailFolders('inbox')/messages",
+    "https://graph.microsoft.com/v1.0/me/mailfolders('inbox')/messages",
+  ])(
     "reuses full opaque paging URLs from %s and repeats both preferences",
     async (resource) => {
       const next = `${resource}?$skiptoken=a%2Bb%2Fc%3D&$top=50`;
@@ -266,6 +271,8 @@ describe("Outlook recruiting mail", () => {
     `${endpoint}#fragment`,
     `${endpoint}#`,
     "https://graph.microsoft.com/v1.0/me/messages",
+    "https://graph.microsoft.com/v1.0/me/mailFolders('sentitems')/messages",
+    "https://graph.microsoft.com/v1.0/me/mailFolders('inbox')/messages/extra",
     "https://graph.microsoft.com/oauth2/v2.0/token",
     "https://login.microsoftonline.com/consumers/oauth2/v2.0/token",
     "https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messages/extra",
