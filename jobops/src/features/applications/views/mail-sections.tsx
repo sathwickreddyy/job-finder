@@ -112,15 +112,20 @@ function MailSection({
   footer?: ReactNode;
 }) {
   return (
-    <section aria-labelledby={`mail-${id}`} className="flex flex-col gap-2">
+    <section
+      aria-labelledby={`mail-${id}`}
+      className="flex flex-col gap-2 rounded-2xl border border-border p-4"
+    >
       <h3 id={`mail-${id}`} className="m-0 text-sm font-semibold">
         {title}{" "}
-        <span className="font-normal text-muted-foreground tabular-nums">· {rows.length}</span>
+        <span className="ml-1 rounded-full bg-secondary px-2 py-0.5 text-xs font-medium text-secondary-foreground tabular-nums">
+          {rows.length}
+        </span>
       </h3>
       <p className="m-0 text-xs text-muted-foreground">{note}</p>
       <ul className="m-0 flex list-none flex-col gap-2 p-0">
         {rows}
-        {!rows.length && <li className="text-sm text-muted-foreground">Nothing here.</li>}
+        {!rows.length && <li className="text-sm text-muted-foreground">No messages to review.</li>}
       </ul>
       {footer}
     </section>
