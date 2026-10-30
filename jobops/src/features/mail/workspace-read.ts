@@ -11,22 +11,13 @@ import { providers } from "@/services/mail/providers";
 import { loadMailContext } from "./context";
 import { coverageKey, scanKey, type ScanProgress } from "./scan-service";
 import { mailAttention, mailDateGroup } from "./attention";
+import { kindLabel } from "./tags";
 import type {
   MailWorkspaceData,
   WorkspaceQuery,
   MailRow,
 } from "./workspace-data";
 
-const kindLabels: Record<string, string> = {
-  INTERVIEW: "Interview",
-  ASSESSMENT: "Assessment",
-  OFFER: "Offer",
-  REJECTION: "Application outcome",
-  FOLLOW_UP: "Application update",
-  RECRUITER_OUTREACH: "Hiring conversation",
-  APPLICATION_ACKNOWLEDGEMENT: "Application received",
-  UNKNOWN: "Message",
-};
 export async function readMailWorkspace(
   query: WorkspaceQuery,
 ): Promise<MailWorkspaceData> {
@@ -158,7 +149,7 @@ export async function readMailWorkspace(
         minute: "2-digit",
       }).format(tracking.receivedAt),
       group: mailDateGroup(tracking.receivedAt),
-      kind: kindLabels[kind],
+      kind: kindLabel[kind],
       action:
         attention?.reason ??
         (view === "excluded"
