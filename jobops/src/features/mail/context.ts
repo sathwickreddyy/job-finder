@@ -28,6 +28,10 @@ export const ruleSchema = z.object({
   subjectTerms: z.array(z.string().trim().min(1).max(150)).max(20),
   excludedTerms: z.array(z.string().trim().min(1).max(150)).max(20),
 });
+/** The lane key for a company name, joining listed names and aliases to their company record. */
+export function companyKeyFor(companyName: string, companies: { name: string; aliases: string[] }[]) {
+  return companyResolver(companies)(companyName).companyKey;
+}
 export const ruleKey = (key: string) =>
   `mailRule:${createHash("sha256").update(key).digest("hex")}`;
 export type WorkspaceCompany = {

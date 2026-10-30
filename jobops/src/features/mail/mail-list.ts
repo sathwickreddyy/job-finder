@@ -2,7 +2,8 @@ import { and, desc, eq, ilike, inArray, ne, or, sql, type SQL } from "drizzle-or
 import { z } from "zod";
 import { db } from "@/db";
 import { mailMessages } from "@/db/schema";
-import { loadMailContext } from "./context";
+import { ApiError } from "@/features/agent-api/http";
+import { loadMailContext, type MailContext } from "./context";
 import { mailLookup, toMailItem, type MailItem } from "./mail-item";
 import { classificationsFor, mailTags } from "./tags";
 
@@ -89,4 +90,19 @@ export async function listMail(
     nextCursor: rows.length > pageSize && last ? `${last.receivedAt}|${last.id}` : null,
     openCount: counted?.count ?? 0,
   };
+}
+
+/** One visible email in the shared shape; excluded or missing mail is a 404. */
+export async function readMailItem(id: string, context?: MailContext): Promise<MailItem> {
+  const [row] = z.uuid().safeParse(id).success
+    ? await db
+        .select({ message: mailMessages, outcome })
+        .from(mailMessages)
+        .where(and(eq(mailMessages.id, id), notExcluded))
+    : [];
+  if (!row) throw new ApiError("Email not found.", 404);
+  return toMailItem(
+    { ...row.message, outcome: row.outcome },
+    mailLookup(context ?? (await loadMailContext())),
+  );
 }
