@@ -763,6 +763,23 @@ export const mailTracking = pgTable(
   ],
 );
 
+/** A message can match one company and be excluded for another without losing either decision. */
+export const companyMailMatches = pgTable(
+  "company_mail_matches",
+  {
+    id: id(),
+    companyKey: text("company_key").notNull(),
+    trackingId: uuid("tracking_id").notNull().references(() => mailTracking.id, { onDelete: "cascade" }),
+    ruleRevision: text("rule_revision").notNull(),
+    kept: boolean("kept").notNull(),
+    reason: text("reason").notNull(),
+    evidence: strings("evidence"),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [uniqueIndex("company_mail_match_identity_idx").on(t.companyKey, t.trackingId)],
+);
+
 // New task workflow reuses missions; credentials and human decisions have separate trust boundaries.
 export const taskCredentials = pgTable(
   "task_credentials",

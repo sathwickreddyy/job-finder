@@ -1,12 +1,18 @@
 import type { ScanRequest } from "./types";
 
 // Inputs are literal phrases, never raw provider operators or regexes.
-const phrase = (value: string) => `"${value}"`;
+const phrase = (value: string) => JSON.stringify(value);
 export function gmailSearchQuery(request: ScanRequest) {
   const terms = ["-in:sent", "-in:drafts"];
   // Widen to whole seconds; the service enforces exact [since, until) bounds.
   if (request.since) terms.push(`after:${Math.floor(Date.parse(request.since) / 1000) - 1}`);
   terms.push(`before:${Math.ceil(Date.parse(request.until) / 1000)}`);
+  const identity = request.search?.companyIdentity;
+  if (identity) terms.push(`{${[
+    ...identity.names.map((v) => "subject:" + phrase(v)),
+    ...identity.domains.map((v) => "from:" + phrase(v)),
+    ...identity.senders.map((v) => "from:" + phrase(v)),
+  ].join(" ")}}`);
   for (const [field, values] of [
     ["", request.search?.keywords ?? []],
     ["from:", request.search?.senders ?? []],
@@ -19,9 +25,15 @@ export function gmailSearchQuery(request: ScanRequest) {
 
 export function outlookSearchQuery(request: ScanRequest): string | undefined {
   const filters = request.search;
-  if (!filters || ![...filters.keywords, ...filters.senders, ...filters.subjects].length)
+  if (!filters || (!filters.companyIdentity && ![...filters.keywords, ...filters.senders, ...filters.subjects].length))
     return undefined; // Date-only scans use uncapped mailbox $filter pagination.
   const terms: string[] = [];
+  const identity = filters.companyIdentity;
+  if (identity) terms.push(`(${[
+    ...identity.names.map((v) => "subject:" + phrase(v)),
+    ...identity.domains.map((v) => "from:" + phrase(v)),
+    ...identity.senders.map((v) => "from:" + phrase(v)),
+  ].join(" OR ")})`);
   for (const [field, values] of [
     ["", filters.keywords],
     ["from:", filters.senders],

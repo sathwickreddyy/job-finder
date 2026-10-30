@@ -1,5 +1,8 @@
 "use client";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { CompanyRuleEditor } from "./company-rule-editor";
+import type { CompanyMailRule } from "./search-policy";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Search, Pause, Play, Mail, ChevronRight, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui";
@@ -12,10 +15,11 @@ import {
   type AccountRun,
   type SearchAccount,
   type SearchResponse,
+  type SavedCompanyMail,
 } from "./search-state";
 import { demoMailSearch } from "./search-preview";
 
-type Company = { id: string; name: string; aliases: string[] };
+type Company = { id: string; name: string; aliases: string[]; rule?: CompanyMailRule };
 const split = (value: string) =>
   value
     .split(",")
@@ -37,8 +41,8 @@ const statuses = {
   limited: "Provider limit · incomplete",
 };
 const pagesPerPass = 10;
-async function fetchSearch(body: unknown): Promise<SearchResponse> {
-  const response = await fetch("/api/v1/mail/search", {
+async function fetchSearch(body: unknown, company = false): Promise<SearchResponse> {
+  const response = await fetch(company ? "/api/v1/mail/company/search" : "/api/v1/mail/search", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -58,6 +62,7 @@ export function MailSearchWorkspace({
   contextLabel,
   backHref = "/mail",
   preview = false,
+  initialSaved,
 }: {
   accounts: SearchAccount[];
   companies: Company[];
@@ -66,11 +71,13 @@ export function MailSearchWorkspace({
   contextLabel?: string;
   backHref?: string;
   preview?: boolean;
+  initialSaved?: SavedCompanyMail;
 }) {
+  const router = useRouter();
   const [company, setCompany] = useState(initialCompany);
   const initial = companies.find((c) => c.id === initialCompany);
   const [keywords, setKeywords] = useState(
-    initial ? [initial.name, ...initial.aliases].slice(0, 10).join(", ") : "",
+    initial && preview ? [initial.name, ...initial.aliases].slice(0, 10).join(", ") : "",
   );
   const [senders, setSenders] = useState("");
   const [subjects, setSubjects] = useState("");
@@ -81,6 +88,15 @@ export function MailSearchWorkspace({
   const [selectedAccounts, setSelectedAccounts] = useState(
     accounts.filter((a) => !initialAccount || a.email === initialAccount).map((a) => a.id),
   );
+  const companyMode = Boolean(initial?.rule && !preview);
+  const [savingRules, setSavingRules] = useState(false);
+  const [savedView, setSavedView] = useState<"kept" | "excluded">("kept");
+  const [savedMail, setSavedMail] = useState<SavedCompanyMail>(
+    initialSaved ?? { messages: [], counts: { kept: 0, excluded: 0 }, nextBefore: null },
+  );
+  const [loadingSaved, setLoadingSaved] = useState(false);
+  const frozenCompany = useRef<string | null>(null);
+  const frozenMode = useRef("latest");
   const [runs, setRuns] = useState<AccountRun[]>([]);
   const [window, setWindow] = useState<ResolvedMailSearch | null>(null);
   const [criteriaOpen, setCriteriaOpen] = useState(true);
@@ -106,7 +122,41 @@ export function MailSearchWorkspace({
   const publish = () => {
     if (mounted.current) setRuns(Object.values(runMap.current));
   };
-  const messages = allSearchMessages(runs);
+  const runMessages = allSearchMessages(runs);
+  const messages = companyMode
+    ? [
+        ...new Map(
+          [...savedMail.messages, ...(savedView === "kept" ? runMessages : [])].map((m) => [
+            m.identity,
+            m,
+          ]),
+        ).values(),
+      ].sort((a, b) => Date.parse(b.receivedAt) - Date.parse(a.receivedAt))
+    : runMessages;
+  async function loadSaved(view: "kept" | "excluded" = savedView, older = false) {
+    if (!companyMode) return;
+    setLoadingSaved(true);
+    try {
+      const query = new URLSearchParams({
+        company: initialCompany,
+        view,
+        ...(older && savedMail.nextBefore ? { before: savedMail.nextBefore } : {}),
+      });
+      const response = await fetch(`/api/v1/mail/company/search?${query}`, { cache: "no-store" });
+      if (!response.ok) throw new Error("Saved company mail could not be loaded.");
+      const data: SavedCompanyMail = await response.json();
+      setSavedMail((previous) => ({
+        ...data,
+        messages: older ? [...previous.messages, ...data.messages] : data.messages,
+      }));
+      setSavedView(view);
+      setResultPage(0);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Saved mail could not be loaded.");
+    } finally {
+      setLoadingSaved(false);
+    }
+  }
   const filtered = resultAccount ? messages.filter((m) => m.account === resultAccount) : messages;
   const shown = filtered.slice(resultPage * 50, (resultPage + 1) * 50);
   const message = messages.find((m) => m.identity === selected);
@@ -128,10 +178,23 @@ export function MailSearchWorkspace({
           runMap.current[id] = { ...run, status: "requesting", error: null };
           publish();
           try {
+            const companyRequest = Boolean(frozenCompany.current);
             const body = run.cursor
-              ? { cursor: run.cursor }
-              : { ...frozen.current, accounts: [run.account.email] };
-            const response = await (preview ? demoMailSearch(body) : fetchSearch(body));
+              ? companyRequest
+                ? { companyCursor: run.cursor }
+                : { cursor: run.cursor }
+              : companyRequest
+                ? {
+                    company: frozenCompany.current,
+                    mode: frozenMode.current,
+                    since: frozen.current?.since,
+                    until: frozen.current?.until,
+                    accounts: [run.account.email],
+                  }
+                : { ...frozen.current, accounts: [run.account.email] };
+            const response = await (preview
+              ? demoMailSearch(body)
+              : fetchSearch(body, companyRequest));
             run = mergeSearchPage(run, response);
             runMap.current[id] = run;
             publish();
@@ -157,6 +220,7 @@ export function MailSearchWorkspace({
       }),
     );
     active.current = false;
+    if (mounted.current && frozenCompany.current) await loadSaved();
     if (mounted.current) {
       setBusy(false);
       setPausing(false);
@@ -183,6 +247,8 @@ export function MailSearchWorkspace({
       const chosen = accounts.filter((a) => selectedAccounts.includes(a.id));
       if (!chosen.length) throw new Error("Select at least one connected account.");
       if (chosen.length > 10) throw new Error("Select at most 10 accounts per search.");
+      frozenCompany.current = companyMode ? initialCompany : null;
+      frozenMode.current = duration === "all" ? "history" : "latest";
       frozen.current = resolved;
       setWindow(resolved);
       setCriteriaOpen(false);
@@ -225,14 +291,34 @@ export function MailSearchWorkspace({
           Gallery preview · sample accounts and messages. No inboxes are contacted.
         </p>
       )}
+      {companyMode && initial?.rule && (
+        <CompanyRuleEditor
+          key={JSON.stringify(initial.rule)}
+          company={initialCompany}
+          rule={initial.rule}
+          disabled={busy}
+          onPending={setSavingRules}
+          onSaved={() => {
+            setRuns([]);
+            runMap.current = {};
+            setWindow(null);
+            setCriteriaOpen(true);
+            frozen.current = null;
+            void loadSaved();
+            router.refresh();
+          }}
+        />
+      )}
       <form onSubmit={search} className="rounded-2xl border border-border bg-card p-5">
         {window && (
           <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
             <p className="m-0 max-w-3xl break-words text-xs text-muted-foreground">
               Current search:{" "}
-              {window.keywords.length
-                ? `keywords ${window.keywords.join(" or ")}`
-                : "all incoming mail"}
+              {companyMode
+                ? `saved ${initial?.name} sender / subject rules`
+                : window.keywords.length
+                  ? `keywords ${window.keywords.join(" or ")}`
+                  : "all incoming mail"}
               {window.senders.length ? ` · from ${window.senders.join(" or ")}` : ""}
               {window.subjects.length ? ` · subjects ${window.subjects.join(" or ")}` : ""} ·{" "}
               {runs.length} accounts
@@ -247,7 +333,10 @@ export function MailSearchWorkspace({
             </button>
           </div>
         )}
-        <fieldset disabled={busy} className={cn("min-w-0 space-y-4", !criteriaOpen && "hidden")}>
+        <fieldset
+          disabled={busy || savingRules}
+          className={cn("min-w-0 space-y-4", !criteriaOpen && "hidden")}
+        >
           <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
             <label className="text-xs font-medium">
               Company preset
@@ -255,6 +344,14 @@ export function MailSearchWorkspace({
                 className="mt-1.5"
                 value={company}
                 onChange={(event) => {
+                  if (!preview) {
+                    router.push(
+                      event.target.value
+                        ? `/mail/search?company=${encodeURIComponent(event.target.value)}`
+                        : "/mail/search",
+                    );
+                    return;
+                  }
                   setCompany(event.target.value);
                   const chosen = companies.find((c) => c.id === event.target.value);
                   setKeywords(
@@ -270,37 +367,42 @@ export function MailSearchWorkspace({
                 ))}
               </select>
             </label>
-            <label className="text-xs font-medium">
-              Keywords or phrases
-              <input
-                className="mt-1.5"
-                value={keywords}
-                onChange={(e) => setKeywords(e.target.value)}
-                placeholder="Amazon, Amazon Jobs — leave blank for all mail"
-              />
-            </label>
-            <label className="text-xs font-medium">
-              From addresses
-              <input
-                className="mt-1.5"
-                value={senders}
-                onChange={(e) => setSenders(e.target.value)}
-                placeholder="recruiter@company.com"
-              />
-            </label>
-            <label className="text-xs font-medium">
-              Subject phrases
-              <input
-                className="mt-1.5"
-                value={subjects}
-                onChange={(e) => setSubjects(e.target.value)}
-                placeholder="interview, application"
-              />
-            </label>
+            {!companyMode && (
+              <>
+                <label className="text-xs font-medium">
+                  Keywords or phrases
+                  <input
+                    className="mt-1.5"
+                    value={keywords}
+                    onChange={(e) => setKeywords(e.target.value)}
+                    placeholder="Amazon, Amazon Jobs — leave blank for all mail"
+                  />
+                </label>
+                <label className="text-xs font-medium">
+                  From addresses
+                  <input
+                    className="mt-1.5"
+                    value={senders}
+                    onChange={(e) => setSenders(e.target.value)}
+                    placeholder="recruiter@company.com"
+                  />
+                </label>
+                <label className="text-xs font-medium">
+                  Subject phrases
+                  <input
+                    className="mt-1.5"
+                    value={subjects}
+                    onChange={(e) => setSubjects(e.target.value)}
+                    placeholder="interview, application"
+                  />
+                </label>
+              </>
+            )}
           </div>
           <p className="m-0 text-xs text-muted-foreground">
-            Separate alternatives with commas. Any alternative within a field; all populated fields
-            must match. Company presets fill keywords only. No hidden hiring filters.
+            {companyMode
+              ? "Uses the company rules above. Matching job-search mail is saved permanently; exclusions are recorded separately. Checks reuse completed coverage, with a one-hour overlap for delayed mail."
+              : "Separate alternatives with commas. Any alternative within a field; all populated fields must match. General keyword searches are temporary."}
           </p>
           <div className="flex flex-wrap items-end gap-4">
             <label className="text-xs font-medium">
@@ -385,9 +487,15 @@ export function MailSearchWorkspace({
           </div>
         </fieldset>
         <div className="mt-5 flex flex-wrap items-center gap-3">
-          <Button type="submit" disabled={busy || !selectedAccounts.length}>
+          <Button type="submit" disabled={busy || savingRules || !selectedAccounts.length}>
             <Search size={16} />
-            {runs.length ? "Start new search" : "Search inboxes"}
+            {companyMode
+              ? duration === "all"
+                ? "Recover older company mail"
+                : "Check company mail"
+              : runs.length
+                ? "Start new search"
+                : "Search inboxes"}
           </Button>
           {busy ? (
             <Button
@@ -421,13 +529,16 @@ export function MailSearchWorkspace({
             )
           )}
           <span className="text-xs text-muted-foreground">
-            Read-only search · results are not saved to tracking.
+            {companyMode
+              ? "Company matches are saved permanently. Application outcomes stay manual."
+              : "Read-only search · results are not saved to tracking."}
           </span>
         </div>
         {window && !busy && (
           <p className="mb-0 text-xs text-muted-foreground">
-            Edited criteria apply to Start new search. Continue keeps the original window. Results
-            remain in this page until you leave or start a new search.
+            {companyMode
+              ? "Saved company mail survives reloads. Continue resumes server checkpoints; each account shows its actual checked window."
+              : "Edited criteria apply to Start new search. Continue keeps the original window. Results remain in this page until you leave or start a new search."}
           </p>
         )}
         {error && (
@@ -436,100 +547,181 @@ export function MailSearchWorkspace({
           </p>
         )}
       </form>
-      {window && (
+      {(window || companyMode) && (
         <>
-          <section aria-label="Search progress" className="space-y-3">
-            <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <h2 className="m-0 text-base font-semibold">
-                {complete
-                  ? "Search complete"
-                  : busy
-                    ? `Searching ${runs.filter((r) => r.status === "requesting").length} accounts`
-                    : "Search paused or incomplete"}{" "}
-                · {messages.length} messages returned
-              </h2>
-              <span className="text-xs text-muted-foreground">
-                {window.since ? date(window.since) : "All available dates"} → {date(window.until)}{" "}
-                IST
-              </span>
-            </div>
-            <p className="m-0 text-xs text-muted-foreground">
-              Incoming folders include spam, junk and trash. Sent/drafts/outbox are skipped.
-              Separate online archives are outside coverage. Searches pause after {pagesPerPass}{" "}
-              pages per account per pass; Continue resumes the same window.
-            </p>
-            <div className="grid divide-y divide-border rounded-2xl border border-border bg-card md:grid-cols-3 md:divide-x md:divide-y-0">
-              {runs.map((run) => (
-                <article
-                  key={run.account.id}
-                  aria-label={`Search status for ${run.account.email}`}
-                  className="min-w-0 px-4 py-4"
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="min-w-0">
-                      <span className="break-all text-sm font-medium">{run.account.email}</span>
-                      <span className="ml-2 text-xs text-muted-foreground">
-                        {run.account.provider}
+          {window && (
+            <section aria-label="Search progress" className="space-y-3">
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <h2 className="m-0 text-base font-semibold">
+                  {complete
+                    ? "Search complete"
+                    : busy
+                      ? `Searching ${runs.filter((r) => r.status === "requesting").length} accounts`
+                      : "Search paused or incomplete"}{" "}
+                  ·{" "}
+                  {companyMode
+                    ? `${runMessages.length} matches from this check`
+                    : `${messages.length} messages returned`}
+                </h2>
+                <span className="text-xs text-muted-foreground">
+                  {window.since ? date(window.since) : "All available dates"} → {date(window.until)}{" "}
+                  IST
+                </span>
+              </div>
+              <p className="m-0 text-xs text-muted-foreground">
+                Incoming folders include spam, junk and trash. Sent/drafts/outbox are skipped.
+                Separate online archives are outside coverage. Searches pause after {pagesPerPass}{" "}
+                pages per account per pass; Continue resumes the same window.
+              </p>
+              <div className="grid divide-y divide-border rounded-2xl border border-border bg-card md:grid-cols-3 md:divide-x md:divide-y-0">
+                {runs.map((run) => (
+                  <article
+                    key={run.account.id}
+                    aria-label={`Search status for ${run.account.email}`}
+                    className="min-w-0 px-4 py-4"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <span className="break-all text-sm font-medium">{run.account.email}</span>
+                        <span className="ml-2 text-xs text-muted-foreground">
+                          {run.account.provider}
+                        </span>
+                      </div>
+                      <span
+                        role="status"
+                        className={cn(
+                          "text-xs font-medium",
+                          run.status === "failed" || run.status === "limited"
+                            ? "text-destructive"
+                            : run.status === "requesting"
+                              ? "text-link"
+                              : "text-muted-foreground",
+                        )}
+                      >
+                        {statuses[run.status]}
                       </span>
                     </div>
-                    <span
-                      role="status"
-                      className={cn(
-                        "text-xs font-medium",
-                        run.status === "failed" || run.status === "limited"
-                          ? "text-destructive"
-                          : run.status === "requesting"
-                            ? "text-link"
-                            : "text-muted-foreground",
-                      )}
-                    >
-                      {statuses[run.status]}
-                    </span>
-                  </div>
-                  <p className="mb-0 mt-2 text-xs text-muted-foreground">
-                    {run.pages} {run.pages === 1 ? "page" : "pages"} · {run.fetched} fetched · {run.messages.length} unique
-                    returned · {run.skippedContext} sent/draft/outbox skipped ·{" "}
-                    {run.skippedOutsideWindow} outside window
-                  </p>
-                  {run.status === "requesting" && (
-                    <p className="mb-0 mt-2 text-xs text-link">
-                      Requesting page {run.pages + 1} · up to{" "}
-                      {run.account.provider === "GMAIL" ? 25 : 50} messages. Waiting for the
-                      provider response.
+                    <p className="mb-0 mt-2 text-xs text-muted-foreground">
+                      {run.pages} {run.pages === 1 ? "page" : "pages"} · {run.fetched} fetched ·{" "}
+                      {run.messages.length} unique returned · {run.skippedContext} sent/draft/outbox
+                      skipped · {run.skippedOutsideWindow} outside window
                     </p>
-                  )}
-                  {run.error && (
-                    <p role="alert" className="mb-0 mt-2 text-xs text-destructive">
-                      {run.error}
-                    </p>
-                  )}
-                  <details className="mt-3 text-xs">
-                    <summary className="cursor-pointer text-link">Query and page activity</summary>
-                    <p className="mt-3 whitespace-pre-wrap break-all rounded-lg bg-muted p-3 font-mono">
-                      {run.query ?? "The exact provider query will appear with its first response."}
-                    </p>
-                    {!run.events.length ? (
-                      <p className="text-muted-foreground">No page response yet.</p>
-                    ) : (
-                      <ol className="space-y-2 pl-4 text-muted-foreground">
-                        {run.events.map((event, index) => (
-                          <li key={index}>
-                            Page {event.page} · {date(event.time)} · {event.detail}
-                          </li>
-                        ))}
-                      </ol>
+                    {run.tracking && (
+                      <div className="mt-2 space-y-1 text-xs text-muted-foreground">
+                        <p className="m-0">
+                          {run.tracking.saved} saved · {run.tracking.alreadyKnown} already known ·{" "}
+                          {run.tracking.excluded} excluded
+                        </p>
+                        <p className="m-0">
+                          {run.tracking.window.since
+                            ? date(run.tracking.window.since)
+                            : "All dates"}{" "}
+                          → {date(run.tracking.window.until)} IST
+                        </p>
+                        {run.tracking.cacheHit && (
+                          <p className="m-0 text-link">
+                            Already covered · used saved mail, no provider request.
+                          </p>
+                        )}
+                        {run.tracking.resumed && (
+                          <p className="m-0">Resumed the saved window shown above.</p>
+                        )}
+                        {Boolean(run.tracking.unavailable) && <p className="m-0">{run.tracking.unavailable} messages disappeared before their bodies could be read.</p>}
+                    {run.tracking.rejected.length > 0 && (
+                          <details>
+                            <summary className="cursor-pointer text-link">
+                              Why messages were excluded
+                            </summary>
+                            <ul className="space-y-2 pl-4">
+                              {run.tracking.rejected.map((row, i) => (
+                                <li key={i}>
+                                  {row.subject} · {row.sender} · {row.reason}
+                                </li>
+                              ))}
+                            </ul>
+                          </details>
+                        )}
+                      </div>
                     )}
-                  </details>
-                </article>
-              ))}
-            </div>
-          </section>
+                    {run.status === "requesting" && (
+                      <p className="mb-0 mt-2 text-xs text-link">
+                        Requesting page {run.pages + 1} · up to{" "}
+                        {run.account.provider === "GMAIL" ? 25 : 50} messages. Waiting for the
+                        provider response.
+                      </p>
+                    )}
+                    {run.error && (
+                      <p role="alert" className="mb-0 mt-2 text-xs text-destructive">
+                        {run.error}
+                      </p>
+                    )}
+                    <details className="mt-3 text-xs">
+                      <summary className="cursor-pointer text-link">
+                        Query and page activity
+                      </summary>
+                      <p className="mt-3 whitespace-pre-wrap break-all rounded-lg bg-muted p-3 font-mono">
+                        {run.tracking?.cacheHit
+                          ? "Used persistent coverage; no provider query was sent."
+                          : (run.query ??
+                            "The exact provider query will appear with its first response.")}
+                      </p>
+                      {!run.events.length ? (
+                        <p className="text-muted-foreground">No page response yet.</p>
+                      ) : (
+                        <ol className="space-y-2 pl-4 text-muted-foreground">
+                          {run.events.map((event, index) => (
+                            <li key={index}>
+                              Page {event.page} · {date(event.time)} · {event.detail}
+                            </li>
+                          ))}
+                        </ol>
+                      )}
+                    </details>
+                  </article>
+                ))}
+              </div>
+            </section>
+          )}
           <section
             aria-label="Search results"
             className="overflow-hidden rounded-2xl border border-border bg-card"
           >
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-3">
-              <h2 className="m-0 text-base font-semibold">Messages · {filtered.length}</h2>
+              <h2 className="m-0 text-base font-semibold">
+                {companyMode ? `Saved ${initial?.name} mail` : "Messages"} · {filtered.length}
+              </h2>
+              {companyMode && (
+                <div className="flex flex-wrap gap-2 text-xs">
+                  <button
+                    disabled={loadingSaved || busy}
+                    aria-pressed={savedView === "kept"}
+                    className={cn(
+                      "rounded-full px-3 py-2",
+                      savedView === "kept" && "bg-selected text-selected-foreground",
+                    )}
+                    onClick={() => void loadSaved("kept")}
+                  >
+                    Kept ({savedMail.counts.kept})
+                  </button>
+                  <button
+                    disabled={loadingSaved || busy}
+                    aria-pressed={savedView === "excluded"}
+                    className={cn(
+                      "rounded-full px-3 py-2",
+                      savedView === "excluded" && "bg-selected text-selected-foreground",
+                    )}
+                    onClick={() => void loadSaved("excluded")}
+                  >
+                    Excluded ({savedMail.counts.excluded})
+                  </button>
+                  <Link
+                    className="px-2 py-2 text-link"
+                    href={`/mail?company=${encodeURIComponent(initialCompany)}`}
+                  >
+                    Open tracked company mail
+                  </Link>
+                </div>
+              )}
               <label className="text-xs">
                 Results account
                 <select
@@ -541,9 +733,9 @@ export function MailSearchWorkspace({
                   }}
                 >
                   <option value="">All accounts</option>
-                  {runs.map((r) => (
-                    <option key={r.account.id} value={r.account.email}>
-                      {r.account.email}
+                  {accounts.map((account) => (
+                    <option key={account.id} value={account.email}>
+                      {account.email}
                     </option>
                   ))}
                 </select>
@@ -558,9 +750,13 @@ export function MailSearchWorkspace({
                     <Mail size={24} className="mb-3" />
                     {busy
                       ? "Messages appear here as each page returns."
-                      : complete
-                        ? "No incoming messages matched these criteria."
-                        : "No messages returned yet. Check account activity above."}
+                      : companyMode
+                        ? savedView === "excluded"
+                          ? "No exclusions recorded."
+                          : "No saved job-search matches yet. Check company mail or refine the rules."
+                        : complete
+                          ? "No incoming messages matched these criteria."
+                          : "No messages returned yet. Check account activity above."}
                   </div>
                 ) : (
                   shown.map((m) => (
@@ -591,6 +787,17 @@ export function MailSearchWorkspace({
                       </span>
                     </button>
                   ))
+                )}
+                {companyMode && savedMail.nextBefore && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    disabled={loadingSaved}
+                    onClick={() => void loadSaved(savedView, true)}
+                  >
+                    {loadingSaved ? "Loading saved mail…" : "Load older saved mail"}
+                  </Button>
                 )}
                 {filtered.length > 50 && (
                   <div className="flex items-center justify-between p-3 text-xs">
@@ -641,6 +848,19 @@ export function MailSearchWorkspace({
                     <p className="break-all text-xs text-muted-foreground">
                       {message.account} · {message.folders.join(" / ")}
                     </p>
+                    {message.decision && (
+                      <p
+                        className={cn(
+                          "mt-4 rounded-xl p-3 text-xs",
+                          message.decision.kept
+                            ? "bg-selected text-selected-foreground"
+                            : "bg-review text-review-foreground",
+                        )}
+                      >
+                        {message.decision.kept ? "Kept" : "Excluded"}: {message.decision.reason}.{" "}
+                        {message.decision.evidence.join(". ")}
+                      </p>
+                    )}
                     <div className="my-5 border-y border-border py-3 text-xs text-muted-foreground">
                       <p className="m-0 capitalize">
                         Detected: {label(message.classification.type)} · rule confidence{" "}
@@ -672,7 +892,7 @@ export function MailSearchWorkspace({
           </section>
         </>
       )}
-      {!window && (
+      {!window && !companyMode && (
         <p className="py-5 text-center text-sm text-muted-foreground">
           Leave the search fields empty to review all incoming mail in your chosen window.
           Unrecognized messages are included.

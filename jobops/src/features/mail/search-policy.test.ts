@@ -137,3 +137,13 @@ describe("company mail search policy", () => {
     expect(evaluate({ receivedAt: "unknown" }).destination).toBe("excluded");
   });
 });
+
+it.each(["Your invoice is ready", "Northstar billing report", "Your order has shipped", "CloudWatch alert", "Password reset code"])("excludes non-hiring company notification %s", (subject) => {
+  expect(evaluate({ subject, bodyText: "Visit our recruiting team and careers page." }).destination).toBe("excluded");
+});
+it("keeps an unstructured reply from an explicitly configured recruiting sender for manual review", () => {
+  expect(evaluate({ subject: "Tuesday works", bodyText: "Thanks, talk then." }, { ...rule, senders: [mail.sender] }).destination).toBe("latest");
+});
+it("does not establish company identity from a body mention alone", () => {
+  expect(evaluate({ sender: "newsletter@external.invalid", subject: "Industry news", bodyText: "Northstar technical interview stories" }).destination).toBe("excluded");
+});

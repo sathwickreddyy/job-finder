@@ -16,12 +16,15 @@ export type MailSearchFilters = {
   keywords: string[];
   senders: string[];
   subjects: string[];
+  companyIdentity?: { names: string[]; domains: string[]; senders: string[] };
 };
 export type ScanRequest = {
   since?: string;
   until: string;
   next?: string;
   search?: MailSearchFilters;
+  skipIds?: string[];
+  skipInternetIds?: string[];
 };
 export type MailProvider = {
   id: ProviderId;
@@ -46,6 +49,9 @@ export type MailProvider = {
   ): Promise<{
     messages: ScannedMessage[];
     next?: string;
+    fetched?: number;
+    skippedKnown?: number;
+    skippedUnavailable?: number;
   }>;
   listRecruitingMail(
     connection: MailConnection,

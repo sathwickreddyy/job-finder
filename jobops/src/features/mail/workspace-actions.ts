@@ -1,10 +1,11 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
 import {
+  companyMailMatches,
   mailConnections,
   mailTracking,
   mailMessages,
@@ -25,9 +26,10 @@ import {
 } from "./scan-service";
 import { reconcileLegacyMail } from "./workspace-read";
 import { matchMail } from "./matching";
+import { companyRevision } from "./company-search-policy";
 
 function invalidate() {
-  for (const path of ["/mail", "/applications", "/companies", "/settings", "/"])
+  for (const path of ["/mail", "/applications", "/companies", "/settings", "/mail/search", "/"])
     revalidatePath(path);
 }
 const scopeSchema = z.object({
@@ -175,6 +177,8 @@ export async function saveWorkspaceRule(
         },
       });
     const updated = await loadMailContext();
+    const savedCompany = updated.companies.find((item) => item.id === key)!;
+    const scoped = { ...updated, companies: [savedCompany] };
     // Re-evaluate retained content without deleting anything or promoting history.
     const rows = await db
       .select({ tracking: mailTracking, message: mailMessages })
@@ -191,22 +195,29 @@ export async function saveWorkspaceRule(
           bodyText: message.bodyText ?? "",
           receivedAt: message.receivedAt.toISOString(),
         },
-        updated,
-        { historical: true, seen: true },
+        scoped,
+        { historical: true, seen: true, threadApplications: tracking.threadId ? tracking.applicationIds : [] },
       );
       if (
         !tracking.companyKeys.includes(key) &&
         !decision.companyKeys.includes(key)
       )
         continue;
-      await db
-        .update(mailTracking)
-        .set({
-          ...decision,
-          disposition: retainDisposition(tracking, decision),
-          updatedAt: new Date(),
-        })
-        .where(eq(mailTracking.id, tracking.id));
+      await db.update(companyMailMatches).set({
+        kept: decision.disposition !== "excluded" && decision.companyKeys.includes(key),
+        reason: decision.reason, evidence: decision.evidence,
+        ruleRevision: companyRevision(savedCompany, updated), updatedAt: new Date(),
+      }).where(and(eq(companyMailMatches.companyKey, key), eq(companyMailMatches.trackingId, tracking.id)));
+      const otherKeys = tracking.companyKeys.filter((company) => company !== key);
+      const keep = decision.disposition !== "excluded" && decision.companyKeys.includes(key);
+      await db.update(mailTracking).set({
+        companyKeys: [...new Set([...otherKeys, ...(keep ? [key] : [])])],
+        applicationIds: [...new Set([...tracking.applicationIds.filter((id) => !updated.applications.some((app) => app.id === id && app.company === key)), ...(keep ? decision.applicationIds : [])])],
+        disposition: otherKeys.length && tracking.disposition !== "excluded" ? tracking.disposition : retainDisposition(tracking, decision),
+        reason: otherKeys.length ? tracking.reason : decision.reason,
+        evidence: otherKeys.length ? tracking.evidence : decision.evidence,
+        updatedAt: new Date(),
+      }).where(eq(mailTracking.id, tracking.id));
     }
     invalidate();
     return {

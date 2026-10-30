@@ -99,19 +99,12 @@ export function matchMail(
   if (matches.length > 1)
     return excluded("Ambiguous company match; refine sender and subject rules");
   if (!matches.length) {
-    if (
-      hits.some((hit) =>
-        [
-          "Matches a company exclusion rule",
-          "Subject does not match the saved company pattern",
-          "Someone is asking you for job-search help",
-          "Networking, digest or promotional notification",
-        ].includes(hit.result.reason),
-      )
-    )
-      return excluded(
-        "Excluded by your pattern or a networking/promotional rule",
-      );
+    const policyExclusion = hits.find((hit) => [
+      "Matches a company exclusion rule", "Subject does not match the saved company pattern",
+      "Someone is asking you for job-search help", "Networking, digest or promotional notification",
+      "Shopping, billing or account notification without an application update",
+    ].includes(hit.result.reason));
+    if (policyExclusion) return { ...excluded(policyExclusion.result.reason), evidence: policyExclusion.result.evidence };
     // A genuine update about the user's own application can predate a saved
     // company/application record. Keep it in the cumulative view for manual
     // association, without manufacturing a company or application.

@@ -1,7 +1,33 @@
 import type { searchMail } from "./search-service";
-export type SearchResponse = Awaited<ReturnType<typeof searchMail>>;
-export type SearchAccountPage = SearchResponse["accounts"][number];
-export type SearchMessage = SearchAccountPage["messages"][number];
+type BaseResponse = Awaited<ReturnType<typeof searchMail>>;
+type BaseAccount = BaseResponse["accounts"][number];
+export type SearchMessage = BaseAccount["messages"][number] & {
+  decision?: { kept: boolean; reason: string; evidence: string[] };
+};
+export type CompanyTrackingInfo = {
+  unavailable?: number;
+  saved: number;
+  alreadyKnown: number;
+  excluded: number;
+  cacheHit: boolean;
+  resumed: boolean;
+  checkpointPages: number;
+  window: { since: string | null; until: string };
+  rejected: { subject: string; sender: string; reason: string }[];
+};
+export type SearchAccountPage = Omit<BaseAccount, "messages"> & {
+  messages: SearchMessage[];
+  tracking?: CompanyTrackingInfo;
+};
+export type SearchResponse = Omit<BaseResponse, "accounts"> & {
+  accounts: SearchAccountPage[];
+  savedCompany?: string;
+};
+export type SavedCompanyMail = {
+  messages: SearchMessage[];
+  counts: { kept: number; excluded: number };
+  nextBefore: string | null;
+};
 export type SearchAccount = { id: string; email: string; provider: string };
 export type AccountRun = {
   account: SearchAccount;
@@ -14,6 +40,7 @@ export type AccountRun = {
   query: string | null;
   cursor: string | null;
   error: string | null;
+  tracking?: CompanyTrackingInfo;
   events: { page: number; time: string; detail: string }[];
 };
 export function newAccountRun(account: SearchAccount): AccountRun {
@@ -47,7 +74,7 @@ export function mergeSearchPage(run: AccountRun, response: SearchResponse): Acco
   return {
     ...run,
     status,
-    pages: run.pages + (page.error ? 0 : 1),
+    pages: page.tracking?.checkpointPages ?? run.pages + (page.error ? 0 : 1),
     fetched: page.totalFetched,
     skippedContext: run.skippedContext + page.skippedContext,
     skippedOutsideWindow: run.skippedOutsideWindow + page.skippedOutsideWindow,
@@ -55,6 +82,16 @@ export function mergeSearchPage(run: AccountRun, response: SearchResponse): Acco
     query: page.effectiveQuery ?? run.query,
     cursor: response.nextCursor,
     error: page.error ?? response.warning,
+    tracking: page.tracking
+      ? {
+          ...page.tracking,
+          unavailable: (run.tracking?.unavailable ?? 0) + (page.tracking.unavailable ?? 0),
+        saved: (run.tracking?.saved ?? 0) + page.tracking.saved,
+          alreadyKnown: (run.tracking?.alreadyKnown ?? 0) + page.tracking.alreadyKnown,
+          excluded: (run.tracking?.excluded ?? 0) + page.tracking.excluded,
+          rejected: [...(run.tracking?.rejected ?? []), ...page.tracking.rejected],
+        }
+      : run.tracking,
     events: [
       ...run.events,
       {

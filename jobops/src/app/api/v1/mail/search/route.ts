@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { searchMail, MailSearchError } from "@/features/mail/search-service";
+import { searchMail } from "@/features/mail/search-service";
+import { runSearchRequest } from "@/features/mail/search-http";
 import { mailSearchRequestSchema } from "@/features/mail/search-contract";
 
 export const runtime = "nodejs";
@@ -27,42 +28,5 @@ export function GET() {
 }
 
 export async function POST(request: Request) {
-  if (request.headers.has("next-action"))
-    return response({ error: "Server actions are not available on this API." }, 403);
-  if (!/^application\/json(?:\s*;|$)/i.test(request.headers.get("content-type") ?? ""))
-    return response({ error: "Send application/json." }, 415);
-  const reader = request.body?.getReader();
-  if (!reader) return response({ error: "A JSON body is required." }, 400);
-  try {
-    const chunks: Uint8Array[] = [];
-    let size = 0;
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      size += value.length;
-      if (size > 65536) {
-        await reader.cancel();
-        return response({ error: "Request exceeds 64 KiB." }, 413);
-      }
-      chunks.push(value);
-    }
-    return response(await searchMail(JSON.parse(Buffer.concat(chunks).toString("utf8"))));
-  } catch (error) {
-    if (error instanceof z.ZodError)
-      return response(
-        {
-          error: "Invalid mail search.",
-          issues: error.issues.map(({ path, message }) => ({ path, message })),
-        },
-        400,
-      );
-    if (error instanceof SyntaxError) return response({ error: "Malformed JSON." }, 400);
-    if (error instanceof MailSearchError) return response({ error: error.message }, error.status);
-    return response(
-      { error: "Mail search could not run. Check local mail configuration and retry." },
-      500,
-    );
-  } finally {
-    reader.releaseLock();
-  }
+  return runSearchRequest(request, searchMail);
 }

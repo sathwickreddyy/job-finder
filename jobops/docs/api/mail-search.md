@@ -2,13 +2,13 @@
 
 `GET /api/v1/mail/search` returns the input JSON schema and examples.
 `POST /api/v1/mail/search` performs one page of read-only provider search per
-selected account, concurrently. Use the same endpoint from company, application,
-and mail pages.
+selected account, concurrently. This endpoint is for temporary ad hoc searches;
+company checks use the persistent wrapper described below.
 
 ## Using the UI
 
 Open `/mail/search`, or choose **Search inboxes** from Mail. Company and application
-pages link to this screen with visible company-name/alias keywords prefilled.
+pages link to this screen with saved company rules and persistent history.
 The existing saved-mail workspace is still available separately.
 
 Choose last N rolling days, an exact IST date range, or all history. Enter optional
@@ -135,3 +135,60 @@ Provider references:
 
 - https://developers.google.com/workspace/gmail/api/reference/rest/v1/users.messages/list
 - https://learn.microsoft.com/en-us/graph/search-query-parameter#use-search-on-message-collections
+
+## Persistent company mail checks
+
+Company selection in `/mail/search?company=<companyKey>` now uses
+`POST /api/v1/mail/company/search`, rather than a temporary broad keyword query:
+
+```json
+{ "company": "amazon", "accounts": ["your-address@example.com"], "lastDays": 7 }
+```
+
+The same `since`/`until`/`lastDays` choices apply. `mode` is `latest` by default;
+`mode: "history"` is used for the separate all-date recovery flow. Continue with
+`{ "companyCursor": "<nextCursor>" }`. Rules come from the saved company pattern,
+not from hidden body keyword expansion. Provider candidates match sender domains,
+exact recruiting addresses, or company names/aliases in the subject. Known outbound
+recipients are included only when an actual outreach record exists. Generic short
+aliases are omitted from unsaved defaults. Company names in message bodies alone
+are insufficient to associate a message.
+
+Candidates are then evaluated by the shared company relevance policy: application
+updates, recruiting conversations and verified contacted-person replies are kept;
+networking/referral requests, digests, promotions, shopping/billing/account notices
+are excluded. An explicit saved sender or required subject rule can keep otherwise
+unstructured replies for review. Matching still uses deterministic rules; inspect
+the recorded reason, refine company rules, and recover older mail when necessary.
+An exact address/domain rule is not proof that a sender is authenticated.
+
+Accepted bodies live in `mail_messages`; provider/account/internet identities and
+folder provenance live in `mail_tracking`. `company_mail_matches` keeps a separate
+accepted/excluded decision for each company so a rejection for one company cannot
+remove another company's accepted association. Exclusions retain metadata and a
+reason, not newly downloaded bodies. Existing stored bodies are preserved if a
+later rule excludes a message. Saved application links/outcomes are not changed.
+
+Each provider page and its company checkpoint commit in one transaction under the
+existing account lock. Incomplete scans resume server-side after reloads or expired
+client cursors. Once an older pending window finishes, continuation checks the tail
+up to the requested end before reporting complete. Completed coverage is reused;
+new checks scan the uncovered tail with a one-hour indexing overlap. Asking for an
+earlier start or changing rules triggers the necessary recovery scan. Limited or
+failed windows never advance completed coverage. Seen messages cannot become new
+after a folder move or a rule change.
+
+Gmail lists matching IDs and skips downloads for previously evaluated IDs. Outlook
+requests page metadata and downloads bodies only for unseen, in-window incoming
+candidates; known IDs/internet IDs and out-of-window/context results need no body
+download. The metadata/list requests needed to discover new mail can still repeat
+known IDs. The UI reports saved/already-known/excluded counts and the actual window
+for each account. A fully covered historical window makes no provider request.
+
+`GET /api/v1/mail/company/search?company=amazon&view=kept` returns saved company mail;
+`view=excluded` returns exclusion metadata/reasons. Both are paginated, 50 results
+at a time; pass the returned `nextBefore` as `before` to load older saved mail.
+Reloading the company page reads this database history without scanning inboxes.
+The company rule editor shares the existing saved patterns with `/mail`; saving
+rules reevaluates stored content without promoting it into Latest. General keyword
+search without a company remains a separate temporary search.

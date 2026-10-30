@@ -214,7 +214,9 @@ export const gmail: MailProvider = {
       nextPageToken?: string;
     }>(`messages?${params}`, accessToken);
     const messages = [];
-    const ids = page.messages ?? [];
+    const listed = page.messages ?? [];
+    const known = new Set(request.skipIds ?? []);
+    const ids = listed.filter((row) => !known.has(row.id));
     for (let offset = 0; offset < ids.length; offset += 2) {
       const chunk = await Promise.all(
         ids.slice(offset, offset + 2).map(async (row) => {
@@ -274,7 +276,8 @@ export const gmail: MailProvider = {
         });
       }
     }
-    return { messages, next: page.nextPageToken };
+    return { messages, next: page.nextPageToken,
+      ...(request.skipIds ? { fetched: listed.length, skippedKnown: listed.length - ids.length } : {}) };
   },
   async listRecruitingMail(connection, cursor) {
     const token = await gmail.accessToken(connection);

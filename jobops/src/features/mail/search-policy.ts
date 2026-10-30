@@ -56,10 +56,10 @@ export function evaluateCompanyMail(
   rule: CompanyMailRule,
   baselineAt: string,
 ): SearchDecision {
-  const exclude = (reason: string): SearchDecision => ({
+  const exclude = (reason: string, evidence: string[] = []): SearchDecision => ({
     destination: "excluded",
     reason,
-    evidence: [],
+    evidence,
   });
   // Match only current-message text supplied by a parser; quoted history and
   // notification footers must not establish intent or contact identity.
@@ -80,6 +80,9 @@ export function evaluateCompanyMail(
       ))
   )
     return exclude("Networking, digest or promotional notification");
+  if (/\b(?:your (?:order|package)|order (?:confirmation|shipped|delivered)|invoice|billing|payment (?:received|due|successful)|service health|cloudwatch|cost report|usage report|security alert|password reset|sign.in code)\b/i.test(message.subject) &&
+      !/\b(?:your application|your interview|your assessment|thank you for applying)\b/i.test(text))
+    return exclude("Shopping, billing or account notification without an application update");
   const domain = domainOf(message.sender);
   const linkedin = linkedinDomains.some((allowed) =>
     domainMatches(domain, allowed),
@@ -110,8 +113,8 @@ export function evaluateCompanyMail(
   if (aliasMatch) evidence.push("Company name in subject");
   if (!evidence.length)
     return exclude("No company, application thread or contacted-person match");
-  if (rule.excludedTerms.some((term) => hasTerm(text, term)))
-    return exclude("Matches a company exclusion rule");
+  const excludedTerm = rule.excludedTerms.find((term) => hasTerm(text, term));
+  if (excludedTerm) return exclude("Matches a company exclusion rule", [`Excluded phrase: ${excludedTerm}`]);
   const requiredSubject = rule.subjectTerms.filter((term) => term.trim());
   if (
     requiredSubject.length &&
@@ -121,8 +124,8 @@ export function evaluateCompanyMail(
 
   const event = classifyMail(message);
   if (
-    (!event.relevant ||
-      (event.type === "UNKNOWN" && !requiredSubject.length)) &&
+    (!event.relevant || event.type === "UNKNOWN") &&
+    !evidence.includes("Exact sender rule") && !requiredSubject.length &&
     !message.linkedThread &&
     !message.contactedPersonReply
   )

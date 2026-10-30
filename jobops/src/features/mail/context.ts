@@ -111,8 +111,8 @@ export async function loadMailContext(): Promise<MailContext> {
         ...(parsed.success
           ? parsed.data
           : {
-              aliases: company.aliases,
-              domains: websiteDomain(company.websiteUrl),
+              aliases: company.aliases.filter((alias) => alias.trim().length >= 5),
+              domains: [...new Set([...websiteDomain(company.websiteUrl), ...websiteDomain(company.careersUrl)])],
               senders: [],
               subjectTerms: [],
               excludedTerms: [],
@@ -121,12 +121,14 @@ export async function loadMailContext(): Promise<MailContext> {
       baselineAt,
       ruleSource: parsed.success
         ? "Your saved pattern"
-        : "Company name, aliases and recorded website",
+        : "Company name, aliases and recorded website/careers domains",
     });
   }
   const apps: WorkspaceApplication[] = rows.map((row) => {
     const resolved = resolve(row.company);
-    if (!allCompanies.has(resolved.companyKey))
+    if (!allCompanies.has(resolved.companyKey)) {
+      const saved = storedRules.find((row) => row.key === ruleKey(resolved.companyKey));
+      const parsed = ruleSchema.safeParse(saved?.value.rule);
       allCompanies.set(resolved.companyKey, {
         id: resolved.companyKey,
         name: resolved.companyName,
@@ -139,9 +141,11 @@ export async function loadMailContext(): Promise<MailContext> {
           senders: [],
           subjectTerms: [],
           excludedTerms: [],
+          ...(parsed.success ? parsed.data : {}),
         },
-        ruleSource: "Recorded application company",
+        ruleSource: parsed.success ? "Your saved pattern" : "Recorded application company",
       });
+    }
     const sent = events.find(
       (event) => event.applicationId === row.id && event.payload.humanConfirmed !== false,
     );
