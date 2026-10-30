@@ -34,6 +34,23 @@ it("rejects postedAtKind without postedAt", () => {
   expect(agentRecordSchema.safeParse(opening({ postedAt: "20 Oct" })).success).toBe(false);
 });
 
+it("rejects dates that are not on the calendar", () => {
+  const dated = (postedAt: string, submittedAt: string) => ({
+    ...input,
+    opening: { ...input.opening, postedAt },
+    application: { ...input.application, submittedAt },
+  });
+  expect(agentRecordSchema.safeParse(dated("2028-02-29", "2028-02-29")).success).toBe(true);
+  for (const [postedAt, submittedAt] of [
+    ["2026-02-30", "2026-10-30"],
+    ["2026-10-20", "2026-02-29"],
+    ["2026-13-01", "2026-10-30"],
+    ["2026-10-20", "2026-04-31"],
+    ["2026-10-20", "2026-10-00"],
+  ])
+    expect(agentRecordSchema.safeParse(dated(postedAt, submittedAt)).success).toBe(false);
+});
+
 it("freshness uses Asia/Kolkata calendar days", () => {
   // 20:00 UTC on 30 Oct is already 31 Oct in India.
   const now = new Date("2026-10-30T20:00:00Z");

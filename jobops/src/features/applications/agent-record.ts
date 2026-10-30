@@ -20,7 +20,15 @@ const httpUrl = z
   .url()
   .max(2000)
   .refine((value) => ["http:", "https:"].includes(new URL(value).protocol), "Use an http(s) URL.");
-const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD.");
+// The format alone lets 2026-02-30 through, which Date silently rolls into March.
+const day = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD.")
+  .refine((value) => {
+    const [year, month, date] = value.split("-").map(Number);
+    const parsed = new Date(Date.UTC(year, month - 1, date));
+    return parsed.getUTCMonth() === month - 1 && parsed.getUTCDate() === date;
+  }, "Use a real calendar date.");
 
 /** The agent applies in the browser; this only records what the user confirmed was submitted. */
 export const agentRecordSchema = z.strictObject({
