@@ -257,6 +257,52 @@ describe.skipIf(!dbTests)("on-demand mail check", () => {
     expect(stepped.sort()).toEqual([a.id, b.id].sort());
   });
 
+  it("follows a resumed window with fresh windows for every inbox", async () => {
+    const a = await connection(),
+      b = await connection();
+    vi.spyOn(outlook, "folders").mockResolvedValue([]);
+    let first = true;
+    const scan = vi.spyOn(outlook, "scanMail").mockImplementation(async (row) => {
+      if (row.id === a.id && first) {
+        first = false;
+        return { messages: [], next: "a-2" };
+      }
+      return { messages: [] };
+    });
+    await checkMailStep();
+    const resumed = await checkMailStep();
+    expect(resumed.more).toBe(true);
+    const calls = scan.mock.calls.length;
+    const fresh = await checkMailStep();
+    expect(
+      scan.mock.calls
+        .slice(calls)
+        .map((call) => call[0].id)
+        .sort(),
+    ).toEqual([a.id, b.id].sort());
+    expect(fresh.more).toBe(false);
+  });
+
+  it("excludes an unreadable message instead of blocking the inbox", async () => {
+    const own = await connection();
+    vi.spyOn(outlook, "folders").mockResolvedValue([]);
+    vi.spyOn(outlook, "scanMail").mockResolvedValue({
+      messages: [
+        mail("no-sender", { sender: "", internetMessageId: "<no-sender@fixture.invalid>" }),
+        mail("blank-subject", { subject: "   ", internetMessageId: "<blank@fixture.invalid>" }),
+      ],
+    });
+    expect(await checkConnection(own, context)).toMatchObject({ status: "done", newAttention: 1 });
+    const rows = await ledger(own.email);
+    expect(rows.find((row) => row.providerMessageId === "no-sender")).toMatchObject({
+      disposition: "excluded",
+      messageId: null,
+      reason: expect.stringContaining("Unreadable"),
+    });
+    expect((await messages(own.email)).map((row) => row.subject)).toEqual(["(No subject)"]);
+    expect((await current(own.id)).lastError).toBeNull();
+  });
+
   it("refuses to check without a connected inbox", async () => {
     const owned = await db
       .select({ id: mailConnections.id })

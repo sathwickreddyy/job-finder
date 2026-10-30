@@ -2,7 +2,7 @@ import { and, desc, eq, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
 import { applications, companyRecords, jobs, resumes, resumeVersions } from "@/db/schema";
-import { ApiError } from "@/features/agent-api/http";
+import { ApiError, refusal } from "@/features/agent-api/http";
 import {
   jobDedupeKey,
   jobInputSchema,
@@ -14,7 +14,7 @@ import { companyKeyFor } from "@/features/mail/context";
 import { indiaDate } from "@/features/mail/attention";
 import { normalizeCompany } from "./lanes";
 import { recordMethods, recordSentAt } from "./domain";
-import { recordApplication } from "./record-service";
+import { isPlannedRecord, recordApplication } from "./record-service";
 
 const httpUrl = z
   .url()
@@ -103,8 +103,30 @@ export async function recordAgentApplication(
   warnings: string[];
 }> {
   const { opening, application } = agentRecordSchema.parse(input);
+  const result = await recordConfirmed(opening, application, now).catch((error: unknown) => {
+    throw refusal(error);
+  });
+  return {
+    ...result,
+    links: {
+      application: `/applications/${result.id}`,
+      company: await companyLink(opening.company),
+    },
+    warnings: recordWarnings(
+      { postedAt: opening.postedAt, resumeVersionId: application.resumeVersionId },
+      now,
+    ),
+  };
+}
+
+type AgentRecord = z.infer<typeof agentRecordSchema>;
+async function recordConfirmed(
+  opening: AgentRecord["opening"],
+  application: AgentRecord["application"],
+  now: Date,
+) {
   const sentAt = application.submittedAt ? recordSentAt(application.submittedAt, now) : now;
-  const result = await db.transaction(async (tx) => {
+  return db.transaction(async (tx) => {
     // The job importer's lock, taken first, serialises concurrent posts before the duplicate check.
     await tx.execute(sql`select pg_advisory_xact_lock(8093210)`);
     const job = jobInputSchema.parse({
@@ -125,13 +147,14 @@ export async function recordAgentApplication(
     const existing = async (jobId: string) =>
       (
         await tx
-          .select({ id: applications.id })
+          .select()
           .from(applications)
           .where(and(eq(applications.jobId, jobId), eq(applications.source, application.method)))
           .limit(1)
       )[0];
     const prior = found ? await existing(found.id) : undefined;
-    if (prior) return { id: prior.id, duplicate: true };
+    // A planned record is upgraded to sent; a record already sent or closed is a duplicate.
+    if (prior && !(await isPlannedRecord(tx, prior))) return { id: prior.id, duplicate: true };
     const summary = await importJobRows([job], "skip", tx);
     const jobId =
       summary.ids[0] ??
@@ -164,7 +187,7 @@ export async function recordAgentApplication(
         })
         .where(eq(jobs.id, jobId));
     const id = await recordApplication(tx, {
-      recordId: null,
+      recordId: prior?.id ?? null,
       jobId,
       versionId: application.resumeVersionId ?? null,
       method: application.method,
@@ -176,17 +199,6 @@ export async function recordAgentApplication(
     });
     return { id, duplicate: false };
   });
-  return {
-    ...result,
-    links: {
-      application: `/applications/${result.id}`,
-      company: await companyLink(opening.company),
-    },
-    warnings: recordWarnings(
-      { postedAt: opening.postedAt, resumeVersionId: application.resumeVersionId },
-      now,
-    ),
-  };
 }
 
 export async function findApplications(query: { url?: string; company?: string }) {

@@ -13,6 +13,27 @@ import { canEditPlannedRecord, recordStateFrom } from "./phase";
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
+/** A record that is still only planned can be upgraded to sent; anything sent or closed cannot. */
+export async function isPlannedRecord(tx: Tx, previous: typeof applications.$inferSelect) {
+  const history = await tx
+    .select({
+      eventType: applicationEvents.eventType,
+      occurredAt: applicationEvents.occurredAt,
+    })
+    .from(applicationEvents)
+    .where(eq(applicationEvents.applicationId, previous.id));
+  const linkedMail = await tx
+    .select({
+      classification: mailMessages.classification,
+      receivedAt: mailMessages.receivedAt,
+    })
+    .from(mailMessages)
+    .where(eq(mailMessages.linkedApplicationId, previous.id));
+  return canEditPlannedRecord(
+    recordStateFrom({ ...previous, events: history, linkedMail }, [], []),
+  );
+}
+
 /** Record as sent (or planned): shared by the Record form and the agent record API. */
 export async function recordApplication(
   tx: Tx,
@@ -58,22 +79,7 @@ export async function recordApplication(
   };
   let recordId: string;
   if (previous) {
-    const history = await tx
-      .select({
-        eventType: applicationEvents.eventType,
-        occurredAt: applicationEvents.occurredAt,
-      })
-      .from(applicationEvents)
-      .where(eq(applicationEvents.applicationId, previous.id));
-    const linkedMail = await tx
-      .select({
-        classification: mailMessages.classification,
-        receivedAt: mailMessages.receivedAt,
-      })
-      .from(mailMessages)
-      .where(eq(mailMessages.linkedApplicationId, previous.id));
-    const state = recordStateFrom({ ...previous, events: history, linkedMail }, [], []);
-    if (!canEditPlannedRecord(state))
+    if (!(await isPlannedRecord(tx, previous)))
       throw new Error(
         "This record has already been sent or closed. Open its record to add an outcome or note.",
       );

@@ -4,6 +4,8 @@ import { eq, inArray, like } from "drizzle-orm";
 import { closeDatabase, db } from "@/db";
 import { activityLogs, applicationEvents, applications, jobs } from "@/db/schema";
 import { findApplications, recordAgentApplication } from "@/features/applications/agent-record";
+import { recordApplication } from "@/features/applications/record-service";
+import { normalizeJobUrl } from "@/features/jobs/import";
 import { assertE2eDatabase, dbTests } from "./helpers/e2e-db";
 
 const prefix = `agent-record-${randomUUID()}`;
@@ -127,6 +129,47 @@ describe.skipIf(!dbTests)("agent application records", () => {
     expect(await job(repost.url)).toMatchObject({
       postedAt: new Date("2026-10-19"),
       postedAtKind: "ORIGINAL",
+    });
+  });
+
+  it("upgrades a planned record instead of reporting a duplicate", async () => {
+    const open = opening();
+    const [stored] = await db
+      .insert(jobs)
+      .values({
+        company,
+        title: open.title,
+        canonicalUrl: normalizeJobUrl(open.url),
+        dedupeKey: `${prefix}-planned`,
+        source: "MANUAL",
+      })
+      .returning();
+    const planned = await db.transaction((tx) =>
+      recordApplication(tx, {
+        recordId: null,
+        jobId: stored.id,
+        versionId: null,
+        method: "DIRECT",
+        state: "planned",
+        notes: "",
+        recipient: "",
+        url: "",
+        sentAt: null,
+      }),
+    );
+    const result = await post(open);
+    expect(result).toMatchObject({ id: planned, duplicate: false });
+    const [app] = await db.select().from(applications).where(eq(applications.id, planned));
+    expect(app.status).toBe("APPLIED");
+    expect(await appsFor(open.url)).toHaveLength(1);
+  });
+
+  it("refuses a missing resume file or future date with 409, not a server error", async () => {
+    await expect(
+      post(opening(), { resumeVersionId: "99999999-9999-4999-8999-999999999999" }),
+    ).rejects.toMatchObject({ status: 409, message: "Choose an existing resume file." });
+    await expect(post(opening(), { submittedAt: "2099-01-01" })).rejects.toMatchObject({
+      status: 409,
     });
   });
 

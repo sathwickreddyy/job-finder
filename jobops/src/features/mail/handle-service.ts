@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
 import { activityLogs, applications, mailEvents, mailMessages } from "@/db/schema";
-import { ApiError } from "@/features/agent-api/http";
+import { ApiError, refusal } from "@/features/agent-api/http";
 import { applyOutcome } from "@/features/applications/outcome-service";
 import { outcomeIds } from "@/features/applications/phase";
 import { roundKinds } from "@/lib/round-kinds";
@@ -98,24 +98,6 @@ async function resolveApplication(
       409,
     );
   return app;
-}
-
-/** Domain refusals become 409s; database and unexpected failures stay internal. */
-function refusal(error: unknown) {
-  if (
-    error instanceof Error &&
-    !(error instanceof ApiError) &&
-    !(error instanceof z.ZodError) &&
-    !error.cause &&
-    !/Failed query|password|postgres|token|secret/i.test(error.message)
-  )
-    return new ApiError(
-      /already (?:been handled|linked)/.test(error.message)
-        ? "This email has already been handled."
-        : error.message,
-      409,
-    );
-  return error;
 }
 
 export async function handleMail(

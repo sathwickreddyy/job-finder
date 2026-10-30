@@ -12,7 +12,7 @@ import {
   mailMessages,
 } from "@/db/schema";
 import { handleMail, updateMail } from "@/features/mail/handle-service";
-import { dismissMessages } from "@/features/mail/handling-service";
+import { dismissMessages, unlinkMailFromRecord } from "@/features/mail/handling-service";
 import { listMail } from "@/features/mail/mail-list";
 import { assertE2eDatabase, dbTests } from "./helpers/e2e-db";
 
@@ -206,6 +206,15 @@ describe.skipIf(!dbTests)("handling mail", () => {
       attention: "open",
     });
     expect(await logs(row.id, "MAIL_PLACED")).toHaveLength(3);
+  });
+
+  it("unlinks mail that was placed at an application", async () => {
+    const row = await email({ companyKey: null });
+    await updateMail(row.id, { application: apps.single[0] });
+    expect(
+      await db.transaction((tx) => unlinkMailFromRecord(tx, row.id, apps.single[0], new Date())),
+    ).toBe(true);
+    expect((await message(row.id)).linkedApplicationId).toBeNull();
   });
 
   it("lane dismissal and API just info write the same flag", async () => {

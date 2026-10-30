@@ -1,4 +1,5 @@
 import { and, eq, inArray, or } from "drizzle-orm";
+import { ZodError } from "zod";
 import { db } from "@/db";
 import { mailConnections, mailEvents, mailMessages, mailTracking, settings } from "@/db/schema";
 import { ApiError } from "@/features/agent-api/http";
@@ -54,6 +55,7 @@ export function checkWindow(
 
 function failureText(error: unknown) {
   return error instanceof Error &&
+    !(error instanceof ZodError) &&
     !error.cause &&
     !/Failed query|token|secret|password|Zod/i.test(error.message)
     ? error.message
@@ -179,12 +181,22 @@ export async function checkConnection(
                     .flatMap((row) => row.applicationIds)
                 : [],
             });
-            const kept = decision.disposition !== "excluded";
+            const externalId = `${current.email}:${raw.externalId}`;
+            // Providers can return mail the importer cannot store (no sender, an over-long
+            // name). Record such an identity as excluded instead of failing the whole page.
+            const record = mailImportSchema.safeParse([
+              {
+                ...raw,
+                externalId,
+                subject: raw.subject.trim() || "(No subject)",
+                senderName: (raw.senderName ?? "").slice(0, 500),
+              },
+            ]);
+            const kept = decision.disposition !== "excluded" && record.success;
             let messageId: string | null = null;
             if (kept) {
-              const externalId = `${current.email}:${raw.externalId}`;
               const imported = await importMailRecords(
-                mailImportSchema.parse([{ ...raw, externalId }]),
+                record.data!,
                 provider.id,
                 current.email,
                 tx,
@@ -255,7 +267,9 @@ export async function checkConnection(
                 companyKeys: decision.companyKeys,
                 applicationIds: decision.applicationIds,
                 disposition: kept ? "kept" : "excluded",
-                reason: decision.reason,
+                reason: record.success
+                  ? decision.reason
+                  : "Unreadable message; open it in your mailbox",
                 evidence: decision.evidence,
               })
               .onConflictDoNothing({
@@ -386,8 +400,12 @@ export async function checkMailStep(): Promise<CheckResult> {
       lastFetchedAt: row.lastSyncedAt?.toISOString() ?? null,
     };
   });
+  // Finishing a resumed window leaves mail since that window unchecked, so the next
+  // step opens fresh windows for every inbox.
+  const resumedDone =
+    incomplete.length > 0 && [...stepped.values()].some((row) => row.status === "done");
   return {
-    more: accounts.some((row) => row.status === "more"),
+    more: accounts.some((row) => row.status === "more") || resumedDone,
     newAttention: [...stepped.values()].reduce((sum, row) => sum + row.newAttention, 0),
     accounts,
   };

@@ -126,11 +126,8 @@ export async function unlinkMailFromRecord(
   await lockRecord(tx, recordId);
   const { message, events } = await lockMail(tx, mailId);
   if (!message.linkedApplicationId && mailIsOpen(message)) return false;
-  if (
-    message.linkedApplicationId !== recordId ||
-    !events.length ||
-    events.some((event) => event.status !== "REVIEWED" || event.linkedApplicationId !== recordId)
-  )
+  // Mail placed on /mail or through the API is linked without reviewing its events.
+  if (message.linkedApplicationId !== recordId)
     throw new Error("This message is no longer linked to this record. Refresh the page.");
   await tx
     .update(mailMessages)

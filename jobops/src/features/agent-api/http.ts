@@ -45,6 +45,24 @@ export async function readJson(request: Request): Promise<unknown> {
   return JSON.parse(Buffer.concat(chunks).toString("utf8")) as unknown;
 }
 
+/** Domain refusals (plain Errors) become 409s; database and unexpected failures stay internal. */
+export function refusal(error: unknown) {
+  if (
+    error instanceof Error &&
+    !(error instanceof ApiError) &&
+    !(error instanceof ZodError) &&
+    !error.cause &&
+    !/Failed query|password|postgres|token|secret/i.test(error.message)
+  )
+    return new ApiError(
+      /already (?:been handled|linked)/.test(error.message)
+        ? "This email has already been handled."
+        : error.message,
+      409,
+    );
+  return error;
+}
+
 export function apiError(error: unknown): Response {
   if (error instanceof ApiError)
     return apiResponse({ error: error.message, ...error.details }, error.status);
