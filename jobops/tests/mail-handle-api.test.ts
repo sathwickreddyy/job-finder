@@ -58,3 +58,10 @@ it("404 for a non-uuid id", async () => {
   expect((await POST(json({ justInfo: true }), params("not-an-id"))).status).toBe(404);
   expect((await PATCH(json({ tag: "offer" }, "PATCH"), params("not-an-id"))).status).toBe(404);
 });
+
+it("PATCH accepts attention open", async () => {
+  mocks.update.mockImplementation(async () => ({ id, attention: "open" }));
+  const response = await PATCH(json({ attention: "open" }, "PATCH"), params());
+  expect(response.status).toBe(200);
+  expect(mocks.update).toHaveBeenLastCalledWith(id, { attention: "open" });
+});

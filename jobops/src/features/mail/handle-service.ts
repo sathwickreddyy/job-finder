@@ -1,7 +1,13 @@
-import { eq } from "drizzle-orm";
+import { desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
-import { activityLogs, applications, mailEvents, mailMessages } from "@/db/schema";
+import {
+  activityLogs,
+  applicationEvents,
+  applications,
+  mailEvents,
+  mailMessages,
+} from "@/db/schema";
 import { ApiError, refusal } from "@/features/agent-api/http";
 import { applyOutcome } from "@/features/applications/outcome-service";
 import { outcomeIds } from "@/features/applications/phase";
@@ -42,9 +48,11 @@ export const updateSchema = z
     tag: z.enum(mailTags).optional(),
     company: z.string().trim().min(1).max(300).nullable().optional(),
     application: z.uuid().nullable().optional(),
+    /** Undo for Just info; refused once an outcome or a lane link came from the email. */
+    attention: z.literal("open").optional(),
   })
   .refine((value) => Object.values(value).some((field) => field !== undefined), {
-    message: "Send tag, company or application.",
+    message: "Send tag, company, application or attention.",
   });
 
 const closed = ["REJECTED", "WITHDRAWN", "CLOSED"];
@@ -166,7 +174,48 @@ export async function handleMail(
   return readMailItem(mailId, context);
 }
 
-/** Retag or place an email. Attention never changes here. */
+/** Reopen an email handled as just info, keeping the record of having done so. */
+async function reopenMail(
+  tx: MailTx,
+  message: typeof mailMessages.$inferSelect,
+  events: (typeof mailEvents.$inferSelect)[],
+) {
+  if (mailIsOpen(message)) return;
+  const [latest] = await tx
+    .select({ eventType: applicationEvents.eventType, payload: applicationEvents.payload })
+    .from(applicationEvents)
+    .where(sql`${applicationEvents.payload}->>'mailMessageId' = ${message.id}`)
+    .orderBy(desc(applicationEvents.createdAt))
+    .limit(1);
+  // An unlink already reopened the email once, so what came before it no longer holds.
+  if (latest && latest.eventType !== "MAIL_UNLINKED")
+    throw new ApiError(
+      typeof latest.payload.outcome === "string"
+        ? "An outcome was recorded from this email. Correct it on the application."
+        : "This email was added to an application. Unlink it there to reopen it.",
+      409,
+    );
+  await tx
+    .update(mailMessages)
+    .set({ attentionState: "OPEN", processedAt: null })
+    .where(eq(mailMessages.id, message.id));
+  for (const event of events) {
+    const details = { ...event.details };
+    delete details.justInfo;
+    await tx
+      .update(mailEvents)
+      .set({ status: "NEEDS_REVIEW", details })
+      .where(eq(mailEvents.id, event.id));
+  }
+  await tx.insert(activityLogs).values({
+    action: "MAIL_REOPENED",
+    entityType: "MAIL",
+    entityId: message.id,
+    summary: "Reopened an email marked as just information",
+  });
+}
+
+/** Retag or place an email; `attention: "open"` undoes Just info. */
 export async function updateMail(
   mailId: string,
   input: unknown,
@@ -215,6 +264,7 @@ export async function updateMail(
         );
       companyKey = body.company;
     }
+    if (body.attention === "open") await reopenMail(tx, message, events);
     if (linked === message.linkedApplicationId && companyKey === message.companyKey) return;
     await tx
       .update(mailMessages)

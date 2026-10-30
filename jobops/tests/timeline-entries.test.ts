@@ -84,6 +84,29 @@ describe("timelineEntries", () => {
     ]);
   });
 
+  it("annotates lane links and clears them after an unlink", () => {
+    const linked = (id: string, type: string, created: string) => ({
+      ...event(id, type, "2026-10-31T09:00:00+05:30", { mailMessageId: "m1" }),
+      createdAt: new Date(created),
+    });
+    const annotation = (events: ReturnType<typeof event>[]) =>
+      flat(build({ mail: [mail("m1", "2026-10-31T09:00:00+05:30")], events })).map((entry) =>
+        entry.type === "mail" ? entry.recorded : "step",
+      );
+    expect(annotation([linked("e1", "MAIL_LINKED", "2026-10-31T10:00:00+05:30")])).toEqual([
+      "Added to the application",
+    ]);
+    expect(
+      annotation([linked("e1", "ACKNOWLEDGEMENT_RECEIVED", "2026-10-31T10:00:00+05:30")]),
+    ).toEqual(["Application acknowledged"]);
+    expect(
+      annotation([
+        linked("e1", "INTERVIEW_SCHEDULED", "2026-10-31T10:00:00+05:30"),
+        linked("e2", "MAIL_UNLINKED", "2026-10-31T11:00:00+05:30"),
+      ]),
+    ).toEqual([null]);
+  });
+
   it("keeps steps from other mail and plain events", () => {
     const days = build({
       mail: [mail("m1", "2026-10-31T09:00:00+05:30")],

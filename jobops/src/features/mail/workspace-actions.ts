@@ -4,7 +4,9 @@ import { revalidatePath } from "next/cache";
 import { and, eq, isNull } from "drizzle-orm";
 import { db } from "@/db";
 import { mailMessages, settings } from "@/db/schema";
+import { outcomeDetail, type OutcomeId } from "@/features/applications/phase";
 import { actionError, formString, type ActionState } from "@/lib/actions";
+import type { RoundKind } from "@/lib/round-kinds";
 import { loadMailContext, ruleKey, ruleSchema } from "./context";
 import { checkMailStep, type CheckResult } from "./check-service";
 import { handleMail, updateMail } from "./handle-service";
@@ -37,15 +39,13 @@ export async function saveWorkspaceRule(
     if (!company) throw new Error("Choose an existing company.");
     const rule = ruleSchema.parse(
       Object.fromEntries(
-        ["aliases", "domains", "senders", "subjectTerms", "excludedTerms"].map(
-          (field) => [
-            field,
-            formString(form, field)
-              .split(",")
-              .map((entry) => entry.trim())
-              .filter(Boolean),
-          ],
-        ),
+        ["aliases", "domains", "senders", "subjectTerms", "excludedTerms"].map((field) => [
+          field,
+          formString(form, field)
+            .split(",")
+            .map((entry) => entry.trim())
+            .filter(Boolean),
+        ]),
       ),
     );
     await db
@@ -98,27 +98,63 @@ export async function saveWorkspaceRule(
   }
 }
 
-/** Just info (`justInfo=1`) or an outcome (`outcome`, optional `applicationId`) from the Mail page. */
+/**
+ * Just info (`justInfo=1`) or an outcome (`outcome`, optional `applicationId`) from the Mail
+ * page. Outcomes that need a round or deadline send `day`, `time` and `kind` in India time.
+ */
 export async function handleMailAction(
   _previous: ActionState,
   form: FormData,
 ): Promise<ActionState> {
   try {
     const id = formString(form, "id");
-    const outcome = formString(form, "outcome");
-    await handleMail(
-      id,
-      formString(form, "justInfo") === "1"
-        ? { justInfo: true }
-        : {
-            outcome,
-            ...(formString(form, "applicationId")
-              ? { applicationId: formString(form, "applicationId") }
-              : {}),
-          },
+    if (formString(form, "justInfo") === "1") {
+      await handleMail(id, { justInfo: true });
+      invalidate();
+      return { success: "Marked as just info." };
+    }
+    const optional = (name: string) => formString(form, name) || undefined;
+    const happenedOn = optional("happenedOn");
+    const { id: outcome, detail } = outcomeDetail(
+      {
+        outcome: formString(form, "outcome") as OutcomeId,
+        kind: optional("kind") as RoundKind | undefined,
+        day: optional("day"),
+        time: optional("time"),
+        name: formString(form, "name"),
+        note: formString(form, "note"),
+        happenedOn,
+      },
+      new Date(),
     );
+    await handleMail(id, {
+      outcome,
+      ...(optional("applicationId") ? { applicationId: optional("applicationId") } : {}),
+      details: {
+        ...(detail.kind ? { kind: detail.kind } : {}),
+        ...(detail.at ? { at: detail.at.toISOString() } : {}),
+        ...(detail.name ? { name: detail.name } : {}),
+        ...(detail.note ? { note: detail.note } : {}),
+        // Without a chosen day the outcome is dated by the email, not by this click.
+        ...(happenedOn ? { happenedAt: detail.happenedAt.toISOString() } : {}),
+      },
+    });
     invalidate();
-    return { success: outcome ? "Outcome recorded from this email." : "Marked as just info." };
+    return { success: "Outcome recorded from this email." };
+  } catch (error) {
+    return actionError(error);
+  }
+}
+
+/** Undo Just info: the email needs attention again. */
+export async function reopenMailAction(
+  _previous: ActionState,
+  form: FormData,
+): Promise<ActionState> {
+  try {
+    await updateMail(formString(form, "id"), { attention: "open" });
+    invalidate();
+    return { success: "Back in Needs you." };
   } catch (error) {
     return actionError(error);
   }

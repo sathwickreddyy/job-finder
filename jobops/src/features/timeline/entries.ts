@@ -21,6 +21,14 @@ export type TimelineDay = { key: string; label: string; entries: TimelineEntry[]
 
 /** The email itself shows these, so they never appear as steps. */
 const mailDriven = new Set(["MAIL_LINKED", "MAIL_UNLINKED", "ACKNOWLEDGEMENT_RECEIVED"]);
+const recordedText = (event: EventRow | undefined) =>
+  !event || event.eventType === "MAIL_UNLINKED"
+    ? null
+    : event.eventType === "MAIL_LINKED"
+      ? "Added to the application"
+      : event.eventType === "ACKNOWLEDGEMENT_RECEIVED"
+        ? "Application acknowledged"
+        : event.summary;
 const DAY = 86_400_000;
 const weekday = new Intl.DateTimeFormat("en-IN", {
   timeZone: "Asia/Kolkata",
@@ -53,16 +61,17 @@ export function timelineEntries(input: {
   now: Date;
 }): TimelineDay[] {
   const onPage = new Set(input.mail.map((item) => item.id));
-  const recorded = new Map<string, EventRow>();
+  // The newest event about an email (by when it was written) says what was done with it.
+  const latest = new Map<string, EventRow>();
   const steps: TimelineStep[] = [];
   for (const event of input.events) {
-    if (mailDriven.has(event.eventType)) continue;
     const mailId = event.payload.mailMessageId;
     if (typeof mailId === "string" && onPage.has(mailId)) {
-      const current = recorded.get(mailId);
-      if (!current || current.occurredAt < event.occurredAt) recorded.set(mailId, event);
+      const current = latest.get(mailId);
+      if (!current || current.createdAt < event.createdAt) latest.set(mailId, event);
       continue;
     }
+    if (mailDriven.has(event.eventType)) continue;
     steps.push({
       type: "step",
       id: event.id,
@@ -95,7 +104,7 @@ export function timelineEntries(input: {
       type: "mail",
       at: item.receivedAt,
       item,
-      recorded: recorded.get(item.id)?.summary ?? null,
+      recorded: recordedText(latest.get(item.id)),
     })),
     ...(input.filtered
       ? []

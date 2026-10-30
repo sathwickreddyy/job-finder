@@ -1,10 +1,11 @@
 import { randomUUID } from "node:crypto";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { and, eq, inArray, like, sql } from "drizzle-orm";
 import { closeDatabase, db } from "@/db";
 import {
   activityLogs,
   applicationEvents,
+  applicationRounds,
   applications,
   companyRecords,
   jobs,
@@ -12,9 +13,16 @@ import {
   mailMessages,
 } from "@/db/schema";
 import { handleMail, updateMail } from "@/features/mail/handle-service";
-import { dismissMessages, unlinkMailFromRecord } from "@/features/mail/handling-service";
+import {
+  dismissMessages,
+  linkMailToRecord,
+  unlinkMailFromRecord,
+} from "@/features/mail/handling-service";
 import { listMail } from "@/features/mail/mail-list";
+import { handleMailAction, reopenMailAction } from "@/features/mail/workspace-actions";
 import { assertE2eDatabase, dbTests } from "./helpers/e2e-db";
+
+vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
 const prefix = `mail-handle-${randomUUID()}`;
 const account = `${prefix}@fixture.invalid`;
@@ -97,6 +105,11 @@ const outcomeEvents = (id: string) =>
     .from(applicationEvents)
     .where(sql`${applicationEvents.payload}->>'mailMessageId' = ${id}`);
 const oa = { outcome: "oa", details: { at: "2026-11-03T18:00:00+05:30" } };
+const form = (fields: Record<string, string>) => {
+  const data = new FormData();
+  for (const [name, value] of Object.entries(fields)) data.set(name, value);
+  return data;
+};
 
 describe.skipIf(!dbTests)("handling mail", () => {
   beforeAll(async () => {
@@ -254,5 +267,83 @@ describe.skipIf(!dbTests)("handling mail", () => {
         [informed.id, "handled"],
       ].sort(),
     );
+  });
+
+  it("reopens an email marked just info", async () => {
+    const row = await email({ companyKey: keys.double });
+    await handleMail(row.id, { justInfo: true });
+    expect(await updateMail(row.id, { attention: "open" })).toMatchObject({
+      id: row.id,
+      attention: "open",
+      handledAt: null,
+    });
+    expect((await message(row.id)).processedAt).toBeNull();
+    const [event] = await db.select().from(mailEvents).where(eq(mailEvents.mailMessageId, row.id));
+    expect(event.status).toBe("NEEDS_REVIEW");
+    expect(event.details).not.toHaveProperty("justInfo");
+    expect(await logs(row.id, "MAIL_REOPENED")).toHaveLength(1);
+    expect(await reopenMailAction({}, form({ id: row.id }))).toEqual({
+      success: "Back in Needs you.",
+    });
+    expect(await logs(row.id, "MAIL_REOPENED")).toHaveLength(1);
+  });
+
+  it("refuses to reopen after an outcome", async () => {
+    const row = await email({ companyKey: keys.double, classification: "FOLLOW_UP" });
+    await handleMail(row.id, { outcome: "passed", applicationId: apps.double[1] });
+    await expect(updateMail(row.id, { attention: "open" })).rejects.toMatchObject({
+      status: 409,
+      message: "An outcome was recorded from this email. Correct it on the application.",
+    });
+    expect((await message(row.id)).attentionState).toBe("DONE");
+  });
+
+  it("refuses to reopen lane-linked mail until it is unlinked", async () => {
+    const row = await email({ companyKey: keys.single, classification: "FOLLOW_UP" });
+    await db.transaction((tx) => linkMailToRecord(tx, row.id, apps.single[0], new Date()));
+    await expect(updateMail(row.id, { attention: "open" })).rejects.toMatchObject({
+      status: 409,
+      message: "This email was added to an application. Unlink it there to reopen it.",
+    });
+    await db.transaction((tx) => unlinkMailFromRecord(tx, row.id, apps.single[0], new Date()));
+    await handleMail(row.id, { justInfo: true });
+    expect(await updateMail(row.id, { attention: "open" })).toMatchObject({ attention: "open" });
+  });
+
+  it("records a round with its time from the Mail form", async () => {
+    const row = await email({ companyKey: keys.double, classification: "INTERVIEW" });
+    const fields = {
+      id: row.id,
+      outcome: "scheduled",
+      applicationId: apps.double[0],
+      day: "2026-11-03",
+      time: "15:00",
+      kind: "DSA",
+    };
+    expect(await handleMailAction({}, form(fields))).toEqual({
+      success: "Outcome recorded from this email.",
+    });
+    const rounds = await db
+      .select()
+      .from(applicationRounds)
+      .where(eq(applicationRounds.applicationId, apps.double[0]));
+    expect(rounds).toEqual([
+      expect.objectContaining({
+        kind: "DSA",
+        outcome: "SCHEDULED",
+        scheduledAt: new Date("2026-11-03T09:30:00Z"),
+      }),
+    ]);
+  });
+
+  it("returns the refusal when the email was already handled", async () => {
+    const row = await email({ companyKey: keys.double, classification: "FOLLOW_UP" });
+    const fields = { id: row.id, outcome: "followup", applicationId: apps.double[1] };
+    expect(await handleMailAction({}, form(fields))).toEqual({
+      success: "Outcome recorded from this email.",
+    });
+    expect(await handleMailAction({}, form(fields))).toEqual({
+      error: "This email has already been handled.",
+    });
   });
 });
