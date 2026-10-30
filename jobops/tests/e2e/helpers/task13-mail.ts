@@ -18,6 +18,10 @@ export async function seedMail(input: {
   classification: typeof mailMessages.$inferInsert.classification;
   recordId?: string;
   attentionState?: "OPEN" | "DONE";
+  companyKey?: string;
+  receivedAt?: Date;
+  senderName?: string;
+  bodyText?: string;
 }) {
   await guardMailFixtures();
   const id = randomUUID();
@@ -28,13 +32,14 @@ export async function seedMail(input: {
       id,
       externalId: id,
       sender: input.sender ?? "talent@example.invalid",
-      senderName: "Talent Team",
+      senderName: input.senderName ?? "Talent Team",
       subject: input.subject,
       snippet: `${input.subject} details`,
-      bodyText: `${input.subject} full message`,
-      receivedAt: new Date(),
+      bodyText: input.bodyText ?? `${input.subject} full message`,
+      receivedAt: input.receivedAt ?? new Date(),
       classification: input.classification,
       attentionState: input.attentionState ?? "OPEN",
+      companyKey: input.companyKey ?? null,
     })
     .returning();
   await guardMailFixtures();

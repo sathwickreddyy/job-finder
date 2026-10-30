@@ -4,7 +4,7 @@ import { eq, inArray } from "drizzle-orm";
 import { closeDatabase, db } from "../../src/db";
 import { activityLogs, applications, jobs } from "../../src/db/schema";
 import { stubExternalSites } from "./helpers/external-sites";
-import { cleanupMailFixtures, guardMailFixtures, seedMail } from "./helpers/task13-mail";
+import { cleanupMailFixtures, guardMailFixtures } from "./helpers/task13-mail";
 
 const recorded: { jobs: string[]; applications: string[]; companies: string[] } = {
   jobs: [],
@@ -27,29 +27,6 @@ test.afterEach(async ({ request }) => {
   recorded.jobs.length = recorded.applications.length = recorded.companies.length = 0;
 });
 test.afterAll(closeDatabase);
-
-const status = (page: import("@playwright/test").Page) =>
-  page.getByRole("navigation", { name: "Mail status" });
-
-test("needs attention, then just info", async ({ page }) => {
-  const subject = `Foundation interview ${randomUUID()}`;
-  await seedMail({ subject, classification: "INTERVIEW" });
-  await page.goto("/mail");
-  await expect(
-    status(page).getByRole("button", { name: /^Needs attention \(\d+\)$/ }),
-  ).toHaveAttribute("aria-pressed", "true");
-  const row = page.getByRole("button", { name: new RegExp(subject) });
-  await expect(row).toBeVisible();
-  await expect(row.getByText("Application / interview")).toBeVisible();
-  await row.click();
-  await page.getByRole("button", { name: "Just info", exact: true }).click();
-  await expect(page.getByRole("status").filter({ hasText: "Marked as just info." })).toBeVisible();
-  await expect(page.getByRole("button", { name: new RegExp(subject) })).toHaveCount(0);
-  await status(page).getByRole("button", { name: "All mail", exact: true }).click();
-  const handled = page.getByRole("button", { name: new RegExp(subject) });
-  await expect(handled).toBeVisible();
-  await expect(handled.getByText("Handled", { exact: true })).toBeVisible();
-});
 
 test("agent record appears on Applications and the company page", async ({ page, request }) => {
   const key = randomUUID().slice(0, 8);
@@ -89,30 +66,4 @@ test("agent record appears on Applications and the company page", async ({ page,
   await expect(
     page.locator("#applications").getByRole("link", { name: `Platform Engineer ${key}` }),
   ).toBeVisible();
-});
-
-test("captures the mail page for review", async ({ page }) => {
-  await seedMail({ subject: `Foundation offer ${randomUUID()}`, classification: "OFFER" });
-  await seedMail({
-    subject: `Foundation outreach ${randomUUID()}`,
-    classification: "RECRUITER_OUTREACH",
-  });
-  await seedMail({ subject: `Foundation rejection ${randomUUID()}`, classification: "REJECTION" });
-  for (const theme of ["light", "dark"] as const)
-    for (const [width, height] of [
-      [375, 812],
-      [1440, 900],
-    ]) {
-      await page.addInitScript((value) => localStorage.setItem("jobops-theme", value), theme);
-      await page.setViewportSize({ width, height });
-      await page.goto("/mail");
-      await expect(status(page)).toBeVisible();
-      expect(
-        await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
-      ).toBe(true);
-      await page.screenshot({
-        path: `test-results/mail-foundation/mail-${theme}-${width}.png`,
-        fullPage: true,
-      });
-    }
 });

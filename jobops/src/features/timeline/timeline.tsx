@@ -81,6 +81,12 @@ function MailRow({
   const { item } = entry;
   const needs = item.attention === "open";
   const [open, setOpen] = useState(startOpen);
+  // Handling an email in place keeps it open, so what was recorded stays in view.
+  const [wasOpen, setWasOpen] = useState(needs);
+  if (wasOpen !== needs) {
+    setWasOpen(needs);
+    if (!needs) setOpen(true);
+  }
   const row = useRef<HTMLLIElement>(null);
   useEffect(() => {
     if (startOpen) row.current?.scrollIntoView({ block: "center" });

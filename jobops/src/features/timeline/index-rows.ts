@@ -8,6 +8,8 @@ export type RailRow = {
   slug: string | null;
   group: RailGroup;
   signal: string;
+  /** The lane's next step, for the pane header; null for mail-only companies. */
+  next: string | null;
   due: RailDue | null;
   newCount: number;
   matches: number | null;
@@ -55,6 +57,7 @@ export function companyRows(input: {
       slug: input.names.get(lane.key)?.slug ?? null,
       group: open ? "needs" : groupOf[lane.group],
       signal: facts?.latestOpenKind ?? lane.next?.text ?? lane.status.label,
+      next: lane.next?.text ?? null,
       due: dueOf(lane.next),
       newCount: open,
       matches: null,
@@ -73,6 +76,7 @@ export function companyRows(input: {
       slug: input.names.get(facts.key)?.slug ?? null,
       group: facts.open ? "needs" : "closed",
       signal: facts.latestOpenKind ?? "No application recorded",
+      next: null,
       due: null,
       newCount: facts.open,
       matches: null,

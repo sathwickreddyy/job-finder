@@ -108,13 +108,14 @@ test("linking imported mail appends history without changing the application pha
   await page.getByRole("button", { name: "Import and classify messages", exact: true }).click();
   await expect.poll(() => captureImportedMail(`e2e-mail-${suffix}`)).toBeTruthy();
   await expect(page).toHaveURL(/\/mail$/);
-  await expect(page.getByRole("button", { name: new RegExp(subject) })).toBeVisible();
   await page.goto(`/mail/${(await captureImportedMail(`e2e-mail-${suffix}`)).id}`);
-  await page.getByLabel("Record for this message").selectOption(applicationId);
-  await page.getByRole("button", { name: "Link and update", exact: true }).click();
-  await expect(page.getByText(`Linking mail: ${subject}`)).toBeVisible();
-  await page.getByRole("button", { name: "Link without recording an outcome" }).click();
-  await expect(page.getByText("Message linked to your record.", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 2, name: "Needs a home" })).toBeVisible();
+  await page.getByText("Place at…").click();
+  await page
+    .getByLabel("Company or application")
+    .selectOption({ value: `application:${applicationId}` });
+  await page.getByRole("button", { name: "Place", exact: true }).click();
+  await expect(page.getByRole("button", { name: new RegExp(subject) })).toHaveCount(0);
   await page.goto(`/applications/${applicationId}`);
   await expect(page.getByTestId("phase-label")).toHaveText(previousPhase);
   await expect(page.getByRole("region", { name: "History" })).toContainText(subject);

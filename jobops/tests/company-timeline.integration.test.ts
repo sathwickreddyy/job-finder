@@ -1,17 +1,18 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { inArray, like } from "drizzle-orm";
+import { eq, inArray, like } from "drizzle-orm";
 import { closeDatabase, db } from "@/db";
 import {
   applicationEvents,
   applications,
   companyRecords,
   jobs,
+  mailEvents,
   mailMessages,
   mailTracking,
 } from "@/db/schema";
 import type { TimelineDay } from "@/features/timeline/entries";
-import { readCompanyIndex, readCompanyTimeline } from "@/features/timeline/read";
+import { readCompanyIndex, readCompanyTimeline, readHomeMail } from "@/features/timeline/read";
 import { assertE2eDatabase, dbTests } from "./helpers/e2e-db";
 
 const prefix = `company-timeline-${randomUUID()}`;
@@ -179,5 +180,59 @@ describe.skipIf(!dbTests)("company timeline", () => {
     expect(home.rows).toEqual([]);
     expect(home.home.matches).toBe(1);
     expect((await readCompanyIndex({ q: `Hidden ${prefix}` }, now)).rows).toEqual([]);
+  });
+
+  it("counts the company's mail by tag", async () => {
+    const all = await readCompanyTimeline(key, { tag: "offer" }, now);
+    expect(all.tags).toEqual({ opportunity: 0, process: 3, offer: 1, rejected: 0, other: 0 });
+    const role = await readCompanyTimeline(key, { application: ids.apps[1] }, now);
+    expect(role.tags).toMatchObject({ process: 1, offer: 0 });
+  });
+
+  it("leaves steps newer than an older page out of it", async () => {
+    const offer = (await db.select().from(mailMessages).where(eq(mailMessages.id, mail.offer)))[0];
+    const [later] = await db
+      .insert(applicationEvents)
+      .values({
+        applicationId: ids.apps[1],
+        eventType: "FOLLOW_UP_SENT",
+        summary: "Followed up",
+        occurredAt: new Date("2026-10-26T05:00:00Z"),
+      })
+      .returning();
+    const cursor = `${offer.receivedAt.toISOString()}|${offer.id}`;
+    const older = await readCompanyTimeline(key, { cursor }, now);
+    expect(mailIds(older.days)).toEqual([mail.placed]);
+    expect(stepTexts(older.days)).toEqual(["Applied for Platform", "Applied for Backend"]);
+    expect(stepTexts((await readCompanyTimeline(key, {}, now)).days)).toContain("Followed up");
+    await db.delete(applicationEvents).where(eq(applicationEvents.id, later.id));
+  });
+
+  it("shows mail saved as an opening as recorded", async () => {
+    const saved = await email({
+      companyKey: null,
+      subject: `Saved role ${prefix}`,
+      classification: "RECRUITER_OUTREACH",
+      attentionState: "DONE",
+      processedAt: new Date(),
+    });
+    await db.insert(mailEvents).values({
+      mailMessageId: saved.id,
+      type: "RECRUITER_OUTREACH",
+      confidence: 0.9,
+      status: "REVIEWED",
+      details: { savedOpeningId: randomUUID() },
+    });
+    const home = await readHomeMail({ q: `Saved role ${prefix}` }, now);
+    expect(home.days.flatMap((day) => day.entries)).toEqual([
+      expect.objectContaining({ type: "mail", recorded: "Saved as an opening" }),
+    ]);
+  });
+
+  it("lists Needs a home mail only", async () => {
+    const home = await readHomeMail({ q: `Unplaced ${prefix}` }, now);
+    expect(mailIds(home.days)).toEqual([mail.unplaced]);
+    expect(home.nextCursor).toBeNull();
+    expect(mailIds((await readHomeMail({ q: `offer letter ${prefix}` }, now)).days)).toEqual([]);
   });
 });

@@ -61,10 +61,12 @@ export function mailScope(query: z.output<typeof mailListSchema>, context: MailC
 export async function listMail(
   filters: z.input<typeof mailListSchema>,
   loaded?: MailContext,
+  /** Extra conditions for in-app views, such as Needs a home. */
+  extra: SQL[] = [],
 ): Promise<{ items: MailItem[]; nextCursor: string | null; openCount: number }> {
   const query = mailListSchema.parse(filters);
   const context = loaded ?? (await loadMailContext());
-  const scope = mailScope(query, context);
+  const scope = [...mailScope(query, context), ...extra];
   const open = ne(mailMessages.attentionState, "DONE");
   const page = [...scope, ...(query.attention === "open" ? [open] : [])];
   if (query.cursor) {

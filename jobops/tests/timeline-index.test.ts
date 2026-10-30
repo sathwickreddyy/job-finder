@@ -70,6 +70,7 @@ describe("companyRows", () => {
       mail: [facts("a")],
     });
     expect(result.rows[0].signal).toBe("Follow up if it stays quiet");
+    expect(result.rows[0].next).toBe("Follow up if it stays quiet");
     expect(rows({ lanes: [lane("b", "closed")] }).rows[0].signal).toBe("Applied");
   });
 
@@ -92,7 +93,7 @@ describe("companyRows", () => {
       ["quiet", "closed"],
       ["busy", "needs"],
     ]);
-    expect(result.rows[3]).toMatchObject({ newCount: 2, signal: "Offer", due: null });
+    expect(result.rows[3]).toMatchObject({ newCount: 2, signal: "Offer", due: null, next: null });
     expect(result.rows[1].signal).toBe("No application recorded");
   });
 

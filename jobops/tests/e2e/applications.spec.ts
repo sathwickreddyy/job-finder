@@ -313,7 +313,7 @@ test("linking an assessment mail books the OA and clears the message", async ({ 
   // Linked mail sits under its event on the lane; the record page lists the message itself.
   await page.goto(`/applications/${applicationId}`);
   await expect(page.getByRole("region", { name: "History" })).toContainText(subject);
-  await page.goto("/mail?view=all");
+  await page.goto(`/mail?${new URLSearchParams({ company })}`);
   await expect(page.getByRole("button", { name: new RegExp(subject) })).toBeVisible();
 });
 

@@ -8,6 +8,7 @@ import {
   type FormEvent,
   type ReactNode,
 } from "react";
+import Link from "next/link";
 import { Check, ChevronDown, Star, Undo2 } from "lucide-react";
 import { useLoadingTask } from "@/components/loading/overlay";
 import { outcomeMeta, type OutcomeId } from "@/features/applications/phase";
@@ -298,6 +299,14 @@ export function HandlingBar({
         </form>
       )}
       <Refusal state={state} />
+      {item.tag === "opportunity" && !item.application && (
+        <Link
+          href={`/jobs/new?fromMail=${item.id}`}
+          className="mt-2 inline-flex h-9 items-center rounded-full px-3 text-sm font-medium text-link hover:bg-muted hover:no-underline"
+        >
+          Save as opening
+        </Link>
+      )}
       {placeOptions && <PlaceAt item={item} options={placeOptions} />}
     </div>
   );

@@ -3,14 +3,12 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { eq, inArray, like } from "drizzle-orm";
 import { closeDatabase, db } from "@/db";
 import { companyRecords, mailMessages, mailTracking, settings } from "@/db/schema";
-import { listMail } from "@/features/mail/mail-list";
 import { ruleKey } from "@/features/mail/context";
-import { readMailWorkspace } from "@/features/mail/workspace-read";
 import { saveWorkspaceRule } from "@/features/mail/workspace-actions";
 import { assertE2eDatabase, dbTests } from "./helpers/e2e-db";
 
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
-const prefix = `mail-workspace-read-${randomUUID()}`;
+const prefix = `mail-rule-save-${randomUUID()}`;
 const domain = `r${randomUUID().slice(0, 8)}.invalid`;
 const name = `Rule ${prefix}`;
 const key = name.toLowerCase();
@@ -33,7 +31,7 @@ async function email(patch: Partial<typeof mailMessages.$inferInsert> = {}) {
   return row;
 }
 
-describe.skipIf(!dbTests)("mail workspace read model", () => {
+describe.skipIf(!dbTests)("saving a company mail rule", () => {
   beforeAll(assertE2eDatabase);
   afterAll(async () => {
     await assertE2eDatabase();
@@ -43,18 +41,6 @@ describe.skipIf(!dbTests)("mail workspace read model", () => {
     if (companies.length)
       await db.delete(companyRecords).where(inArray(companyRecords.id, companies));
     await closeDatabase();
-  });
-
-  it("workspace items equal the API items for the same filters", async () => {
-    await email();
-    await email({ attentionState: "DONE", processedAt: new Date() });
-    expect((await readMailWorkspace({ view: "open" })).items).toEqual(
-      (await listMail({ attention: "open" })).items,
-    );
-    const all = await readMailWorkspace({ view: "all", q: prefix });
-    expect(all.items).toEqual((await listMail({ attention: "all", q: prefix })).items);
-    expect(all.items).toHaveLength(2);
-    expect(all.openCount).toBe(1);
   });
 
   it("rule save places unplaced mail without reopening it", async () => {
