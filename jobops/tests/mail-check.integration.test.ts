@@ -250,11 +250,15 @@ describe.skipIf(!dbTests)("on-demand mail check", () => {
       if (row.id === a.id) throw new Error("Provider unavailable");
       return { messages: [] };
     });
-    await checkMailStep();
+    // The resumed inbox fails: the check is not over until every inbox has been checked.
+    const resumed = await checkMailStep();
+    expect(resumed.more).toBe(true);
+    expect(resumed.accounts.find((row) => row.account === b.email)?.status).toBe("more");
     const calls = scan.mock.calls.length;
-    await checkMailStep();
+    const last = await checkMailStep();
     const stepped = scan.mock.calls.slice(calls).map((call) => call[0].id);
     expect(stepped.sort()).toEqual([a.id, b.id].sort());
+    expect(last.more).toBe(false);
   });
 
   it("follows a resumed window with fresh windows for every inbox", async () => {

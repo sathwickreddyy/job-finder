@@ -340,7 +340,7 @@ export async function checkConnection(
 /**
  * One page per account. Accounts in the middle of a window go first so a check
  * finishes before new windows open; an account that failed mid-window does not
- * hold the others back.
+ * hold the others back. Only a step that checked every account can end the check.
  */
 export async function checkMailStep(): Promise<CheckResult> {
   const connections = await db.select().from(mailConnections).orderBy(mailConnections.createdAt);
@@ -392,20 +392,18 @@ export async function checkMailStep(): Promise<CheckResult> {
         error: result.error,
         lastFetchedAt: result.lastFetchedAt,
       };
+    // Waiting for the step that checks every inbox from its last fetch to now.
     return {
       account: row.email,
       provider: row.provider,
-      status: row.lastError ? "failed" : "done",
-      error: row.lastError,
+      status: "more",
+      error: null,
       lastFetchedAt: row.lastSyncedAt?.toISOString() ?? null,
     };
   });
-  // Finishing a resumed window leaves mail since that window unchecked, so the next
-  // step opens fresh windows for every inbox.
-  const resumedDone =
-    incomplete.length > 0 && [...stepped.values()].some((row) => row.status === "done");
   return {
-    more: accounts.some((row) => row.status === "more") || resumedDone,
+    // Finishing or failing a resumed window still leaves later mail unchecked.
+    more: incomplete.length > 0 || accounts.some((row) => row.status === "more"),
     newAttention: [...stepped.values()].reduce((sum, row) => sum + row.newAttention, 0),
     accounts,
   };
