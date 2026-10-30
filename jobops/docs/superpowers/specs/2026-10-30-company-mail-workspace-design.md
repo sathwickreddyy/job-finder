@@ -1,5 +1,7 @@
 # Company mail workspace — approved 2026-10-30
 
+> Partly superseded on 2026-10-30 by `2026-10-30-shared-mail-foundation-design.md`: Latest/History/Excluded, the separate history-recovery operation and provider search are retired in favour of one on-demand check, colour tags and a single attention flag.
+
 The current broad classifier imports networking and promotional mail; Outlook only searches Inbox and Gmail's initial query covers 30 days. This design replaces that experience with application and outbound-outreach updates, folder coverage and a separate historical recovery workflow. No LLM calls, scheduled polling, automatic sending or inferred application outcomes.
 
 ## Visual direction — revised after rejection on 2026-10-30
