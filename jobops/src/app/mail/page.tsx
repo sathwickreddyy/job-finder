@@ -16,12 +16,11 @@ export default async function MailPage({
       .filter(([, value]) => typeof value === "string")
       .map(([key, value]) => [key, value!.slice(0, 2000)]),
   ) as WorkspaceQuery;
-  if (query.application && !z.uuid().safeParse(query.application).success)
-    notFound();
+  if (query.application && !z.uuid().safeParse(query.application).success) notFound();
   const data = await readMailWorkspace(query);
   return (
     <MailWorkspace
-      key={`${query.company ?? ""}|${query.application ?? ""}`}
+      key={`${query.company ?? ""}|${query.application ?? ""}|${query.search ?? ""}`}
       data={data}
       initial={query}
     />

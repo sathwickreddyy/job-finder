@@ -13,23 +13,31 @@ export function CompanyRuleEditor({
   company: string;
   rule: CompanyMailRule;
   disabled: boolean;
-  onSaved(): void;
+  onSaved(message: string): void;
   onPending(value: boolean): void;
 }) {
-  const [values, setValues] = useState(rule);
+  // The parent remounts this editor whenever the saved rule changes.
+  const [saved] = useState(() => ({
+    domains: rule.domains.join(", "),
+    senders: rule.senders.join(", "),
+    aliases: rule.aliases.join(", "),
+    subjectTerms: rule.subjectTerms.join(", "),
+    excludedTerms: rule.excludedTerms.join(", "),
+  }));
+  const [values, setValues] = useState(saved);
   const [pending, setPending] = useState(false);
   const [feedback, setFeedback] = useState("");
+  const changed = (Object.keys(saved) as (keyof typeof saved)[]).some(
+    (key) => values[key] !== saved[key],
+  );
   return (
-    <details className="rounded-2xl border border-border bg-card p-5" open>
-      <summary className="cursor-pointer text-sm font-semibold">
-        Company mail rules · {rule.company}
-      </summary>
+    <>
       <p className="text-xs text-muted-foreground">
         Identity matches a sender domain, exact address, or company name in the subject. Job-search
         updates and verified contacted-person replies are kept. Shopping, cloud billing, digests and
         promotions are excluded. Generic mentions in the body do not establish a company match.
       </p>
-      <fieldset disabled={disabled || pending} className="grid min-w-0 gap-4 md:grid-cols-2">
+      <fieldset disabled={disabled || pending} className="grid min-w-0 gap-4">
         {(
           [
             ["domains", "Recruiting sender domains", "company.com, careers.company.com"],
@@ -43,10 +51,10 @@ export function CompanyRuleEditor({
             {title}
             <input
               className="mt-1.5"
-              value={values[key].join(", ")}
+              value={values[key]}
               placeholder={placeholder}
               onChange={(event) =>
-                setValues((current) => ({ ...current, [key]: event.target.value.split(",") }))
+                setValues((current) => ({ ...current, [key]: event.target.value }))
               }
             />
           </label>
@@ -54,7 +62,8 @@ export function CompanyRuleEditor({
         <div className="flex items-end">
           <Button
             type="button"
-            variant="outline"
+            disabled={!changed}
+            className="shadow-surface"
             onClick={async () => {
               setPending(true);
               onPending(true);
@@ -67,14 +76,15 @@ export function CompanyRuleEditor({
                 "subjectTerms",
                 "excludedTerms",
               ] as const)
-                form.set(key, values[key].join(","));
+                form.set(key, values[key]);
               try {
                 const result = await saveWorkspaceRule({}, form);
-                setFeedback(
-                  result.error ??
+                // Saving remounts this editor, so the parent reports success.
+                if (result.error) setFeedback(result.error);
+                else
+                  onSaved(
                     "Rules saved. Cached content is rechecked. Run a company check to find additional matches; old mail stays old.",
-                );
-                if (!result.error) onSaved();
+                  );
               } catch {
                 setFeedback("Rules could not be saved. Retry.");
               } finally {
@@ -96,6 +106,6 @@ export function CompanyRuleEditor({
           {feedback}
         </p>
       )}
-    </details>
+    </>
   );
 }

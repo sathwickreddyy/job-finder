@@ -1,6 +1,5 @@
 "use client";
 import { useEffect, useState, useTransition } from "react";
-import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowLeft,
@@ -13,6 +12,7 @@ import {
   Folder,
   History,
   Inbox,
+  Link2,
   Mail,
   RefreshCw,
   Search,
@@ -25,20 +25,16 @@ import { cn } from "@/lib/utils";
 import { useLoadingTask } from "@/components/loading/overlay";
 import {
   checkWorkspaceMail,
-  saveWorkspaceRule,
   reviewWorkspaceMail,
   associateWorkspaceMail,
 } from "./workspace-actions";
-import type {
-  MailWorkspaceData,
-  WorkspaceQuery,
-  MailRow,
-} from "./workspace-data";
-import type { CompanyMailRule } from "./search-policy";
+import type { MailWorkspaceData, WorkspaceQuery, MailRow } from "./workspace-data";
+import { CompanyRuleEditor } from "./company-rule-editor";
+import { HistorySearchPanel } from "./history-search-panel";
 import type { ActionState } from "@/lib/actions";
 type Scope = "all" | "company" | "application";
 type View = "latest" | "history" | "excluded";
-type Detail = "message" | "rules" | "folders";
+type Detail = "message" | "rules" | "folders" | "search";
 const formatDate = (value: string) =>
   new Intl.DateTimeFormat("en-IN", {
     timeZone: "Asia/Kolkata",
@@ -55,7 +51,10 @@ export function MailWorkspace({
   const router = useRouter();
   const params = useSearchParams();
   const currentParams = params.toString();
-  const [pending, startTransition] = useTransition();
+  const [transitionPending, startTransition] = useTransition();
+  const [savingRules, setSavingRules] = useState(false);
+  const [searching, setSearching] = useState(false);
+  const pending = transitionPending || savingRules || searching;
   useLoadingTask(pending, "Updating mail workspace");
   const companies = data.companies.map((row) => ({
     ...row,
@@ -63,37 +62,32 @@ export function MailWorkspace({
   }));
   const applications = data.applications;
   const accountNames = data.connections.map((row) => row.email);
-  const scope: Scope = initial.application
-    ? "application"
-    : initial.company
-      ? "company"
-      : "all";
+  const scope: Scope = initial.application ? "application" : initial.company ? "company" : "all";
   const companyId = initial.company ?? companies[0]?.id ?? "";
   const applicationId = initial.application ?? applications[0]?.id ?? "";
   const view: View =
-    initial.view === "history" || initial.view === "excluded"
-      ? initial.view
-      : "latest";
+    initial.view === "history" || initial.view === "excluded" ? initial.view : "latest";
   const [selectedId, setSelectedId] = useState(initial.selected ?? "");
-  const [rules, setRules] = useState<Record<string, CompanyMailRule>>(
-    Object.fromEntries(companies.map((row) => [row.id, row.rule])),
-  );
   const account = initial.account ?? "All accounts";
-  const [query, setQuery] = useState(initial.q ?? "");
+  const [search, setSearch] = useState({ saved: initial.q ?? "", draft: initial.q ?? "" });
+  // Back/forward navigation changes the URL without remounting this workspace.
+  if (search.saved !== (initial.q ?? ""))
+    setSearch({ saved: initial.q ?? "", draft: initial.q ?? "" });
+  const query = search.draft;
   const [feedback, setFeedback] = useState(initial.notice ?? "");
-  const [detail, setDetail] = useState<Detail>("message");
-  const [mobileReader, setMobileReader] = useState(false);
+  const [detail, setDetail] = useState<Detail>(initial.search === "1" ? "search" : "message");
+  const [mobileReader, setMobileReader] = useState(initial.search === "1");
   const [showThread, setShowThread] = useState(false);
-  const [linkTarget, setLinkTarget] = useState("");
+  const [linkChoice, setLinkChoice] = useState({ message: "", application: "" });
+  // The picker belongs to one message; selecting another message closes it.
+  const [linking, setLinking] = useState("");
+  const [checking, setChecking] = useState(false);
   const [ruleOverride, setRuleOverride] = useState("");
-  const currentApplication = applications.find(
-    (row) => row.id === applicationId,
-  ) ?? {
+  const currentApplication = applications.find((row) => row.id === applicationId) ?? {
     company: companyId,
     role: "Choose an application",
   };
-  const contextCompany =
-    scope === "application" ? currentApplication.company : companyId;
+  const contextCompany = scope === "application" ? currentApplication.company : companyId;
   const company = companies.find((row) => row.id === contextCompany) ?? {
     id: "",
     name: "Company",
@@ -101,20 +95,22 @@ export function MailWorkspace({
   const all = data.messages;
   const visible = all;
   const counts = data.counts;
-  const selected =
-    visible.find((message) => message.id === selectedId) ?? visible[0];
-  const selectedCompany = companies.find((row) => row.id === selected?.company);
-  const selectedApplication = applications.find(
-    (row) => row.id === selected?.application,
+  const selected = visible.find((message) => message.id === selectedId) ?? visible[0];
+  const linkTarget = linkChoice.message === selected?.id ? linkChoice.application : "";
+  // Linked messages cannot be moved to another application here.
+  const canLink = Boolean(
+    selected?.messageId && !selected.application && applications.length && view !== "excluded",
   );
+  const showLink = canLink && linking === selected?.id;
+  const selectedCompany = companies.find((row) => row.id === selected?.company);
+  const selectedApplication = applications.find((row) => row.id === selected?.application);
   const ruleId =
-    ruleOverride ||
-    (scope === "all" ? selected?.company || companyId : contextCompany);
+    ruleOverride || (scope === "all" ? selected?.company || companyId : contextCompany);
   const ruleCompany = companies.find((row) => row.id === ruleId) ?? {
     name: "Choose a company",
     ruleSource: "Select a company before editing its pattern",
   };
-  const rule = rules[ruleId] ?? {
+  const rule = companies.find((row) => row.id === ruleId)?.rule ?? {
     company: "",
     aliases: [],
     domains: [],
@@ -133,34 +129,26 @@ export function MailWorkspace({
       )
     : [];
   const title =
-    scope === "all"
-      ? "All mail"
-      : scope === "company"
-        ? company.name
-        : currentApplication.role;
+    scope === "all" ? "All mail" : scope === "company" ? company.name : currentApplication.role;
   const subtitle =
     scope === "all"
       ? "Every company and application, across your connected accounts."
       : scope === "company"
         ? "All applications and outreach"
         : `${company.name} / Application mail`;
-  function navigate(
-    changes: Record<string, string | undefined>,
-    clearBefore = false,
-  ) {
+  function navigate(changes: Record<string, string | undefined>, clearBefore = false) {
     const next = new URLSearchParams(currentParams);
     if (!("before" in changes) || clearBefore) next.delete("before");
     for (const [key, value] of Object.entries(changes)) {
       if (value) next.set(key, value);
       else next.delete(key);
     }
-    next.delete("notice");
+    if (!("notice" in changes)) next.delete("notice");
+    next.delete("search");
     next.delete("selected");
     setDetail("message");
     setMobileReader(false);
-    startTransition(() =>
-      router.push(`/mail${next.size ? `?${next}` : ""}`, { scroll: false }),
-    );
+    startTransition(() => router.push(`/mail${next.size ? `?${next}` : ""}`, { scroll: false }));
   }
   useEffect(() => {
     if (query.trim().slice(0, 200) === (params.get("q") ?? "")) return;
@@ -191,15 +179,6 @@ export function MailWorkspace({
   function setAccount(next: string) {
     navigate({ account: next === "All accounts" ? undefined : next });
   }
-  function changeRule(
-    key: "aliases" | "domains" | "senders" | "subjectTerms" | "excludedTerms",
-    text: string,
-  ) {
-    setRules((previous) => ({
-      ...previous,
-      [ruleId]: { ...rule, [key]: text.split(",") },
-    }));
-  }
   function openDetail(next: Detail) {
     setDetail(next);
     setMobileReader(true);
@@ -207,14 +186,15 @@ export function MailWorkspace({
   function run(
     action: (previous: ActionState, form: FormData) => Promise<ActionState>,
     fields: Record<string, string>,
+    onSuccess?: () => void,
   ) {
     startTransition(async () => {
       const form = new FormData();
-      for (const [key, value] of Object.entries(fields))
-        if (value) form.set(key, value);
+      for (const [key, value] of Object.entries(fields)) if (value) form.set(key, value);
       try {
         const result = await action({}, form);
         setFeedback(result.error ?? result.success ?? "");
+        if (!result.error) onSuccess?.();
         router.refresh();
       } catch {
         setFeedback(
@@ -224,6 +204,7 @@ export function MailWorkspace({
     });
   }
   function runCheck(mode: "latest" | "history") {
+    setChecking(true);
     startTransition(async () => {
       const form = new FormData();
       for (const [key, value] of Object.entries({
@@ -248,19 +229,15 @@ export function MailWorkspace({
           scanned += result.mailScan?.scanned ?? 0;
           more = result.mailScan?.more ?? false;
           if (result.error || result.mailScan?.failed) break;
-          setFeedback(
-            `${scanned} messages examined. ${historical} historical matches found.`,
-          );
+          setFeedback(`${scanned} messages examined. ${historical} historical matches found.`);
           if (!more) break;
         }
         setFeedback(
           result.error || result.mailScan?.failed
-            ? (result.error ??
-                result.success ??
-                "Check interrupted; see Accounts for details.")
+            ? (result.error ?? result.success ?? "Check interrupted; see Accounts for details.")
             : `${mode === "history" ? `${historical} historical ${historical === 1 ? "match" : "matches"} saved to History` : `${arrived} new ${arrived === 1 ? "update" : "updates"}; ${historical} older ${historical === 1 ? "match" : "matches"} kept in History`}. ${more ? "More mail remains. Continue the check to resume." : "Selected window checked across all accounts."}`,
         );
-        if (mode === "history") {
+        if (mode === "history" && !result.error && !result.mailScan?.failed) {
           const next = new URLSearchParams(currentParams);
           next.set("view", "history");
           next.delete("before");
@@ -273,34 +250,22 @@ export function MailWorkspace({
         setFeedback(
           "Connection interrupted. Saved scan pages are safe. Reload or retry to continue.",
         );
+      } finally {
+        setChecking(false);
       }
     });
   }
 
-  function saveRule() {
-    run(saveWorkspaceRule, {
-      company: ruleId,
-      ...Object.fromEntries(
-        ["aliases", "domains", "senders", "subjectTerms", "excludedTerms"].map(
-          (key) => [
-            key,
-            rule[key as keyof typeof rule] instanceof Array
-              ? (rule[key as keyof typeof rule] as string[]).join(",")
-              : "",
-          ],
-        ),
-      ),
-    });
-  }
   function reviewMessage() {
     if (selected) {
-      run(reviewWorkspaceMail, { id: selected.id });
-      setMobileReader(false);
+      run(reviewWorkspaceMail, { id: selected.id }, () => setMobileReader(false));
     }
   }
   function associateMessage() {
     if (selected)
-      run(associateWorkspaceMail, { id: selected.id, application: linkTarget });
+      run(associateWorkspaceMail, { id: selected.id, application: linkTarget }, () =>
+        setLinking(""),
+      );
   }
   return (
     <div className="space-y-4">
@@ -311,38 +276,48 @@ export function MailWorkspace({
             Your hiring conversations
           </span>
         </div>
-        <div className="flex flex-wrap items-center gap-4">
-          <Button asChild>
-            <Link href={`/mail/search?${new URLSearchParams({
-              ...(initial.company ? { company: initial.company } : {}),
-              ...(initial.application ? { application: initial.application } : {}),
-              ...(initial.account ? { account: initial.account } : {}),
-            })}`}><Search size={16} aria-hidden />Search inboxes</Link>
-          </Button>
-          <button
-            onClick={() => openDetail("folders")}
-            className="text-xs text-link"
-          >
-            Accounts
-          </button>
+        <div className="flex flex-wrap items-center gap-2">
           <Button
-            variant="outline"
-            title="Uses saved company rules and the monitoring window. Use Search inboxes to choose an explicit duration and pattern."
+            variant="ghost"
+            disabled={pending}
+            onClick={() => openDetail("search")}
+            className="gap-1.5 text-link"
+          >
+            <History size={15} aria-hidden />
+            Search inboxes
+            <ChevronDown size={13} aria-hidden />
+          </Button>
+          <Button
+            size="icon"
+            variant="ghost"
+            disabled={pending}
+            aria-label="Mail settings"
+            title="Mail settings"
+            className="!size-11 shrink-0"
+            onClick={() => openDetail("folders")}
+          >
+            <Settings2 size={18} aria-hidden />
+          </Button>
+          <Button
+            className="group min-h-11 gap-2.5 px-5 shadow-surface active:scale-[0.98] motion-reduce:transform-none"
+            title="Check connected accounts for new hiring updates"
             disabled={pending || !data.connections.length}
             onClick={() => runCheck("latest")}
           >
             <RefreshCw
               size={16}
               aria-hidden
-              className={pending ? "animate-spin" : undefined}
+              className={
+                checking
+                  ? "animate-spin"
+                  : "transition-transform group-hover:rotate-45 motion-reduce:transition-none"
+              }
             />
-            {pending
+            {checking
               ? "Checking…"
-              : data.scans.some(
-                    (scan) => scan.mode === "latest" && !scan.complete,
-                  )
-                ? "Continue tracked check"
-                : "Update tracked mail"}
+              : data.scans.some((scan) => scan.mode === "latest" && !scan.complete)
+                ? "Continue check"
+                : "Check mail"}
           </Button>
         </div>
       </header>
@@ -382,9 +357,7 @@ export function MailWorkspace({
               </button>
             ))}
           </nav>
-          <p className="mb-2 mt-8 px-3 text-xs text-muted-foreground">
-            Companies
-          </p>
+          <p className="mb-2 mt-8 px-3 text-xs text-muted-foreground">Companies</p>
           {companies.slice(0, 12).map((row) => (
             <button
               key={row.id}
@@ -411,13 +384,6 @@ export function MailWorkspace({
               <Mail size={14} aria-hidden />
               {data.connections.length} connected accounts
             </p>
-            <button
-              onClick={() => openDetail("folders")}
-              className="flex items-center gap-2 text-xs text-link"
-            >
-              <Folder size={14} aria-hidden />
-              Folders & coverage
-            </button>
           </div>
         </aside>
 
@@ -431,12 +397,8 @@ export function MailWorkspace({
           <div className="px-5 pb-4 pt-5">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <h2 className="m-0 text-xl font-semibold tracking-tight">
-                  {title}
-                </h2>
-                <p className="mb-0 mt-1 text-xs text-muted-foreground">
-                  {subtitle}
-                </p>
+                <h2 className="m-0 text-xl font-semibold tracking-tight">{title}</h2>
+                <p className="mb-0 mt-1 text-xs text-muted-foreground">{subtitle}</p>
               </div>
             </div>
             <div className="mt-4 flex gap-2 lg:hidden">
@@ -454,28 +416,14 @@ export function MailWorkspace({
                   </option>
                 </select>
               </label>
-              <Button
-                variant="ghost"
-                size="icon"
-                aria-label="Folders and coverage"
-                onClick={() => openDetail("folders")}
-              >
-                <Folder size={17} aria-hidden />
-              </Button>
             </div>
             {scope !== "all" && (
               <label className="mt-4 block">
                 <span className="sr-only">
-                  {scope === "company"
-                    ? "Choose company"
-                    : "Choose application"}
+                  {scope === "company" ? "Choose company" : "Choose application"}
                 </span>
                 <select
-                  aria-label={
-                    scope === "company"
-                      ? "Choose company"
-                      : "Choose application"
-                  }
+                  aria-label={scope === "company" ? "Choose company" : "Choose application"}
                   value={scope === "company" ? companyId : applicationId}
                   onChange={(event) =>
                     scope === "company"
@@ -491,11 +439,7 @@ export function MailWorkspace({
                       ))
                     : applications.map((row) => (
                         <option key={row.id} value={row.id}>
-                          {
-                            companies.find((item) => item.id === row.company)
-                              ?.name
-                          }{" "}
-                          / {row.role}
+                          {companies.find((item) => item.id === row.company)?.name} / {row.role}
                         </option>
                       ))}
                 </select>
@@ -507,14 +451,16 @@ export function MailWorkspace({
                 aria-hidden
                 className="pointer-events-none absolute left-3 top-3 text-muted-foreground"
               />
-              <span className="sr-only">Search mail</span>
+              <span className="sr-only">Search saved mail</span>
               <input
-                aria-label="Search mail"
+                aria-label="Search saved mail"
                 maxLength={200}
                 value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="Search mail"
-                className="!border-transparent !bg-background !pl-10"
+                onChange={(event) =>
+                  setSearch({ saved: initial.q ?? "", draft: event.target.value })
+                }
+                placeholder="Search saved mail"
+                className="!min-h-11 !rounded-full !border-transparent !bg-background !pl-10"
               />
             </label>
           </div>
@@ -522,9 +468,9 @@ export function MailWorkspace({
             <nav aria-label="Mail status" className="flex min-w-0 gap-1">
               {(
                 [
-                  ["latest", "Latest"],
+                  ["latest", "New"],
                   ["history", "History"],
-                  ["excluded", "Excluded"],
+                  ...(view === "excluded" ? [["excluded", "Excluded"] as const] : []),
                 ] as const
               ).map(([id, label]) => (
                 <button
@@ -536,14 +482,14 @@ export function MailWorkspace({
                   }}
                   aria-pressed={view === id}
                   className={cn(
-                    "flex items-center gap-1.5 border-b-2 px-2 py-3 text-xs font-medium",
+                    "flex min-h-11 items-center gap-2 border-b-2 px-3 text-sm font-medium transition-colors motion-reduce:transition-none",
                     view === id
                       ? "border-primary text-link"
-                      : "border-transparent text-muted-foreground hover:text-foreground",
+                      : "border-transparent text-muted-foreground hover:bg-muted/40 hover:text-foreground",
                   )}
                 >
                   {label}
-                  <span className="tabular-nums opacity-70">{counts[id]}</span>
+                  <span className="text-xs tabular-nums opacity-75">{counts[id]}</span>
                 </button>
               ))}
             </nav>
@@ -568,10 +514,7 @@ export function MailWorkspace({
               className="flex items-start justify-between gap-3 bg-selected px-5 py-3 text-xs text-selected-foreground"
             >
               <span>{feedback}</span>
-              <button
-                onClick={() => setFeedback("")}
-                aria-label="Dismiss feedback"
-              >
+              <button onClick={() => setFeedback("")} aria-label="Dismiss feedback">
                 <X size={14} aria-hidden />
               </button>
             </div>
@@ -588,16 +531,13 @@ export function MailWorkspace({
                 </p>
                 <ul className="m-0 list-none p-0">
                   {visible.map((message, index) => {
-                    const ownCompany = companies.find(
-                      (row) => row.id === message.company,
-                    );
+                    const ownCompany = companies.find((row) => row.id === message.company);
                     const ownApplication = applications.find(
                       (row) => row.id === message.application,
                     );
                     return (
                       <li key={message.id}>
-                        {(index === 0 ||
-                          visible[index - 1].group !== message.group) && (
+                        {(index === 0 || visible[index - 1].group !== message.group) && (
                           <p className="m-0 bg-background/60 px-5 py-2 text-xs text-muted-foreground">
                             {message.group}
                           </p>
@@ -609,9 +549,7 @@ export function MailWorkspace({
                             setShowThread(false);
                             setMobileReader(true);
                           }}
-                          aria-pressed={
-                            selected?.id === message.id && detail === "message"
-                          }
+                          aria-pressed={selected?.id === message.id && detail === "message"}
                           className={cn(
                             "relative block w-full border-b border-border/40 px-5 py-3 text-left transition-colors motion-reduce:transition-none",
                             selected?.id === message.id && detail === "message"
@@ -620,9 +558,7 @@ export function MailWorkspace({
                           )}
                         >
                           <span className="flex items-center justify-between gap-3">
-                            <span className="truncate text-sm font-medium">
-                              {message.name}
-                            </span>
+                            <span className="truncate text-sm font-medium">{message.name}</span>
                             <span className="shrink-0 text-xs text-muted-foreground">
                               {message.time}
                             </span>
@@ -646,9 +582,7 @@ export function MailWorkspace({
                                 Found in {message.sourceFolder}
                               </span>
                             )}
-                            <span className="ml-auto text-muted-foreground">
-                              {message.account}
-                            </span>
+                            <span className="ml-auto text-muted-foreground">{message.account}</span>
                           </span>
                         </button>
                       </li>
@@ -658,21 +592,22 @@ export function MailWorkspace({
               </>
             ) : (
               <div className="px-8 py-16 text-center">
-                <Inbox
-                  size={24}
-                  aria-hidden
-                  className="mx-auto text-muted-foreground"
-                />
+                <Inbox size={24} aria-hidden className="mx-auto text-muted-foreground" />
                 <h3 className="mb-0 mt-4 text-base font-medium">
-                  {view === "latest"
-                    ? "No new matching mail"
-                    : "No matching messages"}
+                  {view === "latest" ? "No new matching mail" : "No matching messages"}
                 </h3>
                 <p className="mb-0 mt-2 text-sm text-muted-foreground">
                   {query
                     ? "Try a different search."
-                    : "Change the company, application or account to see more."}
+                    : view === "latest" && counts.history
+                      ? "Earlier conversations are saved in History."
+                      : "Check mail or search your inboxes to find hiring updates."}
                 </p>
+                {view === "latest" && counts.history > 0 && (
+                  <Button variant="outline" className="mt-5" onClick={() => setView("history")}>
+                    View history ({counts.history})
+                  </Button>
+                )}
               </div>
             )}
           </div>
@@ -682,10 +617,7 @@ export function MailWorkspace({
             </span>
             <div className="flex gap-3">
               {initial.before && (
-                <button
-                  className="text-link"
-                  onClick={() => navigate({}, true)}
-                >
+                <button className="text-link" onClick={() => navigate({}, true)}>
                   Newest
                 </button>
               )}
@@ -697,18 +629,6 @@ export function MailWorkspace({
                   Older results
                 </button>
               )}
-              <button
-                disabled={pending}
-                className="flex items-center gap-1.5 text-link"
-                onClick={() => runCheck("history")}
-              >
-                <History size={13} aria-hidden />
-                {data.scans.some(
-                  (scan) => scan.mode === "history" && !scan.complete,
-                )
-                  ? "Continue history"
-                  : "Find older mail"}
-              </button>
             </div>
           </div>
         </section>
@@ -719,12 +639,11 @@ export function MailWorkspace({
               ? "Conversation"
               : detail === "rules"
                 ? "Company mail rules"
-                : "Folder coverage"
+                : detail === "search"
+                  ? "Search inboxes"
+                  : "Mail settings"
           }
-          className={cn(
-            "flex min-h-0 min-w-0 flex-col",
-            !mobileReader && "hidden md:flex",
-          )}
+          className={cn("flex min-h-0 min-w-0 flex-col", !mobileReader && "hidden md:flex")}
         >
           <div className="flex min-h-14 items-center justify-between gap-3 border-b border-border px-5">
             <button
@@ -740,30 +659,10 @@ export function MailWorkspace({
               ) : (
                 "Back to message"
               )}
-              <span
-                className={detail === "message" ? "hidden md:inline" : "hidden"}
-              >
+              <span className={detail === "message" ? "hidden md:inline" : "hidden"}>
                 Conversation
               </span>
             </button>
-            <div className="flex items-center gap-1">
-              <Button
-                size="icon"
-                variant="ghost"
-                aria-label="Company mail pattern"
-                onClick={() => openDetail("rules")}
-              >
-                <Settings2 size={16} aria-hidden />
-              </Button>
-              <Button
-                size="icon"
-                variant="ghost"
-                aria-label="Folder coverage"
-                onClick={() => openDetail("folders")}
-              >
-                <Folder size={16} aria-hidden />
-              </Button>
-            </div>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto p-6 xl:p-8">
             {detail === "message" ? (
@@ -808,9 +707,7 @@ export function MailWorkspace({
                         {selected.sender}
                       </p>
                     </div>
-                    <span className="text-xs text-muted-foreground">
-                      {selected.time}
-                    </span>
+                    <span className="text-xs text-muted-foreground">{selected.time}</span>
                   </div>
                   <p className="mb-0 mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
                     <span>{selected.account}</span>
@@ -827,9 +724,7 @@ export function MailWorkspace({
                   </div>
                   <details className="mt-8 border-t border-border/60 py-4 text-xs text-muted-foreground">
                     <summary className="cursor-pointer">
-                      {view === "excluded"
-                        ? "Why this was excluded"
-                        : "Why this belongs here"}
+                      {view === "excluded" ? "Why this was excluded" : "Why this belongs here"}
                     </summary>
                     <p className="mb-0 mt-3">{selected.decision.reason}</p>
                     <p className="mb-0 mt-2">
@@ -837,9 +732,7 @@ export function MailWorkspace({
                       {formatDate(selected.firstTrackedAt)}.
                     </p>
                     {selected.decision.evidence.length > 0 && (
-                      <p className="mb-0 mt-2">
-                        {selected.decision.evidence.join(". ")}.
-                      </p>
+                      <p className="mb-0 mt-2">{selected.decision.evidence.join(". ")}.</p>
                     )}
                   </details>
                   {selectedApplication && (
@@ -856,53 +749,11 @@ export function MailWorkspace({
                       >
                         Application mail history
                       </button>
-                      <a
-                        className="text-link"
-                        href={`/applications/${selectedApplication.id}`}
-                      >
+                      <a className="text-link" href={`/applications/${selectedApplication.id}`}>
                         Open application
                       </a>
                     </div>
                   )}
-                  {selected.messageId &&
-                    applications.length > 0 &&
-                    view !== "excluded" && (
-                      <div className="border-t border-border py-4">
-                        <label className="text-xs text-muted-foreground">
-                          Link this message to an application
-                          <select
-                            aria-label="Link to application"
-                            className="mt-2"
-                            value={linkTarget}
-                            onChange={(event) =>
-                              setLinkTarget(event.target.value)
-                            }
-                          >
-                            <option value="">Choose application</option>
-                            {data.applications
-                              .filter(
-                                (app) =>
-                                  !selected.companyKeys.length ||
-                                  selected.companyKeys.includes(app.company),
-                              )
-                              .map((app) => (
-                                <option key={app.id} value={app.id}>
-                                  {app.role}
-                                </option>
-                              ))}
-                          </select>
-                        </label>
-                        <Button
-                          disabled={pending || !linkTarget}
-                          variant="outline"
-                          size="sm"
-                          className="mt-2"
-                          onClick={associateMessage}
-                        >
-                          Link to application
-                        </Button>
-                      </div>
-                    )}
                   {thread.length > 0 && (
                     <div className="border-t border-border/60 py-4">
                       <button
@@ -911,8 +762,7 @@ export function MailWorkspace({
                         className="flex w-full items-center justify-between text-xs text-muted-foreground"
                       >
                         <span>
-                          {thread.length} earlier{" "}
-                          {thread.length === 1 ? "message" : "messages"} for
+                          {thread.length} earlier {thread.length === 1 ? "message" : "messages"} for
                           this application
                         </span>
                         <ChevronDown
@@ -923,16 +773,11 @@ export function MailWorkspace({
                       </button>
                       {showThread &&
                         thread.map((message) => (
-                          <div
-                            key={message.id}
-                            className="mt-4 border-l border-border pl-4"
-                          >
+                          <div key={message.id} className="mt-4 border-l border-border pl-4">
                             <p className="m-0 text-xs text-muted-foreground">
                               {message.time} / {message.sourceFolder}
                             </p>
-                            <p className="mb-0 mt-1 text-sm font-medium">
-                              {message.subject}
-                            </p>
+                            <p className="mb-0 mt-1 text-sm font-medium">{message.subject}</p>
                             <p className="mb-0 mt-2 whitespace-pre-line text-xs leading-6 text-muted-foreground">
                               {message.bodyText}
                             </p>
@@ -947,11 +792,27 @@ export function MailWorkspace({
                   <p className="mb-0 mt-4 text-sm">Select a conversation</p>
                 </div>
               )
+            ) : detail === "search" ? (
+              <HistorySearchPanel
+                companies={companies}
+                accounts={data.connections}
+                initialCompany={scope === "all" ? "" : contextCompany}
+                initialAccount={initial.account}
+                onPending={setSearching}
+                onOpenResults={(company, notice) => {
+                  setFeedback(notice);
+                  navigate({
+                    company,
+                    application: undefined,
+                    view: "history",
+                    q: undefined,
+                    notice,
+                  });
+                }}
+              />
             ) : detail === "rules" ? (
               <>
-                <h3 className="m-0 text-lg font-semibold">
-                  Company mail pattern
-                </h3>
+                <h3 className="m-0 text-lg font-semibold">Company mail pattern</h3>
                 <label className="mt-4 block text-xs">
                   Company
                   <select
@@ -968,75 +829,51 @@ export function MailWorkspace({
                   </select>
                 </label>
                 <p className="mb-6 mt-2 text-xs text-muted-foreground">
-                  {ruleCompany.ruleSource}. These patterns filter incoming
-                  hiring mail.
+                  {ruleCompany.ruleSource}. These patterns filter incoming hiring mail.
                 </p>
-                {(
-                  [
-                    ["aliases", "Company names", "Alternate names"],
-                    ["domains", "Sender domains", "company.example"],
-                    [
-                      "senders",
-                      "Exact email addresses",
-                      "recruiter@company.example",
-                    ],
-                    [
-                      "subjectTerms",
-                      "Subject includes",
-                      "Optional words or application ID",
-                    ],
-                    ["excludedTerms", "Exclude phrases", "Optional phrases"],
-                  ] as const
-                ).map(([key, label, placeholder]) => (
-                  <label key={key} className="mb-4 block text-xs font-medium">
-                    {label}
-                    <input
-                      className="mt-1.5"
-                      value={rule[key].join(", ")}
-                      onChange={(event) => changeRule(key, event.target.value)}
-                      placeholder={placeholder}
-                    />
-                  </label>
-                ))}
-                <p className="text-xs text-muted-foreground">
-                  Separate entries with commas.
-                </p>
-                <Button disabled={pending || !ruleId} onClick={saveRule}>
-                  Save pattern
-                </Button>
+                {ruleId && (
+                  <CompanyRuleEditor
+                    key={`${ruleId}:${JSON.stringify(rule)}`}
+                    company={ruleId}
+                    rule={rule}
+                    disabled={transitionPending}
+                    onPending={setSavingRules}
+                    onSaved={(message) => {
+                      setFeedback(message);
+                      router.refresh();
+                    }}
+                  />
+                )}
                 <div className="mt-7 border-t border-border pt-5">
-                  <h4 className="m-0 text-sm font-medium">
-                    People you contacted
-                  </h4>
+                  <h4 className="m-0 text-sm font-medium">People you contacted</h4>
                   <p className="mb-0 mt-2 text-xs leading-6 text-muted-foreground">
                     {data.applications
-                      .filter(
-                        (app) =>
-                          app.company === ruleId && app.recipient && app.sentAt,
-                      )
+                      .filter((app) => app.company === ruleId && app.recipient && app.sentAt)
                       .map((app) => app.recipient)
-                      .join(", ") ||
-                      "No outgoing recipients recorded for this company."}
+                      .join(", ") || "No outgoing recipients recorded for this company."}
                   </p>
                 </div>
               </>
             ) : (
               <>
-                <h3 className="m-0 text-lg font-semibold">
-                  Accounts & folder coverage
-                </h3>
+                <h3 className="m-0 text-lg font-semibold">Mail settings</h3>
+                <div className="my-4 flex flex-wrap gap-2">
+                  <Button variant="outline" onClick={() => openDetail("rules")}>
+                    <Settings2 size={15} aria-hidden />
+                    Company rules
+                  </Button>
+                  <Button variant="ghost" onClick={() => navigate({ view: "excluded" })}>
+                    Excluded mail ({counts.excluded})
+                  </Button>
+                </div>
+                <h4 className="m-0 text-sm font-medium">Accounts & folders</h4>
                 <p className="mb-6 mt-2 text-xs text-muted-foreground">
-                  Read-only access. Spam and trash are included in provider
-                  searches. Sent mail and drafts never enter Latest.
+                  Read-only access. Spam and trash are included in provider searches. Sent mail and
+                  drafts are excluded from new updates.
                 </p>
                 {data.connections.map((connection) => (
-                  <div
-                    key={connection.id}
-                    className="border-t border-border py-4"
-                  >
-                    <h4 className="m-0 break-all text-sm font-medium">
-                      {connection.email}
-                    </h4>
+                  <div key={connection.id} className="border-t border-border py-4">
+                    <h4 className="m-0 break-all text-sm font-medium">{connection.email}</h4>
                     <p className="mb-0 mt-1 text-xs text-muted-foreground">
                       {connection.provider} ·{" "}
                       {connection.lastChecked
@@ -1068,20 +905,16 @@ export function MailWorkspace({
                             </li>
                           ))}
                       </ul>
-                      {!data.coverage.find(
-                        (item) => item.account === connection.email,
-                      )?.checkedAt && (
-                        <p className="text-muted-foreground">
-                          Run Update tracked mail to discover folders.
-                        </p>
+                      {!data.coverage.find((item) => item.account === connection.email)
+                        ?.checkedAt && (
+                        <p className="text-muted-foreground">Use Check mail to discover folders.</p>
                       )}
                       {data.scans
                         .filter((scan) => scan.account === connection.email)
                         .map((scan) => (
                           <p key={scan.mode} className="text-muted-foreground">
-                            {scan.mode === "history" ? "History" : "Latest"}:{" "}
-                            {scan.scanned} messages examined, {scan.matched}{" "}
-                            matches.{" "}
+                            {scan.mode === "history" ? "History" : "Latest"}: {scan.scanned}{" "}
+                            messages examined, {scan.matched} matches.{" "}
                             {scan.complete
                               ? "Window complete."
                               : "More pages remain; continue the check."}
@@ -1093,31 +926,39 @@ export function MailWorkspace({
                 <div className="mt-5 flex flex-wrap gap-2">
                   {data.configs.map((config) =>
                     config.configured ? (
-                      <Button
-                        key={config.slug}
-                        size="sm"
-                        variant="outline"
-                        asChild
-                      >
-                        <a href={`/api/mail/${config.slug}/connect`}>
-                          Connect {config.label}
-                        </a>
+                      <Button key={config.slug} size="sm" variant="outline" asChild>
+                        <a href={`/api/mail/${config.slug}/connect`}>Connect {config.label}</a>
                       </Button>
                     ) : (
-                      <p
-                        key={config.slug}
-                        className="text-xs text-muted-foreground"
-                      >
+                      <p key={config.slug} className="text-xs text-muted-foreground">
                         {config.label} setup needed: {config.missing.join(", ")}
                       </p>
                     ),
                   )}
                 </div>
+                <details className="mt-6 border-t border-border pt-4 text-xs">
+                  <summary className="cursor-pointer text-muted-foreground">
+                    Recover all available history
+                  </summary>
+                  <p className="leading-6 text-muted-foreground">
+                    Check all dates for the current company or application scope. Saved mail stays
+                    in History.
+                  </p>
+                  <Button
+                    variant="outline"
+                    disabled={pending || !data.connections.length}
+                    onClick={() => runCheck("history")}
+                  >
+                    <History size={15} aria-hidden />
+                    {data.scans.some((scan) => scan.mode === "history" && !scan.complete)
+                      ? "Continue history recovery"
+                      : "Find older mail"}
+                  </Button>
+                </details>
                 <p className="mt-6 text-xs leading-6 text-muted-foreground">
-                  Latest starts {formatDate(data.baselineAt)}. History scans use
-                  all available dates in resumable batches. Permanently deleted
-                  mail and separate online archive mailboxes cannot be recovered
-                  here.
+                  Latest starts {formatDate(data.baselineAt)}. History scans use all available dates
+                  in resumable batches. Permanently deleted mail and separate online archive
+                  mailboxes cannot be recovered here.
                 </p>
               </>
             )}
@@ -1132,23 +973,71 @@ export function MailWorkspace({
                     : "Excluded"}
               </p>
               <p className="mb-4 mt-1 text-sm font-medium">{selected.action}</p>
-              {view === "latest" && (
-                <Button disabled={pending} onClick={reviewMessage}>
-                  <Check size={16} aria-hidden />
-                  Mark reviewed
-                </Button>
-              )}
-              {view === "history" && (
-                <span className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <History size={14} aria-hidden />
-                  Kept out of future new results
-                </span>
-              )}
-              {view === "excluded" && (
-                <span className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <Archive size={14} aria-hidden />
-                  No application action created
-                </span>
+              <div className="flex flex-wrap items-center gap-2">
+                {view === "latest" && (
+                  <Button
+                    disabled={pending}
+                    onClick={reviewMessage}
+                    className="shadow-surface active:scale-[0.98] motion-reduce:transform-none"
+                  >
+                    <Check size={16} aria-hidden />
+                    Mark reviewed
+                  </Button>
+                )}
+                {canLink && (
+                  <Button
+                    variant="outline"
+                    disabled={pending}
+                    aria-expanded={showLink}
+                    onClick={() => setLinking(showLink ? "" : selected.id)}
+                  >
+                    <Link2 size={15} aria-hidden />
+                    Link to application
+                  </Button>
+                )}
+                {view === "history" && !canLink && (
+                  <span className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <History size={14} aria-hidden />
+                    Kept out of future new results
+                  </span>
+                )}
+                {view === "excluded" && (
+                  <span className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <Archive size={14} aria-hidden />
+                    No application action created
+                  </span>
+                )}
+              </div>
+              {showLink && (
+                <div className="mt-4 flex flex-wrap items-end gap-2">
+                  <label className="min-w-0 flex-1 text-xs text-muted-foreground">
+                    Application
+                    <select
+                      aria-label="Link to application"
+                      className="mt-1.5"
+                      value={linkTarget}
+                      onChange={(event) =>
+                        setLinkChoice({ message: selected.id, application: event.target.value })
+                      }
+                    >
+                      <option value="">Choose application</option>
+                      {applications
+                        .filter(
+                          (app) =>
+                            !selected.companyKeys.length ||
+                            selected.companyKeys.includes(app.company),
+                        )
+                        .map((app) => (
+                          <option key={app.id} value={app.id}>
+                            {companies.find((row) => row.id === app.company)?.name} · {app.role}
+                          </option>
+                        ))}
+                    </select>
+                  </label>
+                  <Button disabled={pending || !linkTarget} onClick={associateMessage}>
+                    Link message
+                  </Button>
+                </div>
               )}
             </div>
           )}

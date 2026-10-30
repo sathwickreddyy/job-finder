@@ -96,11 +96,8 @@ export function ApplicationDetail({
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap justify-end gap-4">
-        <Link className="text-sm text-link" href={`/mail?application=${record.id}`}>
+        <Link className="text-sm text-link" href={`/mail?application=${record.id}&view=history`}>
           Application mail
-        </Link>
-        <Link className="text-sm text-link" href={`/mail/search?application=${record.id}`}>
-          Search inboxes for this company
         </Link>
       </div>
       {notice && (

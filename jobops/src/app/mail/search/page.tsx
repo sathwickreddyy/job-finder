@@ -1,12 +1,11 @@
 import { z } from "zod";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { db } from "@/db";
 import { mailConnections } from "@/db/schema";
 import { loadMailContext } from "@/features/mail/context";
-import { readCompanyMail } from "@/features/mail/company-search";
 import { MailSearchWorkspace } from "@/features/mail/search-workspace";
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Search inboxes" };
+export const metadata = { title: "Advanced inbox search" };
 export default async function MailSearchPage({
   searchParams,
 }: {
@@ -30,25 +29,26 @@ export default async function MailSearchPage({
   if (query.application && !application) notFound();
   const company = application?.company ?? query.company;
   if (company && !context.companies.some((c) => c.id === company)) notFound();
+  // Older company and application links open the saved-rule search in the mail workspace.
+  if (company)
+    redirect(
+      `/mail?${new URLSearchParams({
+        ...(application ? { application: application.id } : { company }),
+        ...(query.account ? { account: query.account } : {}),
+        view: "history",
+        search: "1",
+      })}`,
+    );
   return (
     <MailSearchWorkspace
-      key={company ?? "all"}
-      initialSaved={company ? await readCompanyMail(company) : undefined}
+      key={query.account ?? ""}
       accounts={accounts}
       companies={context.companies.map((c) => ({
         id: c.id,
         name: c.name,
         aliases: c.rule.aliases,
-        rule: c.rule,
       }))}
-      initialCompany={company}
       initialAccount={query.account}
-      contextLabel={
-        application
-          ? `${context.companies.find((c) => c.id === company)?.name} / ${application.role}`
-          : undefined
-      }
-      backHref={application ? `/applications/${application.id}` : "/mail"}
     />
   );
 }

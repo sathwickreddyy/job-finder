@@ -33,6 +33,7 @@ export type WorkspaceQuery = {
   before?: string;
   selected?: string;
   notice?: string;
+  search?: string;
 };
 export type MailWorkspaceData = {
   companies: WorkspaceCompany[];
