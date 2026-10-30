@@ -163,4 +163,30 @@ describe("CompanyTimeline", () => {
     expect(html).toContain("&lt;b&gt;x&lt;/b&gt;");
     expect(html).not.toContain("<b>x</b>");
   });
+
+  it("clamps a long step to two lines that open in place", () => {
+    const long = `Posting date checked: ${"latest publication noted. ".repeat(20)}`;
+    const html = render({
+      days: [
+        {
+          key: "2026-10-30",
+          label: "Fri 30 Oct",
+          entries: [
+            {
+              type: "step",
+              id: "e9",
+              at: "2026-10-30T05:00:00.000Z",
+              applicationId: "a",
+              eventType: "APPLICATION_SUBMITTED",
+              text: long,
+              upcoming: false,
+            },
+          ],
+        },
+      ],
+    });
+    expect(html).toContain("line-clamp-2");
+    expect(html).toMatch(/<button[^>]*aria-expanded="false"[^>]*>[\s\S]*Posting date checked/);
+    expect(render()).not.toContain("line-clamp-2");
+  });
 });

@@ -219,3 +219,71 @@ test("research tabs keep their content", async ({ page }) => {
     page.getByText("Typical rounds", { exact: true }).filter({ visible: true }),
   ).toHaveCount(1);
 });
+
+const fitsWidth = (page: Page) =>
+  page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
+
+test("long and empty fields keep the phone layout", async ({ page }) => {
+  await seedRecord({ company: "Atlassian", source: "DIRECT", sentDaysAgo: 2 });
+  const subject = "Invitation_SoftwareDevelopmentEngineerII_BackendPaymentsInfrastructure_".repeat(
+    5,
+  );
+  const id = await seedMail({
+    subject: subject.slice(0, 300),
+    sender: `${"recruiting-coordination-team".repeat(3)}@example.invalid`,
+    senderName: "",
+    classification: "INTERVIEW",
+    companyKey: "atlassian",
+    bodyText: `${"Please share your availability for the next round. ".repeat(90)}https://example.invalid/${"a".repeat(400)}`,
+  });
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto("/mail");
+  expect(await fitsWidth(page)).toBe(true);
+  await page.goto(`/mail?company=atlassian&mail=${id}`);
+  await expect(page.getByText("Please share your availability").first()).toBeVisible();
+  expect(await fitsWidth(page)).toBe(true);
+  await page.goto("/companies/atlassian");
+  await expect(page.getByRole("button", { name: "Record round scheduled" })).toBeVisible();
+  expect(await fitsWidth(page)).toBe(true);
+});
+
+test("captures Mail and the company page", async ({ page }) => {
+  await seedRecord({
+    company: "Atlassian",
+    source: "DIRECT",
+    sentDaysAgo: 2,
+    title: "SDE II Backend",
+  });
+  await seedMail({
+    subject: unique("Interview invitation"),
+    classification: "INTERVIEW",
+    companyKey: "atlassian",
+  });
+  await seedMail({
+    subject: unique("Offer letter"),
+    classification: "OFFER",
+    companyKey: "atlassian",
+    attentionState: "DONE",
+  });
+  await seedMail({ subject: unique("Recruiter note"), classification: "RECRUITER_OUTREACH" });
+  for (const theme of ["light", "dark"] as const)
+    for (const [width, height] of [
+      [375, 812],
+      [1440, 900],
+    ]) {
+      await page.addInitScript((value) => localStorage.setItem("jobops-theme", value), theme);
+      await page.setViewportSize({ width, height });
+      for (const [name, path] of [
+        ["mail", "/mail?company=atlassian"],
+        ["company", "/companies/atlassian"],
+      ]) {
+        await page.goto(path);
+        await expect(page.getByRole("button", { name: "Record round scheduled" })).toBeVisible();
+        expect(await fitsWidth(page)).toBe(true);
+        await page.screenshot({
+          path: `test-results/company-timeline/${name}-${theme}-${width}.png`,
+          fullPage: true,
+        });
+      }
+    }
+});

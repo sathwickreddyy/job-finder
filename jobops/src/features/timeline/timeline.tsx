@@ -43,9 +43,14 @@ function folderNote(item: MailItem) {
   return `${item.provider === "OUTLOOK" ? "Outlook" : "Gmail"} ${item.folders.join(", ")}`;
 }
 
+/** Longer than this, a step's stored summary (often notes) shows two lines until opened. */
+const LONG_STEP = 140;
+
 function StepRow({ step, role }: { step: TimelineStep; role?: string }) {
-  return (
-    <li className="grid grid-cols-[2rem_minmax(0,1fr)_auto] items-center gap-3 py-2">
+  const [open, setOpen] = useState(false);
+  const long = step.text.length > LONG_STEP;
+  const cells = (
+    <>
       <span
         className={cn(
           "grid size-8 place-items-center rounded-full",
@@ -54,13 +59,30 @@ function StepRow({ step, role }: { step: TimelineStep; role?: string }) {
       >
         <StepIcon eventType={step.eventType} />
       </span>
-      <span className="min-w-0 break-words">
+      <span className={cn("min-w-0 break-words", long && !open && "line-clamp-2")}>
         {step.text}
         {role && <span className="ml-2 text-sm text-muted-foreground">{role}</span>}
       </span>
       <span className="text-xs whitespace-nowrap text-muted-foreground tabular-nums">
         {step.upcoming ? `${formatWeekday(new Date(step.at))}, ${clock(step.at)}` : clock(step.at)}
       </span>
+    </>
+  );
+  const grid = "grid w-full grid-cols-[2rem_minmax(0,1fr)_auto] items-center gap-3 py-2";
+  return (
+    <li>
+      {long ? (
+        <button
+          type="button"
+          aria-expanded={open}
+          onClick={() => setOpen(!open)}
+          className={cn(grid, "rounded-xl text-left hover:bg-muted/60")}
+        >
+          {cells}
+        </button>
+      ) : (
+        <div className={grid}>{cells}</div>
+      )}
     </li>
   );
 }

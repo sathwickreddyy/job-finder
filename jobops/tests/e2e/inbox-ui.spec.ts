@@ -113,8 +113,9 @@ test("Settings disconnect removes only the selected inbox and keeps its tagged m
   await expect(
     page.getByRole("link", { name: "Connect or check inboxes", exact: true }),
   ).toBeFocused();
-  await page.goto("/applications?emails=1");
-  await expect(page.getByText(emails[0], { exact: true })).toHaveCount(1);
+  // The disconnected inbox's mail stays; unplaced, it waits in Needs a home.
+  await page.goto(`/mail?view=home&mail=${messageIds[0]}`);
+  await expect(page.getByRole("button", { name: /Inbox fixture 0:/ })).toBeVisible();
   expect((await pool.query("SELECT id FROM mail_connections WHERE id=$1", [ids[0]])).rowCount).toBe(
     0,
   );

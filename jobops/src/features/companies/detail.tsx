@@ -73,7 +73,7 @@ function nextAction(summary: CompanySummary) {
     case "Interviewing":
       return { label: "Practise questions", href: "?tab=interviews#questions" };
     default:
-      return { label: "View applications", href: "?tab=timeline" };
+      return { label: "View applications", href: "/applications" };
   }
 }
 
@@ -617,9 +617,14 @@ export function TimelineAside({
                 {row.title}
               </Link>
               <span className="block text-xs text-muted-foreground">
-                {methodLabel[row.source] ?? "Application"},{" "}
-                {row.status.toLowerCase().replaceAll("_", " ")}
-                {row.appliedAt ? `, sent ${displayDate(row.appliedAt, preferences)}` : ""}
+                {[
+                  methodLabel[row.source] ?? "Application",
+                  // Applied is already said by the method; later stages add something.
+                  row.status === "APPLIED" ? "" : row.status.toLowerCase().replaceAll("_", " "),
+                  row.appliedAt ? `sent ${displayDate(row.appliedAt, preferences)}` : "",
+                ]
+                  .filter(Boolean)
+                  .join(", ")}
               </span>
               {row.version ? (
                 <Link
