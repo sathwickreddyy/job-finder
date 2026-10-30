@@ -148,6 +148,7 @@ function LineageRows({ files, ...row }: RowsProps) {
       {files.map((file, index) => {
         const selected = row.selectedId === file.id;
         const root = index === files.length - 1;
+        const companies = [...new Set(file.uses.map((use) => use.company))].join(", ");
         return (
           <li key={file.id} className="relative pl-8">
             <span
@@ -171,12 +172,10 @@ function LineageRows({ files, ...row }: RowsProps) {
                 {file.isDefault && <DefaultMark />}
               </span>
               {file.uses.length > 0 && (
-                <span className="mt-2 flex items-center gap-2 text-[11px]">
+                <span className="mt-2 flex min-w-0 flex-col items-start gap-1.5 text-[11px]">
                   <Companies file={file} />
-                  <span className="opacity-80">
-                    {submittedCount(file)
-                      ? `Sent to ${[...new Set(file.uses.map((use) => use.company))].join(", ")}`
-                      : "Preparing"}
+                  <span className="line-clamp-2 w-full break-words opacity-80" title={companies}>
+                    {submittedCount(file) ? `Sent to ${companies}` : "Preparing"}
                   </span>
                 </span>
               )}
