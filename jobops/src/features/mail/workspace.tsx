@@ -30,11 +30,10 @@ import {
 } from "./workspace-actions";
 import type { MailWorkspaceData, WorkspaceQuery, MailRow } from "./workspace-data";
 import { CompanyRuleEditor } from "./company-rule-editor";
-import { HistorySearchPanel } from "./history-search-panel";
 import type { ActionState } from "@/lib/actions";
 type Scope = "all" | "company" | "application";
 type View = "latest" | "history" | "excluded";
-type Detail = "message" | "rules" | "folders" | "search";
+type Detail = "message" | "rules" | "folders";
 const formatDate = (value: string) =>
   new Intl.DateTimeFormat("en-IN", {
     timeZone: "Asia/Kolkata",
@@ -53,8 +52,7 @@ export function MailWorkspace({
   const currentParams = params.toString();
   const [transitionPending, startTransition] = useTransition();
   const [savingRules, setSavingRules] = useState(false);
-  const [searching, setSearching] = useState(false);
-  const pending = transitionPending || savingRules || searching;
+  const pending = transitionPending || savingRules;
   useLoadingTask(pending, "Updating mail workspace");
   const companies = data.companies.map((row) => ({
     ...row,
@@ -75,8 +73,8 @@ export function MailWorkspace({
     setSearch({ saved: initial.q ?? "", draft: initial.q ?? "" });
   const query = search.draft;
   const [feedback, setFeedback] = useState(initial.notice ?? "");
-  const [detail, setDetail] = useState<Detail>(initial.search === "1" ? "search" : "message");
-  const [mobileReader, setMobileReader] = useState(initial.search === "1");
+  const [detail, setDetail] = useState<Detail>("message");
+  const [mobileReader, setMobileReader] = useState(false);
   const [showThread, setShowThread] = useState(false);
   const [linkChoice, setLinkChoice] = useState({ message: "", application: "" });
   // The picker belongs to one message; selecting another message closes it.
@@ -144,7 +142,6 @@ export function MailWorkspace({
       else next.delete(key);
     }
     if (!("notice" in changes)) next.delete("notice");
-    next.delete("search");
     next.delete("selected");
     setDetail("message");
     setMobileReader(false);
@@ -277,16 +274,6 @@ export function MailWorkspace({
           </span>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Button
-            variant="ghost"
-            disabled={pending}
-            onClick={() => openDetail("search")}
-            className="gap-1.5 text-link"
-          >
-            <History size={15} aria-hidden />
-            Search inboxes
-            <ChevronDown size={13} aria-hidden />
-          </Button>
           <Button
             size="icon"
             variant="ghost"
@@ -601,7 +588,7 @@ export function MailWorkspace({
                     ? "Try a different search."
                     : view === "latest" && counts.history
                       ? "Earlier conversations are saved in History."
-                      : "Check mail or search your inboxes to find hiring updates."}
+                      : "Check mail to find hiring updates."}
                 </p>
                 {view === "latest" && counts.history > 0 && (
                   <Button variant="outline" className="mt-5" onClick={() => setView("history")}>
@@ -639,9 +626,7 @@ export function MailWorkspace({
               ? "Conversation"
               : detail === "rules"
                 ? "Company mail rules"
-                : detail === "search"
-                  ? "Search inboxes"
-                  : "Mail settings"
+                : "Mail settings"
           }
           className={cn("flex min-h-0 min-w-0 flex-col", !mobileReader && "hidden md:flex")}
         >
@@ -792,24 +777,6 @@ export function MailWorkspace({
                   <p className="mb-0 mt-4 text-sm">Select a conversation</p>
                 </div>
               )
-            ) : detail === "search" ? (
-              <HistorySearchPanel
-                companies={companies}
-                accounts={data.connections}
-                initialCompany={scope === "all" ? "" : contextCompany}
-                initialAccount={initial.account}
-                onPending={setSearching}
-                onOpenResults={(company, notice) => {
-                  setFeedback(notice);
-                  navigate({
-                    company,
-                    application: undefined,
-                    view: "history",
-                    q: undefined,
-                    notice,
-                  });
-                }}
-              />
             ) : detail === "rules" ? (
               <>
                 <h3 className="m-0 text-lg font-semibold">Company mail pattern</h3>
@@ -936,29 +903,9 @@ export function MailWorkspace({
                     ),
                   )}
                 </div>
-                <details className="mt-6 border-t border-border pt-4 text-xs">
-                  <summary className="cursor-pointer text-muted-foreground">
-                    Recover all available history
-                  </summary>
-                  <p className="leading-6 text-muted-foreground">
-                    Check all dates for the current company or application scope. Saved mail stays
-                    in History.
-                  </p>
-                  <Button
-                    variant="outline"
-                    disabled={pending || !data.connections.length}
-                    onClick={() => runCheck("history")}
-                  >
-                    <History size={15} aria-hidden />
-                    {data.scans.some((scan) => scan.mode === "history" && !scan.complete)
-                      ? "Continue history recovery"
-                      : "Find older mail"}
-                  </Button>
-                </details>
                 <p className="mt-6 text-xs leading-6 text-muted-foreground">
-                  Latest starts {formatDate(data.baselineAt)}. History scans use all available dates
-                  in resumable batches. Permanently deleted mail and separate online archive
-                  mailboxes cannot be recovered here.
+                  Latest starts {formatDate(data.baselineAt)}. Permanently deleted mail and separate
+                  online archive mailboxes cannot be recovered here.
                 </p>
               </>
             )}

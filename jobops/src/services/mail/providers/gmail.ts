@@ -3,7 +3,6 @@ import { recipientPreview } from "./display-metadata";
 import { oauthConfiguration, parseTokenResponse } from "./oauth";
 import { accessTokenFor } from "./connections";
 import type { MailProvider, TokenSet } from "./types";
-import { gmailSearchQuery } from "./search-query";
 import { plainText } from "./plain-text";
 class GmailReadError extends Error {
   constructor(
@@ -204,7 +203,7 @@ export const gmail: MailProvider = {
     if (request.since)
       terms.push(`after:${Math.floor(Date.parse(request.since) / 1000)}`);
     const params = new URLSearchParams({
-      q: request.search ? gmailSearchQuery(request) : terms.join(" "),
+      q: terms.join(" "),
       maxResults: "25",
       includeSpamTrash: "true",
     });

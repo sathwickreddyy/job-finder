@@ -11,7 +11,7 @@ import {
   settings,
 } from "@/db/schema";
 import { normalizeCompany, companyResolver } from "@/features/applications/lanes";
-import type { CompanyMailRule } from "./search-policy";
+import type { CompanyMailRule } from "./company-rules";
 
 export const ruleSchema = z.object({
   aliases: z.array(z.string().trim().min(1).max(150)).max(20),

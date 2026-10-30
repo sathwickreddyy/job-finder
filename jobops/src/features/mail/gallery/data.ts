@@ -1,4 +1,4 @@
-import type { CompanyMailRule, MailEvidence } from "../search-policy";
+import type { CompanyMailRule, MailEvidence } from "../company-rules";
 
 export const companies = [
   { id: "northstar", name: "Northstar", initial: "N", domain: "northstar.example" },

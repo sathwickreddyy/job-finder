@@ -3,7 +3,6 @@ import { classifyMail } from "../classifier";
 import { accessTokenFor } from "./connections";
 import { oauthConfiguration, parseTokenResponse } from "./oauth";
 import type { MailProvider, TokenSet, MailFolder } from "./types";
-import { outlookSearchQuery } from "./search-query";
 import { plainText } from "./plain-text";
 
 export const OUTLOOK_SCOPES = "offline_access User.Read Mail.Read";
@@ -295,12 +294,6 @@ export const outlook: MailProvider = {
         "id,internetMessageId,conversationId,subject,bodyPreview,body,from,toRecipients,receivedDateTime,parentFolderId,isDraft",
     });
     if (request.skipIds) query.set("$select", query.get("$select")!.split(",").filter((field) => field !== "body").join(","));
-    const search = outlookSearchQuery(request);
-    if (search) {
-      query.delete("$filter");
-      query.delete("$orderby");
-      query.set("$search", search);
-    }
     const url = request.next
       ? safeScanLink(request.next, resource)
       : `${graphOrigin}${resource}?${query}`;

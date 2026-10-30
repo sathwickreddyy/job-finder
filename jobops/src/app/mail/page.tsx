@@ -20,7 +20,7 @@ export default async function MailPage({
   const data = await readMailWorkspace(query);
   return (
     <MailWorkspace
-      key={`${query.company ?? ""}|${query.application ?? ""}|${query.search ?? ""}`}
+      key={`${query.company ?? ""}|${query.application ?? ""}`}
       data={data}
       initial={query}
     />

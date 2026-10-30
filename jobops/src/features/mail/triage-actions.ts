@@ -5,12 +5,7 @@ import { z } from "zod";
 import { db } from "@/db";
 import { safeReturnTo, withNotice } from "@/features/applications/return-to";
 import { actionError, formString, type ActionState } from "@/lib/actions";
-import {
-  dismissMessages,
-  linkMailToRecord,
-  restoreDismissal,
-  unlinkMailFromRecord,
-} from "./handling-service";
+import { dismissMessages, linkMailToRecord, unlinkMailFromRecord } from "./handling-service";
 
 function refresh(recordId?: string) {
   for (const path of [
@@ -38,24 +33,6 @@ export async function dismissMail(_state: ActionState, form: FormData): Promise<
       : "These messages have already been handled.";
     const back = safeReturnTo(formString(form, "returnTo"));
     destination = back ? withNotice(back, notice) : emailsNotice(notice);
-  } catch (error) {
-    return actionError(error);
-  }
-  redirect(destination);
-}
-
-export async function undoDismiss(_state: ActionState, form: FormData): Promise<ActionState> {
-  let destination: string;
-  try {
-    const id = z.uuid().parse(formString(form, "mailId"));
-    const token = z.uuid().parse(formString(form, "dismissal"));
-    const count = await db.transaction((tx) => restoreDismissal(tx, id, token));
-    refresh();
-    destination = emailsNotice(
-      count
-        ? `Restored ${count} ${count === 1 ? "message" : "messages"}.`
-        : "This dismissal has already been handled.",
-    );
   } catch (error) {
     return actionError(error);
   }

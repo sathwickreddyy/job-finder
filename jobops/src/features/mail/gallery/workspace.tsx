@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui";
 import { cn } from "@/lib/utils";
-import { evaluateCompanyMail } from "../search-policy";
+import { evaluateCompanyMail } from "../company-rules";
 import { accountNames, applications, baseline, companies, exampleMail, exampleRules } from "./data";
 
 type Scope = "all" | "company" | "application";

@@ -1,4 +1,4 @@
-import type { SearchDecision } from "./search-policy";
+import type { SearchDecision } from "./company-rules";
 import type { WorkspaceApplication, WorkspaceCompany } from "./context";
 export type MailRow = {
   id: string;
@@ -33,7 +33,6 @@ export type WorkspaceQuery = {
   before?: string;
   selected?: string;
   notice?: string;
-  search?: string;
 };
 export type MailWorkspaceData = {
   companies: WorkspaceCompany[];

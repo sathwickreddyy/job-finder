@@ -12,17 +12,10 @@ export type ScannedMessage = z.input<typeof mailImportSchema>[number] & {
   internetMessageId?: string;
   contextOnly?: boolean;
 };
-export type MailSearchFilters = {
-  keywords: string[];
-  senders: string[];
-  subjects: string[];
-  companyIdentity?: { names: string[]; domains: string[]; senders: string[] };
-};
 export type ScanRequest = {
   since?: string;
   until: string;
   next?: string;
-  search?: MailSearchFilters;
   skipIds?: string[];
   skipInternetIds?: string[];
 };

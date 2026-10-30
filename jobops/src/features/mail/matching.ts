@@ -1,7 +1,7 @@
 import { classifyMail } from "@/services/mail/classifier";
 import { currentMessageText } from "@/services/mail/providers/plain-text";
 import type { ScannedMessage } from "@/services/mail/providers/types";
-import { evaluateCompanyMail } from "./search-policy";
+import { evaluateCompanyMail } from "./company-rules";
 import type { MailContext } from "./context";
 
 export type Match = {

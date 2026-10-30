@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { Button } from "@/components/ui";
-import type { CompanyMailRule } from "./search-policy";
+import type { CompanyMailRule } from "./company-rules";
 import { saveWorkspaceRule } from "./workspace-actions";
 export function CompanyRuleEditor({
   company,

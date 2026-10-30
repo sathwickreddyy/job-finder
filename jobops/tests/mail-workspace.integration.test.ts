@@ -8,14 +8,10 @@ import {
   mailTracking,
   settings,
   companyRecords,
-  companyMailMatches,
   jobs,
   applications,
 } from "@/db/schema";
 import { readMailWorkspace } from "@/features/mail/workspace-read";
-import { readCompanyMail } from "@/features/mail/company-search";
-import { loadMailContext } from "@/features/mail/context";
-import { companyRevision } from "@/features/mail/company-search-policy";
 import { outlook } from "@/services/mail/providers/outlook";
 import { scanConnection, scanKey } from "@/features/mail/scan-service";
 import type { MailContext } from "@/features/mail/context";
@@ -315,28 +311,14 @@ describe.skipIf(!enabled)("mail ledger and page checkpoint integration", () => {
         bodyText: "Your application update",
       })
       .returning();
-    const [linkedTracking] = await db
-      .insert(mailTracking)
-      .values({
-        ...base,
-        providerMessageId: "legacy-linked",
-        subject: linked.subject,
-        messageId: linked.id,
-        companyKeys: ["outdated"],
-        applicationIds: ["outdated"],
-      })
-      .returning();
-    const currentContext = await loadMailContext();
-    const currentCompany = currentContext.companies.find((row) => row.id === companyKey)!;
-    await db.insert(companyMailMatches).values({
-      companyKey,
-      trackingId: linkedTracking.id,
-      ruleRevision: companyRevision(currentCompany, currentContext),
-      kept: false,
-      reason: "A cached exclusion before the user linked the message",
+    await db.insert(mailTracking).values({
+      ...base,
+      providerMessageId: "legacy-linked",
+      subject: linked.subject,
+      messageId: linked.id,
+      companyKeys: ["outdated"],
+      applicationIds: ["outdated"],
     });
-    const savedCompany = await readCompanyMail(companyKey);
-    expect(savedCompany.messages.some((row) => row.subject === "Unique linked message")).toBe(true);
     const linkedResult = await readMailWorkspace({
       account,
       application: app.id,

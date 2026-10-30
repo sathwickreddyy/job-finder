@@ -1,11 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, eq, inArray } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
 import {
-  companyMailMatches,
   mailConnections,
   mailTracking,
   mailMessages,
@@ -26,10 +25,9 @@ import {
 } from "./scan-service";
 import { reconcileLegacyMail } from "./workspace-read";
 import { matchMail } from "./matching";
-import { companyRevision } from "./company-search-policy";
 
 function invalidate() {
-  for (const path of ["/mail", "/applications", "/companies", "/settings", "/mail/search", "/"])
+  for (const path of ["/mail", "/applications", "/companies", "/settings", "/"])
     revalidatePath(path);
 }
 const scopeSchema = z.object({
@@ -203,11 +201,6 @@ export async function saveWorkspaceRule(
         !decision.companyKeys.includes(key)
       )
         continue;
-      await db.update(companyMailMatches).set({
-        kept: decision.disposition !== "excluded" && decision.companyKeys.includes(key),
-        reason: decision.reason, evidence: decision.evidence,
-        ruleRevision: companyRevision(savedCompany, updated), updatedAt: new Date(),
-      }).where(and(eq(companyMailMatches.companyKey, key), eq(companyMailMatches.trackingId, tracking.id)));
       const otherKeys = tracking.companyKeys.filter((company) => company !== key);
       const keep = decision.disposition !== "excluded" && decision.companyKeys.includes(key);
       await db.update(mailTracking).set({

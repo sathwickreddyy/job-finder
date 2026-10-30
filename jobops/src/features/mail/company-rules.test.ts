@@ -3,7 +3,7 @@ import {
   evaluateCompanyMail,
   type CompanyMailRule,
   type MailEvidence,
-} from "./search-policy";
+} from "./company-rules";
 
 const rule: CompanyMailRule = {
   company: "Northstar",
