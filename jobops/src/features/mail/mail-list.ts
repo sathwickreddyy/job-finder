@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { mailMessages } from "@/db/schema";
 import { ApiError } from "@/features/agent-api/http";
 import type { MailFacts } from "@/features/timeline/index-rows";
+import { mailCursor } from "@/features/timeline/query";
 import { loadMailContext, type MailContext } from "./context";
 import { mailLookup, toMailItem, type MailItem } from "./mail-item";
 import { classificationsFor, kindLabel, mailTags, type MailTag } from "./tags";
@@ -15,11 +16,7 @@ export const mailListSchema = z.object({
   company: z.string().trim().min(1).max(300).optional(),
   application: z.uuid().optional(),
   q: z.string().trim().max(200).optional(),
-  cursor: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z\|[0-9a-f-]{36}$/i)
-    .refine((value) => Number.isFinite(Date.parse(value.split("|")[0])))
-    .optional(),
+  cursor: mailCursor.optional(),
 });
 
 // Correlated subqueries name the outer table explicitly: Drizzle leaves select-list

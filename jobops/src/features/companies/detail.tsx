@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { ArrowUpRight, ChevronDown } from "lucide-react";
 import { StatusBadge } from "@/components/ui";
+import { normalizeCompany } from "@/features/applications/lanes";
 import { displayDate, type DisplayPreferences } from "@/features/candidate/preferences";
+import { mailHref } from "@/features/timeline/query";
 import { cn } from "@/lib/utils";
 import type { Company } from "./catalog";
 import { DetailTabs, QuestionBank } from "./detail-client";
@@ -116,7 +118,7 @@ export function DetailHeader({ company, summary }: Pick<DetailProps, "company" |
             {action.label}
           </Link>
           <Link
-            href={`/mail?${new URLSearchParams({ company: company.name.trim().toLocaleLowerCase().replace(/\s+/g, " "), view: "all" })}`}
+            href={mailHref({ company: normalizeCompany(company.name) })}
             className="flex min-h-10 items-center rounded-full border border-input px-5 text-sm font-medium hover:bg-muted hover:no-underline"
           >
             Company mail

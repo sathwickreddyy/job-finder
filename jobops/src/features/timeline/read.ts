@@ -3,12 +3,14 @@ import { recordStateFrom, type Phase, type RecordState } from "@/features/applic
 import { buildQueue } from "@/features/applications/queue";
 import { readApplications } from "@/features/applications/read";
 import { loadMailContext } from "@/features/mail/context";
-import { listMail, mailFacts } from "@/features/mail/mail-list";
+import { ApiError } from "@/features/agent-api/http";
+import { listMail, mailFacts, readMailItem } from "@/features/mail/mail-list";
 import { readMailTriage } from "@/features/mail/read";
 import type { MailTag } from "@/features/mail/tags";
 import { queueMailFrom } from "@/features/mail/triage";
 import { timelineEntries, type TimelineDay } from "./entries";
 import { companyRows, type RailRow } from "./index-rows";
+import { mailHref } from "./query";
 
 export type TimelineRole = {
   id: string;
@@ -100,4 +102,17 @@ export async function readCompanyIndex(
       matches && new Map([...matches].flatMap(([key, count]) => (key ? [[key, count]] : []))),
   });
   return { rows, home: { ...home, matches: matches ? (matches.get(null) ?? 0) : null } };
+}
+
+/** Where an old `/mail/<id>` link now opens; null when the email is missing or excluded. */
+export async function mailLocation(id: string): Promise<string | null> {
+  try {
+    const item = await readMailItem(id);
+    return item.company
+      ? mailHref({ company: item.company.key, mail: id })
+      : mailHref({ home: true, mail: id });
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 404) return null;
+    throw error;
+  }
 }

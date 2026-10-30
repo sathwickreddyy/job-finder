@@ -6,6 +6,7 @@ import { Button, Field } from "@/components/ui";
 import { displayDate, type DisplayPreferences } from "@/features/candidate/preferences";
 import { familyFill } from "@/features/companies/format";
 import { roundFamily, roundKindLabel } from "@/features/companies/metrics";
+import { mailHref } from "@/features/timeline/query";
 import { cn } from "@/lib/utils";
 import { addApplicationNote } from "../actions";
 import { formatDay, formatDayTime, indiaDate, istClock, istDaysBetween } from "../dates";
@@ -96,7 +97,10 @@ export function ApplicationDetail({
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap justify-end gap-4">
-        <Link className="text-sm text-link" href={`/mail?application=${record.id}&view=all`}>
+        <Link
+          className="text-sm text-link"
+          href={mailHref({ company: record.companyKey, role: record.id })}
+        >
           Application mail
         </Link>
       </div>
