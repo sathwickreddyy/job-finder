@@ -5,3 +5,5 @@ export default async function Find() {
   const data = await readWorkspace();
   return <Discovery role={data.role} location={data.location} context={data.context} />;
 }
+
+export const metadata = { title: "Find openings" };

@@ -79,10 +79,10 @@ export function AppShell({ children }: { children: ReactNode }) {
               href="/"
               className="flex items-center gap-3 text-lg font-semibold text-foreground hover:no-underline"
             >
-              <span className="grid size-9 place-items-center rounded-xl bg-primary text-primary-foreground">
-                J
-              </span>
-              JobOps
+              {/* Shared vector mark stays crisp in the header and browser tab. */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/jobops-logo.svg" alt="" width={36} height={36} className="size-9" />
+              My Jobs Workspace
             </Link>
             <nav
               aria-label="Primary"

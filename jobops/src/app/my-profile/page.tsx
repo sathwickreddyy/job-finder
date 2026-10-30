@@ -195,3 +195,5 @@ export default async function ProfileHub() {
     </div>
   );
 }
+
+export const metadata = { title: "My profile" };
