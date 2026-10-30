@@ -131,28 +131,35 @@ describe.skipIf(!enabled)("persistent company mail", () => {
     );
   });
   it("keeps real updates, records exclusions and reloads saved company mail without provider access", async () => {
-    const scan = vi
-      .spyOn(gmail, "scanMail")
-      .mockResolvedValue({
-        messages: [
-          mail("ack"),
-          mail("invoice", {
-            subject: "Your invoice",
-            bodyText: "Our recruiting team works here too",
-          }),
-          mail("news", {
-            sender: "news@elsewhere.invalid",
-            subject: "Industry news",
-            bodyText: `${context.companies[0].name} interview stories`,
-          }),
-        ],
-      });
+    const scan = vi.spyOn(gmail, "scanMail").mockResolvedValue({
+      messages: [
+        mail("ack"),
+        mail("invoice", {
+          subject: "Your invoice",
+          bodyText: "Our recruiting team works here too",
+        }),
+        mail("news", {
+          sender: "news@elsewhere.invalid",
+          subject: "Industry news",
+          bodyText: `${context.companies[0].name} interview stories`,
+        }),
+      ],
+    });
     const first = await companyPage(connection, context.companies[0], context, request, "latest");
     expect(first.tracking).toMatchObject({ saved: 1, excluded: 2 });
     expect(first.messages).toHaveLength(1);
     const saved = await readCompanyMail(context.companies[0].id);
     expect(saved.counts).toEqual({ kept: 1, excluded: 2 });
     expect(saved.messages[0].bodyText).toBe("Thank you for applying");
+    const otherAccount = await readCompanyMail(
+      context.companies[0].id,
+      "kept",
+      undefined,
+      "other@example.invalid",
+    );
+    expect(otherAccount.counts).toEqual({ kept: 0, excluded: 0 });
+    expect(otherAccount.messages).toHaveLength(0);
+    expect(otherAccount.nextBefore).toBeNull();
     const excluded = await readCompanyMail(context.companies[0].id, "excluded");
     expect(excluded.messages).toHaveLength(2);
     expect(excluded.messages.every((m) => m.bodyText?.startsWith("Excluded message:"))).toBe(true);
@@ -163,7 +170,9 @@ describe.skipIf(!enabled)("persistent company mail", () => {
   it("adopts already-stored company mail without a second provider fetch", async () => {
     const scan = vi.spyOn(gmail, "scanMail").mockResolvedValue({ messages: [mail("legacy")] });
     await companyPage(connection, context.companies[0], context, request, "latest");
-    await db.delete(companyMailMatches).where(eq(companyMailMatches.companyKey, context.companies[0].id));
+    await db
+      .delete(companyMailMatches)
+      .where(eq(companyMailMatches.companyKey, context.companies[0].id));
     expect((await readCompanyMail(context.companies[0].id)).counts.kept).toBe(1);
     expect(scan).toHaveBeenCalledTimes(1);
   });
@@ -237,6 +246,15 @@ describe.skipIf(!enabled)("persistent company mail", () => {
       .where(eq(mailTracking.accountEmail, connection.email));
     expect(rows).toHaveLength(1);
     expect(rows[0].folders).toEqual(["Archive"]);
+    expect((await readCompanyMail(context.companies[0].id)).counts.kept).toBe(1);
+  });
+  it("counts a repeated identity only once within a provider page", async () => {
+    vi.spyOn(gmail, "scanMail").mockResolvedValue({
+      messages: [mail("repeated"), mail("repeated")],
+    });
+    const result = await companyPage(connection, context.companies[0], context, request, "latest");
+    expect(result.tracking).toMatchObject({ saved: 1, alreadyKnown: 1 });
+    expect(result.messages).toHaveLength(1);
     expect((await readCompanyMail(context.companies[0].id)).counts.kept).toBe(1);
   });
   it("reevaluates exclusions after rule changes without promoting seen mail into Latest", async () => {

@@ -1,13 +1,5 @@
 import { randomUUID } from "node:crypto";
-import {
-  afterAll,
-  afterEach,
-  beforeAll,
-  describe,
-  expect,
-  it,
-  vi,
-} from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { eq, like } from "drizzle-orm";
 import { db, closeDatabase } from "@/db";
 import {
@@ -16,10 +8,14 @@ import {
   mailTracking,
   settings,
   companyRecords,
+  companyMailMatches,
   jobs,
   applications,
 } from "@/db/schema";
 import { readMailWorkspace } from "@/features/mail/workspace-read";
+import { readCompanyMail } from "@/features/mail/company-search";
+import { loadMailContext } from "@/features/mail/context";
+import { companyRevision } from "@/features/mail/company-search-policy";
 import { outlook } from "@/services/mail/providers/outlook";
 import { scanConnection, scanKey } from "@/features/mail/scan-service";
 import type { MailContext } from "@/features/mail/context";
@@ -77,61 +73,36 @@ async function connection(index = 0) {
 }
 describe.skipIf(!enabled)("mail ledger and page checkpoint integration", () => {
   beforeAll(async () => {
-    if (
-      !process.env.DATABASE_URL ||
-      new URL(process.env.DATABASE_URL).pathname !== "/jobops_e2e"
-    )
+    if (!process.env.DATABASE_URL || new URL(process.env.DATABASE_URL).pathname !== "/jobops_e2e")
       throw new Error("Refusing any database other than jobops_e2e");
-    const [marker] = await db
-      .select()
-      .from(settings)
-      .where(eq(settings.key, "__jobops_e2e"));
+    const [marker] = await db.select().from(settings).where(eq(settings.key, "__jobops_e2e"));
     if (marker?.value.ownedBy !== "jobops-browser-tests")
       throw new Error("Test ownership marker required");
   });
   afterEach(() => vi.restoreAllMocks());
   afterAll(async () => {
     // Guard again before deleting only this run's disposable fixtures.
-    if (
-      !process.env.DATABASE_URL ||
-      new URL(process.env.DATABASE_URL).pathname !== "/jobops_e2e"
-    )
+    if (!process.env.DATABASE_URL || new URL(process.env.DATABASE_URL).pathname !== "/jobops_e2e")
       return;
-    await db
-      .delete(mailTracking)
-      .where(like(mailTracking.accountEmail, `${prefix}%`));
-    await db
-      .delete(mailMessages)
-      .where(like(mailMessages.accountEmail, `${prefix}%`));
-    await db
-      .delete(mailConnections)
-      .where(like(mailConnections.email, `${prefix}%`));
-    for (const id of connectionIds)
-      await db.delete(settings).where(like(settings.key, `%${id}%`));
-    for (const id of applicationIds)
-      await db.delete(applications).where(eq(applications.id, id));
+    await db.delete(mailTracking).where(like(mailTracking.accountEmail, `${prefix}%`));
+    await db.delete(mailMessages).where(like(mailMessages.accountEmail, `${prefix}%`));
+    await db.delete(mailConnections).where(like(mailConnections.email, `${prefix}%`));
+    for (const id of connectionIds) await db.delete(settings).where(like(settings.key, `%${id}%`));
+    for (const id of applicationIds) await db.delete(applications).where(eq(applications.id, id));
     for (const id of jobIds) await db.delete(jobs).where(eq(jobs.id, id));
-    for (const id of companyIds)
-      await db.delete(companyRecords).where(eq(companyRecords.id, id));
+    for (const id of companyIds) await db.delete(companyRecords).where(eq(companyRecords.id, id));
     await closeDatabase();
   });
   it("keeps one message identity across a rescan and folder move, and preserves reviewed history", async () => {
     const own = await connection();
-    vi.spyOn(outlook, "folders").mockResolvedValue([
-      { id: "junk", name: "Junk" },
-    ]);
-    const scan = vi
-      .spyOn(outlook, "scanMail")
-      .mockResolvedValue({ messages: [mail("stable")] });
+    vi.spyOn(outlook, "folders").mockResolvedValue([{ id: "junk", name: "Junk" }]);
+    const scan = vi.spyOn(outlook, "scanMail").mockResolvedValue({ messages: [mail("stable")] });
     expect((await scanConnection(own, "latest", {}, context)).arrived).toBe(1);
     scan.mockResolvedValue({
       messages: [{ ...mail("stable"), folders: ["Inbox"] }],
     });
     expect((await scanConnection(own, "latest", {}, context)).arrived).toBe(0);
-    let rows = await db
-      .select()
-      .from(mailTracking)
-      .where(eq(mailTracking.accountEmail, own.email));
+    let rows = await db.select().from(mailTracking).where(eq(mailTracking.accountEmail, own.email));
     expect(rows).toHaveLength(1);
     expect(rows[0].folders).toEqual(["Inbox"]);
     expect(rows[0].disposition).toBe("latest");
@@ -144,11 +115,22 @@ describe.skipIf(!enabled)("mail ledger and page checkpoint integration", () => {
       .set({ attentionState: "DONE" })
       .where(eq(mailMessages.id, rows[0].messageId!));
     expect((await scanConnection(own, "latest", {}, context)).arrived).toBe(0);
-    rows = await db
+    rows = await db.select().from(mailTracking).where(eq(mailTracking.accountEmail, own.email));
+    expect(rows[0].disposition).toBe("history");
+  });
+  it("counts a repeated identity only once within a provider page", async () => {
+    const account = await connection(9);
+    vi.spyOn(outlook, "folders").mockResolvedValue([{ id: "junk", name: "Junk" }]);
+    vi.spyOn(outlook, "scanMail").mockResolvedValue({
+      messages: [mail("repeated"), mail("repeated")],
+    });
+    const result = await scanConnection(account, "latest", {}, context);
+    expect(result.arrived).toBe(1);
+    const rows = await db
       .select()
       .from(mailTracking)
-      .where(eq(mailTracking.accountEmail, own.email));
-    expect(rows[0].disposition).toBe("history");
+      .where(eq(mailTracking.accountEmail, account.email));
+    expect(rows).toHaveLength(1);
   });
   it("does not collapse the same Internet Message-ID across two Outlook accounts", async () => {
     const first = await connection(1),
@@ -157,12 +139,8 @@ describe.skipIf(!enabled)("mail ledger and page checkpoint integration", () => {
     vi.spyOn(outlook, "scanMail").mockResolvedValue({
       messages: [mail("same-provider-id")],
     });
-    expect((await scanConnection(first, "latest", {}, context)).arrived).toBe(
-      1,
-    );
-    expect((await scanConnection(second, "latest", {}, context)).arrived).toBe(
-      1,
-    );
+    expect((await scanConnection(first, "latest", {}, context)).arrived).toBe(1);
+    expect((await scanConnection(second, "latest", {}, context)).arrived).toBe(1);
     const a = await db
       .select()
       .from(mailTracking)
@@ -187,12 +165,8 @@ describe.skipIf(!enabled)("mail ledger and page checkpoint integration", () => {
       ],
     });
     const noCompanies = { ...context, companies: [] };
-    expect((await scanConnection(own, "latest", {}, noCompanies)).arrived).toBe(
-      1,
-    );
-    expect((await scanConnection(own, "latest", {}, noCompanies)).arrived).toBe(
-      0,
-    );
+    expect((await scanConnection(own, "latest", {}, noCompanies)).arrived).toBe(1);
+    expect((await scanConnection(own, "latest", {}, noCompanies)).arrived).toBe(0);
     const rows = await db
       .select()
       .from(mailTracking)
@@ -211,9 +185,7 @@ describe.skipIf(!enabled)("mail ledger and page checkpoint integration", () => {
         next: "opaque-second",
       })
       .mockRejectedValueOnce(new Error("Temporary provider failure"));
-    expect((await scanConnection(own, "history", {}, context)).historical).toBe(
-      1,
-    );
+    expect((await scanConnection(own, "history", {}, context)).historical).toBe(1);
     await expect(scanConnection(own, "history", {}, context)).rejects.toThrow(
       "Temporary provider failure",
     );
@@ -239,17 +211,11 @@ describe.skipIf(!enabled)("mail ledger and page checkpoint integration", () => {
     const own = await connection(4);
     vi.spyOn(outlook, "folders").mockResolvedValue([]);
     const scan = vi.spyOn(outlook, "scanMail").mockResolvedValue({
-      messages: [
-        mail("rollback-first"),
-        { ...mail("invalid"), receivedAt: "invalid" },
-      ],
+      messages: [mail("rollback-first"), { ...mail("invalid"), receivedAt: "invalid" }],
     });
     await expect(scanConnection(own, "latest", {}, context)).rejects.toThrow();
     expect(
-      await db
-        .select()
-        .from(mailTracking)
-        .where(eq(mailTracking.accountEmail, own.email)),
+      await db.select().from(mailTracking).where(eq(mailTracking.accountEmail, own.email)),
     ).toHaveLength(0);
     const [checkpoint] = await db
       .select()
@@ -259,10 +225,7 @@ describe.skipIf(!enabled)("mail ledger and page checkpoint integration", () => {
     scan.mockResolvedValue({ messages: [mail("outside-scope")] });
     await scanConnection(own, "latest", { company: "another" }, context);
     expect(
-      await db
-        .select()
-        .from(mailTracking)
-        .where(eq(mailTracking.accountEmail, own.email)),
+      await db.select().from(mailTracking).where(eq(mailTracking.accountEmail, own.email)),
     ).toHaveLength(0);
     expect((await scanConnection(own, "latest", {}, context)).arrived).toBe(1);
   });
@@ -285,10 +248,7 @@ describe.skipIf(!enabled)("mail ledger and page checkpoint integration", () => {
       })
       .returning();
     jobIds.push(job.id);
-    const [app] = await db
-      .insert(applications)
-      .values({ jobId: job.id })
-      .returning();
+    const [app] = await db.insert(applications).values({ jobId: job.id }).returning();
     applicationIds.push(app.id);
     const account = `${prefix}-scope@fixture.invalid`;
     const base = {
@@ -317,9 +277,7 @@ describe.skipIf(!enabled)("mail ledger and page checkpoint integration", () => {
       before: first.nextBefore!,
     });
     expect(second.messages).toHaveLength(1);
-    expect(first.messages.map((row) => row.id)).not.toContain(
-      second.messages[0].id,
-    );
+    expect(first.messages.map((row) => row.id)).not.toContain(second.messages[0].id);
     const byCompany = await readMailWorkspace({
       account,
       company: companyKey,
@@ -343,9 +301,7 @@ describe.skipIf(!enabled)("mail ledger and page checkpoint integration", () => {
         })
       ).total,
     ).toBe(0);
-    expect((await readMailWorkspace({ account, view: "latest" })).total).toBe(
-      0,
-    );
+    expect((await readMailWorkspace({ account, view: "latest" })).total).toBe(0);
     const [linked] = await db
       .insert(mailMessages)
       .values({
@@ -359,14 +315,28 @@ describe.skipIf(!enabled)("mail ledger and page checkpoint integration", () => {
         bodyText: "Your application update",
       })
       .returning();
-    await db.insert(mailTracking).values({
-      ...base,
-      providerMessageId: "legacy-linked",
-      subject: linked.subject,
-      messageId: linked.id,
-      companyKeys: ["outdated"],
-      applicationIds: ["outdated"],
+    const [linkedTracking] = await db
+      .insert(mailTracking)
+      .values({
+        ...base,
+        providerMessageId: "legacy-linked",
+        subject: linked.subject,
+        messageId: linked.id,
+        companyKeys: ["outdated"],
+        applicationIds: ["outdated"],
+      })
+      .returning();
+    const currentContext = await loadMailContext();
+    const currentCompany = currentContext.companies.find((row) => row.id === companyKey)!;
+    await db.insert(companyMailMatches).values({
+      companyKey,
+      trackingId: linkedTracking.id,
+      ruleRevision: companyRevision(currentCompany, currentContext),
+      kept: false,
+      reason: "A cached exclusion before the user linked the message",
     });
+    const savedCompany = await readCompanyMail(companyKey);
+    expect(savedCompany.messages.some((row) => row.subject === "Unique linked message")).toBe(true);
     const linkedResult = await readMailWorkspace({
       account,
       application: app.id,

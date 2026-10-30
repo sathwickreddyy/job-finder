@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, desc, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
 import {
@@ -299,6 +299,7 @@ export async function companyPage(
         );
       info.alreadyKnown = page.skippedKnown ?? 0;
       info.unavailable = page.skippedUnavailable ?? 0;
+      const processed = new Set<string>();
       for (const raw of page.messages) {
         if (raw.contextOnly) {
           base.skippedContext++;
@@ -324,12 +325,14 @@ export async function companyPage(
         const cached =
           previous &&
           observed.find((r) => r.tracking.id === previous.id && r.match.ruleRevision === revision);
-        if (cached) {
+        if (cached || (previous && processed.has(previous.id))) {
           info.alreadyKnown++;
           await tx
             .update(mailTracking)
             .set({ providerMessageId: raw.externalId, folders: raw.folders, updatedAt: new Date() })
             .where(eq(mailTracking.id, previous!.id));
+          previous!.providerMessageId = raw.externalId;
+          previous!.folders = raw.folders;
           continue;
         }
         const decision = matchMail(
@@ -357,8 +360,9 @@ export async function companyPage(
         const kept =
           Boolean(manual) ||
           (decision.disposition !== "excluded" && decision.companyKeys.includes(company.id));
-        const reason = manual ? "Manually linked to this company's application" :
-          !kept && decision.disposition !== "excluded"
+        const reason = manual
+          ? "Manually linked to this company's application"
+          : !kept && decision.disposition !== "excluded"
             ? "No sender, subject, outreach or thread identity for this company"
             : decision.reason;
         let messageId = previous?.messageId ?? null;
@@ -433,6 +437,10 @@ export async function companyPage(
               .where(eq(mailTracking.id, previous.id))
               .returning()
           : await tx.insert(mailTracking).values(values).returning();
+        // Later results in the same provider page must see this saved identity too.
+        if (previous) Object.assign(previous, tracking);
+        else allPrior.push(tracking);
+        processed.add(tracking.id);
         await tx
           .insert(companyMailMatches)
           .values({
@@ -506,32 +514,82 @@ export async function readCompanyMail(
   company: string,
   view: "kept" | "excluded" = "kept",
   before?: string,
+  account?: string,
 ): Promise<SavedCompanyMail> {
   const context = await loadMailContext();
   if (!context.companies.some((c) => c.id === company))
     throw new MailSearchError("Choose an existing company.");
   const selectedCompany = context.companies.find((row) => row.id === company)!;
   const revision = companyRevision(selectedCompany, context);
-  const applicationIds = context.applications.filter((app) => app.company === company).map((app) => app.id);
+  const applicationIds = context.applications
+    .filter((app) => app.company === company)
+    .map((app) => app.id);
   // Reuse already-stored content, including legacy company/application links, without fetching it again.
-  const stored = await db.select({ tracking: mailTracking, message: mailMessages, match: companyMailMatches })
-    .from(mailTracking).innerJoin(mailMessages, eq(mailTracking.messageId, mailMessages.id))
-    .leftJoin(companyMailMatches, and(eq(companyMailMatches.trackingId, mailTracking.id), eq(companyMailMatches.companyKey, company)))
-    .where(and(or(sql`${mailTracking.companyKeys} @> ${JSON.stringify([company])}::jsonb`,
-      ...(applicationIds.length ? [inArray(mailMessages.linkedApplicationId, applicationIds)] : []),
-      eq(companyMailMatches.companyKey, company)),
-    or(isNull(companyMailMatches.id), ne(companyMailMatches.ruleRevision, revision))));
+  const stored = await db
+    .select({ tracking: mailTracking, message: mailMessages, match: companyMailMatches })
+    .from(mailTracking)
+    .innerJoin(mailMessages, eq(mailTracking.messageId, mailMessages.id))
+    .leftJoin(
+      companyMailMatches,
+      and(
+        eq(companyMailMatches.trackingId, mailTracking.id),
+        eq(companyMailMatches.companyKey, company),
+      ),
+    )
+    .where(
+      and(
+        or(
+          sql`${mailTracking.companyKeys} @> ${JSON.stringify([company])}::jsonb`,
+          ...(applicationIds.length
+            ? [inArray(mailMessages.linkedApplicationId, applicationIds)]
+            : []),
+          eq(companyMailMatches.companyKey, company),
+        ),
+        or(
+          isNull(companyMailMatches.id),
+          ne(companyMailMatches.ruleRevision, revision),
+          and(
+            isNotNull(mailMessages.linkedApplicationId),
+            sql`${companyMailMatches.kept} IS DISTINCT FROM (${applicationIds.length ? inArray(mailMessages.linkedApplicationId, applicationIds) : sql`false`})`,
+          ),
+        ),
+      ),
+    );
   for (const { tracking, message } of stored) {
-    const decision = matchMail({ ...message, externalId: tracking.providerMessageId, folders: tracking.folders,
-      bodyText: message.bodyText ?? message.snippet, receivedAt: tracking.receivedAt.toISOString(), threadId: tracking.threadId ?? undefined },
-      { ...context, companies: [selectedCompany] }, { historical: true, seen: true,
-        threadApplications: tracking.threadId ? tracking.applicationIds : [] });
-    const manual = message.linkedApplicationId && applicationIds.includes(message.linkedApplicationId);
-    const values = { kept: Boolean(manual) || (decision.disposition !== "excluded" && decision.companyKeys.includes(company)),
+    const decision = matchMail(
+      {
+        ...message,
+        externalId: tracking.providerMessageId,
+        folders: tracking.folders,
+        bodyText: message.bodyText ?? message.snippet,
+        receivedAt: tracking.receivedAt.toISOString(),
+        threadId: tracking.threadId ?? undefined,
+      },
+      { ...context, companies: [selectedCompany] },
+      {
+        historical: true,
+        seen: true,
+        threadApplications: tracking.threadId ? tracking.applicationIds : [],
+      },
+    );
+    const manual =
+      message.linkedApplicationId && applicationIds.includes(message.linkedApplicationId);
+    const values = {
+      kept: message.linkedApplicationId
+        ? Boolean(manual)
+        : decision.disposition !== "excluded" && decision.companyKeys.includes(company),
       reason: manual ? "Manually linked to this company's application" : decision.reason,
-      evidence: decision.evidence, ruleRevision: revision, updatedAt: new Date() };
-    await db.insert(companyMailMatches).values({ ...values, companyKey: company, trackingId: tracking.id })
-      .onConflictDoUpdate({ target: [companyMailMatches.companyKey, companyMailMatches.trackingId], set: values });
+      evidence: decision.evidence,
+      ruleRevision: revision,
+      updatedAt: new Date(),
+    };
+    await db
+      .insert(companyMailMatches)
+      .values({ ...values, companyKey: company, trackingId: tracking.id })
+      .onConflictDoUpdate({
+        target: [companyMailMatches.companyKey, companyMailMatches.trackingId],
+        set: values,
+      });
   }
   const connections = await db
     .select({
@@ -543,7 +601,13 @@ export async function readCompanyMail(
   const totals = await db
     .select({ kept: companyMailMatches.kept, count: sql<number>`count(*)::int` })
     .from(companyMailMatches)
-    .where(eq(companyMailMatches.companyKey, company))
+    .innerJoin(mailTracking, eq(companyMailMatches.trackingId, mailTracking.id))
+    .where(
+      and(
+        eq(companyMailMatches.companyKey, company),
+        account ? eq(mailTracking.accountEmail, account) : undefined,
+      ),
+    )
     .groupBy(companyMailMatches.kept);
   const counts = { kept: 0, excluded: 0 };
   totals.forEach((r) => {
@@ -565,6 +629,7 @@ export async function readCompanyMail(
       and(
         eq(companyMailMatches.companyKey, company),
         eq(companyMailMatches.kept, view === "kept"),
+        account ? eq(mailTracking.accountEmail, account) : undefined,
         paging,
       ),
     )

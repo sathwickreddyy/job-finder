@@ -14,9 +14,12 @@ export async function GET(request: Request) {
         company: z.string().min(1).max(300),
         view: z.enum(["kept", "excluded"]).default("kept"),
         before: z.string().max(200).optional(),
+        account: z.email().optional(),
       })
       .parse(Object.fromEntries(new URL(request.url).searchParams));
-    return mailSearchResponse(await readCompanyMail(query.company, query.view, query.before));
+    return mailSearchResponse(
+      await readCompanyMail(query.company, query.view, query.before, query.account),
+    );
   } catch (error) {
     if (error instanceof z.ZodError || error instanceof MailSearchError)
       return mailSearchResponse({ error: "Choose a valid company and saved-mail page." }, 400);

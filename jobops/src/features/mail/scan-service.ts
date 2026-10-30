@@ -1,18 +1,9 @@
 import { createHash } from "node:crypto";
 import { and, eq, inArray, or } from "drizzle-orm";
-import {
-  mailConnections,
-  mailMessages,
-  mailEvents,
-  mailTracking,
-  settings,
-} from "@/db/schema";
+import { mailConnections, mailMessages, mailEvents, mailTracking, settings } from "@/db/schema";
 import { withConnectionLock } from "@/services/mail/providers/connections";
 import { providerFor } from "@/services/mail/providers";
-import type {
-  MailConnection,
-  MailFolder,
-} from "@/services/mail/providers/types";
+import type { MailConnection, MailFolder } from "@/services/mail/providers/types";
 import { loadMailContext, type MailContext } from "./context";
 import { matchMail } from "./matching";
 import { importMailRecords, mailImportSchema } from "./import";
@@ -52,11 +43,7 @@ export class ScanFailure extends Error {
 export const coverageKey = (id: string) => `mailCoverage:${id}`;
 export const scanRuleRevision = (context: MailContext) =>
   createHash("sha256")
-    .update(
-      JSON.stringify(
-        context.companies.map((row) => ({ id: row.id, rule: row.rule })),
-      ),
-    )
+    .update(JSON.stringify(context.companies.map((row) => ({ id: row.id, rule: row.rule }))))
     .digest("hex");
 export const scanKey = (id: string, mode: string, scope: ScanScope) =>
   `mailScan:v2:${id}:${mode}:${createHash("sha256")
@@ -72,8 +59,7 @@ export async function scanContext(scope: ScanScope) {
   const company = scope.application
     ? context.applications.find((app) => app.id === scope.application)?.company
     : scope.company;
-  if (scope.application && !company)
-    throw new Error("Choose an existing application.");
+  if (scope.application && !company) throw new Error("Choose an existing application.");
   if (company && !context.companies.some((row) => row.id === company))
     throw new Error("Choose an existing company.");
   return {
@@ -112,15 +98,10 @@ export async function scanConnection(
     const provider = providerFor(current.provider);
     const key = scanKey(current.id, mode, scope);
     const rulesRevision = scanRuleRevision(context);
-    const [saved] = await database
-      .select()
-      .from(settings)
-      .where(eq(settings.key, key));
-    const stored = saved?.value as
-      (ScanProgress & { rulesRevision?: string }) | undefined;
+    const [saved] = await database.select().from(settings).where(eq(settings.key, key));
+    const stored = saved?.value as (ScanProgress & { rulesRevision?: string }) | undefined;
     const baseline = context.baselineAt;
-    const resumable =
-      stored && !stored.complete && stored.rulesRevision === rulesRevision;
+    const resumable = stored && !stored.complete && stored.rulesRevision === rulesRevision;
     const startedAt = new Date().toISOString();
     const progress: ScanProgress & { rulesRevision: string } = resumable
       ? { ...stored, rulesRevision }
@@ -238,8 +219,7 @@ export async function scanConnection(
                 (row) =>
                   row.providerMessageId.startsWith("legacy:") &&
                   (row.providerMessageId === `legacy:${raw.externalId}` ||
-                    (raw.internetMessageId &&
-                      row.internetMessageId === raw.internetMessageId)),
+                    (raw.internetMessageId && row.internetMessageId === raw.internetMessageId)),
               );
             const threadApplications = raw.threadId
               ? threads
@@ -254,10 +234,8 @@ export async function scanConnection(
             // Company/app scoped scans observe other IDs but do not consume their
             // queue eligibility. The global scan must still be able to find them.
             const outside =
-              (scope.company &&
-                !decision.companyKeys.includes(scope.company)) ||
-              (scope.application &&
-                !decision.applicationIds.includes(scope.application));
+              (scope.company && !decision.companyKeys.includes(scope.company)) ||
+              (scope.application && !decision.applicationIds.includes(scope.application));
             if (outside) continue;
             let disposition = retainDisposition(previous, decision);
             let messageId = previous?.messageId ?? null;
@@ -280,9 +258,8 @@ export async function scanConnection(
                 );
               messageId = message.id;
               const contactReply =
-                decision.evidence.includes(
-                  "Reply from a person you contacted",
-                ) && classifyMail(raw).type === "UNKNOWN";
+                decision.evidence.includes("Reply from a person you contacted") &&
+                classifyMail(raw).type === "UNKNOWN";
               if (contactReply)
                 await tx
                   .update(mailMessages)
@@ -298,9 +275,7 @@ export async function scanConnection(
                 await tx
                   .update(mailEvents)
                   .set({
-                    ...(contactReply
-                      ? { type: "FOLLOW_UP" as const, confidence: 0.75 }
-                      : {}),
+                    ...(contactReply ? { type: "FOLLOW_UP" as const, confidence: 0.75 } : {}),
                     details: {
                       ...details,
                       ...(decision.applicationIds.length === 1
@@ -321,8 +296,7 @@ export async function scanConnection(
                 .from(mailMessages)
                 .where(eq(mailMessages.id, messageId));
               if (message.state === "DONE" || message.linked)
-                disposition =
-                  disposition === "excluded" ? "excluded" : "history";
+                disposition = disposition === "excluded" ? "excluded" : "history";
             }
             const values = {
               provider: current.provider,
@@ -343,23 +317,29 @@ export async function scanConnection(
               evidence: decision.evidence,
               updatedAt: new Date(),
             };
-            if (previous)
-              await tx
-                .update(mailTracking)
-                .set(values)
-                .where(eq(mailTracking.id, previous.id));
-            else
-              await tx
-                .insert(mailTracking)
-                .values(values)
-                .onConflictDoNothing({
-                  target: [
-                    mailTracking.provider,
-                    mailTracking.accountEmail,
-                    mailTracking.providerMessageId,
-                  ],
-                });
-            if (!previous) {
+            const [saved] = previous
+              ? await tx
+                  .update(mailTracking)
+                  .set(values)
+                  .where(eq(mailTracking.id, previous.id))
+                  .returning()
+              : await tx
+                  .insert(mailTracking)
+                  .values(values)
+                  .onConflictDoNothing({
+                    target: [
+                      mailTracking.provider,
+                      mailTracking.accountEmail,
+                      mailTracking.providerMessageId,
+                    ],
+                  })
+                  .returning();
+            // Provider pages may overlap internally as well as across requests.
+            if (saved) {
+              if (previous) Object.assign(previous, saved);
+              else prior.push(saved);
+            }
+            if (!previous && saved) {
               if (disposition === "latest") delta.arrived++;
               else if (disposition === "history") delta.historical++;
               else delta.excluded++;
