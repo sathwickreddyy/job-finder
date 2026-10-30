@@ -3,7 +3,32 @@
 `GET /api/v1/mail/search` returns the input JSON schema and examples.
 `POST /api/v1/mail/search` performs one page of read-only provider search per
 selected account, concurrently. Use the same endpoint from company, application,
-and mail pages. The existing UI is not switched to this endpoint yet.
+and mail pages.
+
+## Using the UI
+
+Open `/mail/search`, or choose **Search inboxes** from Mail. Company and application
+pages link to this screen with visible company-name/alias keywords prefilled.
+The existing saved-mail workspace is still available separately.
+
+Choose last N rolling days, an exact IST date range, or all history. Enter optional
+keyword phrases, sender addresses and subject phrases, then select accounts.
+The browser calls this endpoint independently for each selected account in parallel,
+using one frozen timestamp window across all requests. Each account displays its
+own request state, fetched/returned/skipped counts, exact provider query, and page
+activity. Results appear as pages finish, with a plain-text reader and classification
+reasons. Unknown messages are retained.
+
+**Pause after current pages** stops requesting additional pages after in-flight
+responses finish. **Continue / retry unfinished accounts** uses retained cursors,
+keeps successful results, and skips completed/limited accounts. Each pass is capped
+at ten pages per account; the screen explicitly reports paused/incomplete status.
+Continue resumes that same search window. Edited criteria take effect only when
+starting a new search. Results/cursors live in the current page, not browser storage;
+leaving it or starting a new search clears them. Search does not save to tracking.
+
+`/gallery/mail/search` is a labelled sample-only preview of the same component;
+its fixture transport makes no mailbox requests.
 
 ## Last N days across all accounts
 
