@@ -16,8 +16,7 @@ function refresh(recordId?: string) {
   ])
     revalidatePath(path);
 }
-const emailsNotice = (notice: string) =>
-  `/mail?notice=${encodeURIComponent(notice)}`;
+const emailsNotice = (notice: string) => `/mail?notice=${encodeURIComponent(notice)}`;
 
 export async function dismissMail(_state: ActionState, form: FormData): Promise<ActionState> {
   let destination: string;

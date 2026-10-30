@@ -72,7 +72,5 @@ it("dismisses from a lane and returns there", async () => {
 it("returns to Mail when dismissing without a lane", async () => {
   mocks.dismissMessages.mockResolvedValue(1);
   await dismissMail({}, form({ mailId }));
-  expect(mocks.redirect).toHaveBeenCalledWith(
-    "/mail?notice=Dismissed%201%20message.",
-  );
+  expect(mocks.redirect).toHaveBeenCalledWith("/mail?notice=Dismissed%201%20message.");
 });
