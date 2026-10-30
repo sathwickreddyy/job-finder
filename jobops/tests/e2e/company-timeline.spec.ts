@@ -170,3 +170,52 @@ test("legacy handled mail stays handled despite a pending review event", async (
   await expect(mailRow(page, subject)).not.toContainText("Needs you");
   await expect(page.getByRole("button", { name: "Record round scheduled" })).toHaveCount(0);
 });
+
+test("company page opens on Timeline with the aside", async ({ page }) => {
+  await seedRecord({
+    company: "Atlassian",
+    source: "DIRECT",
+    sentDaysAgo: 2,
+    title: "Timeline Engineer",
+  });
+  const subject = unique("Atlassian interview");
+  await seedMail({ subject, classification: "INTERVIEW", companyKey: "atlassian" });
+  await page.goto("/companies/atlassian");
+  await expect(page.getByRole("heading", { level: 1, name: "Atlassian" })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "Timeline", exact: true })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  const aside = page.getByRole("complementary", { name: "Company facts" });
+  for (const heading of ["Your roles", "Pay", "Interview loop"])
+    await expect(aside.getByRole("heading", { name: heading, exact: true })).toBeVisible();
+  await expect(aside.getByRole("link", { name: "Timeline Engineer" })).toBeVisible();
+  await expect(mailRow(page, subject)).toBeVisible();
+  await expect(page.getByRole("button", { name: "Record round scheduled" })).toBeVisible();
+  await expect(
+    page.getByText("Typical rounds", { exact: true }).filter({ visible: true }),
+  ).toHaveCount(0);
+  await page.getByRole("button", { name: "Just info", exact: true }).click();
+  await expect(page.getByText("Marked as just info")).toBeVisible();
+  await expect(mailRow(page, subject)).not.toContainText("Needs you");
+});
+
+test("progress tab opens Timeline", async ({ page }) => {
+  await page.goto("/companies/atlassian?tab=progress");
+  await expect(page.getByRole("tab", { name: "Timeline", exact: true })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+});
+
+test("research tabs keep their content", async ({ page }) => {
+  await page.goto("/companies/atlassian?tab=pay");
+  await expect(page.getByRole("tab", { name: "Compensation", exact: true })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await expect(page.getByRole("heading", { level: 2, name: "Compensation" })).toBeVisible();
+  await expect(
+    page.getByText("Typical rounds", { exact: true }).filter({ visible: true }),
+  ).toHaveCount(1);
+});

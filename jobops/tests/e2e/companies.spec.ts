@@ -69,18 +69,18 @@ test("city cards follow current resumes while applications preserve the submitte
   await expect(page).toHaveURL(/view=grid&q=Amazon/);
   await bengaluru.click({ position: { x: 20, y: 20 } });
   await expect(page).toHaveURL(/\/companies\/amazon\?city=Bengaluru$/);
-  await expect(page.getByRole("tab", { name: "Compensation", exact: true })).toHaveAttribute(
+  await expect(page.getByRole("tab", { name: "Timeline", exact: true })).toHaveAttribute(
     "aria-selected",
     "true",
   );
-  await page.getByRole("tab", { name: "Your progress", exact: true }).click();
-  await expect(page).toHaveURL(/\/companies\/amazon\?city=Bengaluru&tab=progress$/);
+  await page.getByRole("tab", { name: "Interview loop", exact: true }).click();
+  await expect(page).toHaveURL(/\/companies\/amazon\?city=Bengaluru&tab=interviews$/);
   await page.keyboard.press("ArrowLeft");
-  await expect(page.getByRole("tab", { name: "Interview loop", exact: true })).toBeFocused();
-  await expect(page).toHaveURL(/tab=interviews$/);
-  await page.keyboard.press("ArrowRight");
+  await expect(page.getByRole("tab", { name: "Compensation", exact: true })).toBeFocused();
+  await expect(page).toHaveURL(/tab=pay$/);
+  await page.keyboard.press("ArrowLeft");
   await page.reload();
-  await expect(page.getByRole("tab", { name: "Your progress", exact: true })).toHaveAttribute(
+  await expect(page.getByRole("tab", { name: "Timeline", exact: true })).toHaveAttribute(
     "aria-selected",
     "true",
   );
@@ -109,7 +109,7 @@ test("city cards follow current resumes while applications preserve the submitte
   await page.getByLabel("Use this as my default file").check();
   await page.getByRole("button", { name: "Upload PDF", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Company revision", exact: true })).toBeVisible();
-  await page.goto("/companies/amazon?city=Bengaluru&tab=progress");
+  await page.goto("/companies/amazon?city=Bengaluru&tab=timeline");
   await expect(
     bengaluruResume.getByRole("link", { name: "Current resume: Company revision", exact: true }),
   ).toHaveAttribute("href", familyPath);

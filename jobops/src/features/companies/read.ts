@@ -22,6 +22,7 @@ export async function readCompanies() {
           company: jobs.company,
           title: jobs.title,
           location: jobs.location,
+          source: applications.source,
           status: applications.status,
           appliedAt: applications.appliedAt,
           updatedAt: applications.updatedAt,

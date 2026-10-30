@@ -16,6 +16,8 @@ import { matchMail } from "./matching";
 function invalidate() {
   for (const path of ["/mail", "/applications", "/companies", "/settings", "/"])
     revalidatePath(path);
+  // Company pages show the same timeline and handle mail in place.
+  revalidatePath("/companies/[slug]", "page");
 }
 /** One Check mail step across all accounts; the page loops while `mailCheck.more`. */
 export async function checkMail(): Promise<ActionState & { mailCheck?: CheckResult }> {
