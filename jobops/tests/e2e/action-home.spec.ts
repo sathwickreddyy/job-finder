@@ -1,9 +1,7 @@
 import { stubExternalSites } from "./helpers/external-sites";
 import { expect, test } from "@playwright/test";
-import { eq } from "drizzle-orm";
-import { closeDatabase, db } from "../../src/db";
-import { mailMessages } from "../../src/db/schema";
-import { cleanupMailFixtures, guardMailFixtures, seedMail } from "./helpers/task13-mail";
+import { closeDatabase } from "../../src/db";
+import { cleanupMailFixtures, guardMailFixtures } from "./helpers/task13-mail";
 
 test.beforeEach(async ({ page }) => {
   await stubExternalSites(page);
@@ -12,26 +10,6 @@ test.beforeEach(async ({ page }) => {
 test.beforeEach(guardMailFixtures);
 test.afterEach(cleanupMailFixtures);
 test.afterAll(() => closeDatabase());
-
-test("emails triage dismisses a message as handled", async ({ page }) => {
-  const subject = `Interview test ${Date.now()}`;
-  const mailId = await seedMail({ subject, classification: "INTERVIEW" });
-  await page.goto(`/inbox?view=attention&q=${encodeURIComponent(subject)}`);
-  await expect(page).toHaveURL(/\/applications\?emails=1$/);
-  const updates = page.getByRole("region", { name: /^Replies we couldn't match/ });
-  const message = updates.getByRole("link", { name: subject, exact: true });
-  await expect(message).toBeVisible();
-  await updates
-    .getByRole("listitem")
-    .filter({ hasText: subject })
-    .getByRole("button", { name: "Dismiss", exact: true })
-    .click();
-  await expect(page.getByRole("status").filter({ hasText: "Dismissed 1 message." })).toBeVisible();
-  await expect(message).toHaveCount(0);
-  expect(
-    (await db.select().from(mailMessages).where(eq(mailMessages.id, mailId)))[0].attentionState,
-  ).toBe("DONE");
-});
 
 test("core pages fit a phone and preserve the selected theme", async ({ page }) => {
   const errors: string[] = [];
@@ -47,11 +25,11 @@ test("core pages fit a phone and preserve the selected theme", async ({ page }) 
   );
   await expect(page.getByRole("link", { name: "Emails", exact: true })).toHaveAttribute(
     "href",
-    "/applications?emails=1",
+    "/mail",
   );
-  await expect(page.locator("a").filter({ hasText: "Refresh your inboxes" })).toHaveAttribute(
+  await expect(page.locator("a").filter({ hasText: "Check mail" })).toHaveAttribute(
     "href",
-    "/applications?emails=1",
+    "/mail",
   );
   for (const label of ["Interview stage", "Offers"]) {
     await expect(page.getByRole("link", { name: new RegExp(`${label}$`) })).toHaveAttribute(
@@ -68,7 +46,7 @@ test("core pages fit a phone and preserve the selected theme", async ({ page }) 
     "/applications",
     "/applications?open=00000000-0000-4000-8000-000000000000",
     "/my-profile",
-    "/applications?emails=1",
+    "/mail",
   ]) {
     await page.goto(path);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(

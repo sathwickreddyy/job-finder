@@ -32,7 +32,7 @@ function heldResponse() {
 }
 
 async function expectBlocked(page: Page) {
-  await expect(page.locator("[inert]")).toContainText("JobOps");
+  await expect(page.locator("[inert]")).toContainText("My Jobs Workspace");
   await expect(popup(page).getByRole("progressbar")).not.toHaveAttribute("aria-valuenow");
 }
 

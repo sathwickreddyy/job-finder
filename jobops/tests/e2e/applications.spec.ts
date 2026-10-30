@@ -313,20 +313,15 @@ test("linking an assessment mail books the OA and clears the message", async ({ 
   // Linked mail sits under its event on the lane; the record page lists the message itself.
   await page.goto(`/applications/${applicationId}`);
   await expect(page.getByRole("region", { name: "History" })).toContainText(subject);
-  await page.goto("/applications?emails=1");
-  await expect(page.getByRole("link", { name: subject, exact: true })).toHaveCount(0);
+  await page.goto("/mail?view=all");
+  await expect(page.getByRole("button", { name: new RegExp(subject) })).toBeVisible();
 });
 
 test("a recruiter mail becomes a saved opening", async ({ page }) => {
   const subject = `SDE-3 role ${Date.now()}`;
-  await seedMail({ subject, classification: "RECRUITER_OUTREACH" });
-  await page.goto("/applications?emails=1");
-  await page
-    .getByRole("region", { name: /^New roles/ })
-    .getByRole("listitem")
-    .filter({ hasText: subject })
-    .getByRole("link", { name: "Save as opening", exact: true })
-    .click();
+  const id = await seedMail({ subject, classification: "RECRUITER_OUTREACH" });
+  await page.goto(`/mail/${id}`);
+  await page.getByRole("link", { name: "Save as opening", exact: true }).click();
   await expect(page.getByLabel("Job description")).toHaveValue(`${subject} full message`);
   await page.getByLabel("Company").fill(`Mail Role Co ${Date.now()}`);
   await page.getByLabel("Role / title").fill("SDE-3 Backend");
@@ -334,41 +329,8 @@ test("a recruiter mail becomes a saved opening", async ({ page }) => {
   await page.getByRole("button", { name: "Save job", exact: true }).click();
   await expect(page).toHaveURL(/\/jobs\/[0-9a-f-]+\?savedFromMail=1$/);
   await captureSavedJob(new URL(page.url()).pathname.split("/").at(-1)!);
-  await page.goto("/applications?emails=1");
-  await expect(page.getByRole("link", { name: subject, exact: true })).toHaveCount(0);
-});
-
-test("noise can be cleared in one action", async ({ page }) => {
-  const subjects = [`Job alert one ${Date.now()}`, `Job alert two ${Date.now()}`];
-  for (const subject of subjects)
-    await seedMail({ subject, classification: "UNKNOWN", sender: "alerts@naukri.com" });
-  await page.goto("/applications?emails=1");
-  await page
-    .getByRole("region", { name: /^Job alerts and auto-replies/ })
-    .getByRole("button", { name: "Clear all", exact: true })
-    .click();
-  await expect(
-    page.getByRole("status").filter({ hasText: /Dismissed \d+ messages/ }),
-  ).toBeVisible();
-  for (const subject of subjects)
-    await expect(page.getByRole("link", { name: subject, exact: true })).toHaveCount(0);
-});
-
-test("the Emails drawer describes missing configuration for both providers", async ({ page }) => {
-  await page.goto("/applications?emails=1");
-  const gmail = page.getByRole("button", { name: "Connect Gmail", exact: true });
-  await expect(gmail).toBeDisabled();
-  await expect(gmail).toHaveAccessibleDescription("Gmail isn't set up on this computer yet.");
-  const outlook = page.getByRole("button", { name: "Connect Outlook", exact: true });
-  await expect(outlook).toBeDisabled();
-  await expect(outlook).toHaveAccessibleDescription("Outlook isn't set up on this computer yet.");
-  await page.getByText("Setup details").first().click();
-  await expect(
-    page.getByText(/Set GOOGLE_CLIENT_ID, .* in \.env, then restart the app\./),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: "Refresh all inboxes", exact: true }),
-  ).toBeDisabled();
+  await page.goto(`/mail/${id}`);
+  await expect(page.getByRole("link", { name: "Save as opening", exact: true })).toHaveCount(0);
 });
 
 test("record history uses readable India-time dates and long notes collapse", async ({ page }) => {

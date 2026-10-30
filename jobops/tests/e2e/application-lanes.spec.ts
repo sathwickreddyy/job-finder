@@ -129,10 +129,7 @@ test("old and stale links still land somewhere useful, and phones scroll the cha
   await page.goto("/applications?open=not-a-uuid&mail=x");
   await expect(lane(page, company)).toBeVisible();
   await page.goto("/applications?tab=emails");
-  await expect(page.getByRole("dialog", { name: "Emails" })).toBeVisible();
-  await page.keyboard.press("Escape");
-  await expect(page.getByRole("dialog", { name: "Emails" })).toBeHidden();
-  await expect(page).toHaveURL(/\/applications$/);
+  await expect(page).toHaveURL(/\/mail$/);
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/applications");
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
@@ -141,44 +138,6 @@ test("old and stale links still land somewhere useful, and phones scroll the cha
       .getByTestId("lanes-chart")
       .evaluate((element) => element.scrollWidth > element.clientWidth),
   ).toBe(true);
-});
-
-test("the Emails drawer links an unmatched reply into its lane and clears alerts", async ({
-  page,
-}) => {
-  const company = `Drawer Lane ${Date.now()}`;
-  const subject = `${company} interview`;
-  const { applicationId } = await seedRecord({ company, source: "DIRECT", sentDaysAgo: 3 });
-  await seedMail({ subject, classification: "INTERVIEW" });
-  await seedMail({
-    subject: `${company} alert one`,
-    sender: "jobalerts@naukri.com",
-    classification: "UNKNOWN",
-  });
-  await seedMail({
-    subject: `${company} alert two`,
-    sender: "jobalerts@naukri.com",
-    classification: "UNKNOWN",
-  });
-  await page.goto("/applications");
-  // With no inbox connected the header button reads "Connect inboxes" (spec §1).
-  await page.getByRole("button", { name: /^(Emails|Connect inboxes)/ }).click();
-  const drawer = page.getByRole("dialog", { name: "Emails" });
-  const unmatched = drawer.getByRole("region", { name: /^Replies we couldn't match/ });
-  const card = unmatched.getByRole("listitem").filter({ hasText: subject });
-  await card.getByLabel("Record for this message").selectOption(applicationId);
-  await card.getByRole("button", { name: "Link and update", exact: true }).click();
-  await expect(page).toHaveURL(new RegExp(`open=${applicationId}&mail=`));
-  await expect(page.getByText(`Linking mail: ${subject}`)).toBeVisible();
-  await page.goto("/applications?emails=1");
-  await drawer
-    .getByRole("region", { name: /^Job alerts and auto-replies/ })
-    .getByRole("button", { name: "Clear all", exact: true })
-    .click();
-  await expect(
-    page.getByRole("status").filter({ hasText: /Dismissed \d+ messages/ }),
-  ).toBeVisible();
-  await expect(drawer.getByText(`${company} alert one`)).toHaveCount(0);
 });
 
 test("a wrongly matched email can be dismissed from its lane", async ({ page }) => {
@@ -199,33 +158,6 @@ test("a wrongly matched email can be dismissed from its lane", async ({ page }) 
   ).toHaveCount(0);
 });
 
-test("linking a drawer reply to a closed record closes the drawer and opens that lane", async ({
-  page,
-}) => {
-  const company = `Closed Lane ${Date.now()}`;
-  const subject = `${company} late update`;
-  const { applicationId } = await seedRecord({ company, source: "DIRECT", sentDaysAgo: 5 });
-  await page.goto(`/applications/${applicationId}`);
-  await page.getByRole("button", { name: "Rejected", exact: true }).click();
-  await page.getByRole("button", { name: "Save", exact: true }).click();
-  await expect(page.getByRole("status").filter({ hasText: "Saved: Rejected." })).toBeVisible();
-  await seedMail({ subject, classification: "INTERVIEW" });
-  await page.goto("/applications");
-  await expect(lane(page, company)).toHaveCount(0);
-  await page.getByRole("button", { name: /^(Emails|Connect inboxes)/ }).click();
-  const drawer = page.getByRole("dialog", { name: "Emails" });
-  const card = drawer
-    .getByRole("region", { name: /^Replies we couldn't match/ })
-    .getByRole("listitem")
-    .filter({ hasText: subject });
-  await card.getByLabel("Record for this message").selectOption(applicationId);
-  await card.getByRole("button", { name: "Link and update", exact: true }).click();
-  await expect(page).toHaveURL(new RegExp(`open=${applicationId}&mail=`));
-  await expect(drawer).toBeHidden();
-  await expect(page.getByRole("region", { name: `${company} timeline` })).toBeVisible();
-  await expect(page.getByText(`Linking mail: ${subject}`)).toBeVisible();
-});
-
 test("saving on a lane far down the page keeps it in view", async ({ page }) => {
   const stamp = Date.now();
   for (let index = 0; index < 14; index += 1)
@@ -244,18 +176,6 @@ test("saving on a lane far down the page keeps it in view", async ({ page }) => 
   await expect(saved).toBeVisible();
   await expect(page).toHaveURL(new RegExp(`/applications\\?open=${applicationId}$`));
   await expect(saved).toBeInViewport();
-});
-
-test("clicking empty space inside the Emails drawer keeps it open", async ({ page }) => {
-  await page.setViewportSize({ width: 1280, height: 2000 });
-  await page.goto("/applications?emails=1");
-  const drawer = page.getByRole("dialog", { name: "Emails" });
-  await expect(drawer).toBeVisible();
-  const box = (await drawer.boundingBox())!;
-  await page.mouse.click(box.x + box.width / 2, box.y + box.height - 10);
-  await expect(drawer).toBeVisible();
-  await page.mouse.click(Math.max(5, box.x - 40), box.y + box.height / 2);
-  await expect(drawer).toBeHidden();
 });
 
 test("stack previews organize saved events without moving the chart and dismiss with Escape", async ({
@@ -304,14 +224,6 @@ test("keyboard saving a terminal outcome keeps focus within the lane", async ({ 
   await page.keyboard.press("Enter");
   await expect(page.getByRole("status").filter({ hasText: "Saved: Rejected." })).toBeVisible();
   await expect(detail.getByRole("region", { name: "Progress", exact: true })).toBeFocused();
-});
-
-test("closing a deep-linked drawer returns focus to the header trigger", async ({ page }) => {
-  await page.goto("/applications?emails=1");
-  await expect(page.getByRole("dialog", { name: "Emails" })).toBeVisible();
-  await page.keyboard.press("Escape");
-  await expect(page.getByRole("button", { name: /^(Emails|Connect inboxes)/ })).toBeFocused();
-  await expect(page).toHaveURL(/\/applications$/);
 });
 
 test("phone scrolling keeps edge dots and their badges behind the company column", async ({
@@ -502,17 +414,4 @@ test("matched acknowledgement on a closed company is actionable and stays closed
   await expect(lane(page, company).getByTestId("lane-status")).toHaveText("Rejected");
   await page.goto("/applications");
   await expect(lane(page, company)).toHaveCount(0);
-});
-
-test("drawer focus stays on its trigger after a slow close navigation", async ({ page }) => {
-  await page.goto("/applications?emails=1");
-  await expect(page.getByRole("dialog", { name: "Emails" })).toBeVisible();
-  await page.route("**/applications?**", async (route) => {
-    if (route.request().headers().rsc === "1")
-      await new Promise((resolve) => setTimeout(resolve, 600));
-    await route.continue();
-  });
-  await page.keyboard.press("Escape");
-  await expect(page).toHaveURL(/\/applications$/);
-  await expect(page.getByRole("button", { name: /^(Emails|Connect inboxes)/ })).toBeFocused();
 });

@@ -20,10 +20,7 @@ export async function checkMail(): Promise<ActionState & { mailCheck?: CheckResu
   try {
     const mailCheck = await checkMailStep();
     invalidate();
-    return {
-      mailCheck,
-      mailRefresh: { arrived: mailCheck.newAttention, completedAt: new Date().toISOString() },
-    };
+    return { mailCheck };
   } catch (error) {
     return actionError(error);
   }

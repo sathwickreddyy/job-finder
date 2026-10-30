@@ -69,10 +69,10 @@ it("dismisses from a lane and returns there", async () => {
   );
 });
 
-it("returns to the Emails drawer when dismissing without a lane", async () => {
+it("returns to Mail when dismissing without a lane", async () => {
   mocks.dismissMessages.mockResolvedValue(1);
   await dismissMail({}, form({ mailId }));
   expect(mocks.redirect).toHaveBeenCalledWith(
-    "/applications?emails=1&notice=Dismissed%201%20message.",
+    "/mail?notice=Dismissed%201%20message.",
   );
 });

@@ -31,8 +31,8 @@ export default async function NewJob({
             <p role="alert" className="rounded-2xl bg-danger-soft p-4 text-destructive">
               {error}
             </p>
-            <Link href="/applications?emails=1" className="text-link">
-              Return to Emails
+            <Link href="/mail" className="text-link">
+              Return to Mail
             </Link>
           </div>
         ) : (

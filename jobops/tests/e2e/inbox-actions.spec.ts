@@ -16,6 +16,10 @@ const { providers } = (await tsImport(
   "../../src/services/mail/providers/index.ts",
   loader,
 )) as typeof import("../../src/services/mail/providers");
+const { checkMail } = (await tsImport(
+  "../../src/features/mail/workspace-actions.ts",
+  loader,
+)) as typeof import("../../src/features/mail/workspace-actions");
 const { checkKey } = (await tsImport(
   "../../src/features/mail/check-service.ts",
   loader,
@@ -137,17 +141,18 @@ test.afterEach(async () => {
   await pool?.end();
 });
 
-test("actual refresh-all action imports other inboxes when one Outlook grant is revoked", async () => {
+const statusOf = (result: Awaited<ReturnType<typeof checkMail>>, email: string) =>
+  result.mailCheck?.accounts.find((row) => row.account === email)?.status;
+
+test("actual Check mail imports other inboxes when one Outlook grant is revoked", async () => {
   scanWith(async (row) => {
     if (row.email === emails[1]) throw new Error("Outlook access expired. Reconnect Outlook.");
     return { messages: [message(row.email)] };
   });
-  const result = await run(() => actions.refreshAllInboxes());
-  expect(result).toMatchObject({
-    success: expect.stringContaining("2 new need attention. Checked 2 of 3 inboxes."),
-    mailRefresh: { arrived: 2 },
-  });
-  expect(result.success).toContain(emails[1]);
+  const result = await run(() => checkMail());
+  expect(result.mailCheck).toMatchObject({ more: false, newAttention: 2 });
+  expect(statusOf(result, emails[1])).toBe("failed");
+  expect([statusOf(result, emails[0]), statusOf(result, emails[2])]).toEqual(["done", "done"]);
   expect(
     (
       await pool.query(
@@ -164,7 +169,7 @@ test("actual refresh-all action imports other inboxes when one Outlook grant is 
   ).toContain("expired");
 });
 
-test("actual refresh-all keeps committed pages after secondary status persistence failure", async () => {
+test("actual Check mail keeps committed pages after secondary status persistence failure", async () => {
   trigger = `task17_${randomUUID().replaceAll("-", "")}`;
   await guard();
   await pool.query(
@@ -181,11 +186,10 @@ test("actual refresh-all keeps committed pages after secondary status persistenc
       ...(row.email === emails[1] ? { next: "retry" } : {}),
     };
   });
-  const result = await run(() => actions.refreshAllInboxes());
-  expect(result).toMatchObject({
-    success: expect.stringContaining("3 new need attention. Checked 2 of 3 inboxes."),
-    mailRefresh: { arrived: 3 },
-  });
+  const first = await run(() => checkMail());
+  expect(first.mailCheck).toMatchObject({ more: true, newAttention: 3 });
+  const second = await run(() => checkMail());
+  expect(statusOf(second, emails[1])).toBe("failed");
   expect(
     (await pool.query("SELECT id FROM mail_messages WHERE account_email=ANY($1::text[])", [emails]))
       .rowCount,
@@ -196,23 +200,22 @@ test("actual refresh-all keeps committed pages after secondary status persistenc
   ).toBe("retry");
 });
 
-test("actual refresh-all reports every failure and retains previously imported mail", async () => {
+test("actual Check mail reports every failure and retains previously imported mail", async () => {
   scanWith(async (row) => ({ messages: [message(row.email)] }));
-  await run(() => actions.refreshAllInboxes());
+  await run(() => checkMail());
   scanWith(async () => {
     throw new Error("Access expired. Reconnect.");
   });
-  const result = await run(() => actions.refreshAllInboxes());
-  expect(result.mailRefresh?.arrived).toBe(0);
-  expect(result.error).toContain("No inbox checked.");
-  for (const email of emails) expect(result.error).toContain(email);
+  const result = await run(() => checkMail());
+  expect(result.mailCheck?.newAttention).toBe(0);
+  for (const email of emails) expect(statusOf(result, email)).toBe("failed");
   expect(
     (await pool.query("SELECT id FROM mail_messages WHERE account_email=ANY($1::text[])", [emails]))
       .rowCount,
   ).toBe(3);
 });
 
-test("concurrent refresh-all actions use the shared lock and import each message once", async () => {
+test("concurrent Check mail actions use the shared lock and import each message once", async () => {
   const entered = barrier(),
     release = barrier();
   let gmailCalls = 0;
@@ -223,20 +226,16 @@ test("concurrent refresh-all actions use the shared lock and import each message
     }
     return { messages: [message(row.email)] };
   });
-  const first = run(() => actions.refreshAllInboxes());
+  const first = run(() => checkMail());
   await entered.promise;
-  const second = run(() => actions.refreshAllInboxes());
+  const second = run(() => checkMail());
   try {
     await lockWait();
   } finally {
     release.resolve();
   }
   const results = await Promise.all([first, second]);
-  expect(results.map((row) => row.mailRefresh?.arrived)).toEqual([3, 0]);
-  expect(
-    (await pool.query("SELECT id FROM mail_messages WHERE account_email=ANY($1::text[])", [emails]))
-      .rowCount,
-  ).toBe(3);
+  expect(results.map((row) => row.mailCheck?.newAttention)).toEqual([3, 0]);
   expect(
     (
       await pool.query(
@@ -257,7 +256,7 @@ test("actual disconnect action waits for refresh then removes credentials and ch
     }
     return { messages: [message(row.email)], next: "continued" };
   });
-  const refresh = run(() => actions.refreshAllInboxes());
+  const refresh = run(() => checkMail());
   await entered.promise;
   const form = new FormData();
   form.set("connectionId", ids[0]);
