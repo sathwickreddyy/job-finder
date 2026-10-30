@@ -1,11 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { eq, inArray } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
 import {
-  mailConnections,
   mailTracking,
   mailMessages,
   mailEvents,
@@ -15,123 +14,23 @@ import {
 } from "@/db/schema";
 import { actionError, formString, type ActionState } from "@/lib/actions";
 import { loadMailContext, ruleKey, ruleSchema } from "./context";
-import {
-  scanConnection,
-  ScanFailure,
-  scanKey,
-  scanRuleRevision,
-  type ScanScope,
-} from "./scan-service";
+import { checkMailStep, type CheckResult } from "./check-service";
 import { matchMail } from "./matching";
 
 function invalidate() {
   for (const path of ["/mail", "/applications", "/companies", "/settings", "/"])
     revalidatePath(path);
 }
-const scopeSchema = z.object({
-  company: z.string().max(300).optional(),
-  application: z.uuid().optional(),
-  account: z.email().optional(),
-});
-export async function checkWorkspaceMail(
-  _previous: ActionState,
-  form: FormData,
-): Promise<ActionState> {
+/** One Check mail step across all accounts; the page loops while `mailCheck.more`. */
+export async function checkMail(): Promise<ActionState & { mailCheck?: CheckResult }> {
   try {
-    const mode = z
-      .enum(["latest", "history"])
-      .parse(formString(form, "mode") || "latest");
-    const scope: ScanScope = scopeSchema.parse(
-      Object.fromEntries(
-        ["company", "application", "account"].flatMap((key) =>
-          formString(form, key) ? [[key, formString(form, key)]] : [],
-        ),
-      ),
-    );
-    const context = await loadMailContext();
-    if (
-      scope.company &&
-      !context.companies.some((company) => company.id === scope.company)
-    )
-      throw new Error("Choose an existing company.");
-    if (
-      scope.application &&
-      !context.applications.some((app) => app.id === scope.application)
-    )
-      throw new Error("Choose an existing application.");
-    const connections = await db
-      .select()
-      .from(mailConnections)
-      .where(
-        scope.account ? eq(mailConnections.email, scope.account) : undefined,
-      );
-    if (!connections.length)
-      throw new Error("Connect an inbox before checking mail.");
-    const saved = await db
-      .select()
-      .from(settings)
-      .where(
-        inArray(
-          settings.key,
-          connections.map((connection) => scanKey(connection.id, mode, scope)),
-        ),
-      );
-    const revision = scanRuleRevision(context);
-    const stateOf = (id: string) =>
-      saved.find(
-        (row) =>
-          row.key === scanKey(id, mode, scope) &&
-          row.value.rulesRevision === revision,
-      )?.value;
-    const continuing = connections.some(
-      (connection) => stateOf(connection.id)?.complete === false,
-    );
-    const active = continuing
-      ? connections.filter(
-          (connection) => stateOf(connection.id)?.complete !== true,
-        )
-      : connections;
-    const results = await Promise.allSettled(
-      active.map((connection) =>
-        scanConnection(connection, mode, scope, context),
-      ),
-    );
-    const done = results.flatMap((result) =>
-      result.status === "fulfilled" ? [result.value] : [],
-    );
-    const failures = results.flatMap((result, index) =>
-      result.status === "rejected"
-        ? [`${active[index].email}: ${actionError(result.reason).error}`]
-        : [],
-    );
-    const committed = results.flatMap((result) =>
-      result.status === "fulfilled"
-        ? [result.value]
-        : result.reason instanceof ScanFailure
-          ? [result.reason.result]
-          : [],
-    );
-    const arrived = committed.reduce((sum, result) => sum + result.arrived, 0);
-    const historical = committed.reduce(
-      (sum, result) => sum + result.historical,
-      0,
-    );
-    const more = committed.some((result) => result.more);
-    const matches = `${historical} older ${historical === 1 ? "match" : "matches"}`;
-    const summary = `${done.length + connections.length - active.length} of ${connections.length} accounts checked. ${mode === "history" ? `${matches} saved to History` : `${arrived} new ${arrived === 1 ? "update" : "updates"}; ${matches} kept in History`}.${more ? " More mail remains; continue the check to resume saved pages." : ""}${failures.length ? ` Needs attention: ${failures.join(" ")}` : ""}`;
+    const mailCheck = await checkMailStep();
     invalidate();
     return {
-      ...(done.length ? { success: summary } : { error: summary }),
-      mailRefresh: { arrived, completedAt: new Date().toISOString() },
-      mailScan: {
-        more,
-        scanned: committed.reduce((sum, row) => sum + row.scanned, 0),
-        historical,
-        failed: failures.length > 0,
-      },
+      mailCheck,
+      mailRefresh: { arrived: mailCheck.newAttention, completedAt: new Date().toISOString() },
     };
   } catch (error) {
-    invalidate();
     return actionError(error);
   }
 }

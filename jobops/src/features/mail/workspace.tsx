@@ -23,11 +23,7 @@ import {
 import { Button } from "@/components/ui";
 import { cn } from "@/lib/utils";
 import { useLoadingTask } from "@/components/loading/overlay";
-import {
-  checkWorkspaceMail,
-  reviewWorkspaceMail,
-  associateWorkspaceMail,
-} from "./workspace-actions";
+import { checkMail, reviewWorkspaceMail, associateWorkspaceMail } from "./workspace-actions";
 import type { MailWorkspaceData, WorkspaceQuery, MailRow } from "./workspace-data";
 import { CompanyRuleEditor } from "./company-rule-editor";
 import type { ActionState } from "@/lib/actions";
@@ -200,53 +196,36 @@ export function MailWorkspace({
       }
     });
   }
-  function runCheck(mode: "latest" | "history") {
+  function runCheck() {
     setChecking(true);
     startTransition(async () => {
-      const form = new FormData();
-      for (const [key, value] of Object.entries({
-        mode,
-        company: initial.company ?? "",
-        application: initial.application ?? "",
-        account: initial.account ?? "",
-      }))
-        if (value) form.set(key, value);
-      let arrived = 0,
-        historical = 0,
-        scanned = 0,
-        more = false,
-        result: ActionState = {};
+      let arrived = 0;
+      let result: Awaited<ReturnType<typeof checkMail>> = {};
       try {
-        // Short page-sized requests keep long backfills resumable through a
-        // browser/proxy timeout, while one click can still examine four pages.
-        for (let batch = 0; batch < 4; batch++) {
-          result = await checkWorkspaceMail({}, form);
-          arrived += result.mailRefresh?.arrived ?? 0;
-          historical += result.mailScan?.historical ?? 0;
-          scanned += result.mailScan?.scanned ?? 0;
-          more = result.mailScan?.more ?? false;
-          if (result.error || result.mailScan?.failed) break;
-          setFeedback(`${scanned} messages examined. ${historical} historical matches found.`);
-          if (!more) break;
+        // Each call checks one page per inbox, so an interrupted check resumes on the next press.
+        for (let call = 0; call < 20; call++) {
+          result = await checkMail();
+          if (result.error || !result.mailCheck) break;
+          arrived += result.mailCheck.newAttention;
+          setFeedback(`Checking ${result.mailCheck.accounts.length} inboxes…`);
+          if (!result.mailCheck.more) break;
         }
+        const failed = result.mailCheck?.accounts.filter((row) => row.status === "failed") ?? [];
         setFeedback(
-          result.error || result.mailScan?.failed
-            ? (result.error ?? result.success ?? "Check interrupted; see Accounts for details.")
-            : `${mode === "history" ? `${historical} historical ${historical === 1 ? "match" : "matches"} saved to History` : `${arrived} new ${arrived === 1 ? "update" : "updates"}; ${historical} older ${historical === 1 ? "match" : "matches"} kept in History`}. ${more ? "More mail remains. Continue the check to resume." : "Selected window checked across all accounts."}`,
+          result.error ??
+            [
+              arrived ? `${arrived} new need attention.` : "No new mail.",
+              result.mailCheck?.more ? "More mail remains; check again to continue." : "",
+              failed.length
+                ? `Reconnect ${failed.map((row) => row.account).join(", ")} in Settings.`
+                : "",
+            ]
+              .filter(Boolean)
+              .join(" "),
         );
-        if (mode === "history" && !result.error && !result.mailScan?.failed) {
-          const next = new URLSearchParams(currentParams);
-          next.set("view", "history");
-          next.delete("before");
-          setDetail("message");
-          setMobileReader(false);
-          router.replace(`/mail?${next}`, { scroll: false });
-        }
         router.refresh();
       } catch {
-        setFeedback(
-          "Connection interrupted. Saved scan pages are safe. Reload or retry to continue.",
-        );
+        setFeedback("Connection interrupted. Checked pages are safe. Check again to continue.");
       } finally {
         setChecking(false);
       }
@@ -289,7 +268,7 @@ export function MailWorkspace({
             className="group min-h-11 gap-2.5 px-5 shadow-surface active:scale-[0.98] motion-reduce:transform-none"
             title="Check connected accounts for new hiring updates"
             disabled={pending || !data.connections.length}
-            onClick={() => runCheck("latest")}
+            onClick={runCheck}
           >
             <RefreshCw
               size={16}

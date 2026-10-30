@@ -82,8 +82,8 @@ export function FreshMailBanner({ count }: { count: number }) {
 }
 
 export function RefreshAllButton({ disabled }: { disabled: boolean }) {
-  const [state, action, pending] = useActionState(async (previous: ActionState) => {
-    const result = await refreshAllInboxes(previous);
+  const [state, action, pending] = useActionState(async () => {
+    const result = await refreshAllInboxes();
     // Persist before React consumes the result: server revalidation can replace the view.
     retain(result);
     return result;

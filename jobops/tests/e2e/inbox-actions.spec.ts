@@ -16,13 +16,17 @@ const { providers } = (await tsImport(
   "../../src/services/mail/providers/index.ts",
   loader,
 )) as typeof import("../../src/services/mail/providers");
+const { checkKey } = (await tsImport(
+  "../../src/features/mail/check-service.ts",
+  loader,
+)) as typeof import("../../src/features/mail/check-service");
 const { closeDatabase } = (await tsImport(
   "../../src/db/index.ts",
   loader,
 )) as typeof import("../../src/db");
 const { workAsyncStorage } =
   await import("next/dist/server/app-render/work-async-storage.external.js");
-const originals = providers.map((provider) => provider.listRecruitingMail);
+const originals = providers.map(({ folders, scanMail }) => ({ folders, scanMail }));
 let pool: Pool;
 let ids: string[] = [];
 let emails: string[] = [];
@@ -45,12 +49,22 @@ async function run<T>(action: () => Promise<T>) {
   } as unknown as WorkStore;
   return workAsyncStorage.run(store, action);
 }
+// Kept without company context: an explicit update about the user's own application.
 const message = (email: string, suffix = "first") => ({
   externalId: `${email}:${suffix}`,
-  sender: "recruiter@example.invalid",
-  subject: "Interview invitation",
+  sender: "careers@example.invalid",
+  subject: "We received your application",
+  bodyText: "Thank you for applying to the Software Engineer role.",
   receivedAt: new Date().toISOString(),
+  folders: ["Inbox"],
 });
+type Scan = (typeof providers)[number]["scanMail"];
+function scanWith(scan: Scan) {
+  providers.forEach((provider) => {
+    provider.folders = async () => [];
+    provider.scanMail = scan;
+  });
+}
 function barrier() {
   let resolve!: () => void;
   const promise = new Promise<void>((done) => {
@@ -93,9 +107,7 @@ test.beforeEach(async () => {
     );
 });
 test.afterEach(async () => {
-  providers.forEach((provider, index) => {
-    provider.listRecruitingMail = originals[index];
-  });
+  providers.forEach((provider, index) => Object.assign(provider, originals[index]));
   if (owned) {
     await guard();
     if (trigger) {
@@ -103,6 +115,7 @@ test.afterEach(async () => {
       await pool.query(`DROP FUNCTION IF EXISTS "${trigger}"()`);
       trigger = undefined;
     }
+    await pool.query("DELETE FROM mail_tracking WHERE account_email=ANY($1::text[])", [emails]);
     const messages = await pool.query(
       "SELECT id FROM mail_messages WHERE account_email=ANY($1::text[])",
       [emails],
@@ -117,9 +130,7 @@ test.afterEach(async () => {
     await pool.query("DELETE FROM activity_logs WHERE id=ANY($1::uuid[])", [
       logs.rows.map((row) => row.id),
     ]);
-    await pool.query("DELETE FROM settings WHERE key=ANY($1::text[])", [
-      ids.map((id) => `mailCursor:${id}`),
-    ]);
+    for (const id of ids) await pool.query("DELETE FROM settings WHERE key LIKE $1", [`%${id}%`]);
     await pool.query("DELETE FROM mail_connections WHERE id=ANY($1::uuid[])", [ids]);
   }
   await closeDatabase();
@@ -127,15 +138,13 @@ test.afterEach(async () => {
 });
 
 test("actual refresh-all action imports other inboxes when one Outlook grant is revoked", async () => {
-  providers.forEach((provider) => {
-    provider.listRecruitingMail = async (row) => {
-      if (row.email === emails[1]) throw new Error("Outlook access expired. Reconnect Outlook.");
-      return { messages: [message(row.email)] };
-    };
+  scanWith(async (row) => {
+    if (row.email === emails[1]) throw new Error("Outlook access expired. Reconnect Outlook.");
+    return { messages: [message(row.email)] };
   });
-  const result = await run(() => actions.refreshAllInboxes({}));
+  const result = await run(() => actions.refreshAllInboxes());
   expect(result).toMatchObject({
-    success: expect.stringContaining("Refreshed 2 of 3 inboxes · 2 new."),
+    success: expect.stringContaining("2 new need attention. Checked 2 of 3 inboxes."),
     mailRefresh: { arrived: 2 },
   });
   expect(result.success).toContain(emails[1]);
@@ -155,7 +164,7 @@ test("actual refresh-all action imports other inboxes when one Outlook grant is 
   ).toContain("expired");
 });
 
-test("actual refresh-all keeps partial counts after secondary status persistence failure", async () => {
+test("actual refresh-all keeps committed pages after secondary status persistence failure", async () => {
   trigger = `task17_${randomUUID().replaceAll("-", "")}`;
   await guard();
   await pool.query(
@@ -164,45 +173,38 @@ test("actual refresh-all keeps partial counts after secondary status persistence
   await pool.query(
     `CREATE TRIGGER "${trigger}" BEFORE UPDATE ON mail_connections FOR EACH ROW EXECUTE FUNCTION "${trigger}"()`,
   );
-  providers.forEach((provider) => {
-    provider.listRecruitingMail = async (row, cursor) => {
-      if (row.email === emails[1] && cursor)
-        throw new Error("Outlook access expired. Reconnect Outlook.");
-      return {
-        messages: [message(row.email)],
-        ...(row.email === emails[1] ? { nextCursor: { pageToken: "retry" } } : {}),
-      };
+  scanWith(async (row, request) => {
+    if (row.email === emails[1] && request.next)
+      throw new Error("Outlook access expired. Reconnect Outlook.");
+    return {
+      messages: [message(row.email)],
+      ...(row.email === emails[1] ? { next: "retry" } : {}),
     };
   });
-  const result = await run(() => actions.refreshAllInboxes({}));
+  const result = await run(() => actions.refreshAllInboxes());
   expect(result).toMatchObject({
-    success: expect.stringContaining("Refreshed 2 of 3 inboxes · 3 new."),
+    success: expect.stringContaining("3 new need attention. Checked 2 of 3 inboxes."),
     mailRefresh: { arrived: 3 },
   });
-  expect(result.success).toContain("More messages remain");
   expect(
     (await pool.query("SELECT id FROM mail_messages WHERE account_email=ANY($1::text[])", [emails]))
       .rowCount,
   ).toBe(3);
   expect(
-    (await pool.query("SELECT value FROM settings WHERE key=$1", [`mailCursor:${ids[1]}`])).rows[0]
-      .value.pageToken,
+    (await pool.query("SELECT value FROM settings WHERE key=$1", [checkKey(ids[1])])).rows[0].value
+      .next,
   ).toBe("retry");
 });
 
 test("actual refresh-all reports every failure and retains previously imported mail", async () => {
-  providers.forEach((provider) => {
-    provider.listRecruitingMail = async (row) => ({ messages: [message(row.email)] });
+  scanWith(async (row) => ({ messages: [message(row.email)] }));
+  await run(() => actions.refreshAllInboxes());
+  scanWith(async () => {
+    throw new Error("Access expired. Reconnect.");
   });
-  await run(() => actions.refreshAllInboxes({}));
-  providers.forEach((provider) => {
-    provider.listRecruitingMail = async () => {
-      throw new Error("Access expired. Reconnect.");
-    };
-  });
-  const result = await run(() => actions.refreshAllInboxes({}));
+  const result = await run(() => actions.refreshAllInboxes());
   expect(result.mailRefresh?.arrived).toBe(0);
-  expect(result.error).toContain("No inbox refreshed.");
+  expect(result.error).toContain("No inbox checked.");
   for (const email of emails) expect(result.error).toContain(email);
   expect(
     (await pool.query("SELECT id FROM mail_messages WHERE account_email=ANY($1::text[])", [emails]))
@@ -214,18 +216,16 @@ test("concurrent refresh-all actions use the shared lock and import each message
   const entered = barrier(),
     release = barrier();
   let gmailCalls = 0;
-  providers.forEach((provider) => {
-    provider.listRecruitingMail = async (row) => {
-      if (row.email === emails[0] && ++gmailCalls === 1) {
-        entered.resolve();
-        await release.promise;
-      }
-      return { messages: [message(row.email)] };
-    };
+  scanWith(async (row) => {
+    if (row.email === emails[0] && ++gmailCalls === 1) {
+      entered.resolve();
+      await release.promise;
+    }
+    return { messages: [message(row.email)] };
   });
-  const first = run(() => actions.refreshAllInboxes({}));
+  const first = run(() => actions.refreshAllInboxes());
   await entered.promise;
-  const second = run(() => actions.refreshAllInboxes({}));
+  const second = run(() => actions.refreshAllInboxes());
   try {
     await lockWait();
   } finally {
@@ -247,19 +247,17 @@ test("concurrent refresh-all actions use the shared lock and import each message
   ).toBe(3);
 });
 
-test("actual disconnect action waits for refresh then removes credentials/cursor and preserves imported history", async () => {
+test("actual disconnect action waits for refresh then removes credentials and check progress and preserves imported history", async () => {
   const entered = barrier(),
     release = barrier();
-  providers.forEach((provider) => {
-    provider.listRecruitingMail = async (row) => {
-      if (row.email === emails[0]) {
-        entered.resolve();
-        await release.promise;
-      }
-      return { messages: [message(row.email)], nextCursor: { pageToken: "continued" } };
-    };
+  scanWith(async (row) => {
+    if (row.email === emails[0]) {
+      entered.resolve();
+      await release.promise;
+    }
+    return { messages: [message(row.email)], next: "continued" };
   });
-  const refresh = run(() => actions.refreshAllInboxes({}));
+  const refresh = run(() => actions.refreshAllInboxes());
   await entered.promise;
   const form = new FormData();
   form.set("connectionId", ids[0]);
@@ -277,7 +275,7 @@ test("actual disconnect action waits for refresh then removes credentials/cursor
     0,
   );
   expect(
-    (await pool.query("SELECT key FROM settings WHERE key=$1", [`mailCursor:${ids[0]}`])).rowCount,
+    (await pool.query("SELECT key FROM settings WHERE key LIKE $1", [`%${ids[0]}%`])).rowCount,
   ).toBe(0);
   expect(
     (
@@ -296,12 +294,12 @@ test("actual disconnect action waits for refresh then removes credentials/cursor
   ).toBeGreaterThan(0);
 });
 
-test("disconnect audit failure rolls back credentials and cursor; retry commits one honest removal", async () => {
+test("disconnect audit failure rolls back credentials and check progress; retry commits one honest removal", async () => {
   await guard();
-  const key = `mailCursor:${ids[0]}`;
+  const key = checkKey(ids[0]);
   await pool.query("INSERT INTO settings(key,value) VALUES ($1,$2::jsonb)", [
     key,
-    JSON.stringify({ pageToken: "continue", startedAt: "2026-10-03T00:00:00Z" }),
+    JSON.stringify({ next: "continue", complete: false, until: "2026-10-03T00:00:00Z" }),
   ]);
   const before = (await pool.query("SELECT * FROM mail_connections WHERE id=$1", [ids[0]])).rows;
   const cursorBefore = (await pool.query("SELECT * FROM settings WHERE key=$1", [key])).rows;

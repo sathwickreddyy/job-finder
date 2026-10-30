@@ -5,7 +5,6 @@ export type ActionState = {
   redirect?: string;
   /** Committed mail arrivals for this completed refresh, never historical status totals. */
   mailRefresh?: { arrived: number; completedAt: string };
-  mailScan?: { more: boolean; scanned: number; historical: number; failed: boolean };
 };
 export function formString(form: FormData, key: string) {
   return String(form.get(key) ?? "").trim();

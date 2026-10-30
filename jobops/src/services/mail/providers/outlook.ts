@@ -1,5 +1,4 @@
 import { recipientPreview } from "./display-metadata";
-import { classifyMail } from "../classifier";
 import { accessTokenFor } from "./connections";
 import { oauthConfiguration, parseTokenResponse } from "./oauth";
 import type { MailProvider, TokenSet, MailFolder } from "./types";
@@ -8,7 +7,6 @@ import { plainText } from "./plain-text";
 export const OUTLOOK_SCOPES = "offline_access User.Read Mail.Read";
 const authority = "https://login.microsoftonline.com/consumers/oauth2/v2.0";
 const graphOrigin = "https://graph.microsoft.com";
-const inboxPath = "/v1.0/me/mailFolders/inbox/messages";
 const preference = 'outlook.body-content-type="text", IdType="ImmutableId"';
 
 export function readOnlyScopes(scope?: string): boolean {
@@ -83,30 +81,6 @@ async function token(
       "Microsoft returned missing read permissions or permissions beyond read-only mail. Revoke this app and reconnect Outlook with User.Read and Mail.Read.",
     );
   return parseTokenResponse(data);
-}
-
-function safeNextLink(next: string): string {
-  let url: URL;
-  try {
-    url = new URL(next);
-  } catch {
-    throw new Error("Microsoft returned an invalid mail paging URL.");
-  }
-  if (
-    url.origin !== graphOrigin ||
-    ![
-      inboxPath,
-      "/v1.0/me/mailfolders/inbox/messages",
-      "/v1.0/me/mailFolders('inbox')/messages",
-      "/v1.0/me/mailfolders('inbox')/messages",
-    ].includes(url.pathname) ||
-    url.username ||
-    url.password ||
-    next.includes("#")
-  )
-    throw new Error("Microsoft returned an unsafe mail paging URL.");
-  // Preserve the provider's entire opaque query rather than rebuilding skip tokens.
-  return next;
 }
 
 class OutlookReadError extends Error {
@@ -359,57 +333,5 @@ export const outlook: MailProvider = {
       };
     });
     return { messages, next, ...(request.skipIds ? { fetched: page.value.length, skippedUnavailable: unavailable.size } : {}) };
-  },
-  async listRecruitingMail(connection, cursor) {
-    // Validate continuation before obtaining or sending any credentials.
-    let url = cursor?.next ? safeNextLink(cursor.next) : undefined;
-    if (!url) {
-      const since = new Date(
-        connection.lastSyncedAt
-          ? connection.lastSyncedAt.getTime() - 86400000
-          : Date.now() - 30 * 86400000,
-      ).toISOString();
-      const query = new URLSearchParams({
-        $top: "50",
-        $filter: `receivedDateTime ge ${since}`,
-        $orderby: "receivedDateTime desc",
-        $select:
-          "id,internetMessageId,conversationId,subject,bodyPreview,body,from,toRecipients,receivedDateTime",
-      });
-      url = `${graphOrigin}${inboxPath}?${query}`;
-    }
-    const accessToken = await outlook.accessToken(connection);
-    const page = await graphRequest<{
-      value: GraphMessage[];
-      "@odata.nextLink"?: string;
-    }>(url, accessToken);
-    const next = page["@odata.nextLink"];
-    const nextCursor = next ? { next: safeNextLink(next) } : undefined;
-    const messages = [];
-    for (const message of page.value) {
-      const subject = message.subject || "(No subject)";
-      const bodyText = (message.body?.content ?? "").slice(0, 100000);
-      const snippet = (message.bodyPreview ?? "").slice(0, 2000);
-      if (!classifyMail({ subject, bodyText, snippet }).relevant) continue;
-      messages.push({
-        // Immutable Graph IDs preserve case; never use an unrequested mutable fallback.
-        externalId: message.internetMessageId?.trim() || message.id,
-        threadId: message.conversationId,
-        sender:
-          message.from?.emailAddress?.address ?? "unknown@outlook.invalid",
-        senderName: message.from?.emailAddress?.name ?? "",
-        recipient: recipientPreview(
-          (message.toRecipients ?? [])
-            .map((entry) => entry.emailAddress?.address ?? "")
-            .filter(Boolean)
-            .join(", "),
-        ),
-        subject,
-        snippet,
-        bodyText,
-        receivedAt: new Date(message.receivedDateTime).toISOString(),
-      });
-    }
-    return { messages, nextCursor };
   },
 };

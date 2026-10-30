@@ -1,4 +1,3 @@
-import { classifyMail } from "../classifier";
 import { recipientPreview } from "./display-metadata";
 import { oauthConfiguration, parseTokenResponse } from "./oauth";
 import { accessTokenFor } from "./connections";
@@ -277,72 +276,5 @@ export const gmail: MailProvider = {
     }
     return { messages, next: page.nextPageToken,
       ...(request.skipIds ? { fetched: listed.length, skippedKnown: listed.length - ids.length } : {}) };
-  },
-  async listRecruitingMail(connection, cursor) {
-    const token = await gmail.accessToken(connection);
-    const since = connection.lastSyncedAt
-      ? Math.floor((connection.lastSyncedAt.getTime() - 86400000) / 1000)
-      : Math.floor((Date.now() - 30 * 86400000) / 1000);
-    const query =
-      cursor?.query ??
-      `after:${since} -in:sent -in:drafts {application interview assessment recruiter recruiting "job offer" "career opportunity" "thank you for applying"}`;
-    const params = new URLSearchParams({ q: query, maxResults: "100" });
-    if (cursor?.pageToken) params.set("pageToken", cursor.pageToken);
-    const response = await gmailRequest<{
-      messages?: { id: string }[];
-      nextPageToken?: string;
-    }>(`messages?${params}`, token);
-    const results = [];
-    const ids = response.messages ?? [];
-    for (let index = 0; index < ids.length; index += 5) {
-      const chunk = await Promise.all(
-        ids
-          .slice(index, index + 5)
-          .map((message) =>
-            gmailRequest<GmailMessage>(
-              `messages/${encodeURIComponent(message.id)}?format=full`,
-              token,
-            ),
-          ),
-      );
-      for (const message of chunk) {
-        const header = (name: string) =>
-          message.payload?.headers?.find(
-            (entry) => entry.name.toLowerCase() === name.toLowerCase(),
-          )?.value ?? "";
-        const subject = header("Subject") || "(No subject)";
-        const bodyText = textBody(message.payload).slice(0, 100000);
-        const classification = classifyMail({
-          subject,
-          bodyText,
-          snippet: message.snippet,
-        });
-        if (!classification.relevant) continue;
-        const from = header("From");
-        const address = from.match(/<([^>]+)>/);
-        results.push({
-          externalId: message.id,
-          threadId: message.threadId,
-          provider: "GMAIL",
-          sender: address?.[1] ?? from,
-          senderName: address
-            ? from.split("<")[0].trim().replace(/^"|"$/g, "")
-            : "",
-          recipient: recipientPreview(header("To")),
-          subject,
-          snippet: message.snippet ?? "",
-          bodyText,
-          receivedAt: new Date(
-            Number(message.internalDate ?? Date.now()),
-          ).toISOString(),
-        });
-      }
-    }
-    return {
-      messages: results,
-      nextCursor: response.nextPageToken
-        ? { pageToken: response.nextPageToken, query }
-        : undefined,
-    };
   },
 };

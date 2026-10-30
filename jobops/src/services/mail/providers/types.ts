@@ -3,7 +3,6 @@ import type { mailConnections } from "@/db/schema";
 import type { mailImportSchema } from "@/features/mail/import";
 export type ProviderId = "GMAIL" | "OUTLOOK";
 export type TokenSet = { accessToken: string; refreshToken: string | null; expiresAt: Date };
-export type Cursor = { pageToken?: string; query?: string; next?: string; startedAt?: string };
 export type MailConnection = typeof mailConnections.$inferSelect;
 export type MailFolder = { id: string; name: string; contextOnly?: boolean };
 export type ScannedMessage = z.input<typeof mailImportSchema>[number] & {
@@ -46,8 +45,4 @@ export type MailProvider = {
     skippedKnown?: number;
     skippedUnavailable?: number;
   }>;
-  listRecruitingMail(
-    connection: MailConnection,
-    cursor?: Cursor,
-  ): Promise<{ messages: z.input<typeof mailImportSchema>; nextCursor?: Cursor }>;
 };

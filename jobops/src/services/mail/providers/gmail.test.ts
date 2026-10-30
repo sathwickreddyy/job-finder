@@ -76,44 +76,6 @@ it.each([
   );
   await expect(gmail.exchangeCode("code", "verifier")).rejects.toThrow("invalid token response");
 });
-it("keeps the frozen search query, continuation and at most five concurrent message reads", async () => {
-  vi.spyOn(gmail, "accessToken").mockResolvedValue("access");
-  let active = 0,
-    peak = 0;
-  const request = vi.fn(async (url: string) => {
-    if (url.includes("messages?"))
-      return Response.json({
-        messages: Array.from({ length: 11 }, (_, i) => ({ id: `id${i}` })),
-        nextPageToken: "next",
-      });
-    active++;
-    peak = Math.max(peak, active);
-    await new Promise((resolve) => setTimeout(resolve, 1));
-    active--;
-    return Response.json({
-      id: url.split("messages/")[1].split("?")[0],
-      internalDate: "1700000000000",
-      payload: {
-        headers: [
-          { name: "Subject", value: "Interview invitation" },
-          { name: "From", value: "Recruiter <person@example.invalid>" },
-        ],
-      },
-    });
-  });
-  vi.stubGlobal("fetch", request);
-  const connection = { lastSyncedAt: null } as Parameters<typeof gmail.listRecruitingMail>[0];
-  const page = await gmail.listRecruitingMail(connection, {
-    query: "frozen query",
-    pageToken: "continue",
-  });
-  expect(new URL(request.mock.calls[0][0]).searchParams.get("q")).toBe("frozen query");
-  expect(new URL(request.mock.calls[0][0]).searchParams.get("pageToken")).toBe("continue");
-  expect(page.messages).toHaveLength(11);
-  expect(peak).toBe(5);
-  expect(page.nextCursor).toEqual({ pageToken: "next", query: "frozen query" });
-});
-
 it("keeps a mail with many To addresses within the import display limit", async () => {
   const recipient = Array.from({ length: 45 }, (_, i) => `candidate${i}@example.invalid`).join(
     ", ",
@@ -139,9 +101,11 @@ it("keeps a mail with many To addresses within the import display limit", async 
       ),
     ),
   );
-  const page = await gmail.listRecruitingMail({ lastSyncedAt: null } as Parameters<
-    typeof gmail.listRecruitingMail
-  >[0]);
+  const page = await gmail.scanMail(
+    {} as Parameters<typeof gmail.scanMail>[0],
+    { until: "2026-10-30T00:00:00Z" },
+    [],
+  );
   expect(page.messages).toHaveLength(1);
   expect(page.messages[0]).toMatchObject({
     externalId: "many-recipients",

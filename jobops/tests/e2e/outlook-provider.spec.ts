@@ -5,14 +5,23 @@ import { eq } from "drizzle-orm";
 import { db, closeDatabase } from "../../src/db";
 import { mailConnections } from "../../src/db/schema";
 import { encryptToken } from "../../src/services/mail/crypto";
-import { refreshConnection } from "../../src/features/mail/refresh-service";
-import type { MailConnection } from "../../src/services/mail/providers/types";
+import { checkConnection } from "../../src/features/mail/check-service";
+import type { MailContext } from "../../src/features/mail/context";
+import { outlook } from "../../src/services/mail/providers/outlook";
+import type { MailConnection, ScannedMessage } from "../../src/services/mail/providers/types";
 
 let pool: Pool;
 let connection: MailConnection;
 let messageId: string;
 let previousKey: string | undefined;
-const originalFetch = globalThis.fetch;
+const originalScan = outlook.scanMail;
+const originalFolders = outlook.folders;
+const context: MailContext = {
+  baselineAt: "2026-10-01T00:00:00Z",
+  companies: [],
+  applications: [],
+  outbound: [],
+};
 
 async function guard() {
   if (!process.env.DATABASE_URL || new URL(process.env.DATABASE_URL).pathname !== "/jobops_e2e")
@@ -44,13 +53,14 @@ test.beforeEach(async () => {
 });
 
 test.afterEach(async () => {
-  globalThis.fetch = originalFetch;
+  outlook.scanMail = originalScan;
+  outlook.folders = originalFolders;
   await guard();
   // Capture and delete only this fixture's IDs. Cascades remove its associated events.
-  const messages = await pool.query(
-    "SELECT id FROM mail_messages WHERE provider='OUTLOOK' AND external_id=$1",
-    [messageId],
-  );
+  await pool.query("DELETE FROM mail_tracking WHERE account_email=$1", [connection.email]);
+  const messages = await pool.query("SELECT id FROM mail_messages WHERE account_email=$1", [
+    connection.email,
+  ]);
   const logs = await pool.query("SELECT id FROM activity_logs WHERE metadata->>'accountEmail'=$1", [
     connection.email,
   ]);
@@ -60,7 +70,7 @@ test.afterEach(async () => {
   await pool.query("DELETE FROM activity_logs WHERE id=ANY($1::uuid[])", [
     logs.rows.map((row) => row.id),
   ]);
-  await pool.query("DELETE FROM settings WHERE key=$1", [`mailCursor:${connection.id}`]);
+  await pool.query("DELETE FROM settings WHERE key LIKE $1", [`%${connection.id}%`]);
   await pool.query("DELETE FROM mail_connections WHERE id=$1", [connection.id]);
   await closeDatabase();
   await pool.end();
@@ -69,47 +79,30 @@ test.afterEach(async () => {
 });
 
 for (const handled of [false, true]) {
-  test(`actual Outlook adapter and importer deduplicate folder moves${handled ? " and preserve DONE/REVIEWED" : ""}`, async () => {
-    const ids = ["GraphID-before-move", "DifferentGraphID-after-move"];
-    let requests = 0;
-    globalThis.fetch = async (input, init) => {
-      const url = new URL(String(input));
-      expect(url.origin + url.pathname).toBe(
-        "https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messages",
-      );
-      expect(new Headers(init?.headers).get("Authorization")).toBe("Bearer fixture-access");
-      expect(new Headers(init?.headers).get("Prefer")).toBe(
-        'outlook.body-content-type="text", IdType="ImmutableId"',
-      );
-      expect(init?.redirect).toBe("error");
-      return Response.json({
-        value: [
-          {
-            id: ids[requests++],
-            internetMessageId: messageId,
-            subject: "Interview invitation for SDE-2",
-            body: { contentType: "text", content: "We would like to schedule your interview." },
-            bodyPreview: "Interview invitation",
-            conversationId: "fixture-conversation",
-            from: { emailAddress: { name: "Talent Team", address: "talent@example.invalid" } },
-            toRecipients: [{ emailAddress: { address: connection.email } }],
-            receivedDateTime: new Date().toISOString(),
-          },
-        ],
-      });
-    };
-    expect(await refreshConnection(connection)).toEqual({
-      imported: 1,
-      duplicates: 0,
-      more: false,
+  test(`one immutable Outlook identity survives a folder move${handled ? " and stays handled" : ""}`, async () => {
+    const scanned = (folder: string): ScannedMessage => ({
+      externalId: "Immutable-GraphID",
+      internetMessageId: messageId,
+      sender: "talent@example.invalid",
+      senderName: "Talent Team",
+      subject: "We received your application",
+      bodyText: "Thank you for applying to the Software Engineer role.",
+      receivedAt: new Date().toISOString(),
+      folders: [folder],
+    });
+    outlook.folders = async () => [];
+    outlook.scanMail = async () => ({ messages: [scanned("Inbox")] });
+    expect(await checkConnection(connection, context)).toMatchObject({
+      status: "done",
+      newAttention: 1,
     });
     const first = await pool.query(
-      "SELECT id,account_email FROM mail_messages WHERE provider='OUTLOOK' AND external_id=$1",
-      [messageId],
+      "SELECT id,attention_state,folders FROM mail_messages WHERE account_email=$1",
+      [connection.email],
     );
     expect(first.rows).toHaveLength(1);
     const persistedId = first.rows[0].id;
-    expect(first.rows[0].account_email).toBe(connection.email);
+    expect(first.rows[0]).toMatchObject({ attention_state: "OPEN", folders: ["Inbox"] });
     const event = await pool.query("SELECT id FROM mail_events WHERE mail_message_id=$1", [
       persistedId,
     ]);
@@ -125,25 +118,23 @@ for (const handled of [false, true]) {
       .select()
       .from(mailConnections)
       .where(eq(mailConnections.id, connection.id));
-    expect(await refreshConnection(current)).toEqual({ imported: 0, duplicates: 1, more: false });
-    const stored = await pool.query(
-      "SELECT id,attention_state,account_email FROM mail_messages WHERE provider='OUTLOOK' AND external_id=$1",
-      [messageId],
-    );
-    expect(stored.rows).toHaveLength(1);
-    expect(stored.rows[0]).toMatchObject({
-      id: persistedId,
-      account_email: connection.email,
-      attention_state: handled ? "DONE" : "OPEN",
+    outlook.scanMail = async () => ({ messages: [scanned("Archive")] });
+    expect(await checkConnection(current, context)).toMatchObject({
+      status: "done",
+      newAttention: 0,
     });
+    const stored = await pool.query(
+      "SELECT id,attention_state,folders FROM mail_messages WHERE account_email=$1",
+      [connection.email],
+    );
+    expect(stored.rows).toEqual([
+      { id: persistedId, attention_state: handled ? "DONE" : "OPEN", folders: ["Archive"] },
+    ]);
     const events = await pool.query("SELECT id,status FROM mail_events WHERE mail_message_id=$1", [
       persistedId,
     ]);
-    expect(events.rows).toHaveLength(1);
-    expect(events.rows[0]).toMatchObject({
-      id: event.rows[0].id,
-      status: handled ? "REVIEWED" : "NEEDS_REVIEW",
-    });
-    expect(requests).toBe(2);
+    expect(events.rows).toEqual([
+      { id: event.rows[0].id, status: handled ? "REVIEWED" : "NEEDS_REVIEW" },
+    ]);
   });
 }

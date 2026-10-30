@@ -1,0 +1,271 @@
+import { randomUUID } from "node:crypto";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { eq, inArray, like } from "drizzle-orm";
+import { closeDatabase, db } from "@/db";
+import { mailConnections, mailMessages, mailTracking, settings } from "@/db/schema";
+import { outlook } from "@/services/mail/providers/outlook";
+import { checkConnection, checkKey, checkMailStep } from "@/features/mail/check-service";
+import type { MailContext } from "@/features/mail/context";
+import type { ScannedMessage } from "@/services/mail/providers/types";
+import { assertE2eDatabase, dbTests } from "./helpers/e2e-db";
+
+const prefix = `mail-check-${randomUUID()}`;
+const baseline = "2026-10-29T00:00:00Z";
+const rule = {
+  company: "Fixture",
+  aliases: [],
+  domains: ["fixture.invalid"],
+  senders: [],
+  subjectTerms: [],
+  excludedTerms: [],
+};
+const context: MailContext = {
+  baselineAt: baseline,
+  companies: [
+    { id: "fixture", name: "Fixture", slug: null, baselineAt: baseline, ruleSource: "test", rule },
+  ],
+  applications: [],
+  outbound: [],
+};
+const mail = (id: string, patch: Partial<ScannedMessage> = {}): ScannedMessage => ({
+  externalId: id,
+  internetMessageId: "<shared@fixture.invalid>",
+  sender: "talent@fixture.invalid",
+  subject: "Interview invitation",
+  bodyText: "Please share your interview availability",
+  receivedAt: "2026-10-30T00:00:00Z",
+  folders: ["Inbox"],
+  ...patch,
+});
+// Kept without any company context: an explicit update about the user's own application.
+const update = (id: string): ScannedMessage =>
+  mail(id, {
+    sender: "careers@untracked.invalid",
+    subject: "We received your application",
+    bodyText: "Thank you for applying to the Software Engineer role.",
+  });
+let index = 0;
+async function connection() {
+  const [row] = await db
+    .insert(mailConnections)
+    .values({
+      provider: "OUTLOOK",
+      email: `${prefix}-${index++}@fixture.invalid`,
+      encryptedAccessToken: "unused-fixture",
+    })
+    .returning();
+  return row;
+}
+const ledger = (email: string) =>
+  db.select().from(mailTracking).where(eq(mailTracking.accountEmail, email));
+const messages = (email: string) =>
+  db.select().from(mailMessages).where(eq(mailMessages.accountEmail, email));
+const current = async (id: string) =>
+  (await db.select().from(mailConnections).where(eq(mailConnections.id, id)))[0];
+
+describe.skipIf(!dbTests)("on-demand mail check", () => {
+  beforeAll(async () => {
+    await assertE2eDatabase();
+    if ((await db.select({ id: mailConnections.id }).from(mailConnections)).length)
+      throw new Error("Check fixtures need jobops_e2e without other inbox connections.");
+  });
+  afterEach(async () => {
+    vi.restoreAllMocks();
+    await assertE2eDatabase();
+    const owned = await db
+      .select({ id: mailConnections.id })
+      .from(mailConnections)
+      .where(like(mailConnections.email, `${prefix}%`));
+    for (const { id } of owned) await db.delete(settings).where(like(settings.key, `%${id}%`));
+    await db.delete(mailTracking).where(like(mailTracking.accountEmail, `${prefix}%`));
+    await db.delete(mailMessages).where(like(mailMessages.accountEmail, `${prefix}%`));
+    await db.delete(mailConnections).where(like(mailConnections.email, `${prefix}%`));
+  });
+  afterAll(closeDatabase);
+
+  it("imports Junk and Deleted Items mail as open records", async () => {
+    const own = await connection();
+    vi.spyOn(outlook, "folders").mockResolvedValue([
+      { id: "junk", name: "Junk" },
+      { id: "deleted", name: "Deleted Items" },
+    ]);
+    vi.spyOn(outlook, "scanMail").mockResolvedValue({
+      messages: [
+        mail("junk", { folders: ["Junk"], internetMessageId: "<junk@fixture.invalid>" }),
+        mail("trash", { folders: ["Deleted Items"], internetMessageId: "<trash@fixture.invalid>" }),
+      ],
+    });
+    const result = await checkConnection(own, context);
+    expect(result).toMatchObject({ status: "done", newAttention: 2, error: null });
+    const rows = await messages(own.email);
+    expect(rows.map((row) => row.attentionState)).toEqual(["OPEN", "OPEN"]);
+    expect(rows.map((row) => row.folders).sort()).toEqual([["Deleted Items"], ["Junk"]]);
+    expect(rows.every((row) => row.companyKey === "fixture")).toBe(true);
+  });
+
+  it("keeps one identity across a rescan and folder move", async () => {
+    const own = await connection();
+    vi.spyOn(outlook, "folders").mockResolvedValue([]);
+    const scan = vi.spyOn(outlook, "scanMail").mockResolvedValue({
+      messages: [mail("stable", { folders: ["Junk"] })],
+    });
+    expect((await checkConnection(own, context)).newAttention).toBe(1);
+    scan.mockResolvedValue({ messages: [mail("stable", { folders: ["Inbox"] })] });
+    expect((await checkConnection(own, context)).newAttention).toBe(0);
+    const rows = await ledger(own.email);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ folders: ["Inbox"], disposition: "kept" });
+    const [message] = await messages(own.email);
+    expect(message.folders).toEqual(["Inbox"]);
+    expect(await messages(own.email)).toHaveLength(1);
+  });
+
+  it("counts a repeated identity once within a page", async () => {
+    const own = await connection();
+    vi.spyOn(outlook, "folders").mockResolvedValue([]);
+    vi.spyOn(outlook, "scanMail").mockResolvedValue({
+      messages: [mail("repeated"), mail("repeated")],
+    });
+    expect((await checkConnection(own, context)).newAttention).toBe(1);
+    expect(await ledger(own.email)).toHaveLength(1);
+  });
+
+  it("does not collapse one Internet Message-ID across two accounts", async () => {
+    const first = await connection(),
+      second = await connection();
+    vi.spyOn(outlook, "folders").mockResolvedValue([]);
+    vi.spyOn(outlook, "scanMail").mockResolvedValue({ messages: [mail("same-provider-id")] });
+    expect((await checkConnection(first, context)).newAttention).toBe(1);
+    expect((await checkConnection(second, context)).newAttention).toBe(1);
+    const [a] = await ledger(first.email);
+    const [b] = await ledger(second.email);
+    expect(a.messageId).not.toBe(b.messageId);
+  });
+
+  it("never imports excluded or context-only mail, even after a rule change", async () => {
+    const own = await connection();
+    const digest = mail("digest", {
+      internetMessageId: "<digest@fixture.invalid>",
+      sender: "messages-noreply@linkedin.com",
+      senderName: "LinkedIn",
+      subject: "You have a message",
+      bodyText: "People you may know: Priya Sharma",
+    });
+    const sent = mail("sent", { contextOnly: true, internetMessageId: "<sent@fixture.invalid>" });
+    vi.spyOn(outlook, "folders").mockResolvedValue([]);
+    vi.spyOn(outlook, "scanMail").mockResolvedValue({ messages: [digest, sent] });
+    expect((await checkConnection(own, context)).newAttention).toBe(0);
+    let rows = await ledger(own.email);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      providerMessageId: "digest",
+      disposition: "excluded",
+      messageId: null,
+    });
+    const widened: MailContext = {
+      ...context,
+      companies: [
+        {
+          ...context.companies[0],
+          rule: { ...rule, domains: ["fixture.invalid", "linkedin.com"] },
+        },
+      ],
+    };
+    expect((await checkConnection(own, widened)).newAttention).toBe(0);
+    rows = await ledger(own.email);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].disposition).toBe("excluded");
+    expect(await messages(own.email)).toHaveLength(0);
+  });
+
+  it("isolates a failing account", async () => {
+    const a = await connection(),
+      b = await connection();
+    vi.spyOn(outlook, "folders").mockResolvedValue([]);
+    vi.spyOn(outlook, "scanMail").mockImplementation(async (row) => {
+      if (row.id === a.id) throw new Error("token expired");
+      return { messages: [update(`${row.email}-update`)] };
+    });
+    const result = await checkMailStep();
+    const byAccount = Object.fromEntries(result.accounts.map((row) => [row.account, row]));
+    expect(byAccount[a.email]).toMatchObject({ status: "failed", lastFetchedAt: null });
+    expect(byAccount[a.email].error).toBeTruthy();
+    expect(byAccount[b.email]).toMatchObject({ status: "done", error: null });
+    expect(result).toMatchObject({ more: false, newAttention: 1 });
+    expect((await current(a.id)).lastError).toBeTruthy();
+    expect((await current(a.id)).lastSyncedAt).toBeNull();
+    expect((await current(b.id)).lastSyncedAt).not.toBeNull();
+  });
+
+  it("advances last fetch only when the window completes", async () => {
+    const own = await connection();
+    vi.spyOn(outlook, "folders").mockResolvedValue([]);
+    vi.spyOn(outlook, "scanMail")
+      .mockResolvedValueOnce({ messages: [mail("page-1")], next: "page-2" })
+      .mockResolvedValueOnce({ messages: [mail("page-2", { internetMessageId: "<p2@x>" })] });
+    expect(await checkConnection(own, context)).toMatchObject({ status: "more" });
+    expect((await current(own.id)).lastSyncedAt).toBeNull();
+    const [saved] = await db
+      .select()
+      .from(settings)
+      .where(eq(settings.key, checkKey(own.id)));
+    const second = await checkConnection(own, context);
+    expect(second.status).toBe("done");
+    expect((await current(own.id)).lastSyncedAt?.toISOString()).toBe(saved.value.until);
+    expect(second.lastFetchedAt).toBe(saved.value.until);
+    expect((await current(own.id)).lastError).toBeNull();
+  });
+
+  it("resumes an incomplete check after a rule edit", async () => {
+    const own = await connection();
+    vi.spyOn(outlook, "folders").mockResolvedValue([]);
+    const scan = vi
+      .spyOn(outlook, "scanMail")
+      .mockResolvedValueOnce({ messages: [mail("resume-1")], next: "resume-2" })
+      .mockResolvedValueOnce({
+        messages: [mail("resume-1"), mail("resume-2", { internetMessageId: "<r2@x>" })],
+      });
+    await checkConnection(own, context);
+    const edited: MailContext = {
+      ...context,
+      companies: [{ ...context.companies[0], rule: { ...rule, excludedTerms: ["newsletter"] } }],
+    };
+    expect((await checkConnection(own, edited)).newAttention).toBe(1);
+    const [first, second] = scan.mock.calls.map((call) => call[1]);
+    expect(second).toMatchObject({ since: first.since, until: first.until, next: "resume-2" });
+    expect(await messages(own.email)).toHaveLength(2);
+    expect(await ledger(own.email)).toHaveLength(2);
+  });
+
+  it("does not let a failed incomplete account hold back the others", async () => {
+    const a = await connection(),
+      b = await connection();
+    vi.spyOn(outlook, "folders").mockResolvedValue([]);
+    const scan = vi.spyOn(outlook, "scanMail").mockImplementation(async (row) => {
+      if (row.id === a.id) return { messages: [], next: "a-2" };
+      return { messages: [] };
+    });
+    await checkMailStep();
+    scan.mockImplementation(async (row) => {
+      if (row.id === a.id) throw new Error("Provider unavailable");
+      return { messages: [] };
+    });
+    await checkMailStep();
+    const calls = scan.mock.calls.length;
+    await checkMailStep();
+    const stepped = scan.mock.calls.slice(calls).map((call) => call[0].id);
+    expect(stepped.sort()).toEqual([a.id, b.id].sort());
+  });
+
+  it("refuses to check without a connected inbox", async () => {
+    const owned = await db
+      .select({ id: mailConnections.id })
+      .from(mailConnections)
+      .where(inArray(mailConnections.provider, ["GMAIL", "OUTLOOK"]));
+    expect(owned).toHaveLength(0);
+    await expect(checkMailStep()).rejects.toMatchObject({
+      status: 409,
+      message: "Connect an inbox before checking mail.",
+    });
+  });
+});

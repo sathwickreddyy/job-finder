@@ -1,5 +1,5 @@
 import { AsyncLocalStorage } from "node:async_hooks";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, like, sql } from "drizzle-orm";
 import { db, withDatabaseSession, type SessionDatabase } from "@/db";
 import { activityLogs, mailConnections, settings } from "@/db/schema";
 import { decryptToken, encryptToken } from "../crypto";
@@ -103,7 +103,9 @@ export async function accessTokenFor(connection: MailConnection): Promise<string
 export async function disconnectConnection(id: string) {
   return withConnectionLock(id, async (database, current) => {
     await database.transaction(async (tx) => {
-      await tx.delete(settings).where(eq(settings.key, `mailCursor:${id}`));
+      // Check progress and folder coverage belong to the credentials being removed.
+      await tx.delete(settings).where(like(settings.key, `mailScan:v2:${id}:%`));
+      await tx.delete(settings).where(eq(settings.key, `mailCoverage:${id}`));
       await tx.delete(mailConnections).where(eq(mailConnections.id, id));
       await tx.insert(activityLogs).values({
         action: "MAIL_DISCONNECTED",

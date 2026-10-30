@@ -9,7 +9,7 @@ import {
 } from "@/db/schema";
 import { providers } from "@/services/mail/providers";
 import { loadMailContext } from "./context";
-import { coverageKey, scanKey, type ScanProgress } from "./scan-service";
+import { checkKey, coverageKey, type CheckProgress } from "./check-service";
 import { mailAttention, mailDateGroup } from "./attention";
 import { kindLabel } from "./tags";
 import type {
@@ -181,29 +181,27 @@ export async function readMailWorkspace(
       account: account.email,
       checkedAt: typeof value?.checkedAt === "string" ? value.checkedAt : null,
       folders: Array.isArray(value?.folders)
-        ? (value.folders as ScanProgress["folders"])
+        ? (value.folders as CheckProgress["folders"])
         : [],
     };
   });
-  const scans = connections.flatMap((account) =>
-    ["latest", "history"].flatMap((mode) => {
-      const value = stored.find(
-        (row) => row.key === scanKey(account.id, mode, query),
-      )?.value as ScanProgress | undefined;
-      return value
-        ? [
-            {
-              account: account.email,
-              mode,
-              scanned: value.scanned,
-              matched: value.matched,
-              complete: value.complete,
-              checkedAt: value.checkedAt,
-            },
-          ]
-        : [];
-    }),
-  );
+  const scans = connections.flatMap((account) => {
+    const value = stored.find((row) => row.key === checkKey(account.id))?.value as
+      | CheckProgress
+      | undefined;
+    return value
+      ? [
+          {
+            account: account.email,
+            mode: "latest",
+            scanned: value.scanned,
+            matched: 0,
+            complete: value.complete,
+            checkedAt: value.checkedAt,
+          },
+        ]
+      : [];
+  });
   const last = selectedRows.at(-1)?.tracking;
   return {
     companies: context.companies,
