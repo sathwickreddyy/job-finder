@@ -1,0 +1,143 @@
+import { randomUUID } from "node:crypto";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { inArray, like } from "drizzle-orm";
+import { closeDatabase, db } from "@/db";
+import {
+  applicationEvents,
+  applications,
+  companyRecords,
+  jobs,
+  mailMessages,
+  mailTracking,
+} from "@/db/schema";
+import type { TimelineDay } from "@/features/timeline/entries";
+import { readCompanyTimeline } from "@/features/timeline/read";
+import { assertE2eDatabase, dbTests } from "./helpers/e2e-db";
+
+const prefix = `company-timeline-${randomUUID()}`;
+const account = `${prefix}@fixture.invalid`;
+const name = `Timeline ${prefix}`;
+const key = name.toLowerCase();
+const now = new Date("2026-10-31T10:00:00+05:30");
+const ids = { jobs: [] as string[], companies: [] as string[], apps: [] as string[] };
+const mail: Record<string, string> = {};
+let counter = 0;
+
+async function application(title: string, appliedAt: Date) {
+  const [job] = await db
+    .insert(jobs)
+    .values({
+      company: name,
+      title,
+      canonicalUrl: `https://fixture.invalid/${prefix}/${title}`,
+      dedupeKey: `${prefix}-${title}`,
+      source: "MANUAL",
+      status: "APPLIED",
+    })
+    .returning();
+  ids.jobs.push(job.id);
+  const [app] = await db
+    .insert(applications)
+    .values({ jobId: job.id, source: "DIRECT", status: "APPLIED", appliedAt })
+    .returning();
+  ids.apps.push(app.id);
+  await db.insert(applicationEvents).values({
+    applicationId: app.id,
+    eventType: "APPLICATION_SUBMITTED",
+    summary: `Applied for ${title}`,
+    occurredAt: appliedAt,
+  });
+  return app.id;
+}
+async function email(patch: Partial<typeof mailMessages.$inferInsert> = {}) {
+  counter++;
+  const [row] = await db
+    .insert(mailMessages)
+    .values({
+      externalId: `${prefix}-${counter}`,
+      provider: "GMAIL",
+      accountEmail: account,
+      sender: "talent@fixture.invalid",
+      subject: `Timeline ${counter}`,
+      receivedAt: new Date(Date.UTC(2026, 9, 25, counter)),
+      classification: "FOLLOW_UP",
+      companyKey: key,
+      ...patch,
+    })
+    .returning();
+  return row;
+}
+const flat = (days: TimelineDay[]) => days.flatMap((day) => day.entries);
+const mailIds = (days: TimelineDay[]) =>
+  flat(days).flatMap((entry) => (entry.type === "mail" ? [entry.item.id] : []));
+const stepTexts = (days: TimelineDay[]) =>
+  flat(days).flatMap((entry) => (entry.type === "step" ? [entry.text] : []));
+
+describe.skipIf(!dbTests)("company timeline", () => {
+  beforeAll(async () => {
+    await assertE2eDatabase();
+    const [company] = await db.insert(companyRecords).values({ slug: prefix, name }).returning();
+    ids.companies.push(company.id);
+    const backend = await application("Backend", new Date("2026-10-20T05:00:00Z"));
+    const platform = await application("Platform", new Date("2026-10-22T05:00:00Z"));
+    mail.placed = (await email()).id;
+    mail.offer = (await email({ classification: "OFFER" })).id;
+    mail.linked = (await email({ companyKey: null, linkedApplicationId: platform })).id;
+    mail.backend = (await email({ linkedApplicationId: backend })).id;
+    const hidden = await email({ subject: `Hidden ${prefix}` });
+    mail.hidden = hidden.id;
+    await db.insert(mailTracking).values({
+      provider: "GMAIL",
+      accountEmail: account,
+      providerMessageId: `${prefix}-hidden`,
+      messageId: hidden.id,
+      sender: hidden.sender,
+      subject: hidden.subject,
+      receivedAt: hidden.receivedAt,
+      disposition: "excluded",
+    });
+  });
+  afterAll(async () => {
+    await assertE2eDatabase();
+    await db.delete(mailTracking).where(like(mailTracking.accountEmail, `${prefix}%`));
+    await db.delete(mailMessages).where(like(mailMessages.accountEmail, `${prefix}%`));
+    await db.delete(applications).where(inArray(applications.jobId, ids.jobs));
+    await db.delete(jobs).where(inArray(jobs.id, ids.jobs));
+    await db.delete(companyRecords).where(inArray(companyRecords.id, ids.companies));
+    await closeDatabase();
+  });
+
+  it("reads one company's mail and steps newest first", async () => {
+    const timeline = await readCompanyTimeline(key, {}, now);
+    expect(timeline.company).toMatchObject({ key, name, slug: prefix });
+    expect(timeline.roles.map((role) => role.role).sort()).toEqual(["Backend", "Platform"]);
+    expect(timeline.roles[0]).toMatchObject({ source: "DIRECT", phase: "Applied" });
+    expect(timeline.roles[0].state).toMatchObject({ source: "DIRECT", status: "APPLIED" });
+    expect(timeline.nextCursor).toBeNull();
+    expect(mailIds(timeline.days)).toEqual([mail.backend, mail.linked, mail.offer, mail.placed]);
+    expect(stepTexts(timeline.days)).toEqual(["Applied for Platform", "Applied for Backend"]);
+    const ats = flat(timeline.days).map((entry) => entry.at);
+    expect(ats).toEqual([...ats].sort().reverse());
+  });
+
+  it("includes linked mail without a company key", async () => {
+    const timeline = await readCompanyTimeline(key, {}, now);
+    expect(mailIds(timeline.days)).toContain(mail.linked);
+  });
+
+  it("never returns excluded mail", async () => {
+    const timeline = await readCompanyTimeline(key, { q: `Hidden ${prefix}` }, now);
+    expect(mailIds(timeline.days)).toEqual([]);
+    expect(mailIds((await readCompanyTimeline(key, {}, now)).days)).not.toContain(mail.hidden);
+  });
+
+  it("filters by tag and role", async () => {
+    const offers = await readCompanyTimeline(key, { tag: "offer" }, now);
+    expect(mailIds(offers.days)).toEqual([mail.offer]);
+    expect(stepTexts(offers.days)).toEqual([]);
+    const platform = ids.apps[1];
+    const role = await readCompanyTimeline(key, { application: platform }, now);
+    expect(mailIds(role.days)).toEqual([mail.linked]);
+    expect(stepTexts(role.days)).toEqual(["Applied for Platform"]);
+  });
+});

@@ -29,11 +29,8 @@ const outcome = sql<
   string | null
 >`(SELECT e.payload->>'outcome' FROM application_events e WHERE e.payload->>'mailMessageId' = "mail_messages"."id"::text AND e.payload->>'outcome' IS NOT NULL ORDER BY e.created_at DESC LIMIT 1)`;
 
-export async function listMail(
-  filters: z.input<typeof mailListSchema>,
-): Promise<{ items: MailItem[]; nextCursor: string | null; openCount: number }> {
-  const query = mailListSchema.parse(filters);
-  const context = await loadMailContext();
+/** The rows a list query covers before attention and paging; the rail counts with it too. */
+export function mailScope(query: z.output<typeof mailListSchema>, context: MailContext): SQL[] {
   const scope: SQL[] = [notExcluded];
   if (query.tag) scope.push(inArray(mailMessages.classification, classificationsFor(query.tag)));
   if (query.application) scope.push(eq(mailMessages.linkedApplicationId, query.application));
@@ -60,6 +57,16 @@ export async function listMail(
       )!,
     );
   }
+  return scope;
+}
+
+export async function listMail(
+  filters: z.input<typeof mailListSchema>,
+  loaded?: MailContext,
+): Promise<{ items: MailItem[]; nextCursor: string | null; openCount: number }> {
+  const query = mailListSchema.parse(filters);
+  const context = loaded ?? (await loadMailContext());
+  const scope = mailScope(query, context);
   const open = ne(mailMessages.attentionState, "DONE");
   const page = [...scope, ...(query.attention === "open" ? [open] : [])];
   if (query.cursor) {
