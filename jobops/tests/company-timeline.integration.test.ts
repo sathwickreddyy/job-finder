@@ -11,23 +11,25 @@ import {
   mailTracking,
 } from "@/db/schema";
 import type { TimelineDay } from "@/features/timeline/entries";
-import { readCompanyTimeline } from "@/features/timeline/read";
+import { readCompanyIndex, readCompanyTimeline } from "@/features/timeline/read";
 import { assertE2eDatabase, dbTests } from "./helpers/e2e-db";
 
 const prefix = `company-timeline-${randomUUID()}`;
 const account = `${prefix}@fixture.invalid`;
 const name = `Timeline ${prefix}`;
 const key = name.toLowerCase();
+const canonical = `Canon ${prefix}`;
+const alias = `Alias ${prefix}`;
 const now = new Date("2026-10-31T10:00:00+05:30");
 const ids = { jobs: [] as string[], companies: [] as string[], apps: [] as string[] };
 const mail: Record<string, string> = {};
 let counter = 0;
 
-async function application(title: string, appliedAt: Date) {
+async function application(title: string, appliedAt: Date, company = name) {
   const [job] = await db
     .insert(jobs)
     .values({
-      company: name,
+      company,
       title,
       canonicalUrl: `https://fixture.invalid/${prefix}/${title}`,
       dedupeKey: `${prefix}-${title}`,
@@ -81,7 +83,7 @@ describe.skipIf(!dbTests)("company timeline", () => {
     const backend = await application("Backend", new Date("2026-10-20T05:00:00Z"));
     const platform = await application("Platform", new Date("2026-10-22T05:00:00Z"));
     mail.placed = (await email()).id;
-    mail.offer = (await email({ classification: "OFFER" })).id;
+    mail.offer = (await email({ classification: "OFFER", subject: `Offer letter ${prefix}` })).id;
     mail.linked = (await email({ companyKey: null, linkedApplicationId: platform })).id;
     mail.backend = (await email({ linkedApplicationId: backend })).id;
     const hidden = await email({ subject: `Hidden ${prefix}` });
@@ -96,6 +98,14 @@ describe.skipIf(!dbTests)("company timeline", () => {
       receivedAt: hidden.receivedAt,
       disposition: "excluded",
     });
+    const [aliased] = await db
+      .insert(companyRecords)
+      .values({ slug: `${prefix}-canon`, name: canonical, aliases: [alias] })
+      .returning();
+    ids.companies.push(aliased.id);
+    await application("Aliased", new Date("2026-10-21T05:00:00Z"), alias);
+    mail.canonical = (await email({ companyKey: canonical.toLowerCase() })).id;
+    mail.unplaced = (await email({ companyKey: null, subject: `Unplaced ${prefix}` })).id;
   });
   afterAll(async () => {
     await assertE2eDatabase();
@@ -139,5 +149,35 @@ describe.skipIf(!dbTests)("company timeline", () => {
     const role = await readCompanyTimeline(key, { application: platform }, now);
     expect(mailIds(role.days)).toEqual([mail.linked]);
     expect(stepTexts(role.days)).toEqual(["Applied for Platform"]);
+  });
+
+  it("merges alias and canonical keys into one row", async () => {
+    const { rows } = await readCompanyIndex({}, now);
+    expect(rows.filter((row) => row.key === canonical.toLowerCase())).toEqual([
+      expect.objectContaining({ name: canonical, slug: `${prefix}-canon`, newCount: 1 }),
+    ]);
+    expect(rows.some((row) => row.key === alias.toLowerCase())).toBe(false);
+  });
+
+  it("counts linked mail without a company key", async () => {
+    const { rows } = await readCompanyIndex({}, now);
+    expect(rows.find((row) => row.key === key)).toMatchObject({
+      group: "needs",
+      newCount: 4,
+      signal: "Application update",
+    });
+  });
+
+  it("narrows the index by tag and search", async () => {
+    const offers = await readCompanyIndex({ tag: "offer" }, now);
+    expect(offers.rows.find((row) => row.key === key)?.matches).toBe(1);
+    expect(offers.rows.some((row) => row.key === canonical.toLowerCase())).toBe(false);
+    const search = await readCompanyIndex({ q: `offer letter ${prefix}` }, now);
+    expect(search.rows.map((row) => [row.key, row.matches])).toEqual([[key, 1]]);
+    expect(search.home.matches).toBe(0);
+    const home = await readCompanyIndex({ q: `Unplaced ${prefix}` }, now);
+    expect(home.rows).toEqual([]);
+    expect(home.home.matches).toBe(1);
+    expect((await readCompanyIndex({ q: `Hidden ${prefix}` }, now)).rows).toEqual([]);
   });
 });

@@ -3,9 +3,10 @@ import { z } from "zod";
 import { db } from "@/db";
 import { mailMessages } from "@/db/schema";
 import { ApiError } from "@/features/agent-api/http";
+import type { MailFacts } from "@/features/timeline/index-rows";
 import { loadMailContext, type MailContext } from "./context";
 import { mailLookup, toMailItem, type MailItem } from "./mail-item";
-import { classificationsFor, mailTags } from "./tags";
+import { classificationsFor, kindLabel, mailTags, type MailTag } from "./tags";
 
 const pageSize = 50;
 export const mailListSchema = z.object({
@@ -112,4 +113,51 @@ export async function readMailItem(id: string, context?: MailContext): Promise<M
     { ...row.message, outcome: row.outcome },
     mailLookup(context ?? (await loadMailContext())),
   );
+}
+
+/**
+ * Open and total counts per company over visible mail. A linked email belongs to its
+ * application's company, otherwise to its own `company_key`; null is Needs a home. With a
+ * tag or search, `matches` counts the rows `listMail` would return for that filter.
+ */
+export async function mailFacts(
+  context: MailContext,
+  keyOf: (applicationId: string) => string | undefined,
+  filters: { tag?: MailTag; q?: string },
+): Promise<{ facts: MailFacts[]; matches: Map<string | null, number> | null }> {
+  const filtered = Boolean(filters.tag || filters.q);
+  const scope = filtered ? mailScope(mailListSchema.parse(filters), context) : [];
+  const rows = await db
+    .select({
+      companyKey: mailMessages.companyKey,
+      applicationId: mailMessages.linkedApplicationId,
+      attentionState: mailMessages.attentionState,
+      classification: mailMessages.classification,
+      receivedAt: mailMessages.receivedAt,
+      matched: filtered ? sql<boolean>`(${and(...scope)})` : sql<boolean>`true`,
+    })
+    .from(mailMessages)
+    .where(notExcluded)
+    .orderBy(desc(mailMessages.receivedAt));
+  const byKey = new Map<string | null, MailFacts>();
+  const matches = filtered ? new Map<string | null, number>() : null;
+  for (const row of rows) {
+    const key = (row.applicationId && keyOf(row.applicationId)) || row.companyKey || null;
+    const open = row.attentionState !== "DONE";
+    const facts = byKey.get(key) ?? {
+      key,
+      open: 0,
+      total: 0,
+      latestAt: row.receivedAt.toISOString(),
+      latestOpenKind: null,
+    };
+    facts.total++;
+    if (open) {
+      facts.open++;
+      facts.latestOpenKind ??= kindLabel[row.classification];
+    }
+    byKey.set(key, facts);
+    if (matches && row.matched) matches.set(key, (matches.get(key) ?? 0) + 1);
+  }
+  return { facts: [...byKey.values()], matches };
 }

@@ -1,9 +1,14 @@
+import { buildLanes, pendingMailFrom } from "@/features/applications/lanes";
 import { recordStateFrom, type Phase, type RecordState } from "@/features/applications/phase";
+import { buildQueue } from "@/features/applications/queue";
 import { readApplications } from "@/features/applications/read";
 import { loadMailContext } from "@/features/mail/context";
-import { listMail } from "@/features/mail/mail-list";
+import { listMail, mailFacts } from "@/features/mail/mail-list";
+import { readMailTriage } from "@/features/mail/read";
 import type { MailTag } from "@/features/mail/tags";
+import { queueMailFrom } from "@/features/mail/triage";
 import { timelineEntries, type TimelineDay } from "./entries";
+import { companyRows, type RailRow } from "./index-rows";
 
 export type TimelineRole = {
   id: string;
@@ -66,4 +71,33 @@ export async function readCompanyTimeline(
     }),
     nextCursor,
   };
+}
+
+export type CompanyIndex = {
+  rows: RailRow[];
+  home: { open: number; total: number; matches: number | null };
+};
+
+/** The Mail rail: Applications' lanes (the same needs-you signal) joined with visible mail. */
+export async function readCompanyIndex(
+  filters: { tag?: MailTag; q?: string },
+  now = new Date(),
+): Promise<CompanyIndex> {
+  const [context, { records, snoozes }] = await Promise.all([
+    loadMailContext(),
+    readApplications(),
+  ]);
+  const triage = await readMailTriage(records);
+  const items = buildQueue({ records, mail: queueMailFrom(triage.messages), snoozes, now });
+  const lanes = buildLanes({ records, items, pending: pendingMailFrom(triage.messages), now });
+  const keys = new Map(context.applications.map((app) => [app.id, app.company]));
+  const { facts, matches } = await mailFacts(context, (id) => keys.get(id), filters);
+  const { rows, home } = companyRows({
+    lanes,
+    mail: facts,
+    names: new Map(context.companies.map((company) => [company.id, company])),
+    matches:
+      matches && new Map([...matches].flatMap(([key, count]) => (key ? [[key, count]] : []))),
+  });
+  return { rows, home: { ...home, matches: matches ? (matches.get(null) ?? 0) : null } };
 }
