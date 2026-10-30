@@ -1,6 +1,6 @@
 import { desc, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { mailEvents, mailMessages } from "@/db/schema";
+import { mailEvents, mailMessages, mailTracking } from "@/db/schema";
 import { mailCanUndoDismiss, mailIsOpen } from "./state";
 import { requireRecordMail } from "./source-policy";
 import { bucketOf, type TriageInput } from "./triage";
@@ -20,9 +20,12 @@ export type TriageData = {
 export async function readMailTriage(
   records: { id: string; company: string; role: string }[],
 ): Promise<TriageData> {
-  const [messages, events] = await Promise.all([
+  const [messages, events, tracked] = await Promise.all([
     db.select().from(mailMessages).orderBy(desc(mailMessages.receivedAt)),
     db.select().from(mailEvents),
+    db
+      .select({ messageId: mailTracking.messageId, disposition: mailTracking.disposition })
+      .from(mailTracking),
   ]);
   const byId = new Map(records.map((record) => [record.id, record]));
   const byMail = new Map<string, typeof events>();
@@ -32,6 +35,9 @@ export async function readMailTriage(
   let lastDismissed: typeof mailMessages.$inferSelect | null = null;
   const open: TriageMessage[] = [];
   for (const message of messages) {
+    // History and excluded mail must never become urgent arrivals on a rescan.
+    if (!tracked.some((row) => row.messageId === message.id && row.disposition === "latest"))
+      continue;
     const own = byMail.get(message.id) ?? [];
     if (!mailIsOpen(message, own)) {
       if (

@@ -2,7 +2,8 @@ import { recipientPreview } from "./display-metadata";
 import { classifyMail } from "../classifier";
 import { accessTokenFor } from "./connections";
 import { oauthConfiguration, parseTokenResponse } from "./oauth";
-import type { MailProvider, TokenSet } from "./types";
+import type { MailProvider, TokenSet, MailFolder } from "./types";
+import { plainText } from "./plain-text";
 
 export const OUTLOOK_SCOPES = "offline_access User.Read Mail.Read";
 const authority = "https://login.microsoftonline.com/consumers/oauth2/v2.0";
@@ -16,7 +17,9 @@ export function readOnlyScopes(scope?: string): boolean {
     .trim()
     .split(/\s+/)
     .map((value) =>
-      value.startsWith(`${graphOrigin}/`) ? value.slice(graphOrigin.length + 1) : value,
+      value.startsWith(`${graphOrigin}/`)
+        ? value.slice(graphOrigin.length + 1)
+        : value,
     );
   const allowed = new Set([
     "offline_access",
@@ -33,10 +36,15 @@ export function readOnlyScopes(scope?: string): boolean {
   );
 }
 
-async function token(body: Record<string, string>, refreshing: boolean): Promise<TokenSet> {
+async function token(
+  body: Record<string, string>,
+  refreshing: boolean,
+): Promise<TokenSet> {
   const config = outlook.configuration();
   if (!config.configured)
-    throw new Error(`Outlook is not configured. Set ${config.missing.join(", ")}.`);
+    throw new Error(
+      `Outlook is not configured. Set ${config.missing.join(", ")}.`,
+    );
   const response = await fetch(`${authority}/token`, {
     method: "POST",
     body: new URLSearchParams({
@@ -59,11 +67,18 @@ async function token(body: Record<string, string>, refreshing: boolean): Promise
   try {
     data = await response.json();
   } catch {
-    throw new Error("Microsoft returned an invalid token response. Reconnect Outlook.");
+    throw new Error(
+      "Microsoft returned an invalid token response. Reconnect Outlook.",
+    );
   }
   const scope =
-    data && typeof data === "object" ? (data as Record<string, unknown>).scope : undefined;
-  if (!(refreshing && scope === undefined) && !(typeof scope === "string" && readOnlyScopes(scope)))
+    data && typeof data === "object"
+      ? (data as Record<string, unknown>).scope
+      : undefined;
+  if (
+    !(refreshing && scope === undefined) &&
+    !(typeof scope === "string" && readOnlyScopes(scope))
+  )
     throw new Error(
       "Microsoft returned missing read permissions or permissions beyond read-only mail. Revoke this app and reconnect Outlook with User.Read and Mail.Read.",
     );
@@ -108,9 +123,36 @@ async function graphRequest<T>(url: string, accessToken: string): Promise<T> {
         ? "Outlook authorization expired. Reconnect Outlook."
         : response.status === 429
           ? "Outlook rate limit reached. Wait a few minutes and retry refresh."
-          : "Outlook could not be read. Check your Microsoft Graph configuration and retry.",
+          : response.status >= 500
+            ? "Outlook is temporarily unavailable. Retry to continue saved pages."
+            : "Outlook could not be read. Check your Microsoft Graph configuration and retry.",
     );
   return (await response.json()) as T;
+}
+
+/** A continuation may only return to the exact resource we requested. */
+export function safeScanLink(next: string, resource: string) {
+  const canonical = (path: string) =>
+    path
+      .replace(/mailfolders/gi, "mailFolders")
+      .replace(/childfolders/gi, "childFolders")
+      .replace(/mailFolders\('([^']+)'\)/g, "mailFolders/$1")
+      .replace(/\/$/, "");
+  let url: URL;
+  try {
+    url = new URL(next);
+  } catch {
+    throw new Error("Microsoft returned an invalid paging URL.");
+  }
+  if (
+    url.origin !== graphOrigin ||
+    url.username ||
+    url.password ||
+    next.includes("#") ||
+    canonical(url.pathname) !== canonical(resource)
+  )
+    throw new Error("Microsoft returned an unsafe paging destination.");
+  return next;
 }
 
 type GraphAddress = { emailAddress?: { name?: string; address?: string } };
@@ -120,17 +162,20 @@ type GraphMessage = {
   conversationId?: string;
   subject?: string;
   bodyPreview?: string;
-  body?: { content?: string };
+  body?: { content?: string; contentType?: string };
   from?: GraphAddress;
   toRecipients?: GraphAddress[];
   receivedDateTime: string;
+  parentFolderId?: string;
+  isDraft?: boolean;
 };
 
 export const outlook: MailProvider = {
   id: "OUTLOOK",
   slug: "outlook",
   label: "Outlook",
-  configuration: () => oauthConfiguration("MICROSOFT", "/api/mail/outlook/callback"),
+  configuration: () =>
+    oauthConfiguration("MICROSOFT", "/api/mail/outlook/callback"),
   authorizeUrl(state, challenge) {
     const config = outlook.configuration();
     const url = new URL(`${authority}/authorize`);
@@ -156,18 +201,136 @@ export const outlook: MailProvider = {
       },
       false,
     );
-    const profile = await graphRequest<{ mail?: string | null; userPrincipalName?: string }>(
+    const profile = await graphRequest<{
+      mail?: string | null;
+      userPrincipalName?: string;
+    }>(
       `${graphOrigin}/v1.0/me?$select=mail,userPrincipalName`,
       tokens.accessToken,
     );
     const email = profile.mail || profile.userPrincipalName;
     if (typeof email !== "string" || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
-      throw new Error("Microsoft did not return an account email. Reconnect Outlook.");
+      throw new Error(
+        "Microsoft did not return an account email. Reconnect Outlook.",
+      );
     return { email: email.toLowerCase(), tokens };
   },
   refreshTokens: (refreshToken) =>
     token({ grant_type: "refresh_token", refresh_token: refreshToken }, true),
   accessToken: accessTokenFor,
+  async folders(connection) {
+    const accessToken = await outlook.accessToken(connection);
+    const contextIds = await Promise.all(
+      ["sentitems", "drafts", "outbox"].map(async (name) => {
+        const result = await graphRequest<{ id: string }>(
+          `${graphOrigin}/v1.0/me/mailFolders/${name}?$select=id`,
+          accessToken,
+        );
+        return result.id;
+      }),
+    );
+    const queue = [
+      { path: "/v1.0/me/mailFolders", prefix: "", contextOnly: false },
+    ];
+    const found: MailFolder[] = [];
+    const visited = new Set<string>();
+    let pages = 0;
+    while (queue.length) {
+      const resource = queue.shift()!;
+      let next: string | undefined =
+        `${graphOrigin}${resource.path}?includeHiddenFolders=true&$top=100&$select=id,displayName,childFolderCount`;
+      while (next) {
+        if (++pages > 1000)
+          throw new Error(
+            "Folder inventory is too large for one check. No scan checkpoint was advanced.",
+          );
+        const result: {
+          value: {
+            id: string;
+            displayName: string;
+            childFolderCount: number;
+          }[];
+          "@odata.nextLink"?: string;
+        } = await graphRequest(next, accessToken);
+        for (const folder of result.value) {
+          if (visited.has(folder.id)) continue;
+          visited.add(folder.id);
+          const name = resource.prefix + folder.displayName;
+          const contextOnly =
+            resource.contextOnly || contextIds.includes(folder.id);
+          found.push({ id: folder.id, name, contextOnly });
+          if (folder.childFolderCount > 0)
+            queue.push({
+              path: `/v1.0/me/mailFolders/${encodeURIComponent(folder.id)}/childFolders`,
+              prefix: `${name} / `,
+              contextOnly,
+            });
+        }
+        next = result["@odata.nextLink"]
+          ? safeScanLink(result["@odata.nextLink"], resource.path)
+          : undefined;
+      }
+    }
+    return found;
+  },
+  async scanMail(connection, request, folders) {
+    const resource = "/v1.0/me/messages";
+    const filters = [
+      `receivedDateTime le ${new Date(request.until).toISOString()}`,
+    ];
+    if (request.since)
+      filters.unshift(
+        `receivedDateTime ge ${new Date(request.since).toISOString()}`,
+      );
+    const query = new URLSearchParams({
+      $top: "50",
+      $filter: filters.join(" and "),
+      $orderby: "receivedDateTime desc",
+      $select:
+        "id,internetMessageId,conversationId,subject,bodyPreview,body,from,toRecipients,receivedDateTime,parentFolderId,isDraft",
+    });
+    const url = request.next
+      ? safeScanLink(request.next, resource)
+      : `${graphOrigin}${resource}?${query}`;
+    const accessToken = await outlook.accessToken(connection);
+    const page = await graphRequest<{
+      value: GraphMessage[];
+      "@odata.nextLink"?: string;
+    }>(url, accessToken);
+    const next = page["@odata.nextLink"]
+      ? safeScanLink(page["@odata.nextLink"], resource)
+      : undefined;
+    const messages = page.value.map((message) => {
+      const folder = folders.find((row) => row.id === message.parentFolderId);
+      if (!folder && message.parentFolderId)
+        throw new Error(
+          "A message folder is missing from the inventory. Refresh folder coverage and retry.",
+        );
+      return {
+        externalId: message.id,
+        internetMessageId: message.internetMessageId?.trim() || undefined,
+        threadId: message.conversationId,
+        sender:
+          message.from?.emailAddress?.address ?? "unknown@outlook.invalid",
+        senderName: message.from?.emailAddress?.name ?? "",
+        recipient: recipientPreview(
+          (message.toRecipients ?? [])
+            .map((row) => row.emailAddress?.address ?? "")
+            .join(", "),
+        ),
+        subject: message.subject || "(No subject)",
+        snippet: (message.bodyPreview ?? "").slice(0, 2000),
+        bodyText: (message.body?.contentType?.toLowerCase() === "html"
+          ? plainText(message.body.content ?? "")
+          : (message.body?.content ?? "")
+        ).slice(0, 100000),
+        receivedAt: new Date(message.receivedDateTime).toISOString(),
+        folders: [folder?.name ?? "Mailbox"],
+        contextOnly: message.isDraft || folder?.contextOnly,
+      };
+    });
+    return { messages, next };
+  },
   async listRecruitingMail(connection, cursor) {
     // Validate continuation before obtaining or sending any credentials.
     let url = cursor?.next ? safeNextLink(cursor.next) : undefined;
@@ -187,10 +350,10 @@ export const outlook: MailProvider = {
       url = `${graphOrigin}${inboxPath}?${query}`;
     }
     const accessToken = await outlook.accessToken(connection);
-    const page = await graphRequest<{ value: GraphMessage[]; "@odata.nextLink"?: string }>(
-      url,
-      accessToken,
-    );
+    const page = await graphRequest<{
+      value: GraphMessage[];
+      "@odata.nextLink"?: string;
+    }>(url, accessToken);
     const next = page["@odata.nextLink"];
     const nextCursor = next ? { next: safeNextLink(next) } : undefined;
     const messages = [];
@@ -203,7 +366,8 @@ export const outlook: MailProvider = {
         // Immutable Graph IDs preserve case; never use an unrequested mutable fallback.
         externalId: message.internetMessageId?.trim() || message.id,
         threadId: message.conversationId,
-        sender: message.from?.emailAddress?.address ?? "unknown@outlook.invalid",
+        sender:
+          message.from?.emailAddress?.address ?? "unknown@outlook.invalid",
         senderName: message.from?.emailAddress?.name ?? "",
         recipient: recipientPreview(
           (message.toRecipients ?? [])

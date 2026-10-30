@@ -728,6 +728,41 @@ export const mailConnections = pgTable(
   ],
 );
 
+/** Account-scoped ledger survives rescans and keeps ignored mail out of Latest. */
+export const mailTracking = pgTable(
+  "mail_tracking",
+  {
+    id: id(),
+    provider: text("provider").notNull(),
+    accountEmail: text("account_email").notNull(),
+    providerMessageId: text("provider_message_id").notNull(),
+    internetMessageId: text("internet_message_id"),
+    messageId: uuid("message_id").references(() => mailMessages.id, { onDelete: "set null" }),
+    threadId: text("thread_id"),
+    sender: text("sender").notNull(),
+    senderName: text("sender_name").notNull().default(""),
+    subject: text("subject").notNull(),
+    receivedAt: date("received_at").notNull(),
+    folders: strings("folders"),
+    companyKeys: strings("company_keys"),
+    applicationIds: strings("application_ids"),
+    disposition: text("disposition").notNull().default("history"),
+    reason: text("reason").notNull().default(""),
+    evidence: strings("evidence"),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    uniqueIndex("mail_tracking_identity_idx").on(t.provider, t.accountEmail, t.providerMessageId),
+    index("mail_tracking_message_idx").on(t.messageId),
+    index("mail_tracking_received_idx").on(t.receivedAt),
+    check(
+      "mail_tracking_disposition_check",
+      sql`${t.disposition} IN ('latest','history','excluded')`,
+    ),
+  ],
+);
+
 // New task workflow reuses missions; credentials and human decisions have separate trust boundaries.
 export const taskCredentials = pgTable(
   "task_credentials",

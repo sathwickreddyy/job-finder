@@ -5,6 +5,14 @@ export type ProviderId = "GMAIL" | "OUTLOOK";
 export type TokenSet = { accessToken: string; refreshToken: string | null; expiresAt: Date };
 export type Cursor = { pageToken?: string; query?: string; next?: string; startedAt?: string };
 export type MailConnection = typeof mailConnections.$inferSelect;
+export type MailFolder = { id: string; name: string; contextOnly?: boolean };
+export type ScannedMessage = z.input<typeof mailImportSchema>[number] & {
+  externalId: string;
+  folders: string[];
+  internetMessageId?: string;
+  contextOnly?: boolean;
+};
+export type ScanRequest = { since?: string; until: string; next?: string };
 export type MailProvider = {
   id: ProviderId;
   slug: "gmail" | "outlook";
@@ -20,6 +28,15 @@ export type MailProvider = {
   exchangeCode(code: string, verifier: string): Promise<{ email: string; tokens: TokenSet }>;
   refreshTokens(refreshToken: string): Promise<TokenSet>;
   accessToken(connection: MailConnection): Promise<string>;
+  folders(connection: MailConnection): Promise<MailFolder[]>;
+  scanMail(
+    connection: MailConnection,
+    request: ScanRequest,
+    folders: MailFolder[],
+  ): Promise<{
+    messages: ScannedMessage[];
+    next?: string;
+  }>;
   listRecruitingMail(
     connection: MailConnection,
     cursor?: Cursor,

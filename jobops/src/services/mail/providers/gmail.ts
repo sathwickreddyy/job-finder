@@ -3,11 +3,26 @@ import { recipientPreview } from "./display-metadata";
 import { oauthConfiguration, parseTokenResponse } from "./oauth";
 import { accessTokenFor } from "./connections";
 import type { MailProvider, TokenSet } from "./types";
-export const GMAIL_READONLY_SCOPE = "https://www.googleapis.com/auth/gmail.readonly";
-async function token(body: Record<string, string>, refreshing: boolean): Promise<TokenSet> {
+import { plainText } from "./plain-text";
+class GmailReadError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+  }
+}
+export const GMAIL_READONLY_SCOPE =
+  "https://www.googleapis.com/auth/gmail.readonly";
+async function token(
+  body: Record<string, string>,
+  refreshing: boolean,
+): Promise<TokenSet> {
   const config = gmail.configuration();
   if (!config.configured)
-    throw new Error(`Gmail is not configured. Set ${config.missing.join(", ")}.`);
+    throw new Error(
+      `Gmail is not configured. Set ${config.missing.join(", ")}.`,
+    );
   const response = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
     body: new URLSearchParams({
@@ -28,10 +43,14 @@ async function token(body: Record<string, string>, refreshing: boolean): Promise
   try {
     data = await response.json();
   } catch {
-    throw new Error("Google returned an invalid token response. Reconnect Gmail.");
+    throw new Error(
+      "Google returned an invalid token response. Reconnect Gmail.",
+    );
   }
   const scope =
-    data && typeof data === "object" ? (data as Record<string, unknown>).scope : undefined;
+    data && typeof data === "object"
+      ? (data as Record<string, unknown>).scope
+      : undefined;
   if (
     !(refreshing && scope === undefined) &&
     !(
@@ -49,19 +68,45 @@ async function token(body: Record<string, string>, refreshing: boolean): Promise
   return parseTokenResponse(data);
 }
 async function gmailRequest<T>(path: string, accessToken: string): Promise<T> {
-  const response = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/${path}`, {
-    headers: { Authorization: `Bearer ${accessToken}` },
-    cache: "no-store",
-    signal: AbortSignal.timeout(20000),
-  });
-  if (!response.ok)
-    throw new Error(
+  const response = await fetch(
+    `https://gmail.googleapis.com/gmail/v1/users/me/${path}`,
+    {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      cache: "no-store",
+      redirect: "error",
+      signal: AbortSignal.timeout(20000),
+    },
+  );
+  if (!response.ok) {
+    let rateLimited = response.status === 429;
+    if (response.status === 403) {
+      try {
+        const error = (await response.json()) as {
+          error?: { errors?: { reason?: string }[] };
+        };
+        rateLimited =
+          error.error?.errors?.some((row) =>
+            [
+              "rateLimitExceeded",
+              "userRateLimitExceeded",
+              "dailyLimitExceeded",
+            ].includes(row.reason ?? ""),
+          ) ?? false;
+      } catch {
+        /* Provider bodies never appear in logs or UI. */
+      }
+    }
+    throw new GmailReadError(
       response.status === 401
         ? "Gmail authorization expired. Reconnect Gmail."
-        : response.status === 429
-          ? "Gmail rate limit reached. Wait a few minutes and retry sync."
-          : "Gmail could not be read. Check your Google API configuration and retry.",
+        : rateLimited
+          ? "Gmail rate limit reached. Wait a few minutes and continue the check."
+          : response.status >= 500
+            ? "Gmail is temporarily unavailable. Retry to continue saved pages."
+            : "Gmail could not be read. Check your Google API configuration and retry.",
+      response.status,
     );
+  }
   return (await response.json()) as T;
 }
 type GmailPart = {
@@ -76,12 +121,19 @@ type GmailMessage = {
   snippet?: string;
   internalDate?: string;
   payload?: GmailPart;
+  labelIds?: string[];
 };
 function textBody(part?: GmailPart): string {
   if (!part) return "";
   if (part.mimeType === "text/plain" && part.body?.data)
     return Buffer.from(part.body.data, "base64url").toString("utf8");
   return (part.parts ?? []).map(textBody).filter(Boolean).join("\n");
+}
+function htmlBody(part?: GmailPart): string {
+  if (!part) return "";
+  if (part.mimeType === "text/html" && part.body?.data)
+    return plainText(Buffer.from(part.body.data, "base64url").toString("utf8"));
+  return (part.parts ?? []).map(htmlBody).filter(Boolean).join("\n");
 }
 export const gmail: MailProvider = {
   id: "GMAIL",
@@ -115,17 +167,114 @@ export const gmail: MailProvider = {
       },
       false,
     );
-    const profile = await gmailRequest<{ emailAddress?: unknown }>("profile", tokens.accessToken);
+    const profile = await gmailRequest<{ emailAddress?: unknown }>(
+      "profile",
+      tokens.accessToken,
+    );
     if (
       typeof profile.emailAddress !== "string" ||
       !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(profile.emailAddress)
     )
-      throw new Error("Google did not return an account email. Reconnect Gmail.");
+      throw new Error(
+        "Google did not return an account email. Reconnect Gmail.",
+      );
     return { email: profile.emailAddress.toLowerCase(), tokens };
   },
   refreshTokens: (refreshToken) =>
     token({ grant_type: "refresh_token", refresh_token: refreshToken }, true),
   accessToken: accessTokenFor,
+  async folders(connection) {
+    const accessToken = await gmail.accessToken(connection);
+    const result = await gmailRequest<{
+      labels: { id: string; name: string }[];
+    }>("labels", accessToken);
+    return result.labels.map((label) => ({
+      ...label,
+      contextOnly: ["SENT", "DRAFT"].includes(label.id),
+    }));
+  },
+  async scanMail(connection, request, folders) {
+    const accessToken = await gmail.accessToken(connection);
+    const terms = [
+      "-in:sent",
+      "-in:drafts",
+      `before:${Math.ceil(Date.parse(request.until) / 1000)}`,
+    ];
+    if (request.since)
+      terms.push(`after:${Math.floor(Date.parse(request.since) / 1000)}`);
+    const params = new URLSearchParams({
+      q: terms.join(" "),
+      maxResults: "25",
+      includeSpamTrash: "true",
+    });
+    if (request.next) params.set("pageToken", request.next);
+    const page = await gmailRequest<{
+      messages?: { id: string }[];
+      nextPageToken?: string;
+    }>(`messages?${params}`, accessToken);
+    const messages = [];
+    const ids = page.messages ?? [];
+    for (let offset = 0; offset < ids.length; offset += 2) {
+      const chunk = await Promise.all(
+        ids.slice(offset, offset + 2).map(async (row) => {
+          try {
+            return await gmailRequest<GmailMessage>(
+              `messages/${encodeURIComponent(row.id)}?format=full`,
+              accessToken,
+            );
+          } catch (error) {
+            if (
+              error instanceof GmailReadError &&
+              [404, 410].includes(error.status)
+            )
+              return null;
+            throw error;
+          }
+        }),
+      );
+      for (const message of chunk) {
+        if (!message) continue;
+        const header = (name: string) =>
+          message.payload?.headers?.find(
+            (row) => row.name.toLowerCase() === name.toLowerCase(),
+          )?.value ?? "";
+        const from = header("From");
+        const address = from.match(/<([^>]+)>/);
+        const labels = message.labelIds ?? [];
+        const names = labels.map(
+          (id) => folders.find((folder) => folder.id === id)?.name ?? id,
+        );
+        if (
+          !labels.some((id) =>
+            ["INBOX", "SPAM", "TRASH", "SENT", "DRAFT"].includes(id),
+          )
+        )
+          names.push("Archive");
+        messages.push({
+          externalId: message.id,
+          internetMessageId: header("Message-ID"),
+          threadId: message.threadId,
+          sender: address?.[1] ?? from,
+          senderName: address
+            ? from.split("<")[0].trim().replace(/^"|"$/g, "")
+            : "",
+          recipient: recipientPreview(header("To")),
+          subject: header("Subject") || "(No subject)",
+          snippet: (message.snippet ?? "").slice(0, 2000),
+          bodyText: (
+            textBody(message.payload) ||
+            htmlBody(message.payload) ||
+            message.snippet ||
+            ""
+          ).slice(0, 100000),
+          receivedAt: new Date(Number(message.internalDate)).toISOString(),
+          folders: names,
+          contextOnly: labels.some((id) => ["SENT", "DRAFT"].includes(id)),
+        });
+      }
+    }
+    return { messages, next: page.nextPageToken };
+  },
   async listRecruitingMail(connection, cursor) {
     const token = await gmail.accessToken(connection);
     const since = connection.lastSyncedAt
@@ -136,10 +285,10 @@ export const gmail: MailProvider = {
       `after:${since} -in:sent -in:drafts {application interview assessment recruiter recruiting "job offer" "career opportunity" "thank you for applying"}`;
     const params = new URLSearchParams({ q: query, maxResults: "100" });
     if (cursor?.pageToken) params.set("pageToken", cursor.pageToken);
-    const response = await gmailRequest<{ messages?: { id: string }[]; nextPageToken?: string }>(
-      `messages?${params}`,
-      token,
-    );
+    const response = await gmailRequest<{
+      messages?: { id: string }[];
+      nextPageToken?: string;
+    }>(`messages?${params}`, token);
     const results = [];
     const ids = response.messages ?? [];
     for (let index = 0; index < ids.length; index += 5) {
@@ -155,11 +304,16 @@ export const gmail: MailProvider = {
       );
       for (const message of chunk) {
         const header = (name: string) =>
-          message.payload?.headers?.find((entry) => entry.name.toLowerCase() === name.toLowerCase())
-            ?.value ?? "";
+          message.payload?.headers?.find(
+            (entry) => entry.name.toLowerCase() === name.toLowerCase(),
+          )?.value ?? "";
         const subject = header("Subject") || "(No subject)";
         const bodyText = textBody(message.payload).slice(0, 100000);
-        const classification = classifyMail({ subject, bodyText, snippet: message.snippet });
+        const classification = classifyMail({
+          subject,
+          bodyText,
+          snippet: message.snippet,
+        });
         if (!classification.relevant) continue;
         const from = header("From");
         const address = from.match(/<([^>]+)>/);
@@ -168,18 +322,24 @@ export const gmail: MailProvider = {
           threadId: message.threadId,
           provider: "GMAIL",
           sender: address?.[1] ?? from,
-          senderName: address ? from.split("<")[0].trim().replace(/^"|"$/g, "") : "",
+          senderName: address
+            ? from.split("<")[0].trim().replace(/^"|"$/g, "")
+            : "",
           recipient: recipientPreview(header("To")),
           subject,
           snippet: message.snippet ?? "",
           bodyText,
-          receivedAt: new Date(Number(message.internalDate ?? Date.now())).toISOString(),
+          receivedAt: new Date(
+            Number(message.internalDate ?? Date.now()),
+          ).toISOString(),
         });
       }
     }
     return {
       messages: results,
-      nextCursor: response.nextPageToken ? { pageToken: response.nextPageToken, query } : undefined,
+      nextCursor: response.nextPageToken
+        ? { pageToken: response.nextPageToken, query }
+        : undefined,
     };
   },
 };

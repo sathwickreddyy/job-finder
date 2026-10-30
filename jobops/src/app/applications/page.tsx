@@ -1,21 +1,15 @@
 import Link from "next/link";
-import { asc } from "drizzle-orm";
+import { redirect } from "next/navigation";
 import { z } from "zod";
 import { Button, EmptyState, PageHeader } from "@/components/ui";
-import { db } from "@/db";
-import { mailConnections } from "@/db/schema";
 import { buildLanes, laneViews, laneWindow, pendingMailFrom } from "@/features/applications/lanes";
 import { resolveLanesView } from "@/features/applications/navigation";
 import { buildQueue } from "@/features/applications/queue";
 import { readApplications } from "@/features/applications/read";
-import { EmailsDrawer } from "@/features/applications/views/emails-drawer";
-import { InboxStatus } from "@/features/applications/views/inboxes";
 import { LaneDetail } from "@/features/applications/views/lane-detail";
 import { LanesChart } from "@/features/applications/views/lanes";
-import { EmailsPanel } from "@/features/applications/views/mail-sections";
 import { readMailTriage, readOpenMail } from "@/features/mail/read";
 import { queueMailFrom } from "@/features/mail/triage";
-import { providers } from "@/services/mail/providers";
 
 export const dynamic = "force-dynamic";
 
@@ -31,26 +25,15 @@ export default async function Applications({
     notice?: string;
   }>;
 }) {
-  const view = resolveLanesView(await searchParams);
+  const query = await searchParams;
+  if (query.emails === "1" || query.tab === "emails")
+    redirect(
+      `/mail${query.notice ? `?notice=${encodeURIComponent(query.notice.slice(0, 300))}` : ""}`,
+    );
+  const view = resolveLanesView(query);
   const now = new Date();
   const { records, snoozes } = await readApplications();
   const triage = await readMailTriage(records);
-  // Public projection only: encrypted tokens and OAuth secrets never reach client props.
-  const connections = await db
-    .select({
-      id: mailConnections.id,
-      provider: mailConnections.provider,
-      email: mailConnections.email,
-      lastRefreshedAt: mailConnections.lastRefreshedAt,
-      lastRefreshedCount: mailConnections.lastRefreshedCount,
-      lastError: mailConnections.lastError,
-    })
-    .from(mailConnections)
-    .orderBy(asc(mailConnections.createdAt), asc(mailConnections.id));
-  const configs = providers.map((provider) => {
-    const { configured, missing } = provider.configuration();
-    return { slug: provider.slug, label: provider.label, configured, missing };
-  });
   const items = buildQueue({ records, mail: queueMailFrom(triage.messages), snoozes, now });
   const lanes = buildLanes({ records, items, pending: pendingMailFrom(triage.messages), now });
   const chart = laneViews(lanes, laneWindow(lanes, now), now);
@@ -76,9 +59,6 @@ export default async function Applications({
     id: record.id,
     label: `${record.companyName} · ${record.role}`,
   }));
-  const decisions = triage.messages.filter(
-    (message) => message.bucket === "roles" || (message.bucket === "updates" && !message.record),
-  ).length;
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
@@ -86,24 +66,9 @@ export default async function Applications({
         description="Every company on one calendar: what happened, where it stands and what to do next."
         actions={
           <>
-            <EmailsDrawer count={decisions} connected={connections.length > 0}>
-              <EmailsPanel
-                data={triage}
-                records={recordOptions}
-                inboxes={
-                  <InboxStatus
-                    connections={connections}
-                    configs={configs}
-                    now={now}
-                    count={decisions}
-                  />
-                }
-                accountIndex={Object.fromEntries(
-                  connections.map((connection, index) => [connection.email, index]),
-                )}
-                notice={view.emails ? view.notice : undefined}
-              />
-            </EmailsDrawer>
+            <Button variant="outline" asChild>
+              <Link href="/mail">Mail</Link>
+            </Button>
             <Button asChild>
               <Link href="/applications/new">Record an application</Link>
             </Button>

@@ -26,7 +26,7 @@ it("keeps Outlook connect available with two accounts and names every reconnect 
       count: 0,
     }),
   );
-  expect(html).toMatch(/<a href="\/api\/mail\/outlook\/connect"[^>]*>Connect Outlook<\/a>/);
+  expect(html).toMatch(/<a href="\/api\/mail\/outlook\/connect"[^>]*>Add another Outlook account/);
   for (const connection of connections) {
     expect(html).toContain(`aria-label="Reconnect ${connection.email}"`);
     expect(html).toContain(`aria-describedby="reconnect-${connection.id}"`);
@@ -49,7 +49,7 @@ it("explains an unconfigured provider in plain words and keeps the variables in 
       count: 0,
     }),
   );
-  expect(html).toContain("Gmail isn&#x27;t set up on this computer yet.");
-  expect(html).toMatch(/<details[^>]*><summary[^>]*>Setup details<\/summary>/);
+  expect(html).toContain("Finish the one-time provider setup to connect this inbox.");
+  expect(html).toMatch(/<details[^>]*><summary[^>]*>View setup instructions<\/summary>/);
   expect(html).toContain("Set GOOGLE_CLIENT_ID in .env");
 });

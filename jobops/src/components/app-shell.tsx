@@ -111,7 +111,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             </nav>
             <div className="flex items-center gap-1">
               <Link
-                href="/applications?emails=1"
+                href="/mail"
                 aria-label="Emails"
                 aria-current={emailsActive ? "page" : undefined}
                 className={cn(
@@ -144,7 +144,15 @@ export function AppShell({ children }: { children: ReactNode }) {
             </div>
           </div>
         </header>
-        <main id="main" className="mx-auto w-full min-w-0 max-w-6xl px-5 py-8 sm:px-8 sm:py-10">
+        <main
+          id="main"
+          className={cn(
+            "mx-auto w-full min-w-0",
+            pathname === "/gallery/mail" || pathname === "/mail"
+              ? "max-w-[1600px] px-4 py-5 sm:px-6"
+              : "max-w-6xl px-5 py-8 sm:px-8 sm:py-10",
+          )}
+        >
           {children}
         </main>
       </div>

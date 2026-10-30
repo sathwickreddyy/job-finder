@@ -2,13 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { db } from "@/db";
-import { mailConnections } from "@/db/schema";
 import { actionError, formString, type ActionState } from "@/lib/actions";
-import { refreshConnection } from "./refresh-service";
 import { disconnectConnection } from "@/services/mail/providers/connections";
 import { importMailRecords, mailImportSchema } from "./import";
-import { summarizeRefresh } from "./refresh-summary";
+import { checkWorkspaceMail } from "./workspace-actions";
 
 export async function importMail(_previous: ActionState, form: FormData): Promise<ActionState> {
   try {
@@ -28,22 +25,7 @@ export async function importMail(_previous: ActionState, form: FormData): Promis
   }
 }
 export async function refreshAllInboxes(_previous: ActionState): Promise<ActionState> {
-  void _previous;
-  try {
-    const connections = await db.select().from(mailConnections);
-    if (!connections.length) throw new Error("Connect Gmail or Outlook before refreshing.");
-    // The service saves each inbox's status under its shared connection lock. Do not
-    // retry status writes here: that could overwrite a subsequent refresh's status.
-    const settled = await Promise.allSettled(connections.map(refreshConnection));
-    revalidatePath("/applications");
-    revalidatePath("/settings");
-    revalidatePath("/");
-    return summarizeRefresh(
-      connections.map((connection, index) => ({ email: connection.email, result: settled[index] })),
-    );
-  } catch (error) {
-    return actionError(error);
-  }
+  return checkWorkspaceMail(_previous, new FormData());
 }
 export async function disconnectInbox(
   _previous: ActionState,

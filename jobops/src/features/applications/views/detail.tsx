@@ -95,6 +95,11 @@ export function ApplicationDetail({
   ];
   return (
     <div className="space-y-6">
+      <div className="flex justify-end">
+        <Link className="text-sm text-link" href={`/mail?application=${record.id}`}>
+          Application mail
+        </Link>
+      </div>
       {notice && (
         <p
           role="status"

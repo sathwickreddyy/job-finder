@@ -290,7 +290,7 @@ describe("Outlook recruiting mail", () => {
   it.each([
     [401, "Reconnect Outlook"],
     [429, "rate limit"],
-    [500, "could not be read"],
+    [500, "temporarily unavailable"],
   ])("returns actionable sanitized errors for HTTP %s", async (status, text) => {
     vi.stubGlobal(
       "fetch",
