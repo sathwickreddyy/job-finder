@@ -13,7 +13,7 @@ test.beforeEach(guardMailFixtures);
 test.afterEach(cleanupMailFixtures);
 test.afterAll(() => closeDatabase());
 
-test("emails triage dismisses a message and undo restores it", async ({ page }) => {
+test("emails triage dismisses a message as handled", async ({ page }) => {
   const subject = `Interview test ${Date.now()}`;
   const mailId = await seedMail({ subject, classification: "INTERVIEW" });
   await page.goto(`/inbox?view=attention&q=${encodeURIComponent(subject)}`);
@@ -28,12 +28,9 @@ test("emails triage dismisses a message and undo restores it", async ({ page }) 
     .click();
   await expect(page.getByRole("status").filter({ hasText: "Dismissed 1 message." })).toBeVisible();
   await expect(message).toHaveCount(0);
-  await page.reload();
-  await page.getByRole("button", { name: "Undo last dismiss" }).click();
-  await expect(message).toBeVisible();
   expect(
     (await db.select().from(mailMessages).where(eq(mailMessages.id, mailId)))[0].attentionState,
-  ).toBe("OPEN");
+  ).toBe("DONE");
 });
 
 test("core pages fit a phone and preserve the selected theme", async ({ page }) => {

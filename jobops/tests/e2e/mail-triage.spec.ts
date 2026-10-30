@@ -376,24 +376,6 @@ test("bulk dismiss covers more than 200 messages and leaves other buckets open",
   ).rejects.toThrow("rollback whole-bucket test");
 });
 
-test("Emails buckets dismiss with durable confirmation at 390px", async ({ page }) => {
-  const app = await record();
-  const ack = await message(
-    { classification: "APPLICATION_ACKNOWLEDGEMENT", subject: `Acknowledged ${randomUUID()}` },
-    app.id,
-  );
-  await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto("/applications?emails=1");
-  const card = page
-    .getByRole("listitem")
-    .filter({ has: page.getByRole("link", { name: ack.subject, exact: true }) });
-  await expect(card.getByRole("button", { name: "Link", exact: true })).toBeVisible();
-  await card.getByRole("button", { name: "Dismiss", exact: true }).click();
-  await expect(page.getByRole("status").filter({ hasText: "Dismissed 1 message." })).toBeVisible();
-  await expect(page.getByRole("link", { name: ack.subject, exact: true })).toHaveCount(0);
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-});
-
 test("mail outcome keeps success and focus after resolution; unlink reopens mail", async ({
   page,
 }) => {
@@ -427,39 +409,41 @@ test("mail outcome keeps success and focus after resolution; unlink reopens mail
   expect((await state(app.id, mail.id)).mail.attentionState).toBe("OPEN");
 });
 
-for (const source of [
-  { classification: "INTERVIEW" as const, sender: "jobs@naukri.com" },
-  { classification: "ASSESSMENT" as const, sender: "alerts@instahyre.com" },
-  { classification: "UNKNOWN" as const },
-  { classification: "RECRUITER_OUTREACH" as const },
-]) {
-  test(`actual ${source.classification} ${source.sender ?? "unmatched"} cannot become record progress`, async ({
-    page,
-  }) => {
-    const app = await record();
-    const mail = await message(source);
-    const before = await state(app.id, mail.id);
-    await guard();
-    await expect(
-      db.transaction((tx) => linkMailToRecord(tx, mail.id, app.id, new Date())),
-    ).rejects.toThrow(/Updates|New roles|noise/);
-    expect(await state(app.id, mail.id)).toEqual(before);
-    await guard();
-    await expect(
-      db.transaction((tx) => applyOutcome(tx, outcome(app.id, mail.id), new Date())),
-    ).rejects.toThrow(/Updates|New roles|noise/);
-    expect(await state(app.id, mail.id)).toEqual(before);
-    await page.goto(`/applications/${app.id}?mail=${mail.id}&outcome=scheduled#what-happened`);
-    expect(await page.locator('#what-happened input[name="outcome"]').count()).toBe(0);
-    await expect(
-      page.getByRole("alert").filter({ hasText: /Updates|New roles|noise/ }),
-    ).toBeVisible();
-    await expect(
-      page.getByRole("link", { name: "Record an outcome manually", exact: true }),
-    ).toHaveAttribute("href", `/applications/${app.id}#what-happened`);
-    expect(await state(app.id, mail.id)).toEqual(before);
+test("mail placed at another company cannot become record progress", async ({ page }) => {
+  const app = await record();
+  const mail = await message({ companyKey: "another fixture company" });
+  const before = await state(app.id, mail.id);
+  await guard();
+  await expect(
+    db.transaction((tx) => linkMailToRecord(tx, mail.id, app.id, new Date())),
+  ).rejects.toThrow(/placed at another fixture company/);
+  expect(await state(app.id, mail.id)).toEqual(before);
+  await guard();
+  await expect(
+    db.transaction((tx) => applyOutcome(tx, outcome(app.id, mail.id), new Date())),
+  ).rejects.toThrow(/placed at another fixture company/);
+  expect(await state(app.id, mail.id)).toEqual(before);
+  await page.goto(`/applications/${app.id}?mail=${mail.id}&outcome=scheduled#what-happened`);
+  expect(await page.locator('#what-happened input[name="outcome"]').count()).toBe(0);
+  await expect(page.getByRole("alert").filter({ hasText: /placed at/ })).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "Record an outcome manually", exact: true }),
+  ).toHaveAttribute("href", `/applications/${app.id}#what-happened`);
+  expect(await state(app.id, mail.id)).toEqual(before);
+});
+
+test("unplaced mail from a job portal can link to a record", async () => {
+  const app = await record();
+  const mail = await message({ classification: "UNKNOWN", sender: "jobs@naukri.com" });
+  await guard();
+  expect(await db.transaction((tx) => linkMailToRecord(tx, mail.id, app.id, new Date()))).toBe(
+    true,
+  );
+  expect((await state(app.id, mail.id)).mail).toMatchObject({
+    linkedApplicationId: app.id,
+    attentionState: "DONE",
   });
-}
+});
 
 for (const kind of ["malformed", "missing", "dismissed", "linked elsewhere"] as const) {
   test(`explicit ${kind} mail URL cannot silently record a manual outcome`, async ({ page }) => {
@@ -549,22 +533,17 @@ for (const status of ["PREPARING", "CLOSED", "APPLIED"] as const) {
   });
 }
 
-test("only the current matched acknowledgement record may link, and acknowledgements never record outcomes", async () => {
+test("acknowledgements link without recording an outcome", async () => {
   const app = await record();
-  const other = await record();
   const ack = await message({ classification: "APPLICATION_ACKNOWLEDGEMENT" }, app.id);
-  const before = await state(other.id, ack.id);
-  await guard();
-  await expect(
-    db.transaction((tx) => linkMailToRecord(tx, ack.id, other.id, new Date())),
-  ).rejects.toThrow(/noise|matched acknowledgement/);
-  expect(await state(other.id, ack.id)).toEqual(before);
-  const matchedBefore = await state(app.id, ack.id);
+  const before = await state(app.id, ack.id);
   await guard();
   await expect(
     db.transaction((tx) => applyOutcome(tx, outcome(app.id, ack.id), new Date())),
   ).rejects.toThrow(/without recording an outcome/);
-  expect(await state(app.id, ack.id)).toEqual(matchedBefore);
+  expect(await state(app.id, ack.id)).toEqual(before);
+  await guard();
+  expect(await db.transaction((tx) => linkMailToRecord(tx, ack.id, app.id, new Date()))).toBe(true);
 });
 
 test("manual query outcome keeps confirmation and focus after cleanup navigation", async ({

@@ -116,7 +116,7 @@ export function DetailHeader({ company, summary }: Pick<DetailProps, "company" |
             {action.label}
           </Link>
           <Link
-            href={`/mail?${new URLSearchParams({ company: company.name.trim().toLocaleLowerCase().replace(/\s+/g, " "), view: "history" })}`}
+            href={`/mail?${new URLSearchParams({ company: company.name.trim().toLocaleLowerCase().replace(/\s+/g, " "), view: "all" })}`}
             className="flex min-h-10 items-center rounded-full border border-input px-5 text-sm font-medium hover:bg-muted hover:no-underline"
           >
             Company mail

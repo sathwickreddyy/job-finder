@@ -133,9 +133,7 @@ test("matched acknowledgement reader links without creating an outcome or resett
   await expect(page.getByRole("button", { name: "Dismiss", exact: true })).toHaveCount(0);
 });
 
-test("reader dismiss keeps durable confirmation and Undo after its action disappears", async ({
-  page,
-}) => {
+test("reader dismiss keeps durable confirmation after its action disappears", async ({ page }) => {
   const mailId = await seedMail({
     subject: `Reader dismissal ${Date.now()}`,
     classification: "INTERVIEW",
@@ -144,14 +142,11 @@ test("reader dismiss keeps durable confirmation and Undo after its action disapp
   await page.getByRole("button", { name: "Dismiss", exact: true }).click();
   await expect(page).toHaveURL(/\/applications\?emails=1&notice=/);
   await expect(page.getByRole("status").filter({ hasText: "Dismissed 1 message." })).toBeVisible();
-  await page.reload();
-  await page.getByRole("button", { name: "Undo last dismiss" }).click();
-  await expect(page.getByRole("status").filter({ hasText: "Restored 1 message." })).toBeVisible();
   expect(
     (await db.select().from(mailMessages).where(eq(mailMessages.id, mailId)))[0].attentionState,
-  ).toBe("OPEN");
+  ).toBe("DONE");
   await page.goto(`/mail/${mailId}`);
-  await expect(page.getByRole("button", { name: "Dismiss", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Dismiss", exact: true })).toHaveCount(0);
 });
 
 for (const classification of [

@@ -1,20 +1,14 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { eq } from "drizzle-orm";
-import { z } from "zod";
+import { and, eq, isNull } from "drizzle-orm";
 import { db } from "@/db";
-import {
-  mailTracking,
-  mailMessages,
-  mailEvents,
-  settings,
-  applicationEvents,
-  activityLogs,
-} from "@/db/schema";
+import { mailMessages, settings } from "@/db/schema";
 import { actionError, formString, type ActionState } from "@/lib/actions";
 import { loadMailContext, ruleKey, ruleSchema } from "./context";
 import { checkMailStep, type CheckResult } from "./check-service";
+import { handleMail, updateMail } from "./handle-service";
+import { notExcluded } from "./mail-list";
 import { matchMail } from "./matching";
 
 function invalidate() {
@@ -73,162 +67,79 @@ export async function saveWorkspaceRule(
     const updated = await loadMailContext();
     const savedCompany = updated.companies.find((item) => item.id === key)!;
     const scoped = { ...updated, companies: [savedCompany] };
-    // Re-evaluate retained content without deleting anything or promoting history.
-    const rows = await db
-      .select({ tracking: mailTracking, message: mailMessages })
-      .from(mailTracking)
-      .innerJoin(mailMessages, eq(mailTracking.messageId, mailMessages.id));
-    for (const { tracking, message } of rows) {
-      if (message.linkedApplicationId) continue;
+    // Place kept, unlinked, unplaced mail the new pattern matches. Attention never changes.
+    const unplaced = await db
+      .select()
+      .from(mailMessages)
+      .where(
+        and(isNull(mailMessages.companyKey), isNull(mailMessages.linkedApplicationId), notExcluded),
+      );
+    let placed = 0;
+    for (const message of unplaced) {
       const decision = matchMail(
         {
           ...message,
-          externalId: tracking.providerMessageId,
+          externalId: message.externalId,
           threadId: message.threadId ?? undefined,
-          folders: tracking.folders,
+          folders: message.folders,
           bodyText: message.bodyText ?? "",
           receivedAt: message.receivedAt.toISOString(),
         },
         scoped,
-        { historical: true, seen: true, threadApplications: tracking.threadId ? tracking.applicationIds : [] },
+        { historical: true, seen: true },
       );
-      if (
-        !tracking.companyKeys.includes(key) &&
-        !decision.companyKeys.includes(key)
-      )
-        continue;
-      const otherKeys = tracking.companyKeys.filter((company) => company !== key);
-      const keep = decision.disposition !== "excluded" && decision.companyKeys.includes(key);
-      await db.update(mailTracking).set({
-        companyKeys: [...new Set([...otherKeys, ...(keep ? [key] : [])])],
-        applicationIds: [...new Set([...tracking.applicationIds.filter((id) => !updated.applications.some((app) => app.id === id && app.company === key)), ...(keep ? decision.applicationIds : [])])],
-        reason: otherKeys.length ? tracking.reason : decision.reason,
-        evidence: otherKeys.length ? tracking.evidence : decision.evidence,
-        updatedAt: new Date(),
-      }).where(eq(mailTracking.id, tracking.id));
+      if (decision.companyKeys.length !== 1 || decision.companyKeys[0] !== key) continue;
+      await db.update(mailMessages).set({ companyKey: key }).where(eq(mailMessages.id, message.id));
+      placed++;
     }
     invalidate();
     return {
-      success:
-        "Company pattern saved. Tracked mail will not become new again. Run a mail check or history scan to use this pattern.",
+      success: `Company pattern saved.${placed ? ` ${placed} unplaced ${placed === 1 ? "email" : "emails"} now ${placed === 1 ? "belongs" : "belong"} to ${savedCompany.name}.` : ""} New mail uses this pattern from the next check.`,
     };
   } catch (error) {
     return actionError(error);
   }
 }
 
-export async function reviewWorkspaceMail(
+/** Just info (`justInfo=1`) or an outcome (`outcome`, optional `applicationId`) from the Mail page. */
+export async function handleMailAction(
   _previous: ActionState,
   form: FormData,
 ): Promise<ActionState> {
   try {
-    const id = z.uuid().parse(formString(form, "id"));
-    await db.transaction(async (tx) => {
-      const [tracking] = await tx
-        .select()
-        .from(mailTracking)
-        .where(eq(mailTracking.id, id))
-        .for("update");
-      if (!tracking) throw new Error("This message no longer exists.");
-      if (tracking.disposition === "excluded") return;
-      if (tracking.messageId) {
-        await tx
-          .update(mailMessages)
-          .set({ attentionState: "DONE", processedAt: new Date() })
-          .where(eq(mailMessages.id, tracking.messageId));
-        await tx
-          .update(mailEvents)
-          .set({ status: "REVIEWED" })
-          .where(eq(mailEvents.mailMessageId, tracking.messageId));
-      }
-      await tx.insert(activityLogs).values({
-        action: "MAIL_REVIEWED",
-        entityType: "MAIL",
-        entityId: tracking.messageId,
-        summary: "Reviewed mail and retained it in history",
-      });
-    });
+    const id = formString(form, "id");
+    const outcome = formString(form, "outcome");
+    await handleMail(
+      id,
+      formString(form, "justInfo") === "1"
+        ? { justInfo: true }
+        : {
+            outcome,
+            ...(formString(form, "applicationId")
+              ? { applicationId: formString(form, "applicationId") }
+              : {}),
+          },
+    );
     invalidate();
-    return {
-      success: "Reviewed and kept in History. It will not appear as new again.",
-    };
+    return { success: outcome ? "Outcome recorded from this email." : "Marked as just info." };
   } catch (error) {
     return actionError(error);
   }
 }
 
-export async function associateWorkspaceMail(
+/** Place an email at an application or company; an empty value clears it. */
+export async function placeMailAction(
   _previous: ActionState,
   form: FormData,
 ): Promise<ActionState> {
   try {
-    const id = z.uuid().parse(formString(form, "id"));
-    const applicationId = z.uuid().parse(formString(form, "application"));
-    const context = await loadMailContext();
-    const app = context.applications.find((row) => row.id === applicationId);
-    if (!app) throw new Error("Choose an existing application.");
-    await db.transaction(async (tx) => {
-      const [tracking] = await tx
-        .select()
-        .from(mailTracking)
-        .where(eq(mailTracking.id, id))
-        .for("update");
-      if (
-        !tracking?.messageId ||
-        tracking.disposition === "excluded" ||
-        (tracking.companyKeys.length > 0 &&
-          !tracking.companyKeys.includes(app.company))
-      )
-        throw new Error(
-          "Only a matched company message can be linked to this application.",
-        );
-      const [message] = await tx
-        .select()
-        .from(mailMessages)
-        .where(eq(mailMessages.id, tracking.messageId))
-        .for("update");
-      if (
-        message.linkedApplicationId &&
-        message.linkedApplicationId !== applicationId
-      )
-        throw new Error(
-          "This message is already linked to another application. Unlink it from that record first.",
-        );
-      await tx
-        .update(mailTracking)
-        .set({
-          applicationIds: [applicationId],
-          companyKeys: [app.company],
-          updatedAt: new Date(),
-        })
-        .where(eq(mailTracking.id, id));
-      if (message.linkedApplicationId === applicationId) return;
-      await tx
-        .update(mailMessages)
-        .set({
-          linkedApplicationId: applicationId,
-          attentionState: "DONE",
-          processedAt: new Date(),
-        })
-        .where(eq(mailMessages.id, message.id));
-      await tx
-        .update(mailEvents)
-        .set({ linkedApplicationId: applicationId, status: "REVIEWED" })
-        .where(eq(mailEvents.mailMessageId, message.id));
-      await tx.insert(applicationEvents).values({
-        applicationId,
-        eventType: "MAIL_LINKED",
-        occurredAt: message.receivedAt,
-        summary: `Mail linked: ${message.subject}`,
-        payload: { mailMessageId: message.id },
-      });
-    });
+    const id = formString(form, "id");
+    const change = form.has("application")
+      ? { application: formString(form, "application") || null }
+      : { company: formString(form, "company") || null };
+    await updateMail(id, change);
     invalidate();
-    revalidatePath(`/applications/${applicationId}`);
-    return {
-      success:
-        "Message linked to the application and kept in History. Application outcomes are unchanged.",
-    };
+    return { success: "Email placed. It still needs your attention until you handle it." };
   } catch (error) {
     return actionError(error);
   }

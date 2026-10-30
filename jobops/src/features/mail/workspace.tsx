@@ -3,14 +3,12 @@ import { useEffect, useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowLeft,
-  Archive,
   Building2,
   Check,
   ChevronDown,
   ChevronRight,
   FileText,
   Folder,
-  History,
   Inbox,
   Link2,
   Mail,
@@ -23,12 +21,15 @@ import {
 import { Button } from "@/components/ui";
 import { cn } from "@/lib/utils";
 import { useLoadingTask } from "@/components/loading/overlay";
-import { checkMail, reviewWorkspaceMail, associateWorkspaceMail } from "./workspace-actions";
-import type { MailWorkspaceData, WorkspaceQuery, MailRow } from "./workspace-data";
+import { checkMail, handleMailAction, placeMailAction } from "./workspace-actions";
+import type { MailWorkspaceData, WorkspaceQuery } from "./workspace-data";
+import type { MailItem } from "./mail-item";
+import { mailDateGroup } from "./attention";
+import { tagLabel, type MailTag } from "./tags";
 import { CompanyRuleEditor } from "./company-rule-editor";
 import type { ActionState } from "@/lib/actions";
 type Scope = "all" | "company" | "application";
-type View = "latest" | "history" | "excluded";
+type View = "open" | "all";
 type Detail = "message" | "rules" | "folders";
 const formatDate = (value: string) =>
   new Intl.DateTimeFormat("en-IN", {
@@ -36,6 +37,41 @@ const formatDate = (value: string) =>
     dateStyle: "medium",
     timeStyle: "short",
   }).format(new Date(value));
+const formatTime = (value: string) =>
+  new Intl.DateTimeFormat("en-IN", {
+    timeZone: "Asia/Kolkata",
+    day: "numeric",
+    month: "short",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(new Date(value));
+const nameOf = (message: MailItem) => message.senderName || message.sender;
+const folderText = (message: MailItem) => message.folders.join(", ") || "Folder not recorded";
+const isSpam = (message: MailItem) => /spam|junk/i.test(message.folders.join(" "));
+// Literal class names so Tailwind generates each tag's colour pair.
+const tagStyles: Record<MailTag, { chip: string; dot: string }> = {
+  opportunity: {
+    chip: "bg-tag-opportunity-container text-tag-opportunity",
+    dot: "bg-tag-opportunity",
+  },
+  process: { chip: "bg-tag-process-container text-tag-process", dot: "bg-tag-process" },
+  offer: { chip: "bg-tag-offer-container text-tag-offer", dot: "bg-tag-offer" },
+  rejected: { chip: "bg-tag-rejected-container text-tag-rejected", dot: "bg-tag-rejected" },
+  other: { chip: "bg-tag-other-container text-tag-other", dot: "bg-tag-other" },
+};
+function TagChip({ tag }: { tag: MailTag }) {
+  return (
+    <span
+      className={cn(
+        "inline-flex shrink-0 items-center gap-1.5 rounded-full px-2 py-0.5 font-medium",
+        tagStyles[tag].chip,
+      )}
+    >
+      <span aria-hidden className={cn("size-1.5 rounded-full", tagStyles[tag].dot)} />
+      {tagLabel[tag]}
+    </span>
+  );
+}
 export function MailWorkspace({
   data,
   initial,
@@ -55,14 +91,11 @@ export function MailWorkspace({
     initial: row.name[0],
   }));
   const applications = data.applications;
-  const accountNames = data.connections.map((row) => row.email);
   const scope: Scope = initial.application ? "application" : initial.company ? "company" : "all";
   const companyId = initial.company ?? companies[0]?.id ?? "";
   const applicationId = initial.application ?? applications[0]?.id ?? "";
-  const view: View =
-    initial.view === "history" || initial.view === "excluded" ? initial.view : "latest";
+  const view: View = initial.view === "all" ? "all" : "open";
   const [selectedId, setSelectedId] = useState(initial.selected ?? "");
-  const account = initial.account ?? "All accounts";
   const [search, setSearch] = useState({ saved: initial.q ?? "", draft: initial.q ?? "" });
   // Back/forward navigation changes the URL without remounting this workspace.
   if (search.saved !== (initial.q ?? ""))
@@ -86,20 +119,17 @@ export function MailWorkspace({
     id: "",
     name: "Company",
   };
-  const all = data.messages;
+  const all = data.items;
   const visible = all;
-  const counts = data.counts;
   const selected = visible.find((message) => message.id === selectedId) ?? visible[0];
   const linkTarget = linkChoice.message === selected?.id ? linkChoice.application : "";
   // Linked messages cannot be moved to another application here.
-  const canLink = Boolean(
-    selected?.messageId && !selected.application && applications.length && view !== "excluded",
-  );
+  const canLink = Boolean(selected && !selected.application && applications.length);
   const showLink = canLink && linking === selected?.id;
-  const selectedCompany = companies.find((row) => row.id === selected?.company);
-  const selectedApplication = applications.find((row) => row.id === selected?.application);
+  const selectedApplication = applications.find((row) => row.id === selected?.application?.id);
+  const reconnect = data.connections.filter((row) => row.lastError);
   const ruleId =
-    ruleOverride || (scope === "all" ? selected?.company || companyId : contextCompany);
+    ruleOverride || (scope === "all" ? selected?.company?.key || companyId : contextCompany);
   const ruleCompany = companies.find((row) => row.id === ruleId) ?? {
     name: "Choose a company",
     ruleSource: "Select a company before editing its pattern",
@@ -112,27 +142,29 @@ export function MailWorkspace({
     subjectTerms: [],
     excludedTerms: [],
   };
-  const thread: MailRow[] = selected
+  const thread: MailItem[] = selected?.application
     ? all.filter(
         (message) =>
           message.id !== selected.id &&
-          message.application &&
-          message.application === selected.application &&
-          message.receivedAt < selected.receivedAt &&
-          message.decision.destination === "history",
+          message.application?.id === selected.application?.id &&
+          message.receivedAt < selected.receivedAt,
       )
     : [];
   const title =
-    scope === "all" ? "All mail" : scope === "company" ? company.name : currentApplication.role;
+    scope === "all"
+      ? "All companies"
+      : scope === "company"
+        ? company.name
+        : currentApplication.role;
   const subtitle =
     scope === "all"
       ? "Every company and application, across your connected accounts."
       : scope === "company"
         ? "All applications and outreach"
         : `${company.name} / Application mail`;
-  function navigate(changes: Record<string, string | undefined>, clearBefore = false) {
+  function navigate(changes: Record<string, string | undefined>, clearCursor = false) {
     const next = new URLSearchParams(currentParams);
-    if (!("before" in changes) || clearBefore) next.delete("before");
+    if (!("cursor" in changes) || clearCursor) next.delete("cursor");
     for (const [key, value] of Object.entries(changes)) {
       if (value) next.set(key, value);
       else next.delete(key);
@@ -149,7 +181,7 @@ export function MailWorkspace({
       const next = new URLSearchParams(currentParams);
       if (query.trim()) next.set("q", query.trim().slice(0, 200));
       else next.delete("q");
-      next.delete("before");
+      next.delete("cursor");
       startTransition(() => router.replace(`/mail?${next}`, { scroll: false }));
     }, 450);
     return () => clearTimeout(timer);
@@ -168,9 +200,6 @@ export function MailWorkspace({
   }
   function setView(next: View) {
     navigate({ view: next });
-  }
-  function setAccount(next: string) {
-    navigate({ account: next === "All accounts" ? undefined : next });
   }
   function openDetail(next: Detail) {
     setDetail(next);
@@ -232,16 +261,13 @@ export function MailWorkspace({
     });
   }
 
-  function reviewMessage() {
-    if (selected) {
-      run(reviewWorkspaceMail, { id: selected.id }, () => setMobileReader(false));
-    }
-  }
-  function associateMessage() {
+  function justInfo() {
     if (selected)
-      run(associateWorkspaceMail, { id: selected.id, application: linkTarget }, () =>
-        setLinking(""),
-      );
+      run(handleMailAction, { id: selected.id, justInfo: "1" }, () => setMobileReader(false));
+  }
+  function placeMessage() {
+    if (selected)
+      run(placeMailAction, { id: selected.id, application: linkTarget }, () => setLinking(""));
   }
   return (
     <div className="space-y-4">
@@ -279,11 +305,7 @@ export function MailWorkspace({
                   : "transition-transform group-hover:rotate-45 motion-reduce:transition-none"
               }
             />
-            {checking
-              ? "Checking…"
-              : data.scans.some((scan) => scan.mode === "latest" && !scan.complete)
-                ? "Continue check"
-                : "Check mail"}
+            {checking ? "Checking…" : "Check mail"}
           </Button>
         </div>
       </header>
@@ -296,7 +318,7 @@ export function MailWorkspace({
           <nav aria-label="Mail scope" className="space-y-1">
             {(
               [
-                ["all", "All mail", Inbox],
+                ["all", "All companies", Inbox],
                 ["company", "Companies", Building2],
                 ["application", "Applications", FileText],
               ] as const
@@ -375,7 +397,7 @@ export function MailWorkspace({
                   value={scope}
                   onChange={(event) => changeScope(event.target.value as Scope)}
                 >
-                  <option value="all">All mail</option>
+                  <option value="all">All companies</option>
                   <option value="company">Companies</option>
                   <option value="application" disabled={!applications.length}>
                     Applications
@@ -430,13 +452,12 @@ export function MailWorkspace({
               />
             </label>
           </div>
-          <div className="flex flex-wrap items-center justify-between gap-x-2 border-b border-border px-3">
+          <div className="border-b border-border px-3">
             <nav aria-label="Mail status" className="flex min-w-0 gap-1">
               {(
                 [
-                  ["latest", "New"],
-                  ["history", "History"],
-                  ...(view === "excluded" ? [["excluded", "Excluded"] as const] : []),
+                  ["open", `Needs attention (${data.openCount})`],
+                  ["all", "All mail"],
                 ] as const
               ).map(([id, label]) => (
                 <button
@@ -455,25 +476,24 @@ export function MailWorkspace({
                   )}
                 >
                   {label}
-                  <span className="text-xs tabular-nums opacity-75">{counts[id]}</span>
                 </button>
               ))}
             </nav>
-            <label className="ml-auto min-w-0 py-1">
-              <span className="sr-only">Account</span>
-              <select
-                aria-label="Account"
-                value={account}
-                onChange={(event) => setAccount(event.target.value)}
-                className="!min-h-8 !w-28 !border-0 !bg-transparent !px-1 !py-1 !text-xs"
-              >
-                <option>All accounts</option>
-                {accountNames.map((name) => (
-                  <option key={name}>{name}</option>
-                ))}
-              </select>
-            </label>
           </div>
+          {reconnect.length > 0 && (
+            <div
+              role="alert"
+              className="flex flex-wrap items-center justify-between gap-2 bg-danger-soft px-5 py-3 text-xs text-destructive"
+            >
+              <span className="min-w-0 [overflow-wrap:anywhere]">
+                {reconnect.map((row) => row.email).join(", ")}{" "}
+                {reconnect.length === 1 ? "needs" : "need"} reconnecting before mail can be checked.
+              </span>
+              <a className="font-medium text-link" href="/settings">
+                Reconnect
+              </a>
+            </div>
+          )}
           {feedback && (
             <div
               role="status"
@@ -488,24 +508,15 @@ export function MailWorkspace({
           <div className="min-h-0 flex-1 overflow-y-auto">
             {visible.length > 0 ? (
               <>
-                <p className="m-0 px-5 pb-2 pt-4 text-xs text-muted-foreground">
-                  {view === "history"
-                    ? "Tracked conversations"
-                    : view === "excluded"
-                      ? "Kept out of Latest"
-                      : "New hiring updates"}
-                </p>
                 <ul className="m-0 list-none p-0">
                   {visible.map((message, index) => {
-                    const ownCompany = companies.find((row) => row.id === message.company);
-                    const ownApplication = applications.find(
-                      (row) => row.id === message.application,
-                    );
+                    const group = mailDateGroup(new Date(message.receivedAt));
                     return (
                       <li key={message.id}>
-                        {(index === 0 || visible[index - 1].group !== message.group) && (
+                        {(index === 0 ||
+                          mailDateGroup(new Date(visible[index - 1].receivedAt)) !== group) && (
                           <p className="m-0 bg-background/60 px-5 py-2 text-xs text-muted-foreground">
-                            {message.group}
+                            {group}
                           </p>
                         )}
                         <button
@@ -524,31 +535,32 @@ export function MailWorkspace({
                           )}
                         >
                           <span className="flex items-center justify-between gap-3">
-                            <span className="truncate text-sm font-medium">{message.name}</span>
+                            <span className="truncate text-sm font-medium">{nameOf(message)}</span>
                             <span className="shrink-0 text-xs text-muted-foreground">
-                              {message.time}
+                              {formatTime(message.receivedAt)}
                             </span>
                           </span>
                           <span className="mt-1.5 block truncate text-sm font-semibold">
                             {message.subject}
                           </span>
                           <span className="mt-1 block truncate text-xs text-muted-foreground">
-                            {ownCompany?.name ?? "Unmatched"}
-                            {ownApplication
-                              ? ` / ${ownApplication.role}`
-                              : message.company
-                                ? " / Company mail"
-                                : " / Company not linked"}
+                            {message.company?.name ?? "Company not placed"}
+                            {message.application ? ` / ${message.application.role}` : ""}
                           </span>
-                          <span className="mt-2 flex items-center gap-2 text-xs">
-                            <span className="text-link">{message.kind}</span>
-                            {/spam|junk/i.test(message.sourceFolder) && (
+                          <span className="mt-2 flex min-w-0 items-center gap-2 text-xs">
+                            <TagChip tag={message.tag} />
+                            {message.attention === "handled" && (
+                              <span className="text-muted-foreground">Handled</span>
+                            )}
+                            {isSpam(message) && (
                               <span className="flex items-center gap-1 text-warning">
                                 <ShieldCheck size={12} aria-hidden />
-                                Found in {message.sourceFolder}
+                                {folderText(message)}
                               </span>
                             )}
-                            <span className="ml-auto text-muted-foreground">{message.account}</span>
+                            <span className="ml-auto truncate text-muted-foreground">
+                              {message.account}
+                            </span>
                           </span>
                         </button>
                       </li>
@@ -560,37 +572,39 @@ export function MailWorkspace({
               <div className="px-8 py-16 text-center">
                 <Inbox size={24} aria-hidden className="mx-auto text-muted-foreground" />
                 <h3 className="mb-0 mt-4 text-base font-medium">
-                  {view === "latest" ? "No new matching mail" : "No matching messages"}
+                  {query
+                    ? "No matching mail"
+                    : view === "open"
+                      ? "Nothing needs attention"
+                      : "No mail yet"}
                 </h3>
                 <p className="mb-0 mt-2 text-sm text-muted-foreground">
                   {query
                     ? "Try a different search."
-                    : view === "latest" && counts.history
-                      ? "Earlier conversations are saved in History."
+                    : view === "open"
+                      ? "New hiring mail appears here after Check mail."
                       : "Check mail to find hiring updates."}
                 </p>
-                {view === "latest" && counts.history > 0 && (
-                  <Button variant="outline" className="mt-5" onClick={() => setView("history")}>
-                    View history ({counts.history})
+                {view === "open" && !query && (
+                  <Button variant="outline" className="mt-5" onClick={() => setView("all")}>
+                    Show all mail
                   </Button>
                 )}
               </div>
             )}
           </div>
           <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-5 py-3 text-xs text-muted-foreground">
-            <span>
-              {visible.length} shown / {data.total} matches
-            </span>
+            <span>{visible.length} shown</span>
             <div className="flex gap-3">
-              {initial.before && (
+              {initial.cursor && (
                 <button className="text-link" onClick={() => navigate({}, true)}>
                   Newest
                 </button>
               )}
-              {data.nextBefore && (
+              {data.nextCursor && (
                 <button
                   className="text-link"
-                  onClick={() => navigate({ before: data.nextBefore! })}
+                  onClick={() => navigate({ cursor: data.nextCursor! })}
                 >
                   Older results
                 </button>
@@ -633,12 +647,16 @@ export function MailWorkspace({
               selected ? (
                 <>
                   <div className="flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
-                    <button
-                      onClick={() => openCompany(selected.company)}
-                      className="hover:text-link"
-                    >
-                      {selectedCompany?.name ?? "Company not linked"}
-                    </button>
+                    {selected.company ? (
+                      <button
+                        onClick={() => openCompany(selected.company!.key)}
+                        className="hover:text-link"
+                      >
+                        {selected.company.name}
+                      </button>
+                    ) : (
+                      <span>Company not placed</span>
+                    )}
                     <ChevronRight size={12} aria-hidden />
                     {selectedApplication ? (
                       <button
@@ -659,46 +677,34 @@ export function MailWorkspace({
                       aria-hidden
                       className="grid size-10 shrink-0 place-items-center rounded-full bg-secondary text-sm font-medium text-secondary-foreground"
                     >
-                      {selected.name
+                      {nameOf(selected)
                         .split(" ")
                         .map((part) => part[0])
                         .slice(0, 2)
                         .join("")}
                     </span>
                     <div className="min-w-0 flex-1">
-                      <p className="m-0 text-sm font-medium">{selected.name}</p>
+                      <p className="m-0 text-sm font-medium">{nameOf(selected)}</p>
                       <p className="m-0 truncate text-xs text-muted-foreground">
                         {selected.sender}
                       </p>
                     </div>
-                    <span className="text-xs text-muted-foreground">{selected.time}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {formatTime(selected.receivedAt)}
+                    </span>
                   </div>
                   <p className="mb-0 mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                    <TagChip tag={selected.tag} />
+                    <span>{selected.kind}</span>
                     <span>{selected.account}</span>
                     <span className="flex items-center gap-1.5">
                       <Folder size={12} aria-hidden />
-                      {selected.sourceFolder}
+                      {folderText(selected)}
                     </span>
-                    {/spam|junk/i.test(selected.sourceFolder) && (
-                      <span className="text-warning">Plain-text preview</span>
-                    )}
                   </p>
-                  <div className="mt-7 whitespace-pre-line text-sm leading-7">
-                    {selected.bodyText}
+                  <div className="mt-7 whitespace-pre-line text-sm leading-7 [overflow-wrap:anywhere]">
+                    {selected.text || "No plain-text body available."}
                   </div>
-                  <details className="mt-8 border-t border-border/60 py-4 text-xs text-muted-foreground">
-                    <summary className="cursor-pointer">
-                      {view === "excluded" ? "Why this was excluded" : "Why this belongs here"}
-                    </summary>
-                    <p className="mb-0 mt-3">{selected.decision.reason}</p>
-                    <p className="mb-0 mt-2">
-                      Received {formatDate(selected.receivedAt)}. First tracked{" "}
-                      {formatDate(selected.firstTrackedAt)}.
-                    </p>
-                    {selected.decision.evidence.length > 0 && (
-                      <p className="mb-0 mt-2">{selected.decision.evidence.join(". ")}.</p>
-                    )}
-                  </details>
                   {selectedApplication && (
                     <div className="flex flex-wrap gap-4 border-t border-border py-4 text-xs">
                       <button
@@ -707,11 +713,11 @@ export function MailWorkspace({
                           navigate({
                             application: selectedApplication.id,
                             company: undefined,
-                            view: "history",
+                            view: "all",
                           })
                         }
                       >
-                        Application mail history
+                        All mail for this application
                       </button>
                       <a className="text-link" href={`/applications/${selectedApplication.id}`}>
                         Open application
@@ -739,11 +745,11 @@ export function MailWorkspace({
                         thread.map((message) => (
                           <div key={message.id} className="mt-4 border-l border-border pl-4">
                             <p className="m-0 text-xs text-muted-foreground">
-                              {message.time} / {message.sourceFolder}
+                              {formatTime(message.receivedAt)} / {folderText(message)}
                             </p>
                             <p className="mb-0 mt-1 text-sm font-medium">{message.subject}</p>
                             <p className="mb-0 mt-2 whitespace-pre-line text-xs leading-6 text-muted-foreground">
-                              {message.bodyText}
+                              {message.text}
                             </p>
                           </div>
                         ))}
@@ -808,9 +814,6 @@ export function MailWorkspace({
                     <Settings2 size={15} aria-hidden />
                     Company rules
                   </Button>
-                  <Button variant="ghost" onClick={() => navigate({ view: "excluded" })}>
-                    Excluded mail ({counts.excluded})
-                  </Button>
                 </div>
                 <h4 className="m-0 text-sm font-medium">Accounts & folders</h4>
                 <p className="mb-6 mt-2 text-xs text-muted-foreground">
@@ -838,9 +841,7 @@ export function MailWorkspace({
                       </p>
                     )}
                     <details className="mt-3 text-xs">
-                      <summary className="cursor-pointer text-link">
-                        Folders and saved scan progress
-                      </summary>
+                      <summary className="cursor-pointer text-link">Folders checked</summary>
                       <ul className="mt-3 space-y-1 pl-4 text-muted-foreground">
                         {data.coverage
                           .find((item) => item.account === connection.email)
@@ -855,17 +856,6 @@ export function MailWorkspace({
                         ?.checkedAt && (
                         <p className="text-muted-foreground">Use Check mail to discover folders.</p>
                       )}
-                      {data.scans
-                        .filter((scan) => scan.account === connection.email)
-                        .map((scan) => (
-                          <p key={scan.mode} className="text-muted-foreground">
-                            {scan.mode === "history" ? "History" : "Latest"}: {scan.scanned}{" "}
-                            messages examined, {scan.matched} matches.{" "}
-                            {scan.complete
-                              ? "Window complete."
-                              : "More pages remain; continue the check."}
-                          </p>
-                        ))}
                     </details>
                   </div>
                 ))}
@@ -883,8 +873,8 @@ export function MailWorkspace({
                   )}
                 </div>
                 <p className="mt-6 text-xs leading-6 text-muted-foreground">
-                  Latest starts {formatDate(data.baselineAt)}. Permanently deleted mail and separate
-                  online archive mailboxes cannot be recovered here.
+                  Check mail reads from each account&apos;s last check to now. Permanently deleted
+                  mail and separate online archive mailboxes cannot be recovered here.
                 </p>
               </>
             )}
@@ -892,22 +882,26 @@ export function MailWorkspace({
           {detail === "message" && selected && (
             <div className="border-t border-border px-6 py-4 xl:px-8">
               <p className="m-0 text-xs text-muted-foreground">
-                {view === "latest"
-                  ? "Next step"
-                  : view === "history"
-                    ? "Already tracked"
-                    : "Excluded"}
+                {selected.attention === "open" ? "Needs attention" : "Handled"}
               </p>
-              <p className="mb-4 mt-1 text-sm font-medium">{selected.action}</p>
+              <p className="mb-4 mt-1 text-sm font-medium">
+                {selected.attention === "open"
+                  ? "Just info clears it. Record outcomes on its application."
+                  : selected.outcome
+                    ? "Outcome recorded from this email."
+                    : selected.handledAt
+                      ? `Handled ${formatDate(selected.handledAt)}.`
+                      : "Already handled."}
+              </p>
               <div className="flex flex-wrap items-center gap-2">
-                {view === "latest" && (
+                {selected.attention === "open" && (
                   <Button
                     disabled={pending}
-                    onClick={reviewMessage}
+                    onClick={justInfo}
                     className="shadow-surface active:scale-[0.98] motion-reduce:transform-none"
                   >
                     <Check size={16} aria-hidden />
-                    Mark reviewed
+                    Just info
                   </Button>
                 )}
                 {canLink && (
@@ -920,18 +914,6 @@ export function MailWorkspace({
                     <Link2 size={15} aria-hidden />
                     Link to application
                   </Button>
-                )}
-                {view === "history" && !canLink && (
-                  <span className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <History size={14} aria-hidden />
-                    Kept out of future new results
-                  </span>
-                )}
-                {view === "excluded" && (
-                  <span className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <Archive size={14} aria-hidden />
-                    No application action created
-                  </span>
                 )}
               </div>
               {showLink && (
@@ -948,11 +930,7 @@ export function MailWorkspace({
                     >
                       <option value="">Choose application</option>
                       {applications
-                        .filter(
-                          (app) =>
-                            !selected.companyKeys.length ||
-                            selected.companyKeys.includes(app.company),
-                        )
+                        .filter((app) => !selected.company || app.company === selected.company.key)
                         .map((app) => (
                           <option key={app.id} value={app.id}>
                             {companies.find((row) => row.id === app.company)?.name} · {app.role}
@@ -960,7 +938,7 @@ export function MailWorkspace({
                         ))}
                     </select>
                   </label>
-                  <Button disabled={pending || !linkTarget} onClick={associateMessage}>
+                  <Button disabled={pending || !linkTarget} onClick={placeMessage}>
                     Link message
                   </Button>
                 </div>

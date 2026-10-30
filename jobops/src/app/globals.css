@@ -25,6 +25,31 @@
   --radius-md: 0.45rem;
   --radius-lg: 0.65rem;
   --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --color-tag-opportunity: var(--tag-opportunity);
+  --color-tag-opportunity-container: var(--tag-opportunity-container);
+  --color-tag-process: var(--tag-process);
+  --color-tag-process-container: var(--tag-process-container);
+  --color-tag-offer: var(--tag-offer);
+  --color-tag-offer-container: var(--tag-offer-container);
+  --color-tag-rejected: var(--tag-rejected);
+  --color-tag-rejected-container: var(--tag-rejected-container);
+  --color-tag-other: var(--tag-other);
+  --color-tag-other-container: var(--tag-other-container);
+}
+
+/* Mail tags: blue opportunity, yellow process, green offer, red rejection, grey other.
+   Each pair follows the active light or dark theme through the referenced tokens. */
+:root {
+  --tag-opportunity: var(--link);
+  --tag-opportunity-container: var(--primary-container);
+  --tag-process: var(--amber);
+  --tag-process-container: var(--amber-soft);
+  --tag-offer: var(--teal);
+  --tag-offer-container: var(--teal-soft);
+  --tag-rejected: var(--danger);
+  --tag-rejected-container: var(--danger-soft);
+  --tag-other: var(--muted-foreground);
+  --tag-other-container: var(--muted);
 }
 
 @layer base {
