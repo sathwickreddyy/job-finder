@@ -16,6 +16,7 @@ export type Handling = {
   reason: string;
 };
 
+const nothingToRecord = "Nothing to record from this email.";
 // Kind labels are one per classification, so the shared email shape needs no extra field.
 const classificationOf = new Map(
   Object.entries(kindLabel).map(([classification, label]) => [
@@ -52,6 +53,19 @@ export function suggestHandling(
     reason:
       outcome && allowed
         ? `Suggested for ${/^[aeiou]/.test(kind) ? "an" : "a"} ${kind} email.`
-        : "Nothing to record from this email.",
+        : nothingToRecord,
   };
+}
+
+/** The suggestion once a role is chosen, so the button and its reason always agree. */
+export function suggestionFor(
+  handling: Handling,
+  applicationId: string | null,
+): { suggested: OutcomeId | null; reason: string } {
+  const app = handling.applications.find((option) => option.id === applicationId);
+  const suggested =
+    handling.suggested !== "info" && app?.outcomes.includes(handling.suggested)
+      ? handling.suggested
+      : null;
+  return { suggested, reason: suggested ? handling.reason : nothingToRecord };
 }

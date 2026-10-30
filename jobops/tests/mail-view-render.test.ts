@@ -32,6 +32,7 @@ const data = (patch: Partial<MailViewData> = {}): MailViewData => ({
     ],
     home: { open: 0, total: 0, matches: null },
   },
+  pinned: false,
   pane: { kind: "empty" },
   placeOptions: { companies: [], applications: [] },
   inboxes: {
@@ -79,5 +80,23 @@ describe("MailView", () => {
     expect(render(data({ notice: "Gmail could not be verified." }))).toContain(
       "Gmail could not be verified.",
     );
+  });
+
+  it("keeps the rail on a phone when the URL named no company", () => {
+    const html = render(data({ query: { ...data().query, company: "lumen" }, pinned: false }));
+    expect(html).toMatch(/<div class="min-w-0"><nav aria-label="Companies"/);
+    const pinned = render(data({ query: { ...data().query, company: "lumen" }, pinned: true }));
+    expect(pinned).toMatch(/<div class="min-w-0 hidden md:block"><nav aria-label="Companies"/);
+  });
+
+  it("counts open mail in Needs a home", () => {
+    const html = render(data({ index: { rows: [], home: { open: 1, total: 5, matches: null } } }));
+    expect(html).toContain("1 email to place");
+    expect(html).not.toContain("5 emails to place");
+    const handled = render(
+      data({ index: { rows: [], home: { open: 0, total: 3, matches: null } } }),
+    );
+    expect(handled).toContain("Nothing to place");
+    expect(handled).toContain("3 handled");
   });
 });

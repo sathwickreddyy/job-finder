@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { RecordState } from "@/features/applications/phase";
 import type { MailItem } from "@/features/mail/mail-item";
-import { suggestHandling } from "@/features/timeline/suggest";
+import { suggestHandling, suggestionFor } from "@/features/timeline/suggest";
 
 const item = (patch: Partial<MailItem> = {}): MailItem => ({
   id: "mail-1",
@@ -79,6 +79,25 @@ describe("suggestHandling", () => {
       applications: [],
       chosen: null,
       suggested: "info",
+      reason: "Nothing to record from this email.",
+    });
+  });
+
+  it("matches the suggestion and its reason to the chosen role", () => {
+    const booked = {
+      rounds: [{ kind: "DSA" as const, outcome: "SCHEDULED" as const, scheduledAt: null }],
+    };
+    const handling = suggestHandling(item(), [
+      role("a"),
+      role("b", { status: "TECHNICAL_INTERVIEW", ...booked }),
+    ]);
+    expect(handling.chosen).toBeNull();
+    expect(suggestionFor(handling, "a")).toEqual({
+      suggested: "scheduled",
+      reason: "Suggested for an interview email.",
+    });
+    expect(suggestionFor(handling, "b")).toEqual({
+      suggested: null,
       reason: "Nothing to record from this email.",
     });
   });

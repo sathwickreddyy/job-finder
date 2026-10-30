@@ -83,6 +83,10 @@ test("asks which role with two open applications", async ({ page }) => {
   const which = page.getByRole("radiogroup", { name: "Which role?" });
   await expect(page.getByRole("button", { name: "Record heard back" })).toHaveCount(0);
   await which.getByRole("radio", { name: "Platform Engineer" }).click();
+  await expect(which.getByRole("radio", { name: "Platform Engineer" })).toHaveAttribute(
+    "aria-checked",
+    "true",
+  );
   await expect(page.getByRole("button", { name: "Record heard back" })).toBeVisible();
   await page.getByRole("button", { name: "Something else" }).click();
   await page.getByRole("button", { name: "Sent a follow-up", exact: true }).click();
@@ -286,4 +290,46 @@ test("captures Mail and the company page", async ({ page }) => {
         });
       }
     }
+});
+
+test("long role names keep the phone layout", async ({ page }) => {
+  const company = unique("Long Roles Co");
+  const title =
+    "Senior Software Development Engineer, Distributed Payments Infrastructure Platform";
+  await seedRecord({ company, source: "DIRECT", sentDaysAgo: 2, title: `${title} A` });
+  await seedRecord({ company, source: "DIRECT", sentDaysAgo: 2, title: `${title} B` });
+  await seedMail({
+    subject: unique("Update"),
+    classification: "FOLLOW_UP",
+    companyKey: keyOf(company),
+  });
+  await page.setViewportSize({ width: 375, height: 812 });
+  await openCompany(page, company);
+  await expect(page.getByRole("radiogroup", { name: "Which role?" })).toBeVisible();
+  expect(await fitsWidth(page)).toBe(true);
+});
+
+test("landing on Mail names the shown company on a wide screen only", async ({ page }) => {
+  await companyWithMail("INTERVIEW");
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto("/mail");
+  await expect(page).toHaveURL(/\/mail\?company=/);
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto("/mail");
+  await expect(rail(page)).toBeVisible();
+  await page.waitForLoadState("networkidle");
+  await expect(page).toHaveURL(/\/mail$/);
+});
+
+test("company page facts sit in two columns on a phone", async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto("/companies/atlassian");
+  const aside = page.getByRole("complementary", { name: "Company facts" });
+  const pay = await aside.getByRole("heading", { name: "Pay", exact: true }).boundingBox();
+  const loop = await aside
+    .getByRole("heading", { name: "Interview loop", exact: true })
+    .boundingBox();
+  expect(Math.abs(pay!.y - loop!.y)).toBeLessThan(4);
+  expect(loop!.x).toBeGreaterThan(pay!.x);
+  expect(await fitsWidth(page)).toBe(true);
 });

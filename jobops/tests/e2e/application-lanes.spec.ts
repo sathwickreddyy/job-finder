@@ -129,7 +129,7 @@ test("old and stale links still land somewhere useful, and phones scroll the cha
   await page.goto("/applications?open=not-a-uuid&mail=x");
   await expect(lane(page, company)).toBeVisible();
   await page.goto("/applications?tab=emails");
-  await expect(page).toHaveURL(/\/mail$/);
+  await expect(page).toHaveURL(/\/mail(\?company=[^&]+)?$/);
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/applications");
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);

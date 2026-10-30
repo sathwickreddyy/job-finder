@@ -606,9 +606,10 @@ export function TimelineAside({
   return (
     <aside
       aria-label="Company facts"
-      className="grid min-w-0 gap-6 self-start sm:grid-cols-2 lg:sticky lg:top-6 lg:grid-cols-1 [&>*]:min-w-0"
+      className="grid min-w-0 grid-cols-2 gap-x-4 gap-y-6 self-start lg:sticky lg:top-6 lg:grid-cols-1 [&>*]:min-w-0"
     >
-      <div id="applications" className="space-y-2">
+      {/* On a phone: roles across the top, pay and the loop side by side, then the resume. */}
+      <div id="applications" className="col-span-2 space-y-2 lg:col-span-1">
         <h2 className={asideHeading}>Your roles</h2>
         <ul className="m-0 list-none space-y-3 p-0">
           {activity.records.map((row) => (
@@ -696,7 +697,7 @@ export function TimelineAside({
           Interview loop
         </Link>
       </div>
-      <div id="resumes" className="space-y-4 sm:col-span-2 lg:col-span-1">
+      <div id="resumes" className="col-span-2 space-y-4 lg:col-span-1">
         <h2 className={asideHeading}>Resume</h2>
         {ordered.map((row) => (
           <CompanyResumeReference key={row} company={company} city={row} data={data} />

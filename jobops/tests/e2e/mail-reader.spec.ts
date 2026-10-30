@@ -19,7 +19,8 @@ for (const path of [
 ]) {
   test(`${path} opens Mail and drops legacy filters`, async ({ page }) => {
     await page.goto(path);
-    await expect(page).toHaveURL(/\/mail(\?status=REVIEWED)?$/);
+    // A wide screen may name the company Mail opens on.
+    await expect(page).toHaveURL(/\/mail(\?(status=REVIEWED|company=[^&]+))?$/);
     await expect(page.getByRole("link", { name: "Emails", exact: true })).toHaveAttribute(
       "aria-current",
       "page",

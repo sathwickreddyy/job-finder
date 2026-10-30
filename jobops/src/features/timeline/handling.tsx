@@ -22,7 +22,7 @@ import {
 import type { ActionState } from "@/lib/actions";
 import { roundKinds } from "@/lib/round-kinds";
 import { cn } from "@/lib/utils";
-import type { Handling } from "./suggest";
+import { suggestionFor, type Handling } from "./suggest";
 
 export type PlaceOptions = {
   companies: { key: string; name: string }[];
@@ -30,7 +30,7 @@ export type PlaceOptions = {
 };
 
 const chip =
-  "pressable inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-sm font-medium";
+  "pressable inline-flex h-9 max-w-full items-center gap-1.5 truncate rounded-full px-3.5 text-sm font-medium";
 const plainChip = "border border-border text-foreground hover:bg-muted";
 const quiet =
   "pressable inline-flex h-11 items-center gap-1 rounded-full px-4 text-sm font-medium hover:bg-muted";
@@ -184,12 +184,10 @@ export function HandlingBar({
   const [more, setMore] = useState(false);
   const [form, setForm] = useState<OutcomeId | null>(null);
   const app = handling.applications.find((option) => option.id === chosen);
-  const suggested =
-    handling.suggested !== "info" && app?.outcomes.includes(handling.suggested)
-      ? handling.suggested
-      : null;
+  const { suggested, reason } = suggestionFor(handling, chosen);
   const others = (app?.outcomes ?? []).filter((id) => id !== suggested);
-  const asking = !app && handling.applications.length > 1;
+  // The choice stays in view once made, so a misclick is visible before anything is recorded.
+  const asking = handling.chosen === null && handling.applications.length > 1;
   const outcomeButton = (id: OutcomeId, className: string, children: ReactNode) =>
     outcomeMeta[id].needs ? (
       <button
@@ -222,9 +220,14 @@ export function HandlingBar({
                   role="radio"
                   aria-checked={chosen === option.id}
                   onClick={() => setChosen(option.id)}
-                  className={cn(chip, plainChip)}
+                  className={cn(
+                    chip,
+                    chosen === option.id
+                      ? "bg-selected text-selected-foreground ring-1 ring-primary/35"
+                      : plainChip,
+                  )}
                 >
-                  {option.role}
+                  <span className="truncate">{option.role}</span>
                 </button>
               ))}
             </div>
@@ -277,7 +280,7 @@ export function HandlingBar({
           )}
         </div>
         <p className="m-0 mt-2 text-xs text-muted-foreground">
-          {asking ? "Choose the role this email is about." : handling.reason}
+          {asking && !app ? "Choose the role this email is about." : reason}
         </p>
         {more && (
           <div className="reveal mt-3 flex flex-wrap gap-2">

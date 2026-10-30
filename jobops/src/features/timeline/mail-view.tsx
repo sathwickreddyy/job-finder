@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, ChevronRight, Inbox, Search, SlidersHorizontal } from "lucide-react";
@@ -116,7 +116,10 @@ function Rail({ data, selected }: { data: MailViewData; selected: string | null 
     group,
     rows: index.rows.filter((row) => row.group === group),
   }));
-  const homeCount = filtered ? (index.home.matches ?? 0) : index.home.total;
+  // Needs a home counts open mail; it stays listed while it holds any mail at all.
+  const homeCount = filtered ? (index.home.matches ?? 0) : index.home.open;
+  const homeShown = filtered ? homeCount > 0 : index.home.total > 0;
+  const handled = index.home.total - index.home.open;
   return (
     <nav
       aria-label="Companies"
@@ -187,7 +190,7 @@ function Rail({ data, selected }: { data: MailViewData; selected: string | null 
           </Group>
         ) : null,
       )}
-      {homeCount > 0 && (
+      {homeShown && (
         <Group
           label={groupLabel.home}
           count={homeCount}
@@ -199,14 +202,15 @@ function Rail({ data, selected }: { data: MailViewData; selected: string | null 
             aria-current={query.home ? "page" : undefined}
             className={rowShell(query.home)}
           >
-            <span className="flex items-center gap-2">
-              <span className={cn("truncate", index.home.open ? "font-semibold" : "font-medium")}>
-                {homeCount} {homeCount === 1 ? "email" : "emails"} to place
-              </span>
-              <NewBadge count={filtered ? 0 : index.home.open} />
+            <span className={cn("block truncate", homeCount ? "font-semibold" : "font-medium")}>
+              {filtered
+                ? matchText(homeCount)
+                : homeCount
+                  ? `${homeCount} ${homeCount === 1 ? "email" : "emails"} to place`
+                  : "Nothing to place"}
             </span>
             <span className="block truncate text-sm text-muted-foreground">
-              {filtered ? matchText(homeCount) : "Mail that matched no company"}
+              {!filtered && handled ? `${handled} handled` : "Mail that matched no company"}
             </span>
           </Link>
         </Group>
@@ -396,7 +400,14 @@ function Pane({ data }: { data: MailViewData }) {
  * page until a company (or Needs a home) is chosen in the URL.
  */
 export function MailView({ data }: { data: MailViewData }) {
-  const chosen = Boolean(data.query.company || data.query.home);
+  const chosen = data.pinned;
+  useEffect(() => {
+    if (data.pinned || data.pane.kind === "empty") return;
+    // On a wide screen the default company is on show. Naming it in the URL keeps it there
+    // after handling its last open email moves it out of Needs you.
+    if (!window.matchMedia("(min-width: 768px)").matches) return;
+    window.history.replaceState(window.history.state, "", mailHref(data.query));
+  }, [data]);
   const selected = data.pane.kind === "company" ? data.pane.company.key : null;
   return (
     <div className="space-y-4">
