@@ -121,3 +121,5 @@ export default async function Applications({
     </div>
   );
 }
+
+export const metadata = { title: "Applications" };

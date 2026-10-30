@@ -121,6 +121,12 @@ export function DetailHeader({ company, summary }: Pick<DetailProps, "company" |
           >
             Company mail
           </Link>
+          <Link
+            href={`/mail/search?company=${encodeURIComponent(company.name.trim().toLocaleLowerCase().replace(/\s+/g, " "))}`}
+            className="flex min-h-10 items-center rounded-full border border-input px-5 text-sm font-medium hover:bg-muted hover:no-underline"
+          >
+            Search company inboxes
+          </Link>
         </div>
       </div>
       {company.focus && <p className="max-w-3xl text-sm text-muted-foreground">{company.focus}</p>}

@@ -396,3 +396,5 @@ async function Assessments({
     </DetailSection>
   );
 }
+
+export const metadata = { title: "Resumes" };

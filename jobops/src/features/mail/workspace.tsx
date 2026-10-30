@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowLeft,
@@ -303,14 +304,21 @@ export function MailWorkspace({
   }
   return (
     <div className="space-y-4">
-      <header className="flex items-center justify-between gap-4 px-1">
+      <header className="flex flex-wrap items-center justify-between gap-4 px-1">
         <div className="flex items-center gap-3">
           <h1 className="m-0 text-2xl font-semibold tracking-tight">Mail</h1>
           <span className="hidden border-l border-border pl-3 text-xs text-muted-foreground sm:inline">
             Your hiring conversations
           </span>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex flex-wrap items-center gap-4">
+          <Button asChild>
+            <Link href={`/mail/search?${new URLSearchParams({
+              ...(initial.company ? { company: initial.company } : {}),
+              ...(initial.application ? { application: initial.application } : {}),
+              ...(initial.account ? { account: initial.account } : {}),
+            })}`}><Search size={16} aria-hidden />Search inboxes</Link>
+          </Button>
           <button
             onClick={() => openDetail("folders")}
             className="text-xs text-link"
@@ -318,6 +326,8 @@ export function MailWorkspace({
             Accounts
           </button>
           <Button
+            variant="outline"
+            title="Uses saved company rules and the monitoring window. Use Search inboxes to choose an explicit duration and pattern."
             disabled={pending || !data.connections.length}
             onClick={() => runCheck("latest")}
           >
@@ -331,8 +341,8 @@ export function MailWorkspace({
               : data.scans.some(
                     (scan) => scan.mode === "latest" && !scan.complete,
                   )
-                ? "Continue check"
-                : "Check mail"}
+                ? "Continue tracked check"
+                : "Update tracked mail"}
           </Button>
         </div>
       </header>
@@ -1062,7 +1072,7 @@ export function MailWorkspace({
                         (item) => item.account === connection.email,
                       )?.checkedAt && (
                         <p className="text-muted-foreground">
-                          Run Check mail to discover folders.
+                          Run Update tracked mail to discover folders.
                         </p>
                       )}
                       {data.scans

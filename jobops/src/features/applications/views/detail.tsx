@@ -95,9 +95,12 @@ export function ApplicationDetail({
   ];
   return (
     <div className="space-y-6">
-      <div className="flex justify-end">
+      <div className="flex flex-wrap justify-end gap-4">
         <Link className="text-sm text-link" href={`/mail?application=${record.id}`}>
           Application mail
+        </Link>
+        <Link className="text-sm text-link" href={`/mail/search?application=${record.id}`}>
+          Search inboxes for this company
         </Link>
       </div>
       {notice && (

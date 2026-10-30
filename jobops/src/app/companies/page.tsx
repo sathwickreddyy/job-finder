@@ -171,3 +171,5 @@ export default async function CompaniesPage({
     </div>
   );
 }
+
+export const metadata = { title: "Companies" };
