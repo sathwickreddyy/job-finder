@@ -380,6 +380,18 @@ it("uses linked real inbound mail but ignores automatic acknowledgements", () =>
   });
 });
 
+it("counts linked mail as a reply only once it is handled", () => {
+  const app = { source: "COLD_EMAIL", status: "APPLIED" as const, appliedAt: NOW };
+  const placed = { classification: "FOLLOW_UP", receivedAt: NOW, attentionState: "OPEN" };
+  const waiting = recordStateFrom({ ...app, linkedMail: [placed] }, [], []);
+  expect(waiting.replied).toBe(false);
+  expect(availableOutcomes(waiting)).toContain("replied");
+  expect(
+    recordStateFrom({ ...app, linkedMail: [{ ...placed, attentionState: "DONE" }] }, [], [])
+      .replied,
+  ).toBe(true);
+});
+
 it("restarts outreach awaiting reply after a follow-up later than inbound evidence", () => {
   const earlier = new Date(NOW.getTime() - 86400000);
   const app = {

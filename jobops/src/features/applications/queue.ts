@@ -3,7 +3,9 @@ import type { RoundKind } from "@/lib/round-kinds";
 import { addDays, formatDayTime, istDayStart, istDaysBetween } from "./dates";
 import {
   inboundEvents,
+  isLinkedReply,
   isOutreach,
+  type LinkedMailEvidence,
   methodLabel,
   phaseOf,
   recordStateFrom,
@@ -34,7 +36,7 @@ export type QueueRecord = {
   nextActionNote: string;
   rounds: QueueRound[];
   events: { eventType: string; occurredAt: Date }[];
-  linkedMail: { classification: string; receivedAt: Date }[];
+  linkedMail: LinkedMailEvidence[];
 };
 export type QueueLink = { label: string; href: string };
 export type QueueMail = {
@@ -83,9 +85,7 @@ export function silenceClock(record: QueueRecord, now: Date) {
     ...record.events
       .filter((event) => inboundEvents.has(event.eventType))
       .map((event) => event.occurredAt),
-    ...record.linkedMail
-      .filter((mail) => mail.classification !== "APPLICATION_ACKNOWLEDGEMENT")
-      .map((mail) => mail.receivedAt),
+    ...record.linkedMail.filter(isLinkedReply).map((mail) => mail.receivedAt),
   ]);
   const outreach = isOutreach(record.source);
   if (outreach && inbound && (!nudge || inbound >= nudge)) return null;

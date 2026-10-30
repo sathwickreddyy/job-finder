@@ -44,7 +44,11 @@ async function recordEvidence(tx: Tx, id: string) {
     .from(applicationEvents)
     .where(eq(applicationEvents.applicationId, id));
   const linkedMail = await tx
-    .select({ classification: mailMessages.classification, receivedAt: mailMessages.receivedAt })
+    .select({
+      classification: mailMessages.classification,
+      receivedAt: mailMessages.receivedAt,
+      attentionState: mailMessages.attentionState,
+    })
     .from(mailMessages)
     .where(eq(mailMessages.linkedApplicationId, id));
   return { events, linkedMail };

@@ -19,7 +19,13 @@ import type { QueueRecord } from "./queue";
 
 type EventRow = typeof applicationEvents.$inferSelect;
 type RoundRow = typeof applicationRounds.$inferSelect;
-type LinkedMail = { id: string; subject: string; classification: string; receivedAt: Date };
+type LinkedMail = {
+  id: string;
+  subject: string;
+  classification: string;
+  receivedAt: Date;
+  attentionState: string;
+};
 
 export type ApplicationRecord = Omit<QueueRecord, "events" | "rounds" | "linkedMail"> & {
   events: EventRow[];
@@ -85,6 +91,7 @@ export async function readApplications() {
         subject: mailMessages.subject,
         classification: mailMessages.classification,
         receivedAt: mailMessages.receivedAt,
+        attentionState: mailMessages.attentionState,
       })
       .from(mailMessages)
       .where(isNotNull(mailMessages.linkedApplicationId)),
@@ -113,11 +120,12 @@ export async function readApplications() {
     const ownRounds = rounds.filter((round) => round.applicationId === app.id);
     const linkedMail = mail
       .filter((message) => message.applicationId === app.id)
-      .map(({ id, subject, classification, receivedAt }) => ({
+      .map(({ id, subject, classification, receivedAt, attentionState }) => ({
         id,
         subject,
         classification,
         receivedAt,
+        attentionState,
       }));
     const state = recordStateFrom(
       { ...app, linkedMail, events: own },

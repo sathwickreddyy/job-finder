@@ -22,6 +22,7 @@ function chart() {
         subject: "We got it",
         classification: "APPLICATION_ACKNOWLEDGEMENT",
         receivedAt: at("2026-09-20T12:05:00"),
+        attentionState: "DONE",
       },
     ],
   });

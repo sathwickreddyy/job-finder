@@ -20,6 +20,15 @@ export const methodLabel: Record<string, string> = {
   LINKEDIN_MESSAGE: "LinkedIn message",
 };
 
+export type LinkedMailEvidence = {
+  classification: string;
+  receivedAt: Date;
+  attentionState?: string;
+};
+/** Linked mail is a reply once handled; mail only placed at a record still needs attention. */
+export const isLinkedReply = (mail: LinkedMailEvidence) =>
+  mail.classification !== "APPLICATION_ACKNOWLEDGEMENT" && mail.attentionState !== "OPEN";
+
 /** Events that mean the other side responded. Automatic acknowledgements do not count. */
 export const inboundEvents = new Set([
   "REPLY_RECEIVED",
@@ -51,7 +60,7 @@ export function recordStateFrom(
     source: string;
     status: Stage;
     appliedAt: Date | null;
-    linkedMail?: { classification: string; receivedAt: Date }[];
+    linkedMail?: LinkedMailEvidence[];
     events?: { eventType: string; occurredAt: Date }[];
   },
   rounds: RecordState["rounds"],
@@ -68,9 +77,7 @@ export function recordStateFrom(
     "OFFER",
   ].includes(app.status);
   const types = new Set([...eventTypes, ...(app.events ?? []).map((event) => event.eventType)]);
-  const linkedInbound = (app.linkedMail ?? []).filter(
-    (mail) => mail.classification !== "APPLICATION_ACKNOWLEDGEMENT",
-  );
+  const linkedInbound = (app.linkedMail ?? []).filter(isLinkedReply);
   const hasResponse =
     [...types].some((type) => inboundEvents.has(type)) || linkedInbound.length > 0 || advanced;
   const latestAt = (dates: Date[]) =>

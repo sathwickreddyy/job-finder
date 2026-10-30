@@ -232,12 +232,14 @@ describe("lane dots", () => {
           subject: "HackerRank invite",
           classification: "ASSESSMENT",
           receivedAt: at("2026-09-26T09:59:00"),
+          attentionState: "DONE",
         },
         {
           id: ackId,
           subject: "We received it",
           classification: "APPLICATION_ACKNOWLEDGEMENT",
           receivedAt: at("2026-09-24T09:05:00"),
+          attentionState: "DONE",
         },
       ],
       rounds: [

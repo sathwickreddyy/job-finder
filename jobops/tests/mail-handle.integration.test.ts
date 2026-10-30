@@ -18,13 +18,21 @@ import { assertE2eDatabase, dbTests } from "./helpers/e2e-db";
 
 const prefix = `mail-handle-${randomUUID()}`;
 const account = `${prefix}@fixture.invalid`;
-const names = { single: `Single ${prefix}`, double: `Double ${prefix}` };
-const keys = { single: names.single.toLowerCase(), double: names.double.toLowerCase() };
-const apps: Record<string, string[]> = { single: [], double: [] };
+const names = {
+  single: `Single ${prefix}`,
+  double: `Double ${prefix}`,
+  outreach: `Outreach ${prefix}`,
+};
+const keys = {
+  single: names.single.toLowerCase(),
+  double: names.double.toLowerCase(),
+  outreach: names.outreach.toLowerCase(),
+};
+const apps: Record<string, string[]> = { single: [], double: [], outreach: [] };
 const ids = { jobs: [] as string[], companies: [] as string[] };
 let counter = 0;
 
-async function company(kind: "single" | "double", count: number) {
+async function company(kind: keyof typeof names, count: number, source = "MANUAL") {
   const [row] = await db
     .insert(companyRecords)
     .values({ slug: `${prefix}-${kind}`, name: names[kind] })
@@ -45,7 +53,12 @@ async function company(kind: "single" | "double", count: number) {
     ids.jobs.push(job.id);
     const [app] = await db
       .insert(applications)
-      .values({ jobId: job.id, status: "APPLIED", appliedAt: new Date("2026-10-20T05:00:00Z") })
+      .values({
+        jobId: job.id,
+        source,
+        status: "APPLIED",
+        appliedAt: new Date("2026-10-20T05:00:00Z"),
+      })
       .returning();
     apps[kind].push(app.id);
   }
@@ -90,6 +103,7 @@ describe.skipIf(!dbTests)("handling mail", () => {
     await assertE2eDatabase();
     await company("single", 1);
     await company("double", 2);
+    await company("outreach", 1, "COLD_EMAIL");
   });
   afterAll(async () => {
     await assertE2eDatabase();
@@ -215,6 +229,17 @@ describe.skipIf(!dbTests)("handling mail", () => {
       await db.transaction((tx) => unlinkMailFromRecord(tx, row.id, apps.single[0], new Date())),
     ).toBe(true);
     expect((await message(row.id)).linkedApplicationId).toBeNull();
+  });
+
+  it("records the reply from an email placed at sent outreach", async () => {
+    const row = await email({ companyKey: null, classification: "FOLLOW_UP" });
+    await updateMail(row.id, { application: apps.outreach[0] });
+    expect(await handleMail(row.id, { outcome: "replied" })).toMatchObject({
+      attention: "handled",
+      outcome: "replied",
+      application: { id: apps.outreach[0] },
+    });
+    expect(await outcomeEvents(row.id)).toHaveLength(1);
   });
 
   it("lane dismissal and API just info write the same flag", async () => {

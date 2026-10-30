@@ -26,6 +26,7 @@ export async function isPlannedRecord(tx: Tx, previous: typeof applications.$inf
     .select({
       classification: mailMessages.classification,
       receivedAt: mailMessages.receivedAt,
+      attentionState: mailMessages.attentionState,
     })
     .from(mailMessages)
     .where(eq(mailMessages.linkedApplicationId, previous.id));
