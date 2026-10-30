@@ -1,6 +1,6 @@
 # Shared mail foundation and agent record APIs — design
 
-Status: design approved section by section on 2026-10-30; awaiting written-spec review.
+Status: approved 2026-10-30; implemented on branch `shared-mail-foundation` (plan `jobops/docs/superpowers/plans/2026-10-30-shared-mail-foundation.md`). Attention is stored as `OPEN`/`DONE` and serialized as `open`/`handled`.
 Piece 1 of 4 in the connected workspace redesign. Supersedes the history-recovery, Latest/History/Excluded and provider-search parts of `2026-10-30-company-mail-workspace-design.md`.
 
 ## Why
