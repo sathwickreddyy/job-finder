@@ -35,7 +35,7 @@ export default async function MailMessagePage({ params }: { params: Promise<{ id
   )?.details.suggestedApplicationId;
   const suggested = applicationOptions.find((option) => option.id === suggestedId);
   const bucket = bucketOf({ ...message, recordId: suggested?.id ?? null });
-  const open = mailIsOpen(message, events);
+  const open = mailIsOpen(message);
   const linkedId =
     message.linkedApplicationId ??
     events.find((event) => event.linkedApplicationId)?.linkedApplicationId;

@@ -19,7 +19,6 @@ vi.mock("@/features/applications/outcome-service", () => ({
 vi.mock("@/features/mail/handling-service", () => ({
   linkMailToRecord: mocks.linkMailToRecord,
   dismissMessages: mocks.dismissMessages,
-  restoreDismissal: vi.fn(),
   unlinkMailFromRecord: vi.fn(),
 }));
 

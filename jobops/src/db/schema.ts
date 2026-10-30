@@ -224,6 +224,8 @@ export const jobs = pgTable(
     salaryMax: real("salary_max"),
     currency: text("currency"),
     postedAt: date("posted_at"),
+    postedAtKind: text("posted_at_kind"),
+    postedAtSourceUrl: text("posted_at_source_url"),
     firstSeenAt: date("first_seen_at").notNull().defaultNow(),
     lastSeenAt: date("last_seen_at").notNull().defaultNow(),
     status: jobStatusEnum("status").notNull().default("NEW"),
@@ -244,6 +246,10 @@ export const jobs = pgTable(
     check(
       "jobs_salary_range",
       sql`(${t.salaryMin} IS NULL OR ${t.salaryMin} >= 0) AND (${t.salaryMax} IS NULL OR ${t.salaryMax} >= 0) AND (${t.salaryMin} IS NULL OR ${t.salaryMax} IS NULL OR ${t.salaryMin} <= ${t.salaryMax})`,
+    ),
+    check(
+      "jobs_posted_at_kind_check",
+      sql`${t.postedAtKind} IS NULL OR ${t.postedAtKind} IN ('ORIGINAL','LATEST_PUBLICATION')`,
     ),
   ],
 );
@@ -540,11 +546,15 @@ export const mailMessages = pgTable(
     }),
     processedAt: date("processed_at"),
     attentionState: text("attention_state").notNull().default("OPEN"),
+    companyKey: text("company_key"),
+    folders: strings("folders"),
     createdAt: createdAt(),
   },
   (t) => [
     uniqueIndex("mail_messages_external_idx").on(t.provider, t.externalId),
     index("mail_messages_received_idx").on(t.receivedAt),
+    index("mail_messages_attention_idx").on(t.attentionState, t.receivedAt),
+    index("mail_messages_company_idx").on(t.companyKey),
   ],
 );
 
@@ -728,7 +738,7 @@ export const mailConnections = pgTable(
   ],
 );
 
-/** Account-scoped ledger survives rescans and keeps ignored mail out of Latest. */
+/** Account-scoped identity ledger: seen mail is never re-imported, excluded mail is never shown. */
 export const mailTracking = pgTable(
   "mail_tracking",
   {
@@ -746,7 +756,7 @@ export const mailTracking = pgTable(
     folders: strings("folders"),
     companyKeys: strings("company_keys"),
     applicationIds: strings("application_ids"),
-    disposition: text("disposition").notNull().default("history"),
+    disposition: text("disposition").notNull().default("kept"),
     reason: text("reason").notNull().default(""),
     evidence: strings("evidence"),
     createdAt: createdAt(),
@@ -758,26 +768,9 @@ export const mailTracking = pgTable(
     index("mail_tracking_received_idx").on(t.receivedAt),
     check(
       "mail_tracking_disposition_check",
-      sql`${t.disposition} IN ('latest','history','excluded')`,
+      sql`${t.disposition} IN ('kept','excluded')`,
     ),
   ],
-);
-
-/** A message can match one company and be excluded for another without losing either decision. */
-export const companyMailMatches = pgTable(
-  "company_mail_matches",
-  {
-    id: id(),
-    companyKey: text("company_key").notNull(),
-    trackingId: uuid("tracking_id").notNull().references(() => mailTracking.id, { onDelete: "cascade" }),
-    ruleRevision: text("rule_revision").notNull(),
-    kept: boolean("kept").notNull(),
-    reason: text("reason").notNull(),
-    evidence: strings("evidence"),
-    createdAt: createdAt(),
-    updatedAt: updatedAt(),
-  },
-  (t) => [uniqueIndex("company_mail_match_identity_idx").on(t.companyKey, t.trackingId)],
 );
 
 // New task workflow reuses missions; credentials and human decisions have separate trust boundaries.

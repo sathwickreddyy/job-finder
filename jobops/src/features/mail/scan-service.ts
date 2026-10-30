@@ -73,21 +73,6 @@ export async function scanContext(scope: ScanScope) {
   };
 }
 
-export function retainDisposition(
-  previous: { disposition: string; companyKeys: string[] } | undefined,
-  next: ReturnType<typeof matchMail>,
-) {
-  if (!previous) return next.disposition;
-  if (next.disposition === "excluded") return "excluded";
-  if (
-    previous.disposition === "latest" &&
-    (previous.companyKeys.some((key) => next.companyKeys.includes(key)) ||
-      (!previous.companyKeys.length && !next.companyKeys.length))
-  )
-    return "latest";
-  return "history";
-}
-
 export async function scanConnection(
   connection: MailConnection,
   mode: "latest" | "history",
@@ -237,9 +222,11 @@ export async function scanConnection(
               (scope.company && !decision.companyKeys.includes(scope.company)) ||
               (scope.application && !decision.applicationIds.includes(scope.application));
             if (outside) continue;
-            let disposition = retainDisposition(previous, decision);
+            // A seen identity keeps its disposition and is never re-imported or reopened.
+            const disposition =
+              previous?.disposition ?? (decision.disposition === "excluded" ? "excluded" : "kept");
             let messageId = previous?.messageId ?? null;
-            if (disposition !== "excluded" && !messageId) {
+            if (!previous && disposition === "kept") {
               const externalId = `${current.email}:${raw.externalId}`;
               await importMailRecords(
                 mailImportSchema.parse([{ ...raw, externalId }]),
@@ -256,19 +243,23 @@ export async function scanConnection(
                     eq(mailMessages.externalId, externalId),
                   ),
                 );
-              messageId = message.id;
               const contactReply =
                 decision.evidence.includes("Reply from a person you contacted") &&
                 classifyMail(raw).type === "UNKNOWN";
-              if (contactReply)
-                await tx
-                  .update(mailMessages)
-                  .set({ classification: "FOLLOW_UP" })
-                  .where(eq(mailMessages.id, messageId));
+              await tx
+                .update(mailMessages)
+                .set({
+                  folders: raw.folders,
+                  ...(decision.companyKeys.length === 1
+                    ? { companyKey: decision.companyKeys[0] }
+                    : {}),
+                  ...(contactReply ? { classification: "FOLLOW_UP" as const } : {}),
+                })
+                .where(eq(mailMessages.id, message.id));
               const events = await tx
                 .select()
                 .from(mailEvents)
-                .where(eq(mailEvents.mailMessageId, messageId));
+                .where(eq(mailEvents.mailMessageId, message.id));
               for (const event of events) {
                 const details = { ...event.details };
                 delete details.suggestedApplicationId;
@@ -286,18 +277,12 @@ export async function scanConnection(
                   })
                   .where(eq(mailEvents.id, event.id));
               }
-            }
-            if (messageId) {
-              const [message] = await tx
-                .select({
-                  state: mailMessages.attentionState,
-                  linked: mailMessages.linkedApplicationId,
-                })
-                .from(mailMessages)
+              messageId = message.id;
+            } else if (messageId && disposition === "kept")
+              await tx
+                .update(mailMessages)
+                .set({ folders: raw.folders })
                 .where(eq(mailMessages.id, messageId));
-              if (message.state === "DONE" || message.linked)
-                disposition = disposition === "excluded" ? "excluded" : "history";
-            }
             const values = {
               provider: current.provider,
               accountEmail: current.email,
@@ -340,8 +325,7 @@ export async function scanConnection(
               else prior.push(saved);
             }
             if (!previous && saved) {
-              if (disposition === "latest") delta.arrived++;
-              else if (disposition === "history") delta.historical++;
+              if (disposition === "kept") delta.arrived++;
               else delta.excluded++;
             }
           }

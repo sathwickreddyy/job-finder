@@ -8,110 +8,14 @@ import {
   settings,
 } from "@/db/schema";
 import { providers } from "@/services/mail/providers";
-import { loadMailContext, type MailContext } from "./context";
-import { matchMail } from "./matching";
-import {
-  coverageKey,
-  scanKey,
-  retainDisposition,
-  type ScanProgress,
-} from "./scan-service";
+import { loadMailContext } from "./context";
+import { coverageKey, scanKey, type ScanProgress } from "./scan-service";
 import { mailAttention, mailDateGroup } from "./attention";
 import type {
   MailWorkspaceData,
   WorkspaceQuery,
   MailRow,
 } from "./workspace-data";
-
-/** Rules may reclassify history, but can never make a previously seen message new. */
-export async function reconcileLegacyMail(context: MailContext) {
-  const policyKey = "mailPolicy:2026-10-30.4";
-  const [policy] = await db
-    .select()
-    .from(settings)
-    .where(eq(settings.key, policyKey));
-  // JSON imports and older links retain their exact message IDs. Imports are
-  // historical discoveries, never evidence of a newly arrived provider email.
-  const missing = await db
-    .select({ message: mailMessages })
-    .from(mailMessages)
-    .leftJoin(mailTracking, eq(mailTracking.messageId, mailMessages.id))
-    .where(sql`${mailTracking.id} IS NULL`);
-  for (const { message } of missing)
-    await db
-      .insert(mailTracking)
-      .values({
-        provider: message.provider,
-        accountEmail: message.accountEmail ?? "",
-        providerMessageId: `legacy:${message.externalId}`,
-        internetMessageId:
-          message.provider === "OUTLOOK" ? message.externalId : null,
-        messageId: message.id,
-        threadId: message.threadId,
-        sender: message.sender,
-        senderName: message.senderName,
-        subject: message.subject,
-        receivedAt: message.receivedAt,
-        disposition: "history",
-        folders: message.provider === "IMPORT" ? ["JSON import"] : [],
-        reason: "Imported before the mail workspace; kept as history",
-        createdAt: message.createdAt,
-      })
-      .onConflictDoNothing({
-        target: [
-          mailTracking.provider,
-          mailTracking.accountEmail,
-          mailTracking.providerMessageId,
-        ],
-      });
-  const rows = await db
-    .select({ tracking: mailTracking, message: mailMessages })
-    .from(mailTracking)
-    .innerJoin(mailMessages, eq(mailTracking.messageId, mailMessages.id))
-    .where(
-      policy
-        ? sql`${mailTracking.providerMessageId} LIKE 'legacy:%' AND ${mailTracking.reason} = 'Imported before the mail workspace; kept as history'`
-        : undefined,
-    );
-  for (const { tracking, message } of rows) {
-    const decision = matchMail(
-      {
-        ...message,
-        externalId: tracking.providerMessageId,
-        threadId: message.threadId ?? undefined,
-        folders: tracking.folders,
-        receivedAt: message.receivedAt.toISOString(),
-        bodyText: message.bodyText ?? "",
-      },
-      context,
-      { historical: true, seen: true },
-    );
-    const linked = context.applications.find(
-      (app) => app.id === message.linkedApplicationId,
-    );
-    await db
-      .update(mailTracking)
-      .set({
-        disposition: linked ? "history" : retainDisposition(tracking, decision),
-        companyKeys: linked ? [linked.company] : decision.companyKeys,
-        applicationIds: linked ? [linked.id] : decision.applicationIds,
-        evidence: decision.evidence,
-        reason: linked
-          ? "Previously linked to this application; preserved in history"
-          : decision.reason,
-        updatedAt: new Date(),
-      })
-      .where(eq(mailTracking.id, tracking.id));
-  }
-  if (!policy)
-    await db
-      .insert(settings)
-      .values({
-        key: policyKey,
-        value: { checkedAt: new Date().toISOString() },
-      })
-      .onConflictDoNothing();
-}
 
 const kindLabels: Record<string, string> = {
   INTERVIEW: "Interview",
@@ -127,7 +31,6 @@ export async function readMailWorkspace(
   query: WorkspaceQuery,
 ): Promise<MailWorkspaceData> {
   const context = await loadMailContext();
-  await reconcileLegacyMail(context);
   const connections = await db
     .select({
       id: mailConnections.id,
@@ -179,7 +82,8 @@ export async function readMailWorkspace(
       )!,
     );
   }
-  const disposition = sql<string>`CASE WHEN ${mailTracking.disposition} = 'excluded' THEN 'excluded' WHEN ${mailMessages.attentionState} = 'DONE' OR ${mailMessages.linkedApplicationId} IS NOT NULL THEN 'history' ELSE ${mailTracking.disposition} END`;
+  // Interim views until the workspace reads the shared mail list.
+  const disposition = sql<string>`CASE WHEN ${mailTracking.disposition} = 'excluded' THEN 'excluded' WHEN ${mailMessages.attentionState} = 'OPEN' THEN 'latest' ELSE 'history' END`;
   const scope = and(...conditions);
   const totals = await db
     .select({ disposition, count: sql<number>`count(*)::int` })

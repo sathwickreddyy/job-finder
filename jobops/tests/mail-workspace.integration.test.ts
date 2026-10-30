@@ -16,8 +16,8 @@ import { outlook } from "@/services/mail/providers/outlook";
 import { scanConnection, scanKey } from "@/features/mail/scan-service";
 import type { MailContext } from "@/features/mail/context";
 import type { ScannedMessage } from "@/services/mail/providers/types";
+import { assertE2eDatabase, dbTests } from "./helpers/e2e-db";
 
-const enabled = process.env.MAIL_WORKSPACE_DB_TEST === "1";
 const prefix = `mail-workspace-${randomUUID()}`;
 const connectionIds: string[] = [];
 const jobIds: string[] = [];
@@ -67,19 +67,12 @@ async function connection(index = 0) {
   connectionIds.push(row.id);
   return row;
 }
-describe.skipIf(!enabled)("mail ledger and page checkpoint integration", () => {
-  beforeAll(async () => {
-    if (!process.env.DATABASE_URL || new URL(process.env.DATABASE_URL).pathname !== "/jobops_e2e")
-      throw new Error("Refusing any database other than jobops_e2e");
-    const [marker] = await db.select().from(settings).where(eq(settings.key, "__jobops_e2e"));
-    if (marker?.value.ownedBy !== "jobops-browser-tests")
-      throw new Error("Test ownership marker required");
-  });
+describe.skipIf(!dbTests)("mail ledger and page checkpoint integration", () => {
+  beforeAll(assertE2eDatabase);
   afterEach(() => vi.restoreAllMocks());
   afterAll(async () => {
     // Guard again before deleting only this run's disposable fixtures.
-    if (!process.env.DATABASE_URL || new URL(process.env.DATABASE_URL).pathname !== "/jobops_e2e")
-      return;
+    await assertE2eDatabase();
     await db.delete(mailTracking).where(like(mailTracking.accountEmail, `${prefix}%`));
     await db.delete(mailMessages).where(like(mailMessages.accountEmail, `${prefix}%`));
     await db.delete(mailConnections).where(like(mailConnections.email, `${prefix}%`));
@@ -101,18 +94,19 @@ describe.skipIf(!enabled)("mail ledger and page checkpoint integration", () => {
     let rows = await db.select().from(mailTracking).where(eq(mailTracking.accountEmail, own.email));
     expect(rows).toHaveLength(1);
     expect(rows[0].folders).toEqual(["Inbox"]);
-    expect(rows[0].disposition).toBe("latest");
-    await db
-      .update(mailTracking)
-      .set({ disposition: "history" })
-      .where(eq(mailTracking.id, rows[0].id));
+    expect(rows[0].disposition).toBe("kept");
     await db
       .update(mailMessages)
       .set({ attentionState: "DONE" })
       .where(eq(mailMessages.id, rows[0].messageId!));
     expect((await scanConnection(own, "latest", {}, context)).arrived).toBe(0);
     rows = await db.select().from(mailTracking).where(eq(mailTracking.accountEmail, own.email));
-    expect(rows[0].disposition).toBe("history");
+    expect(rows[0].disposition).toBe("kept");
+    const [message] = await db
+      .select()
+      .from(mailMessages)
+      .where(eq(mailMessages.id, rows[0].messageId!));
+    expect(message).toMatchObject({ attentionState: "DONE", folders: ["Inbox"] });
   });
   it("counts a repeated identity only once within a provider page", async () => {
     const account = await connection(9);
@@ -168,7 +162,7 @@ describe.skipIf(!enabled)("mail ledger and page checkpoint integration", () => {
       .from(mailTracking)
       .where(eq(mailTracking.accountEmail, own.email));
     expect(rows).toHaveLength(1);
-    expect(rows[0].disposition).toBe("latest");
+    expect(rows[0].disposition).toBe("kept");
     expect(rows[0].companyKeys).toEqual([]);
   });
   it("checkpoints a committed history page before failure and resumes the failed page", async () => {
@@ -181,7 +175,7 @@ describe.skipIf(!enabled)("mail ledger and page checkpoint integration", () => {
         next: "opaque-second",
       })
       .mockRejectedValueOnce(new Error("Temporary provider failure"));
-    expect((await scanConnection(own, "history", {}, context)).historical).toBe(1);
+    expect((await scanConnection(own, "history", {}, context)).arrived).toBe(1);
     await expect(scanConnection(own, "history", {}, context)).rejects.toThrow(
       "Temporary provider failure",
     );
@@ -194,14 +188,13 @@ describe.skipIf(!enabled)("mail ledger and page checkpoint integration", () => {
     scan.mockResolvedValueOnce({ messages: [mail("history-second")] });
     const result = await scanConnection(own, "history", {}, context);
     expect(scan.mock.calls.at(-1)?.[1].next).toBe("opaque-second");
-    expect(result.arrived).toBe(0);
-    expect(result.historical).toBe(1);
+    expect(result.arrived).toBe(1);
     const rows = await db
       .select()
       .from(mailTracking)
       .where(eq(mailTracking.accountEmail, own.email));
     expect(rows).toHaveLength(2);
-    expect(rows.every((row) => row.disposition === "history")).toBe(true);
+    expect(rows.every((row) => row.disposition === "kept")).toBe(true);
   });
   it("rolls back a failing page and does not consume unrelated mail in a company-scoped search", async () => {
     const own = await connection(4);
@@ -255,7 +248,7 @@ describe.skipIf(!enabled)("mail ledger and page checkpoint integration", () => {
       receivedAt: new Date("2026-10-30T00:00:00Z"),
       companyKeys: [companyKey],
       applicationIds: [app.id],
-      disposition: "history",
+      disposition: "kept",
     };
     await db.insert(mailTracking).values(
       Array.from({ length: 101 }, (_, index) => ({
@@ -308,6 +301,7 @@ describe.skipIf(!enabled)("mail ledger and page checkpoint integration", () => {
         subject: "Unique linked message",
         receivedAt: new Date("2026-10-30T00:00:00Z"),
         linkedApplicationId: app.id,
+        attentionState: "DONE",
         bodyText: "Your application update",
       })
       .returning();

@@ -18,7 +18,6 @@ import { applyOutcome } from "../../src/features/applications/outcome-service";
 import {
   dismissMessages,
   linkMailToRecord,
-  restoreDismissal,
   unlinkMailFromRecord,
 } from "../../src/features/mail/handling-service";
 import { readMailTriage } from "../../src/features/mail/read";
@@ -316,7 +315,7 @@ test("linked inbound drives outreach state and unlink preserves later outcomes",
   );
 });
 
-test("legacy DONE stays handled; dismiss skips linked mail and undo cannot resurrect it", async () => {
+test("legacy DONE stays handled and dismiss skips linked mail", async () => {
   const app = await record();
   const legacy = await message({ attentionState: "DONE" });
   const linked = await message();
@@ -333,24 +332,13 @@ test("legacy DONE stays handled; dismiss skips linked mail and undo cannot resur
   expect(triage.messages.some((row) => [legacy.id, linked.id, open.id].includes(row.id))).toBe(
     false,
   );
-  const dismissed = (await state(app.id, open.id)).mailEvents[0];
-  const token = String(dismissed.details.triageDismissal);
-  await guard();
-  expect(await db.transaction((tx) => restoreDismissal(tx, open.id, token))).toBe(1);
-  await guard();
-  await db.transaction((tx) => linkMailToRecord(tx, open.id, app.id, new Date()));
-  await guard();
-  await expect(db.transaction((tx) => restoreDismissal(tx, open.id, token))).rejects.toThrow(
-    /no longer/,
-  );
-  expect((await state(app.id, open.id)).mail.linkedApplicationId).toBe(app.id);
   await guard();
   await expect(
     db.transaction((tx) => linkMailToRecord(tx, legacy.id, app.id, new Date())),
   ).rejects.toThrow(/handled/);
 });
 
-test("bulk dismiss covers more than 200 messages and undo restores that operation only", async () => {
+test("bulk dismiss covers more than 200 messages and leaves other buckets open", async () => {
   const mailIds: string[] = Array.from({ length: 205 }, () => randomUUID());
   ids.mail.push(...mailIds);
   await guard();
@@ -383,24 +371,12 @@ test("bulk dismiss covers more than 200 messages and undo restores that operatio
       expect(dismissed.every((row) => row.attentionState === "DONE")).toBe(true);
       const [untouched] = await tx.select().from(mailMessages).where(eq(mailMessages.id, role.id));
       expect(untouched.attentionState).toBe("OPEN");
-      const [event] = await tx
-        .select()
-        .from(mailEvents)
-        .where(eq(mailEvents.mailMessageId, mailIds[0]));
-      expect(
-        await restoreDismissal(tx, mailIds[0], String(event.details.triageDismissal)),
-      ).toBeGreaterThanOrEqual(205);
-      const restored = await tx
-        .select()
-        .from(mailMessages)
-        .where(inArray(mailMessages.id, mailIds));
-      expect(restored.every((row) => row.attentionState === "OPEN")).toBe(true);
       throw new Error("rollback whole-bucket test");
     }),
   ).rejects.toThrow("rollback whole-bucket test");
 });
 
-test("Emails buckets dismiss with durable confirmation and Undo at 390px", async ({ page }) => {
+test("Emails buckets dismiss with durable confirmation at 390px", async ({ page }) => {
   const app = await record();
   const ack = await message(
     { classification: "APPLICATION_ACKNOWLEDGEMENT", subject: `Acknowledged ${randomUUID()}` },
@@ -415,9 +391,6 @@ test("Emails buckets dismiss with durable confirmation and Undo at 390px", async
   await card.getByRole("button", { name: "Dismiss", exact: true }).click();
   await expect(page.getByRole("status").filter({ hasText: "Dismissed 1 message." })).toBeVisible();
   await expect(page.getByRole("link", { name: ack.subject, exact: true })).toHaveCount(0);
-  await page.getByRole("button", { name: "Undo last dismiss" }).click();
-  await expect(page.getByRole("status").filter({ hasText: "Restored 1 message." })).toBeVisible();
-  await expect(page.getByRole("link", { name: ack.subject, exact: true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 
@@ -533,33 +506,6 @@ test("mail handled while its outcome form is open keeps source and rejects all w
   await expect(page.getByRole("alert").filter({ hasText: /already been handled/ })).toBeVisible();
   await expect(page.locator('#what-happened input[name="mailId"]')).toHaveValue(mail.id);
   expect(await state(app.id, mail.id)).toEqual(before);
-});
-
-test("Undo isolates independent operations and rejects an old token after restore and re-dismiss", async () => {
-  const app = await record();
-  const first = await message({ classification: "UNKNOWN" });
-  const second = await message({ classification: "UNKNOWN" });
-  await guard();
-  await db.transaction((tx) => dismissMessages(tx, { ids: [first.id] }, new Date()));
-  const oldToken = String((await state(app.id, first.id)).mailEvents[0].details.triageDismissal);
-  await guard();
-  await db.transaction((tx) => dismissMessages(tx, { ids: [second.id] }, new Date()));
-  const independent = await state(app.id, second.id);
-  expect(independent.mailEvents[0].details.triageDismissal).not.toBe(oldToken);
-  await guard();
-  expect(await db.transaction((tx) => restoreDismissal(tx, first.id, oldToken))).toBe(1);
-  expect((await state(app.id, first.id)).mail.attentionState).toBe("OPEN");
-  expect(await state(app.id, second.id)).toEqual(independent);
-  await guard();
-  await db.transaction((tx) => dismissMessages(tx, { ids: [first.id] }, new Date()));
-  const redismissed = await state(app.id, first.id);
-  expect(redismissed.mailEvents[0].details.triageDismissal).not.toBe(oldToken);
-  await guard();
-  await expect(db.transaction((tx) => restoreDismissal(tx, first.id, oldToken))).rejects.toThrow(
-    /no longer/,
-  );
-  expect(await state(app.id, first.id)).toEqual(redismissed);
-  expect(await state(app.id, second.id)).toEqual(independent);
 });
 
 for (const status of ["PREPARING", "CLOSED", "APPLIED"] as const) {

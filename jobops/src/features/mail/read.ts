@@ -1,7 +1,7 @@
 import { desc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { mailEvents, mailMessages, mailTracking } from "@/db/schema";
-import { mailCanUndoDismiss, mailIsOpen } from "./state";
+import { mailIsOpen } from "./state";
 import { requireRecordMail } from "./source-policy";
 import { bucketOf, type TriageInput } from "./triage";
 
@@ -10,12 +10,7 @@ export type TriageMessage = TriageInput & {
   accountEmail: string | null;
   record: { id: string; company: string; role: string } | null;
 };
-export type TriageData = {
-  messages: TriageMessage[];
-  handled: number;
-  lastDismissedId: string | null;
-  lastDismissalToken: string | null;
-};
+export type TriageData = { messages: TriageMessage[]; handled: number };
 
 export async function readMailTriage(
   records: { id: string; company: string; role: string }[],
@@ -31,31 +26,21 @@ export async function readMailTriage(
   const byMail = new Map<string, typeof events>();
   for (const event of events)
     byMail.set(event.mailMessageId, [...(byMail.get(event.mailMessageId) ?? []), event]);
+  // Excluded identities are never shown, even when an older import kept a copy.
+  const excluded = new Set(
+    tracked.flatMap((row) =>
+      row.disposition === "excluded" && row.messageId ? [row.messageId] : [],
+    ),
+  );
   let handled = 0;
-  let lastDismissed: typeof mailMessages.$inferSelect | null = null;
   const open: TriageMessage[] = [];
   for (const message of messages) {
-    // History and excluded mail must never become urgent arrivals on a rescan.
-    if (!tracked.some((row) => row.messageId === message.id && row.disposition === "latest"))
-      continue;
-    const own = byMail.get(message.id) ?? [];
-    if (!mailIsOpen(message, own)) {
-      if (
-        message.attentionState === "DONE" ||
-        message.linkedApplicationId ||
-        own.some((event) => ["REVIEWED", "DISMISSED"].includes(event.status))
-      )
-        handled++;
-      const batch = own[0]?.details.triageDismissal;
-      if (
-        typeof batch === "string" &&
-        mailCanUndoDismiss(message, own, batch) &&
-        message.processedAt &&
-        (!lastDismissed?.processedAt || message.processedAt > lastDismissed.processedAt)
-      )
-        lastDismissed = message;
+    if (excluded.has(message.id)) continue;
+    if (!mailIsOpen(message)) {
+      handled++;
       continue;
     }
+    const own = byMail.get(message.id) ?? [];
     const suggested = own.find((event) => typeof event.details.suggestedApplicationId === "string")
       ?.details.suggestedApplicationId;
     const record = typeof suggested === "string" ? (byId.get(suggested) ?? null) : null;
@@ -65,14 +50,7 @@ export async function readMailTriage(
       bucket: bucketOf({ ...message, recordId: record?.id ?? null }),
     });
   }
-  return {
-    messages: open,
-    handled,
-    lastDismissedId: lastDismissed?.id ?? null,
-    lastDismissalToken: lastDismissed
-      ? String(byMail.get(lastDismissed.id)?.[0]?.details.triageDismissal)
-      : null,
-  };
+  return { messages: open, handled };
 }
 
 /** Same gate as the writer; a stale URL cannot offer a handled message for linking. */
@@ -83,7 +61,7 @@ export async function readOpenMail(id: string, recordId: string) {
   ]);
   if (!message)
     throw new Error("This source message no longer exists. Return to Emails to choose a message.");
-  if (!mailIsOpen(message, events))
+  if (!mailIsOpen(message))
     throw new Error(
       "This source message has already been handled. Return to Emails to see its current state.",
     );

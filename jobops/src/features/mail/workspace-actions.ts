@@ -20,10 +20,8 @@ import {
   ScanFailure,
   scanKey,
   scanRuleRevision,
-  retainDisposition,
   type ScanScope,
 } from "./scan-service";
-import { reconcileLegacyMail } from "./workspace-read";
 import { matchMail } from "./matching";
 
 function invalidate() {
@@ -61,7 +59,6 @@ export async function checkWorkspaceMail(
       !context.applications.some((app) => app.id === scope.application)
     )
       throw new Error("Choose an existing application.");
-    await reconcileLegacyMail(context);
     const connections = await db
       .select()
       .from(mailConnections)
@@ -206,7 +203,6 @@ export async function saveWorkspaceRule(
       await db.update(mailTracking).set({
         companyKeys: [...new Set([...otherKeys, ...(keep ? [key] : [])])],
         applicationIds: [...new Set([...tracking.applicationIds.filter((id) => !updated.applications.some((app) => app.id === id && app.company === key)), ...(keep ? decision.applicationIds : [])])],
-        disposition: otherKeys.length && tracking.disposition !== "excluded" ? tracking.disposition : retainDisposition(tracking, decision),
         reason: otherKeys.length ? tracking.reason : decision.reason,
         evidence: otherKeys.length ? tracking.evidence : decision.evidence,
         updatedAt: new Date(),
@@ -236,10 +232,6 @@ export async function reviewWorkspaceMail(
         .for("update");
       if (!tracking) throw new Error("This message no longer exists.");
       if (tracking.disposition === "excluded") return;
-      await tx
-        .update(mailTracking)
-        .set({ disposition: "history", updatedAt: new Date() })
-        .where(eq(mailTracking.id, id));
       if (tracking.messageId) {
         await tx
           .update(mailMessages)
@@ -308,7 +300,6 @@ export async function associateWorkspaceMail(
         .set({
           applicationIds: [applicationId],
           companyKeys: [app.company],
-          disposition: "history",
           updatedAt: new Date(),
         })
         .where(eq(mailTracking.id, id));
