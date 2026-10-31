@@ -25,11 +25,17 @@ import { loadMailContext, type MailContext } from "@/features/mail/context";
 import { updateMail } from "@/features/mail/handle-service";
 import { ingestPage } from "@/features/mail/ingest";
 import { readMailItem } from "@/features/mail/mail-list";
-import { undoAutoOutcomeAction } from "@/features/mail/workspace-actions";
+import { unlinkMail } from "@/features/mail/triage-actions";
+import {
+  placeMailAction,
+  retagMail,
+  undoAutoOutcomeAction,
+} from "@/features/mail/workspace-actions";
 import type { ScannedMessage } from "@/services/mail/providers/types";
 import { assertE2eDatabase, dbTests } from "./helpers/e2e-db";
 
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
+vi.mock("next/navigation", () => ({ redirect: vi.fn() }));
 
 const prefix = `mail-auto-${randomUUID()}`;
 const account = `${prefix}@fixture.invalid`;
@@ -555,5 +561,63 @@ describe.skipIf(!dbTests)("auto-applying mail", () => {
     expect(await undoAutoOutcomeAction({}, form)).toMatchObject({
       error: "This outcome can no longer be undone. Correct it on the application.",
     });
+  });
+
+  it("unlinking an auto-applied email undoes its outcome first", async () => {
+    const { app, mail } = await fixture("REJECTION");
+    await auto(mail.id);
+    const form = new FormData();
+    form.set("mailId", mail.id);
+    form.set("recordId", app.id);
+    await unlinkMail({}, form);
+    expect(await record(app.id)).toMatchObject({ status: "APPLIED", closedReason: null });
+    expect(await message(mail.id)).toMatchObject({
+      attentionState: "OPEN",
+      linkedApplicationId: null,
+    });
+    expect(await auto(mail.id)).toEqual({ kind: "none" });
+  });
+
+  it("Undo leaves the email marked as undone", async () => {
+    const { mail } = await fixture("REJECTION");
+    await auto(mail.id);
+    await run((tx) => undoAutoOutcome(tx, mail.id, NOW));
+    expect((await readMailItem(mail.id)).autoOutcome).toEqual({ undoable: false, undone: true });
+  });
+
+  it("placing an acknowledgement says it was acknowledged", async () => {
+    const found = await fixture("APPLICATION_ACKNOWLEDGEMENT", {
+      companyKey: null,
+      attentionState: "OPEN",
+    });
+    const key = (await loadMailContext()).companies.find(
+      (company) => company.name === found.job.company,
+    )!.id;
+    const form = new FormData();
+    form.set("id", found.mail.id);
+    form.set("company", key);
+    expect(await placeMailAction({}, form)).toEqual({
+      success: "Email placed and marked acknowledged.",
+    });
+  });
+
+  it("retagging names the outcome it recorded", async () => {
+    const { mail } = await fixture("ASSESSMENT", { attentionState: "OPEN" });
+    expect(await retagMail(mail.id, "applicationRejected")).toEqual({
+      success: "Tagged as Application rejected. Marked rejected.",
+      previous: "ASSESSMENT",
+    });
+  });
+
+  it("an older rejection does not close an application the company answered later", async () => {
+    const { app, mail } = await fixture("REJECTION");
+    await db.insert(applicationEvents).values({
+      applicationId: app.id,
+      eventType: "INTERVIEW_SCHEDULED",
+      occurredAt: new Date("2026-10-30T05:00:00Z"),
+      summary: "Round scheduled",
+    });
+    expect(await auto(mail.id)).toEqual({ kind: "ask", applicationId: app.id });
+    expect((await record(app.id)).status).toBe("APPLIED");
   });
 });

@@ -253,6 +253,30 @@ describe("CompanyTimeline", () => {
     expect(html(false)).not.toContain("Undo");
   });
 
+  it("HandledLine says an undone automatic outcome was undone, with no Undo", () => {
+    const undone = item("m5", {
+      tag: "applicationRejected",
+      kind: "Rejection",
+      attention: "handled",
+      handledAt: "2026-10-31T05:00:00.000Z",
+      autoOutcome: { undoable: false, undone: true },
+    });
+    const html = render({
+      openMail: "m5",
+      days: [
+        {
+          key: "2026-10-31",
+          label: "Today",
+          stamp: today,
+          entries: [{ type: "mail", at: undone.receivedAt, item: undone, recorded: null }],
+        },
+      ],
+    });
+    expect(html).toContain("Undone. Kept on the application as information.");
+    expect(html).not.toContain("Marked as just info");
+    expect(html).not.toContain("Undo<");
+  });
+
   it("offers Undo only for just info", () => {
     const handled = item("m3", { attention: "handled", handledAt: "2026-10-31T05:00:00.000Z" });
     const html = render({

@@ -12,6 +12,8 @@ export type RuleApplication = {
   /** availableOutcomes(state) */
   outcomes: OutcomeId[];
   bookedRound: boolean;
+  /** The latest reply or round from the company that the user recorded by hand. */
+  lastHeardAt: Date | null;
 };
 export type RuleMail = {
   classification: MailClassification;
@@ -61,9 +63,14 @@ export function decideMailEffect(mail: RuleMail, applications: RuleApplication[]
 
   const single = live.length === 1 ? live[0] : null;
   if (!single) return { kind: "ask", applicationId: null };
-  const eligible = mail.namedApplicationIds.every((id) => id === single.id);
-  if (eligible && acknowledgement) return { kind: "acknowledge", applicationId: single.id };
-  if (eligible && outcome && single.outcomes.includes(outcome) && !single.bookedRound)
+  // Another application is named (a referral contact's reply, an older role): ask, and keep
+  // whichever application matching suggested.
+  if (mail.namedApplicationIds.some((id) => id !== single.id))
+    return { kind: "ask", applicationId: null };
+  if (acknowledgement) return { kind: "acknowledge", applicationId: single.id };
+  // The company answered after this email, so it is older news than what the user recorded.
+  const answeredLater = single.lastHeardAt !== null && single.lastHeardAt > mail.receivedAt;
+  if (outcome && single.outcomes.includes(outcome) && !single.bookedRound && !answeredLater)
     return { kind: "outcome", applicationId: single.id, outcome };
   return { kind: "ask", applicationId: single.id };
 }

@@ -328,6 +328,13 @@ export function HandledLine({ item, recorded }: { item: MailItem; recorded: stri
 function AutoOutcomeLine({ item, recorded }: { item: MailItem; recorded: string | null }) {
   const { state, pending, submit } = useSubmit(undoAutoOutcomeAction);
   const outcome = recorded ?? (item.outcome ? outcomeMeta[item.outcome].label : "an outcome");
+  if (item.autoOutcome?.undone)
+    return (
+      <p className="m-0 flex items-center gap-2 text-sm text-muted-foreground">
+        <Check aria-hidden size={15} className="shrink-0 text-tag-offer" />
+        Undone. Kept on the application as information.
+      </p>
+    );
   return (
     <div>
       <form

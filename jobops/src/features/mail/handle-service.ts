@@ -13,7 +13,8 @@ import { ApiError, refusal } from "@/features/agent-api/http";
 import { applyOutcome } from "@/features/applications/outcome-service";
 import { outcomeIds } from "@/features/applications/phase";
 import { roundKinds } from "@/lib/round-kinds";
-import { autoApplyMail, resetAutoEffect } from "./auto-apply";
+import { autoApplySafely, resetAutoEffect } from "./auto-apply";
+import type { MailEffect } from "./auto-apply-rule";
 import { loadMailContext, type MailContext } from "./context";
 import { lockMail, type MailTx } from "./handling-service";
 import type { MailItem } from "./mail-item";
@@ -250,10 +251,18 @@ export async function updateMailKind(
   mailId: string,
   input: unknown,
   now = new Date(),
-): Promise<{ item: MailItem; previous: MailClassification }> {
+): Promise<{
+  item: MailItem;
+  previous: MailClassification;
+  /** What the mail rule did after a retag or placement, and whether a retag undid an outcome. */
+  effect: MailEffect | null;
+  undone: boolean;
+}> {
   const body = updateSchema.parse(input);
   const context = await loadMailContext();
   let previous: MailClassification = "UNKNOWN";
+  let effect: MailEffect | null = null;
+  let undone = false;
   await db.transaction(async (tx) => {
     const { message, events } = await lockVisibleMail(tx, mailId, context);
     previous = message.classification;
@@ -264,7 +273,7 @@ export async function updateMailKind(
     if (classification) {
       if (classification !== message.classification) {
         // A new reading of the email: put back what the mail rule did with the old one first.
-        await resetAutoEffect(tx, mailId, now);
+        undone = (await resetAutoEffect(tx, mailId, now))?.undone ?? false;
         await tx.update(mailMessages).set({ classification }).where(eq(mailMessages.id, mailId));
         for (const event of events)
           await tx
@@ -316,7 +325,7 @@ export async function updateMailKind(
         metadata: { company: companyKey, application: linked, at: now.toISOString() },
       });
     }
-    if (retagged || placed) await autoApplyMail(tx, mailId, context, now);
+    if (retagged || placed) effect = await autoApplySafely(tx, mailId, context, now);
   });
-  return { item: await readMailItem(mailId, context), previous };
+  return { item: await readMailItem(mailId, context), previous, effect, undone };
 }

@@ -5,7 +5,8 @@ import { z } from "zod";
 import { db } from "@/db";
 import { safeReturnTo, withNotice } from "@/features/applications/return-to";
 import { actionError, formString, type ActionState } from "@/lib/actions";
-import { dismissMessages, linkMailToRecord, unlinkMailFromRecord } from "./handling-service";
+import { unlinkMailWithUndo } from "./auto-apply";
+import { dismissMessages, linkMailToRecord } from "./handling-service";
 
 function refresh(recordId?: string) {
   for (const path of [
@@ -68,7 +69,7 @@ export async function unlinkMail(_state: ActionState, form: FormData): Promise<A
     const mailId = z.uuid().parse(formString(form, "mailId"));
     const recordId = z.uuid().parse(formString(form, "recordId"));
     const unlinked = await db.transaction((tx) =>
-      unlinkMailFromRecord(tx, mailId, recordId, new Date()),
+      unlinkMailWithUndo(tx, mailId, recordId, new Date()),
     );
     refresh(recordId);
     destination = `/applications/${recordId}?notice=${encodeURIComponent(unlinked ? "Mail unlinked and returned to Emails. Recorded outcomes and history were kept." : "Mail already unlinked.")}`;

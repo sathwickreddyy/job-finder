@@ -11,7 +11,12 @@ import {
 } from "@/db/schema";
 import { ApiError } from "@/features/agent-api/http";
 import { applyOutcome } from "@/features/applications/outcome-service";
-import { availableOutcomes, phaseOf, recordStateFrom } from "@/features/applications/phase";
+import {
+  availableOutcomes,
+  inboundEvents,
+  phaseOf,
+  recordStateFrom,
+} from "@/features/applications/phase";
 import {
   decideMailEffect,
   type MailEffect,
@@ -19,7 +24,7 @@ import {
   type RuleMail,
 } from "./auto-apply-rule";
 import type { MailContext } from "./context";
-import { linkMailToRecord, lockMail, type MailTx } from "./handling-service";
+import { linkMailToRecord, lockMail, unlinkMailFromRecord, type MailTx } from "./handling-service";
 
 if (typeof window !== "undefined") throw new Error("Mail writes run on the server.");
 
@@ -242,10 +247,23 @@ export async function ruleInputs(
         phase: phaseOf(state),
         outcomes: availableOutcomes(state),
         bookedRound: ownRounds.some((round) => round.outcome === "SCHEDULED"),
+        lastHeardAt: latestOf([
+          ...own
+            .filter((event) => inboundEvents.has(event.eventType) && event.payload.auto !== true)
+            .map((event) => event.occurredAt),
+          ...ownRounds
+            .filter((round) => round.outcome !== "CANCELLED")
+            .map((round) => round.scheduledAt),
+        ]),
       };
     }),
   };
 }
+
+const latestOf = (dates: (Date | null)[]) => {
+  const times = dates.flatMap((date) => (date && Number.isFinite(date.getTime()) ? [date] : []));
+  return times.length ? new Date(Math.max(...times.map((date) => date.getTime()))) : null;
+};
 
 /** Decides and applies what an email does to its application, in the caller's transaction. */
 export async function autoApplyMail(
@@ -261,16 +279,52 @@ export async function autoApplyMail(
 }
 
 /**
+ * The rule on one email inside a savepoint: an email it cannot apply is logged and left as it
+ * was, so it never fails Fetch new mail, Include this or a retag.
+ */
+export async function autoApplySafely(
+  tx: MailTx,
+  messageId: string,
+  context: MailContext,
+  now: Date,
+): Promise<MailEffect> {
+  try {
+    return await tx.transaction((step) => autoApplyMail(step, messageId, context, now));
+  } catch (error) {
+    console.error(`The mail rule skipped ${messageId}`, error);
+    return { kind: "none" };
+  }
+}
+
+/** Unlinking puts back an outcome the rule recorded from the email first, so Undo is never lost. */
+export async function unlinkMailWithUndo(
+  tx: MailTx,
+  messageId: string,
+  recordId: string,
+  now: Date,
+) {
+  const found = await autoOutcomeEvent(tx, messageId);
+  if (found?.undoable && found.applicationId === recordId)
+    await undoAutoOutcome(tx, messageId, now);
+  return unlinkMailFromRecord(tx, messageId, recordId, now);
+}
+
+/**
  * Before a retag: undoes the rule's outcome while it can still be undone, then drops the
- * rule's link and markers so the rule reads the email afresh. Returns false, changing
+ * rule's link and markers so the rule reads the email afresh. Returns null, changing
  * nothing, once the user has recorded something newer (spec §1, Undo).
  */
-export async function resetAutoEffect(tx: MailTx, messageId: string, now: Date) {
+export async function resetAutoEffect(
+  tx: MailTx,
+  messageId: string,
+  now: Date,
+): Promise<{ undone: boolean } | null> {
   const found = await autoOutcomeEvent(tx, messageId);
-  if (found && !found.undoable) return false;
+  if (found && !found.undoable) return null;
   if (found) await undoAutoOutcome(tx, messageId, now);
+  const undone = { undone: !!found };
   const { message, events } = await lockMail(tx, messageId);
-  if (!events.some((event) => event.details.autoApplied || event.details.autoUndone)) return true;
+  if (!events.some((event) => event.details.autoApplied || event.details.autoUndone)) return undone;
   if (message.linkedApplicationId) {
     await tx
       .delete(applicationEvents)
@@ -294,5 +348,5 @@ export async function resetAutoEffect(tx: MailTx, messageId: string, now: Date) 
       .set({ details, linkedApplicationId: null })
       .where(eq(mailEvents.id, event.id));
   }
-  return true;
+  return undone;
 }

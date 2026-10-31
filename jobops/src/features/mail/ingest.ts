@@ -5,7 +5,7 @@ import type { MailConnection, ProviderId, ScannedMessage } from "@/services/mail
 import type { MailContext } from "./context";
 import type { MailTx } from "./handling-service";
 import { previousJobFor } from "@/features/companies/previous-job";
-import { autoApplyMail } from "./auto-apply";
+import { autoApplySafely } from "./auto-apply";
 import { importMailRecords, mailImportSchema } from "./import";
 import { matchMail, type Match } from "./matching";
 import { sortRejection } from "./rejection-sort";
@@ -273,7 +273,7 @@ export async function ingestPage(
     if (!saved) continue;
     if (fresh && messageId) {
       // Clear outcomes update their application; asking mail stays open, even from history.
-      const effect = await autoApplyMail(tx, messageId, context, new Date());
+      const effect = await autoApplySafely(tx, messageId, context, new Date());
       const opened = effect.kind === "ask";
       if (fresh.handled && opened) counts.newAttention++;
       if (!fresh.handled && (effect.kind === "acknowledge" || effect.kind === "outcome"))

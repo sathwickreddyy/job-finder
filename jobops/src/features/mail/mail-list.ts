@@ -30,6 +30,8 @@ export const notExcluded = sql`NOT EXISTS (SELECT 1 FROM mail_tracking t WHERE t
 const outcome = sql<
   string | null
 >`(SELECT e.payload->>'outcome' FROM application_events e WHERE e.payload->>'mailMessageId' = "mail_messages"."id"::text AND e.payload->>'outcome' IS NOT NULL ORDER BY e.created_at DESC LIMIT 1)`;
+/** True once the user undid an outcome the mail rule recorded from it. */
+const autoUndone = sql<boolean>`EXISTS (SELECT 1 FROM mail_events me WHERE me.mail_message_id = "mail_messages"."id" AND me.details->>'autoUndone' = 'true')`;
 /** Null unless the mail rule recorded an outcome from it; true while nothing newer was recorded. */
 const autoUndoable = sql<
   boolean | null
@@ -86,7 +88,7 @@ export async function listMail(
   }
   const [rows, [counted]] = await Promise.all([
     db
-      .select({ message: mailMessages, outcome, autoUndoable })
+      .select({ message: mailMessages, outcome, autoUndoable, autoUndone })
       .from(mailMessages)
       .where(and(...page))
       .orderBy(desc(mailMessages.receivedAt), desc(mailMessages.id))
@@ -99,8 +101,8 @@ export async function listMail(
   const lookup = mailLookup(context);
   const items = rows
     .slice(0, pageSize)
-    .map(({ message, outcome, autoUndoable }) =>
-      toMailItem({ ...message, outcome, autoUndoable }, lookup),
+    .map(({ message, outcome, autoUndoable, autoUndone }) =>
+      toMailItem({ ...message, outcome, autoUndoable, autoUndone }, lookup),
     );
   const last = items.at(-1);
   return {
@@ -114,13 +116,18 @@ export async function listMail(
 export async function readMailItem(id: string, context?: MailContext): Promise<MailItem> {
   const [row] = z.uuid().safeParse(id).success
     ? await db
-        .select({ message: mailMessages, outcome, autoUndoable })
+        .select({ message: mailMessages, outcome, autoUndoable, autoUndone })
         .from(mailMessages)
         .where(and(eq(mailMessages.id, id), notExcluded))
     : [];
   if (!row) throw new ApiError("Email not found.", 404);
   return toMailItem(
-    { ...row.message, outcome: row.outcome, autoUndoable: row.autoUndoable },
+    {
+      ...row.message,
+      outcome: row.outcome,
+      autoUndoable: row.autoUndoable,
+      autoUndone: row.autoUndone,
+    },
     mailLookup(context ?? (await loadMailContext())),
   );
 }

@@ -19,6 +19,7 @@ const app = (patch: Partial<RuleApplication> = {}): RuleApplication => ({
   phase: "Applied",
   outcomes: applied as RuleApplication["outcomes"],
   bookedRound: false,
+  lastHeardAt: null,
   ...patch,
 });
 const mail = (patch: Partial<RuleMail> = {}): RuleMail => ({
@@ -101,10 +102,27 @@ describe("decideMailEffect", () => {
     expect(decideMailEffect(early, [sent])).toEqual({ kind: "acknowledge", applicationId: "a1" });
   });
 
-  it("asks when another application is named", () => {
+  it("asks without re-pointing the suggestion when another application is named", () => {
     expect(
       decideMailEffect(mail({ classification: "REJECTION", namedApplicationIds: ["a2"] }), [app()]),
-    ).toEqual({ kind: "ask", applicationId: "a1" });
+    ).toEqual({ kind: "ask", applicationId: null });
+  });
+
+  it("asks when the company replied after the email", () => {
+    const later = app({ lastHeardAt: new Date("2026-10-10T11:00:00+05:30") });
+    expect(decideMailEffect(mail({ classification: "REJECTION" }), [later])).toEqual({
+      kind: "ask",
+      applicationId: "a1",
+    });
+  });
+
+  it("applies when the last reply came before the email", () => {
+    const earlier = app({ lastHeardAt: new Date("2026-10-02T12:00:00+05:30") });
+    expect(decideMailEffect(mail({ classification: "REJECTION" }), [earlier])).toEqual({
+      kind: "outcome",
+      applicationId: "a1",
+      outcome: "rejected",
+    });
   });
 
   it("applies when only its own application is named", () => {

@@ -7,6 +7,7 @@ import { outcomeDetail, type OutcomeId } from "@/features/applications/phase";
 import { actionError, formString, type ActionState } from "@/lib/actions";
 import type { RoundKind } from "@/lib/round-kinds";
 import { undoAutoOutcome } from "./auto-apply";
+import type { MailEffect } from "./auto-apply-rule";
 import { checkMailStep, type CheckResult } from "./check-service";
 import { companySearchStep, type SearchLane, type SearchRun } from "./company-search";
 import { listDropped } from "./dropped";
@@ -203,14 +204,26 @@ export async function undoAutoOutcomeAction(
   }
 }
 
+/** What the mail rule changed, as a sentence for the snackbar; empty when nothing changed. */
+function ruleNote(effect: MailEffect | null, undone: boolean) {
+  if (effect?.kind === "acknowledge") return "Marked acknowledged.";
+  if (effect?.kind === "outcome")
+    return effect.outcome === "offer" ? "Recorded an offer." : "Marked rejected.";
+  return undone ? "The outcome it recorded was undone." : "";
+}
+
 export type RetagState = ActionState & { previous?: MailClassification };
 
-/** Edit tag: correct a wrong tag; attention and placement stay as they were. */
+/**
+ * Edit tag: correct a wrong tag. Attention and placement stay as they were, unless the mail rule
+ * reads the new tag differently (it undoes its own earlier outcome first); the message says so.
+ */
 export async function retagMail(id: string, tag: string): Promise<RetagState> {
   try {
-    const { item, previous } = await updateMailKind(id, { tag });
+    const { item, previous, effect, undone } = await updateMailKind(id, { tag });
     invalidate();
-    return { success: `Tagged as ${tagLabel[item.tag]}`, previous };
+    const note = ruleNote(effect, undone);
+    return { success: `Tagged as ${tagLabel[item.tag]}${note ? `. ${note}` : ""}`, previous };
   } catch (error) {
     return actionError(error);
   }
@@ -237,9 +250,14 @@ export async function placeMailAction(
     const change = form.has("application")
       ? { application: formString(form, "application") || null }
       : { company: formString(form, "company") || null };
-    await updateMail(id, change);
+    const { effect } = await updateMailKind(id, change);
     invalidate();
-    return { success: "Email placed. It still needs your attention until you handle it." };
+    const note = ruleNote(effect, false);
+    return {
+      success: note
+        ? `Email placed and ${note.charAt(0).toLowerCase()}${note.slice(1)}`
+        : "Email placed. It still needs your attention until you handle it.",
+    };
   } catch (error) {
     return actionError(error);
   }

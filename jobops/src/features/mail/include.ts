@@ -9,7 +9,7 @@ import { assertPhrase } from "@/services/mail/providers/search-query";
 import type { ProviderId } from "@/services/mail/providers/types";
 import { isSharedSender, keywordProblem, loadMailContext } from "./context";
 import { importMailRecords, mailImportSchema } from "./import";
-import { autoApplyMail } from "./auto-apply";
+import { autoApplySafely } from "./auto-apply";
 import { sortRejection } from "./rejection-sort";
 import { readMailItem } from "./mail-list";
 import type { MailItem } from "./mail-item";
@@ -114,7 +114,7 @@ export async function includeMail(
           updatedAt: new Date(),
         })
         .where(eq(mailTracking.id, row.id));
-      if (imported.imported) await autoApplyMail(tx, message.id, context, new Date());
+      if (imported.imported) await autoApplySafely(tx, message.id, context, new Date());
       return message.id;
     });
   });
