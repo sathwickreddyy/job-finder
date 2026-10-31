@@ -5,7 +5,6 @@ import { Check, Copy } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui";
 import { cn } from "@/lib/utils";
-import { AccordionGroups, CardGroups, LaneGroups } from "./applications";
 import {
   AgendaAbove,
   ComingUpStrip,
@@ -213,33 +212,6 @@ const sections: Section[] = [
         name: "Split button",
         note: "One press fetches since last time; the arrow opens Last N days.",
         render: () => <SplitFetch />,
-      },
-    ],
-  },
-  {
-    id: "applications",
-    title: "Applications, one group per application",
-    description:
-      "Same emails, grouped by application. Northstar has two. Fernwood's confirmation was matched but not linked yet: press Link. Previous jobs are collapsed at the end.",
-    width: "max-w-4xl",
-    options: [
-      {
-        letter: "A",
-        name: "Cards with latest mail",
-        note: "One card per application with its status, next step and latest three emails. Cards with something due are outlined.",
-        render: () => <CardGroups />,
-      },
-      {
-        letter: "B",
-        name: "Rows that open",
-        note: "A compact table: status, next step, due and a dot per email. Open a row to see its emails.",
-        render: () => <AccordionGroups />,
-      },
-      {
-        letter: "C",
-        name: "Lanes on a calendar",
-        note: "Each application is a lane across four weeks with its emails placed by date and what's due ahead of Today.",
-        render: () => <LaneGroups />,
       },
     ],
   },

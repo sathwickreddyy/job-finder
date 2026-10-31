@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   companyResolver,
-  laneDots,
   laneStatus,
   leadOf,
   normalizeCompany,
@@ -11,7 +10,7 @@ import {
   type LaneSource,
   type PendingMail,
 } from "@/features/applications/lanes";
-import { NOW, at, event, lanesFor, record, round, uid } from "./lane-fixtures";
+import { NOW, at, lanesFor, record, round, uid } from "./lane-fixtures";
 
 describe("company keys", () => {
   it("normalizes case and spacing and maps listed aliases onto the company record", () => {
@@ -220,102 +219,6 @@ describe("lead and lane status", () => {
     });
     expect(leadOf([older, newer]).id).toBe(newer.id);
     expect(laneStatus([older, newer], NOW, true)).toEqual({ tone: "rejected", label: "Rejected" });
-  });
-});
-
-describe("lane dots", () => {
-  it("uses short labels, skips mail an event already points at, and adds rounds, follow-ups and pending mail", () => {
-    const id = uid();
-    const mailId = uid();
-    const ackId = uid();
-    const pendingId = uid();
-    const source = record({
-      id,
-      phase: "Interviewing",
-      status: "ASSESSMENT",
-      nextActionAt: at("2026-10-05T09:00:00"),
-      nextActionNote: "Check the portal",
-      events: [
-        event(id, "APPLICATION_SUBMITTED", at("2026-09-24T09:00:00"), {
-          summary: "Submission confirmation verified on Ashby: Success",
-        }),
-        event(id, "ASSESSMENT_RECEIVED", at("2026-09-26T10:00:00"), {
-          payload: { mailMessageId: mailId },
-        }),
-        event(id, "MANUAL_NOTE", at("2026-09-27T10:00:00"), { summary: "Asked about the team" }),
-      ],
-      linkedMail: [
-        {
-          id: mailId,
-          subject: "HackerRank invite",
-          classification: "ASSESSMENT",
-          receivedAt: at("2026-09-26T09:59:00"),
-          attentionState: "DONE",
-        },
-        {
-          id: ackId,
-          subject: "We received it",
-          classification: "APPLICATION_ACKNOWLEDGEMENT",
-          receivedAt: at("2026-09-24T09:05:00"),
-          attentionState: "DONE",
-        },
-      ],
-      rounds: [
-        round(id, {
-          kind: "ONLINE_ASSESSMENT",
-          scheduledAt: at("2026-10-07T23:59:00"),
-          name: "HackerRank",
-        }),
-      ],
-    });
-    const dots = laneDots(
-      [source],
-      [
-        {
-          id: pendingId,
-          recordId: id,
-          subject: "Round 2 confirmed",
-          classification: "INTERVIEW",
-          receivedAt: at("2026-10-03T09:12:00"),
-          outcome: "scheduled",
-        },
-      ],
-      NOW,
-    );
-    expect(dots.map((dot) => [dot.tone, dot.label])).toEqual([
-      ["sent", "Applied"],
-      ["mail", "Automatic “we received it”"],
-      ["mail", "Got an OA"],
-      ["note", "Note"],
-      ["pending", "Interview email · not added yet"],
-      ["upcoming", "Check the portal"],
-      ["upcoming", "OA closes"],
-    ]);
-    expect(dots[0].detail).toBe("Submission confirmation verified on Ashby: Success");
-    expect(dots[2].mailId).toBe(mailId);
-    expect(dots[3].detail).toBe("Asked about the team");
-    expect(dots[4]).toMatchObject({ mailId: pendingId, outcome: "scheduled", recordId: id });
-    expect(dots.every((dot) => dot.role === null && dot.via === null)).toBe(true);
-  });
-
-  it("tags roles when a company has several openings, tags outreach by method, and falls back to the sent date", () => {
-    const direct = record({
-      jobId: "job-a",
-      role: "SDE II, Fabric",
-      sentAt: at("2026-10-01T10:00:00"),
-    });
-    const referral = record({
-      jobId: "job-b",
-      role: "SDE II, Storage",
-      source: "REFERRAL",
-      sentAt: at("2026-09-30T10:00:00"),
-    });
-    expect(
-      laneDots([direct, referral], [], NOW).map((dot) => [dot.label, dot.role, dot.via]),
-    ).toEqual([
-      ["Reached out", "SDE II, Storage", "Referral ask"],
-      ["Applied", "SDE II, Fabric", null],
-    ]);
   });
 });
 
@@ -587,36 +490,6 @@ describe("lanes per application", () => {
       true,
     );
     expect(lanesFor([a, b])).toHaveLength(1);
-  });
-
-  it("mail dots carry their tag", () => {
-    const linked = record({
-      linkedMail: [
-        {
-          id: "m1",
-          subject: "Interview invitation",
-          classification: "INTERVIEW",
-          receivedAt: at("2026-10-01T10:00:00"),
-          attentionState: "DONE",
-        },
-      ],
-    });
-    const pending: PendingMail = {
-      id: "m2",
-      recordId: linked.id,
-      subject: "Background verification",
-      classification: "BACKGROUND_CHECK",
-      receivedAt: at("2026-10-02T10:00:00"),
-      outcome: null,
-    };
-    const [lane] = byApplication([linked], [pending]);
-    const tags = Object.fromEntries(lane.dots.map((dot) => [dot.mailId ?? dot.key, dot.tag]));
-    expect(tags.m1).toBe("interviewCall");
-    expect(tags.m2).toBe("backgroundCheck");
-    expect(lane.dots.find((dot) => dot.mailId === "m2")?.label).toBe(
-      "Background verification email · not added yet",
-    );
-    expect(lane.dots.find((dot) => dot.tone === "sent")?.tag ?? null).toBeNull();
   });
 
   it("previous jobs are not lanes", () => {

@@ -1,13 +1,10 @@
 import { roundKindLabel } from "@/features/companies/metrics";
-import { tagOf, type MailClassification, type MailTag } from "@/features/mail/tags";
 import { suggestedOutcome, type TriageInput } from "@/features/mail/triage";
 import {
   addDays,
   formatDay,
   formatTime,
   formatWeekday,
-  formatWhen,
-  indiaDate,
   istDayStart,
   istDaysBetween,
 } from "./dates";
@@ -174,23 +171,9 @@ export function laneStatus(records: LaneSource[], now: Date, pendingMail = false
   return { tone: status.tone, label: `${status.label}${mail}${more}` };
 }
 
-/* ---------- Dots (spec §2.3) ---------- */
+/* ---------- Tones and matched mail (spec §2.3) ---------- */
 
 export type DotTone = "sent" | "mail" | "good" | "bad" | "note" | "upcoming" | "pending";
-export type LaneDot = {
-  key: string;
-  at: Date;
-  tone: DotTone;
-  label: string;
-  detail: string;
-  recordId: string;
-  role: string | null;
-  via: string | null;
-  mailId: string | null;
-  outcome: OutcomeId | null;
-  /** The email's tag for mail dots, linked or pending; null for every other dot. */
-  tag: MailTag | null;
-};
 export type PendingMail = {
   id: string;
   recordId: string;
@@ -213,46 +196,6 @@ const replyEvents = new Set([
   "INTERVIEW_SCHEDULED",
   "ROUND_RESCHEDULED",
 ]);
-const eventLabel: Record<string, string> = {
-  APPLICATION_CREATED: "Saved the opening",
-  APPLICATION_SENT: "Applied",
-  APPLICATION_SUBMITTED: "Applied",
-  OUTREACH_SENT: "Reached out",
-  FOLLOW_UP_SENT: "Sent a follow-up",
-  REPLY_RECEIVED: "Heard back",
-  ASSESSMENT_RECEIVED: "Got an OA",
-  INTERVIEW_REQUESTED: "Interview requested",
-  INTERVIEW_SCHEDULED: "Round scheduled",
-  ROUND_PASSED: "Cleared the round",
-  ROUND_FAILED: "Didn't clear the round",
-  ROUND_RESCHEDULED: "Round rescheduled",
-  OFFER_RECEIVED: "Got an offer",
-  OFFER_ACCEPTED: "Accepted the offer",
-  OFFER_DECLINED: "Declined the offer",
-  REJECTION_RECEIVED: "Rejected",
-  CLOSED_NO_REPLY: "Closed, no reply",
-  WITHDRAWN: "Withdrew",
-  REFERRAL_SUBMITTED: "Referral submitted",
-  REFERRAL_DECLINED: "Referral declined",
-  MANUAL_NOTE: "Note",
-  MAIL_UNLINKED: "Email unlinked",
-};
-const mailLabel: Record<string, string> = {
-  INTERVIEW: "Interview email",
-  ASSESSMENT: "Assessment invite",
-  OFFER: "Offer email",
-  REJECTION: "Rejection email",
-  INTERVIEW_REJECTION: "Rejection email",
-  FOLLOW_UP: "Recruiter reply",
-  RECRUITER_OUTREACH: "Recruiter email",
-  APPLICATION_ACKNOWLEDGEMENT: "Automatic “we received it”",
-  UNKNOWN: "Email",
-  REFERRAL: "Referral email",
-  INTERVIEW_UPDATE: "Interview update",
-  BACKGROUND_CHECK: "Background verification email",
-  ONBOARDING: "Joining email",
-};
-
 /** Single-line text clipped with an ellipsis. */
 export function clip(text: string, max: number) {
   const flat = text.replace(/\s+/g, " ").trim();
@@ -286,106 +229,6 @@ export function pendingMailFrom(messages: TriageInput[]): PendingMail[] {
   );
 }
 
-export function laneDots(records: LaneSource[], pending: PendingMail[], now: Date): LaneDot[] {
-  const severalJobs = new Set(records.map((record) => record.jobId)).size > 1;
-  const dots: LaneDot[] = [];
-  for (const record of records) {
-    const base = {
-      recordId: record.id,
-      role: severalJobs ? record.role : null,
-      via: isOutreach(record.source) ? (methodLabel[record.source] ?? null) : null,
-      mailId: null,
-      outcome: null,
-      tag: null,
-    };
-    const referenced = new Set(
-      record.events
-        .map((event) => event.payload.mailMessageId)
-        .filter((value): value is string => typeof value === "string"),
-    );
-    for (const event of record.events) {
-      const mailId =
-        typeof event.payload.mailMessageId === "string" ? event.payload.mailMessageId : null;
-      const summary = clip(event.summary, 80);
-      const label = eventLabel[event.eventType] ?? summary;
-      dots.push({
-        ...base,
-        key: `event:${event.id}`,
-        at: event.occurredAt,
-        tone: eventTone(event.eventType, mailId !== null),
-        label,
-        detail: label === summary ? "" : clip(event.summary, 160),
-        mailId,
-      });
-    }
-    for (const mail of record.linkedMail) {
-      if (referenced.has(mail.id)) continue;
-      dots.push({
-        ...base,
-        key: `mail:${mail.id}`,
-        at: mail.receivedAt,
-        tone: "mail",
-        label: mailLabel[mail.classification] ?? "Email",
-        detail: clip(mail.subject, 160),
-        mailId: mail.id,
-        tag: tagOf(mail.classification as MailClassification),
-      });
-    }
-    if (!record.events.length && record.sentAt)
-      dots.push({
-        ...base,
-        key: `sent:${record.id}`,
-        at: record.sentAt,
-        tone: "sent",
-        label: isOutreach(record.source) ? "Reached out" : "Applied",
-        detail: "",
-      });
-    for (const round of record.rounds) {
-      if (round.outcome !== "SCHEDULED" || !round.scheduledAt) continue;
-      dots.push({
-        ...base,
-        key: `round:${round.id}`,
-        at: round.scheduledAt,
-        tone: "upcoming",
-        label:
-          round.kind === "ONLINE_ASSESSMENT"
-            ? "OA closes"
-            : `Round ${round.position} · ${roundKindLabel[round.kind]}`,
-        detail: round.name,
-      });
-    }
-    if (record.nextActionAt && record.phase !== "Closed" && record.nextActionAt > now)
-      dots.push({
-        ...base,
-        key: `followup:${record.id}`,
-        at: record.nextActionAt,
-        tone: "upcoming",
-        label: record.nextActionNote ? clip(record.nextActionNote, 80) : "Follow up",
-        detail: "Your follow-up date",
-      });
-  }
-  for (const mail of pending) {
-    const record = records.find((item) => item.id === mail.recordId);
-    if (!record) continue;
-    dots.push({
-      key: `pending:${mail.id}`,
-      at: mail.receivedAt,
-      tone: "pending",
-      label: `${mailLabel[mail.classification] ?? "Email"} · not added yet`,
-      detail: clip(mail.subject, 160),
-      recordId: record.id,
-      role: severalJobs ? record.role : null,
-      via: null,
-      mailId: mail.id,
-      outcome: mail.outcome,
-      tag: tagOf(mail.classification as MailClassification),
-    });
-  }
-  return dots
-    .filter((dot) => Number.isFinite(dot.at.getTime()))
-    .sort((a, b) => a.at.getTime() - b.at.getTime());
-}
-
 /* ---------- Next step (spec §2.4) ---------- */
 
 export type LaneNext = {
@@ -413,7 +256,6 @@ export type Lane = {
   leadId: string;
   roles: LaneRole[];
   status: LaneStatus;
-  dots: LaneDot[];
   next: LaneNext | null;
   group: LaneGroup;
   lastActivity: number;
@@ -584,7 +426,6 @@ export function buildLanes(input: {
       leadId: lead.id,
       roles,
       status: laneStatus(records, now, pending.length > 0),
-      dots: laneDots(records, pending, now),
       next,
       group:
         pending.length > 0
@@ -607,184 +448,4 @@ export function buildLanes(input: {
         : nextRank(a.next) - nextRank(b.next) || nextTime(a.next) - nextTime(b.next)) ||
       b.lastActivity - a.lastActivity,
   );
-}
-
-/* ---------- Calendar (spec §2.6) ---------- */
-
-const DAY = 86_400_000;
-const IST_OFFSET = 19_800_000;
-export type LaneWindow = { start: number; end: number; ticks: number[] };
-
-/** Two days before the oldest open dot to the end of the 7th IST day after today; 2–12 weeks wide. */
-export function laneWindow(lanes: Lane[], now: Date): LaneWindow {
-  const today = istDayStart(now).getTime();
-  const end = today + 8 * DAY;
-  const times = lanes
-    .filter((lane) => lane.group !== "closed")
-    .flatMap((lane) => lane.dots.map((dot) => dot.at.getTime()));
-  const first = istDayStart(new Date(Math.min(today, ...times))).getTime() - 2 * DAY;
-  const start = Math.max(end - 84 * DAY, Math.min(end - 14 * DAY, first));
-  const step = (end - start) / DAY <= 21 ? 3 : 7;
-  const ticks: number[] = [];
-  let tick = start + DAY;
-  if (step === 7) while (new Date(tick + IST_OFFSET).getUTCDay() !== 1) tick += DAY;
-  for (; tick < end; tick += step * DAY) ticks.push(tick);
-  return { start, end, ticks };
-}
-
-export const positionOf = (window: LaneWindow, at: number) =>
-  Math.min(100, Math.max(0, ((at - window.start) / (window.end - window.start)) * 100));
-
-export type DotStack = {
-  pct: number;
-  earlier: boolean;
-  later: boolean;
-  dots: LaneDot[];
-  lead: LaneDot;
-};
-const dotWeight: Record<DotTone, number> = {
-  pending: 6,
-  upcoming: 5,
-  bad: 4,
-  good: 3,
-  mail: 2,
-  sent: 1,
-  note: 0,
-};
-
-/** Nearby dots stack; out-of-window history and bookings get separate Earlier/Later stacks. */
-export function stackDots(dots: LaneDot[], window: LaneWindow, gap = 4.5): DotStack[] {
-  const stacks: Omit<DotStack, "lead">[] = [];
-  for (const dot of dots) {
-    const time = dot.at.getTime();
-    const earlier = time < window.start;
-    const later = time >= window.end;
-    const pct = positionOf(window, time);
-    const last = stacks.at(-1);
-    if (
-      last &&
-      last.earlier === earlier &&
-      last.later === later &&
-      (earlier || later || pct - last.pct < gap)
-    )
-      last.dots.push(dot);
-    else stacks.push({ pct, earlier, later, dots: [dot] });
-  }
-  return stacks.map((stack) => ({
-    ...stack,
-    lead: stack.dots.reduce((best, dot) =>
-      dotWeight[dot.tone] > dotWeight[best.tone] ? dot : best,
-    ),
-  }));
-}
-
-/** "Today", "Today, 4:00 pm" for later today, else "3 Oct". */
-export function dayLabel(at: Date, now: Date) {
-  if (indiaDate(at) === indiaDate(now)) return at > now ? `Today, ${formatTime(at)}` : "Today";
-  return indiaDate(at).slice(0, 4) === indiaDate(now).slice(0, 4)
-    ? formatDay(at)
-    : `${formatDay(at)} ${indiaDate(at).slice(0, 4)}`;
-}
-
-export type StackView = {
-  key: string;
-  pct: number;
-  tone: DotTone;
-  /** Set when the stack's first dot is an email: the chart draws its tag icon. */
-  tag: MailTag | null;
-  count: number;
-  label: string;
-  lines: string[];
-  edge: "earlier" | "later" | null;
-  entries: {
-    key: string;
-    tone: DotTone;
-    label: string;
-    when: string;
-    detail: string;
-    scope: string;
-  }[];
-};
-export type LaneView = {
-  key: string;
-  company: string;
-  /** The role under the company name when the lane holds one application. */
-  role: string | null;
-  leadId: string;
-  status: LaneStatus;
-  group: LaneGroup;
-  next: LaneNext | null;
-  stacks: StackView[];
-  line: { from: number; to: number } | null;
-  dashed: { from: number; to: number } | null;
-};
-export type ChartView = {
-  lanes: LaneView[];
-  today: number;
-  ticks: { pct: number; label: string | null }[];
-};
-
-function dotLine(dot: LaneDot, now: Date) {
-  const scope = [dot.role, dot.via].filter(Boolean).join(" · ");
-  return `${scope ? `${scope} · ` : ""}${dot.label}, ${dayLabel(dot.at, now)}${dot.detail ? ` (${dot.detail})` : ""}`;
-}
-
-/** Plain, serializable chart data for the client component. */
-export function laneViews(lanes: Lane[], window: LaneWindow, now: Date): ChartView {
-  const today = positionOf(window, now.getTime());
-  return {
-    today,
-    ticks: window.ticks.map((tick) => {
-      const pct = positionOf(window, tick);
-      return { pct, label: Math.abs(pct - today) > 5 ? formatDay(new Date(tick)) : null };
-    }),
-    lanes: lanes.map((lane) => {
-      const past = lane.dots.filter((dot) => dot.at <= now);
-      const future = lane.dots.filter((dot) => dot.at > now);
-      const first = lane.dots[0];
-      return {
-        key: lane.key,
-        company: lane.company,
-        role: lane.roles.length === 1 ? lane.roles[0].role : null,
-        leadId: lane.leadId,
-        status: lane.status,
-        group: lane.group,
-        next: lane.next,
-        stacks: stackDots(lane.dots, window).map((stack) => {
-          const lines = stack.dots.map((dot) => dotLine(dot, now));
-          return {
-            key: stack.dots[0].key,
-            pct: stack.pct,
-            tone: stack.lead.tone,
-            tag: stack.lead.tag,
-            count: stack.dots.length,
-            lines,
-            edge: stack.earlier ? "earlier" : stack.later ? "later" : null,
-            entries: stack.dots.map((dot) => ({
-              key: dot.key,
-              tone: dot.tone,
-              label: dot.label,
-              when:
-                indiaDate(dot.at).slice(0, 4) === indiaDate(now).slice(0, 4)
-                  ? formatWhen(dot.at, now)
-                  : `${formatDay(dot.at)} ${indiaDate(dot.at).slice(0, 4)}, ${formatTime(dot.at)}`,
-              detail: dot.detail,
-              scope: [dot.role, dot.via].filter(Boolean).join(" · "),
-            })),
-            label: `${stack.earlier ? "Earlier: " : stack.later ? "Later: " : ""}${lines.join("; ")}`,
-          };
-        }),
-        line:
-          first && past.length
-            ? {
-                from: positionOf(window, first.at.getTime()),
-                to: lane.group === "closed" ? positionOf(window, past.at(-1)!.at.getTime()) : today,
-              }
-            : null,
-        dashed: future.length
-          ? { from: today, to: positionOf(window, future.at(-1)!.at.getTime()) }
-          : null,
-      };
-    }),
-  };
 }

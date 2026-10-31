@@ -19,7 +19,6 @@ const lane = (key: string, group: LaneGroup, patch: Partial<Lane> = {}): Lane =>
   leadId: `${key}-lead`,
   roles: [],
   status: { tone: "applied", label: "Applied" },
-  dots: [],
   next: null,
   group,
   lastActivity: 0,

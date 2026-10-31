@@ -2,7 +2,6 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { expect, it } from "vitest";
 import { formatWhen } from "@/features/applications/dates";
-import { StatusPill } from "@/features/applications/views/lane-marks";
 import { Timeline } from "@/features/applications/views/timeline";
 
 const NOW = new Date("2026-10-03T10:30:00+05:30");
@@ -60,13 +59,4 @@ it("shows an empty history plainly", () => {
   expect(renderToStaticMarkup(createElement(Timeline, { now: NOW, entries: [] }))).toContain(
     "Nothing recorded yet.",
   );
-});
-
-it("marks quiet records with the review dot and a test id", () => {
-  const html = renderToStaticMarkup(
-    createElement(StatusPill, { status: { tone: "quiet", label: "Quiet for 13 days" } }),
-  );
-  expect(html).toContain('data-testid="lane-status"');
-  expect(html).toContain("bg-review");
-  expect(html).toContain("Quiet for 13 days");
 });
