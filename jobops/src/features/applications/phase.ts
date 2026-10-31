@@ -230,7 +230,7 @@ export function availableOutcomes(state: RecordState): OutcomeId[] {
     return ["passed", "failed", "rescheduled", "rejected", "withdrew"];
   if (phase === "Interviewing")
     return ["scheduled", "offer", "followup", "rejected", "ghosted", "withdrew"];
-  return ["heard", "oa", "scheduled", "followup", "rejected", "ghosted", "withdrew"];
+  return ["heard", "oa", "scheduled", "offer", "followup", "rejected", "ghosted", "withdrew"];
 }
 
 /** A requested outcome (from a queue or mail link) is preselected only when it applies. */

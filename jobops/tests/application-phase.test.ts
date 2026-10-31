@@ -80,11 +80,18 @@ describe("available outcomes", () => {
       "heard",
       "oa",
       "scheduled",
+      "offer",
       "followup",
       "rejected",
       "ghosted",
       "withdrew",
     ]));
+  it("offers Got an offer from Applied", () =>
+    expect(availableOutcomes(state())).toContain("offer"));
+  it("keeps offer out while a round is booked", () =>
+    expect(
+      availableOutcomes(state({ status: "TECHNICAL_INTERVIEW", rounds: [booked] })),
+    ).not.toContain("offer"));
   it("only settles or moves a booked round", () =>
     expect(availableOutcomes(state({ status: "TECHNICAL_INTERVIEW", rounds: [booked] }))).toEqual([
       "passed",

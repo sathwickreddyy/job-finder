@@ -47,7 +47,10 @@ describe("suggestHandling", () => {
   });
 
   it("falls back to Just info when not allowed", () => {
-    const handling = suggestHandling(item({ kind: "Offer", tag: "offer" }), [role("a")]);
+    const booked = { kind: "DSA" as const, outcome: "SCHEDULED" as const, scheduledAt: null };
+    const handling = suggestHandling(item({ kind: "Offer", tag: "offer" }), [
+      role("a", { status: "TECHNICAL_INTERVIEW", rounds: [booked] }),
+    ]);
     expect(handling.applications[0].outcomes).not.toContain("offer");
     expect(handling).toMatchObject({
       suggested: "info",
