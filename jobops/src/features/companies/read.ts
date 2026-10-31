@@ -87,6 +87,7 @@ export async function readCompanies() {
       locationSource: present.find((location) => location.sourceUrl)?.sourceUrl ?? "",
       locations: present,
       facts: facts.filter((fact) => fact.companyId === row.id),
+      kind: row.kind === "PREVIOUS_EMPLOYER" ? "PREVIOUS_EMPLOYER" : "SHORTLIST",
     };
   });
   return { records, openings, families, references, companies };

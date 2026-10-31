@@ -24,6 +24,7 @@ import type { CompaniesData } from "./read";
 import { CompanyResearch } from "./research";
 import { compensationAmount, publicationYear, type ResearchFact } from "./research-data";
 import { CompanyResumeReference } from "./resume-reference";
+import { PreviousJobForm } from "./previous-job-form";
 import { PreviousBadge, StatusPill } from "./status-pill";
 import type { CompanySummary } from "./summary";
 
@@ -155,6 +156,14 @@ export function DetailHeader({
           )}
         </p>
       )}
+      <details className="group max-w-md">
+        <summary className="inline-flex cursor-pointer list-none items-center gap-1 text-sm font-medium text-link [&::-webkit-details-marker]:hidden">
+          Add previous job
+        </summary>
+        <div className="mt-3 rounded-card border border-border bg-card p-4">
+          <PreviousJobForm company={{ key: normalizeCompany(company.name), name: company.name }} />
+        </div>
+      </details>
     </header>
   );
 }
