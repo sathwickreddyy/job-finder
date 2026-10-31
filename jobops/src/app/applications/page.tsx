@@ -2,12 +2,14 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { Button, EmptyState, PageHeader } from "@/components/ui";
-import { buildLanes, laneViews, laneWindow, pendingMailFrom } from "@/features/applications/lanes";
+import { journeyOf } from "@/features/applications/journey";
+import { buildLanes, pendingMailFrom } from "@/features/applications/lanes";
 import { resolveLanesView } from "@/features/applications/navigation";
 import { buildQueue } from "@/features/applications/queue";
 import { readApplications } from "@/features/applications/read";
-import { LaneDetail } from "@/features/applications/views/lane-detail";
-import { LanesChart } from "@/features/applications/views/lanes";
+import { readApplicationStory } from "@/features/applications/story";
+import { ApplicationExpanded } from "@/features/applications/views/application-detail";
+import { ApplicationList } from "@/features/applications/views/application-list";
 import { readMailTriage, readOpenMail } from "@/features/mail/read";
 import { queueMailFrom } from "@/features/mail/triage";
 import { PREVIOUS_JOB, previousJobs } from "@/features/companies/previous-job";
@@ -38,7 +40,7 @@ export default async function Applications({
     readApplications(),
     previousJobs(),
   ]);
-  // Previous jobs are history: listed under the chart, never lanes or queue items.
+  // Previous jobs are history: listed below, never rows or queue items.
   const records = all.filter((record) => record.source !== PREVIOUS_JOB);
   const triage = await readMailTriage(records);
   const items = buildQueue({ records, mail: queueMailFrom(triage.messages), snoozes, now });
@@ -49,7 +51,7 @@ export default async function Applications({
     now,
     by: "application",
   });
-  const chart = laneViews(lanes, laneWindow(lanes, now), now);
+  const journeys = Object.fromEntries(records.map((record) => [record.id, journeyOf(record)]));
   const openRecord = view.open ? records.find((record) => record.id === view.open) : undefined;
   const openLane = openRecord ? lanes.find((lane) => lane.key === openRecord.id) : undefined;
   const companyName = new Map(all.map((record) => [record.id, record.companyName]));
@@ -57,7 +59,7 @@ export default async function Applications({
   let mailError: string | undefined;
   if (openRecord && view.mail !== null) {
     if (!z.uuid().safeParse(view.mail).success)
-      mailError = "The source message link is invalid. Open Emails to choose a message.";
+      mailError = "The source message link is invalid. Open Mail to choose a message.";
     else {
       try {
         mail = await readOpenMail(view.mail, openRecord.id);
@@ -67,15 +69,18 @@ export default async function Applications({
       }
     }
   }
-  const recordOptions = records.map((record) => ({
-    id: record.id,
-    label: `${record.companyName} · ${record.role}`,
-  }));
+  const story =
+    openRecord &&
+    (await readApplicationStory(
+      openRecord,
+      records.filter((record) => record.companyKey === openRecord.companyKey),
+      now,
+    ));
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
         title="Applications"
-        description="Every application on one calendar: what happened, where it stands and what to do next."
+        description="How far each application got, and the one thing to do next."
         actions={
           <>
             <Button variant="outline" asChild>
@@ -96,20 +101,22 @@ export default async function Applications({
         </p>
       )}
       {records.length ? (
-        <LanesChart
-          {...chart}
-          openKey={openLane?.key ?? null}
+        <ApplicationList
+          lanes={lanes}
+          journeys={journeys}
+          openId={openLane ? openRecord!.id : null}
           detail={
-            openLane && openRecord ? (
-              <LaneDetail
-                lane={openLane}
+            openLane && openRecord && story ? (
+              <ApplicationExpanded
                 record={openRecord}
+                lane={openLane}
+                journey={journeys[openRecord.id]}
+                story={story}
                 now={now}
                 requested={view.outcome}
                 mail={mail}
                 mailIntent={view.mail ?? undefined}
                 mailError={mailError}
-                records={recordOptions}
               />
             ) : null
           }
