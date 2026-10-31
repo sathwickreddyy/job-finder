@@ -7,7 +7,7 @@ import { mailMessages, settings } from "@/db/schema";
 import { outcomeDetail, type OutcomeId } from "@/features/applications/phase";
 import { actionError, formString, type ActionState } from "@/lib/actions";
 import type { RoundKind } from "@/lib/round-kinds";
-import { loadMailContext, ruleKey, ruleSchema } from "./context";
+import { companyRuleSchema, loadMailContext, ruleKey } from "./context";
 import { checkMailStep, type CheckResult } from "./check-service";
 import { handleMail, updateMail } from "./handle-service";
 import { notExcluded } from "./mail-list";
@@ -39,9 +39,9 @@ export async function saveWorkspaceRule(
     const context = await loadMailContext();
     const company = context.companies.find((row) => row.id === key);
     if (!company) throw new Error("Choose an existing company.");
-    const rule = ruleSchema.parse(
+    const parsed = companyRuleSchema(company.name).safeParse(
       Object.fromEntries(
-        ["aliases", "domains", "senders", "subjectTerms", "excludedTerms"].map((field) => [
+        ["aliases", "domains", "senders", "keywords", "excludedTerms"].map((field) => [
           field,
           formString(form, field)
             .split(",")
@@ -50,6 +50,8 @@ export async function saveWorkspaceRule(
         ]),
       ),
     );
+    if (!parsed.success) return { error: parsed.error.issues[0].message };
+    const rule = parsed.data;
     await db
       .insert(settings)
       .values({
@@ -87,7 +89,13 @@ export async function saveWorkspaceRule(
         scoped,
         { historical: true, seen: true },
       );
-      if (decision.companyKeys.length !== 1 || decision.companyKeys[0] !== key) continue;
+      // Dropped decisions name the company they nearly matched; only kept ones place mail.
+      if (
+        decision.disposition === "excluded" ||
+        decision.companyKeys.length !== 1 ||
+        decision.companyKeys[0] !== key
+      )
+        continue;
       await db.update(mailMessages).set({ companyKey: key }).where(eq(mailMessages.id, message.id));
       placed++;
     }

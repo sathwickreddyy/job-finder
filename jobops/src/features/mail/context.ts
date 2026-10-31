@@ -13,8 +13,79 @@ import {
 import { normalizeCompany, companyResolver } from "@/features/applications/lanes";
 import type { CompanyMailRule } from "./company-rules";
 
-export const ruleSchema = z.object({
-  aliases: z.array(z.string().trim().min(1).max(150)).max(20),
+/** Words in every company's mail; a keyword made of one of these would claim all of it. */
+export const genericJobWords = [
+  "application",
+  "applications",
+  "interview",
+  "interviews",
+  "job",
+  "jobs",
+  "hiring",
+  "recruiter",
+  "recruiters",
+  "recruiting",
+  "recruitment",
+  "careers",
+  "career",
+  "offer",
+  "offers",
+  "assessment",
+  "role",
+  "roles",
+  "position",
+  "positions",
+  "opening",
+  "openings",
+  "talent",
+  "team",
+  "hr",
+];
+/** Why a keyword can't identify a company, or `null` when it can. */
+export function keywordProblem(value: string, company?: string): string | null {
+  const term = value.trim();
+  if (!genericJobWords.includes(term.toLowerCase())) return null;
+  return company
+    ? `"${term}" appears in every company's mail, so it can't identify ${company}. Try a phrase like "${company} Talent".`
+    : `"${term}" appears in every company's mail, so it can't identify one company. Try a phrase with the company's name.`;
+}
+
+/** Senders many companies share: personal mail, applicant tracking systems, job portals and BGV vendors. */
+export const sharedSenderDomains = [
+  "gmail.com",
+  "googlemail.com",
+  "outlook.com",
+  "outlook.in",
+  "hotmail.com",
+  "yahoo.com",
+  "icloud.com",
+  "greenhouse.io",
+  "lever.co",
+  "ashbyhq.com",
+  "myworkday.com",
+  "workday.com",
+  "smartrecruiters.com",
+  "icims.com",
+  "hackerrank.com",
+  "hackerearth.com",
+  "naukri.com",
+  "instahyre.com",
+  "cutshort.io",
+  "hirist.tech",
+  "linkedin.com",
+  "fadv.com",
+  "hireright.com",
+  "authbridge.com",
+];
+/** An address (or bare domain) on a shared domain or one of its subdomains. */
+export function isSharedSender(address: string): boolean {
+  const domain = address.trim().toLowerCase().split("@").at(-1) ?? "";
+  return sharedSenderDomains.some((shared) => domain === shared || domain.endsWith(`.${shared}`));
+}
+
+const term = z.string().trim().min(1).max(150);
+const ruleFields = {
+  aliases: z.array(term).max(20),
   domains: z
     .array(
       z
@@ -25,11 +96,45 @@ export const ruleSchema = z.object({
     )
     .max(20),
   senders: z.array(z.email().max(254)).max(30),
-  subjectTerms: z.array(z.string().trim().min(1).max(150)).max(20),
-  excludedTerms: z.array(z.string().trim().min(1).max(150)).max(20),
-});
+  keywords: z.array(term).max(20),
+  excludedTerms: z.array(term).max(20),
+};
+/** Rules saved before 2026-10-31 called keywords `subjectTerms`. */
+const withKeywords = (value: unknown) => {
+  if (!value || typeof value !== "object" || "keywords" in value) return value;
+  const { subjectTerms, ...rest } = value as Record<string, unknown>;
+  return { ...rest, keywords: subjectTerms ?? [] };
+};
+/** A rule edit for a company; a generic keyword is refused with the company's name in the copy. */
+export function companyRuleSchema(company?: string) {
+  return z.preprocess(
+    withKeywords,
+    z.object({
+      ...ruleFields,
+      keywords: ruleFields.keywords.superRefine((keywords, ctx) => {
+        for (const keyword of keywords) {
+          const problem = keywordProblem(keyword, company);
+          if (problem) ctx.addIssue({ code: "custom", message: problem });
+        }
+      }),
+    }),
+  );
+}
+export const ruleSchema = companyRuleSchema();
+/** A saved rule; keywords refused since it was saved are dropped so its addresses still apply. */
+export function storedRule(value: unknown) {
+  const parsed = z.preprocess(withKeywords, z.object(ruleFields)).safeParse(value);
+  if (!parsed.success) return null;
+  return {
+    ...parsed.data,
+    keywords: parsed.data.keywords.filter((keyword) => !keywordProblem(keyword)),
+  };
+}
 /** The lane key for a company name, joining listed names and aliases to their company record. */
-export function companyKeyFor(companyName: string, companies: { name: string; aliases: string[] }[]) {
+export function companyKeyFor(
+  companyName: string,
+  companies: { name: string; aliases: string[] }[],
+) {
   return companyResolver(companies)(companyName).companyKey;
 }
 export const ruleKey = (key: string) =>
@@ -61,22 +166,10 @@ export type MailContext = {
   outbound: OutboundContact[];
   baselineAt: string;
 };
-const blockedDefaults = [
-  "gmail.com",
-  "outlook.com",
-  "outlook.in",
-  "linkedin.com",
-  "greenhouse.io",
-  "ashbyhq.com",
-  "lever.co",
-  "workday.com",
-];
 function websiteDomain(website: string | null) {
   try {
     const domain = new URL(website ?? "").hostname.replace(/^www\./, "").toLowerCase();
-    return blockedDefaults.some((name) => domain === name || domain.endsWith(`.${name}`))
-      ? []
-      : [domain];
+    return isSharedSender(domain) ? [] : [domain];
   } catch {
     return [];
   }
@@ -105,25 +198,28 @@ export async function loadMailContext(): Promise<MailContext> {
   for (const company of companies) {
     const id = normalizeCompany(company.name);
     const saved = storedRules.find((row) => row.key === ruleKey(id));
-    const parsed = ruleSchema.safeParse(saved?.value.rule);
+    const parsed = storedRule(saved?.value.rule);
     allCompanies.set(id, {
       id,
       name: company.name,
       slug: company.slug,
       rule: {
         company: company.name,
-        ...(parsed.success
-          ? parsed.data
-          : {
-              aliases: company.aliases.filter((alias) => alias.trim().length >= 5),
-              domains: [...new Set([...websiteDomain(company.websiteUrl), ...websiteDomain(company.careersUrl)])],
-              senders: [],
-              subjectTerms: [],
-              excludedTerms: [],
-            }),
+        ...(parsed ?? {
+          aliases: company.aliases.filter((alias) => alias.trim().length >= 5),
+          domains: [
+            ...new Set([
+              ...websiteDomain(company.websiteUrl),
+              ...websiteDomain(company.careersUrl),
+            ]),
+          ],
+          senders: [],
+          keywords: [],
+          excludedTerms: [],
+        }),
       },
       baselineAt,
-      ruleSource: parsed.success
+      ruleSource: parsed
         ? "Your saved pattern"
         : "Company name, aliases and recorded website/careers domains",
     });
@@ -132,7 +228,7 @@ export async function loadMailContext(): Promise<MailContext> {
     const resolved = resolve(row.company);
     if (!allCompanies.has(resolved.companyKey)) {
       const saved = storedRules.find((row) => row.key === ruleKey(resolved.companyKey));
-      const parsed = ruleSchema.safeParse(saved?.value.rule);
+      const parsed = storedRule(saved?.value.rule);
       allCompanies.set(resolved.companyKey, {
         id: resolved.companyKey,
         name: resolved.companyName,
@@ -143,11 +239,11 @@ export async function loadMailContext(): Promise<MailContext> {
           aliases: [],
           domains: [],
           senders: [],
-          subjectTerms: [],
+          keywords: [],
           excludedTerms: [],
-          ...(parsed.success ? parsed.data : {}),
+          ...parsed,
         },
-        ruleSource: parsed.success ? "Your saved pattern" : "Recorded application company",
+        ruleSource: parsed ? "Your saved pattern" : "Recorded application company",
       });
     }
     const sent = events.find(

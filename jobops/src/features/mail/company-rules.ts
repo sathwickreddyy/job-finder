@@ -6,12 +6,15 @@ export type CompanyMailRule = {
   aliases: string[];
   domains: string[];
   senders: string[];
-  subjectTerms: string[];
+  /** Phrases that identify the company in a subject or sender name, such as "Fernwood Hiring Team". */
+  keywords: string[];
   excludedTerms: string[];
 };
 export type MailEvidence = {
   subject: string;
   sender: string;
+  /** The display name, which carries the company for mail sent through an ATS. */
+  senderName?: string;
   bodyText: string;
   receivedAt: string;
   sourceFolder: string;
@@ -33,6 +36,15 @@ const networking =
 const inboundHelp =
   /\b(?:can you refer me|could you refer me|refer me (?:to|for)|looking for a referral from you|can you help me (?:find|get|with) (?:a )?job|please review my (?:cv|resume))\b/i;
 const linkedinDomains = ["linkedin.com", "linkedinmail.com"];
+/** Hiring words in a subject; sender names like "Talent" and body footers don't count. */
+const hiringWords =
+  /\b(?:careers?|jobs?|roles?|positions?|openings?|hiring|recruit(?:er|ers|ing|ment)|talent|interviews?|assessment|candidate|applica(?:nt|tion)|appl(?:y|ied|ying)|notice period|ctc|compensation|resume|cv)\b/i;
+/** Evidence strong enough to keep company mail as Other when no job event is recognised. */
+const strongEvidence = [
+  "Exact sender rule",
+  "Company sender domain",
+  "Keyword in subject or sender name",
+];
 
 function domainOf(address: string) {
   return address.trim().toLowerCase().split("@")[1] ?? "";
@@ -45,10 +57,7 @@ function hasTerm(text: string, term: string) {
   const value = term.trim().toLowerCase();
   if (!value) return false;
   const escaped = value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return new RegExp(
-    `(?:^|[^\\p{L}\\p{N}])${escaped}(?:$|[^\\p{L}\\p{N}])`,
-    "iu",
-  ).test(text);
+  return new RegExp(`(?:^|[^\\p{L}\\p{N}])${escaped}(?:$|[^\\p{L}\\p{N}])`, "iu").test(text);
 }
 
 export function evaluateCompanyMail(
@@ -64,8 +73,7 @@ export function evaluateCompanyMail(
   // Match only current-message text supplied by a parser; quoted history and
   // notification footers must not establish intent or contact identity.
   const text = `${message.subject}\n${message.bodyText}`;
-  if (inboundHelp.test(text))
-    return exclude("Someone is asking you for job-search help");
+  if (inboundHelp.test(text)) return exclude("Someone is asking you for job-search help");
   if (networking.test(message.subject))
     return exclude("Networking, digest or promotional notification");
   if (
@@ -75,67 +83,66 @@ export function evaluateCompanyMail(
     (/\b(?:opted in to (?:job )?alerts|update your job preferences|manage (?:your )?job alerts)\b/i.test(
       message.bodyText,
     ) &&
-      !/\b(?:your application|thank you for applying|your interview|your assessment)\b/i.test(
-        text,
-      ))
+      !/\b(?:your application|thank you for applying|your interview|your assessment)\b/i.test(text))
   )
     return exclude("Networking, digest or promotional notification");
-  if (/\b(?:your (?:order|package)|order (?:confirmation|shipped|delivered)|invoice|billing|payment (?:received|due|successful)|service health|cloudwatch|cost report|usage report|security alert|password reset|sign.in code)\b/i.test(message.subject) &&
-      !/\b(?:your application|your interview|your assessment|thank you for applying)\b/i.test(text))
+  if (
+    /\b(?:your (?:order|package)|order (?:confirmation|shipped|delivered)|invoice|billing|payment (?:received|due|successful)|service health|cloudwatch|cost report|usage report|security alert|password reset|sign.in code)\b/i.test(
+      message.subject,
+    ) &&
+    !/\b(?:your application|your interview|your assessment|thank you for applying)\b/i.test(text)
+  )
     return exclude("Shopping, billing or account notification without an application update");
   const domain = domainOf(message.sender);
-  const linkedin = linkedinDomains.some((allowed) =>
-    domainMatches(domain, allowed),
-  );
+  const linkedin = linkedinDomains.some((allowed) => domainMatches(domain, allowed));
   if (linkedin && !message.contactedPersonReply)
-    return exclude(
-      "LinkedIn notification has no verified reply from someone you contacted",
-    );
+    return exclude("LinkedIn notification has no verified reply from someone you contacted");
 
   const evidence: string[] = [];
   if (message.linkedThread) evidence.push("Existing application thread");
-  if (message.contactedPersonReply)
-    evidence.push("Reply from a person you contacted");
-  if (
-    rule.senders.some(
-      (sender) => sender.trim().toLowerCase() === message.sender.toLowerCase(),
-    )
-  )
+  if (message.contactedPersonReply) evidence.push("Reply from a person you contacted");
+  if (rule.senders.some((sender) => sender.trim().toLowerCase() === message.sender.toLowerCase()))
     evidence.push("Exact sender rule");
-  if (
-    !linkedin &&
-    rule.domains.some((allowed) => domainMatches(domain, allowed))
-  )
+  if (!linkedin && rule.domains.some((allowed) => domainMatches(domain, allowed)))
     evidence.push("Company sender domain");
   const aliasMatch = [rule.company, ...rule.aliases].some((alias) =>
     hasTerm(message.subject, alias),
   );
   if (aliasMatch) evidence.push("Company name in subject");
-  if (!evidence.length)
-    return exclude("No company, application thread or contacted-person match");
-  const excludedTerm = rule.excludedTerms.find((term) => hasTerm(text, term));
-  if (excludedTerm) return exclude("Matches a company exclusion rule", [`Excluded phrase: ${excludedTerm}`]);
-  const requiredSubject = rule.subjectTerms.filter((term) => term.trim());
+  const senderName = message.senderName ?? "";
   if (
-    requiredSubject.length &&
-    !requiredSubject.some((term) => hasTerm(message.subject, term))
+    rule.keywords.some(
+      (keyword) => hasTerm(message.subject, keyword) || hasTerm(senderName, keyword),
+    )
   )
-    return exclude("Subject does not match the saved company pattern");
+    evidence.push("Keyword in subject or sender name");
+  if (!evidence.length) return exclude("No company, application thread or contacted-person match");
+  const excludedTerm = rule.excludedTerms.find((term) => hasTerm(text, term));
+  if (excludedTerm)
+    return exclude("Matches a company exclusion rule", [`Excluded phrase: ${excludedTerm}`]);
 
+  // With no recognised event, keep company mail as Other only on strong evidence: an
+  // exact sender, or the company's domain or keyword with hiring words in the subject.
   const event = classifyMail(message);
+  const strong =
+    evidence.includes("Exact sender rule") ||
+    (evidence.some((item) => strongEvidence.includes(item)) && hiringWords.test(message.subject));
   if (
     (!event.relevant || event.type === "UNKNOWN") &&
-    !evidence.includes("Exact sender rule") && !requiredSubject.length &&
+    !strong &&
     !message.linkedThread &&
     !message.contactedPersonReply
   )
-    return exclude("Company match without a job-search event");
+    return exclude(
+      `Matched ${rule.company} by ${evidence
+        .map((item) => item[0].toLowerCase() + item.slice(1))
+        .join(" and ")}; no job event recognised`,
+      evidence,
+    );
   const received = Date.parse(message.receivedAt);
   const baseline = Date.parse(baselineAt);
   if (!Number.isFinite(received) || !Number.isFinite(baseline))
-    return exclude(
-      "Message date or latest-check baseline is missing; review separately",
-    );
+    return exclude("Message date or latest-check baseline is missing; review separately");
   if (message.seen || message.historical || received <= baseline)
     return {
       destination: "history",

@@ -68,4 +68,27 @@ describe.skipIf(!dbTests)("saving a company mail rule", () => {
     const [hidden] = await db.select().from(mailMessages).where(eq(mailMessages.id, excluded.id));
     expect(hidden.companyKey).toBeNull();
   });
+
+  it("does not place mail the rule only nearly matches", async () => {
+    const promo = await email({
+      sender: `deals@${domain}`,
+      subject: `${name} Prime Day ${prefix}`,
+      bodyText: "Big savings this weekend",
+    });
+    const form = new FormData();
+    form.set("company", key);
+    form.set("domains", domain);
+    expect((await saveWorkspaceRule({}, form)).error).toBeUndefined();
+    const [after] = await db.select().from(mailMessages).where(eq(mailMessages.id, promo.id));
+    expect(after.companyKey).toBeNull();
+  });
+
+  it("refuses a generic keyword with the company's name", async () => {
+    const form = new FormData();
+    form.set("company", key);
+    form.set("keywords", "Interview");
+    expect((await saveWorkspaceRule({}, form)).error).toBe(
+      `"Interview" appears in every company's mail, so it can't identify ${name}. Try a phrase like "${name} Talent".`,
+    );
+  });
 });

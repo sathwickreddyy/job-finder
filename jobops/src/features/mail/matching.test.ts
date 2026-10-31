@@ -16,7 +16,7 @@ const context: MailContext = {
         aliases: [],
         domains: ["acme.example"],
         senders: [],
-        subjectTerms: [],
+        keywords: [],
         excludedTerms: [],
       },
     },
@@ -102,11 +102,8 @@ describe("production mail matching evidence", () => {
     expect(result.companyKeys).toEqual([]);
     expect(result.applicationIds).toEqual([]);
     expect(
-      matchMail(
-        update,
-        { ...context, companies: [] },
-        { historical: true, seen: false },
-      ).disposition,
+      matchMail(update, { ...context, companies: [] }, { historical: true, seen: false })
+        .disposition,
     ).toBe("history");
   });
   it("does not bypass an explicit company exclusion for a personal update", () => {
@@ -134,14 +131,10 @@ describe("production mail matching evidence", () => {
   });
   it("uses a unique role mention or linked thread to identify the application", () => {
     expect(
-      matchMail(
-        { ...message, subject: "Software Engineer II interview invitation" },
-        context,
-        {
-          historical: false,
-          seen: false,
-        },
-      ).applicationIds,
+      matchMail({ ...message, subject: "Software Engineer II interview invitation" }, context, {
+        historical: false,
+        seen: false,
+      }).applicationIds,
     ).toEqual(["sde"]);
     expect(
       matchMail(message, context, {
@@ -159,10 +152,9 @@ describe("production mail matching evidence", () => {
       subject: "Priya Sharma sent you a message",
       bodyText: "Send me your CV.",
     };
-    expect(
-      matchMail(reply, context, { historical: false, seen: false })
-        .applicationIds,
-    ).toEqual(["sde"]);
+    expect(matchMail(reply, context, { historical: false, seen: false }).applicationIds).toEqual([
+      "sde",
+    ]);
     expect(
       matchMail(
         {
@@ -176,11 +168,8 @@ describe("production mail matching evidence", () => {
       ).disposition,
     ).toBe("excluded");
     expect(
-      matchMail(
-        reply,
-        { ...context, outbound: [] },
-        { historical: false, seen: false },
-      ).disposition,
+      matchMail(reply, { ...context, outbound: [] }, { historical: false, seen: false })
+        .disposition,
     ).toBe("excluded");
   });
   it("excludes inbound referral requests even from an outgoing contact", () => {
@@ -202,8 +191,7 @@ describe("production mail matching evidence", () => {
         {
           ...message,
           subject: "Re: Hello",
-          bodyText:
-            "Please unsubscribe me\nOn Monday wrote:\nInterview invitation",
+          bodyText: "Please unsubscribe me\nOn Monday wrote:\nInterview invitation",
         },
         context,
         { historical: false, seen: false },
@@ -211,10 +199,9 @@ describe("production mail matching evidence", () => {
     ).toBe("excluded");
   });
   it("keeps historical matches out of Latest, irrespective of folder or provider read state", () => {
-    expect(
-      matchMail(message, context, { historical: true, seen: false })
-        .disposition,
-    ).toBe("history");
+    expect(matchMail(message, context, { historical: true, seen: false }).disposition).toBe(
+      "history",
+    );
     expect(
       matchMail({ ...message, folders: ["Inbox"] }, context, {
         historical: false,
@@ -230,8 +217,82 @@ describe("production mail matching evidence", () => {
       name: "Other",
       rule: { ...shared.companies[0].rule, company: "Other" },
     });
-    expect(
-      matchMail(message, shared, { historical: false, seen: false }).reason,
-    ).toContain("Ambiguous");
+    expect(matchMail(message, shared, { historical: false, seen: false }).reason).toContain(
+      "Ambiguous",
+    );
+  });
+});
+
+describe("specific reasons on dropped mail", () => {
+  const oracle: MailContext = {
+    baselineAt: "2026-10-29T18:30:00Z",
+    applications: [],
+    outbound: [],
+    companies: [
+      {
+        id: "oracle",
+        name: "Oracle",
+        slug: "oracle",
+        baselineAt: "2026-10-29T18:30:00Z",
+        ruleSource: "test",
+        rule: {
+          company: "Oracle",
+          aliases: [],
+          domains: ["oracle.com"],
+          senders: [],
+          keywords: [],
+          excludedTerms: [],
+        },
+      },
+    ],
+  };
+  const options = { historical: false, seen: false };
+  it("reports the matched company's reason and key on exclusion", () => {
+    const result = matchMail(
+      {
+        ...message,
+        sender: "events@example.net",
+        senderName: "Events",
+        subject: "Oracle meetup",
+        bodyText: "Join us",
+      },
+      oracle,
+      options,
+    );
+    expect(result.disposition).toBe("excluded");
+    expect(result.reason).toMatch(/^Matched Oracle/);
+    expect(result.companyKeys).toEqual(["oracle"]);
+  });
+  it('keeps "Thank you for your application to Oracle"', () => {
+    const result = matchMail(
+      {
+        ...message,
+        sender: "oracle-hcm@oracle.com",
+        senderName: "Oracle",
+        subject: "Thank you for your application to Oracle",
+        bodyText: "We will review it.",
+      },
+      oracle,
+      options,
+    );
+    expect(result.disposition).toBe("latest");
+    expect(result.companyKeys).toEqual(["oracle"]);
+  });
+  it("keeps the generic reason only when no company had any evidence", () => {
+    const result = matchMail(
+      {
+        ...message,
+        sender: "news@example.net",
+        senderName: "News",
+        subject: "Weekend reading",
+        bodyText: "",
+      },
+      oracle,
+      options,
+    );
+    expect(result.reason).toBe(
+      "No hiring update matched a saved company, application or outgoing contact",
+    );
+    expect(result.companyKeys).toEqual([]);
   });
 });

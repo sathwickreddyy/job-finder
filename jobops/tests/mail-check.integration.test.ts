@@ -16,7 +16,7 @@ const rule = {
   aliases: [],
   domains: ["fixture.invalid"],
   senders: [],
-  subjectTerms: [],
+  keywords: [],
   excludedTerms: [],
 };
 const context: MailContext = {

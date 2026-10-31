@@ -32,7 +32,7 @@ export const exampleRules: Record<string, CompanyMailRule> = Object.fromEntries(
       aliases: [],
       domains: [company.domain],
       senders: [],
-      subjectTerms: [],
+      keywords: [],
       excludedTerms: [],
     },
   ]),

@@ -21,7 +21,7 @@ export function CompanyRuleEditor({
     domains: rule.domains.join(", "),
     senders: rule.senders.join(", "),
     aliases: rule.aliases.join(", "),
-    subjectTerms: rule.subjectTerms.join(", "),
+    keywords: rule.keywords.join(", "),
     excludedTerms: rule.excludedTerms.join(", "),
   }));
   const [values, setValues] = useState(saved);
@@ -33,9 +33,10 @@ export function CompanyRuleEditor({
   return (
     <>
       <p className="text-xs text-muted-foreground">
-        Identity matches a sender domain, exact address, or company name in the subject. Job-search
-        updates and verified contacted-person replies are kept. Shopping, cloud billing, digests and
-        promotions are excluded. Generic mentions in the body do not establish a company match.
+        Identity matches a sender domain, exact address, company name in the subject, or a keyword
+        in the subject or sender name. Job-search updates and verified contacted-person replies are
+        kept. Shopping, cloud billing, digests and promotions are excluded. Generic mentions in the
+        body do not establish a company match.
       </p>
       <fieldset disabled={disabled || pending} className="grid min-w-0 gap-4">
         {(
@@ -43,7 +44,7 @@ export function CompanyRuleEditor({
             ["domains", "Recruiting sender domains", "company.com, careers.company.com"],
             ["senders", "Exact recruiting email addresses", "recruiter@company.com"],
             ["aliases", "Other company names in subject", "Company Careers"],
-            ["subjectTerms", "Subject must include (optional)", "application, interview, job ID"],
+            ["keywords", "Keywords in the subject or sender name", "Company Hiring Team"],
             ["excludedTerms", "Exclude phrases", "newsletter, webinar, invoice"],
           ] as const
         ).map(([key, title, placeholder]) => (
@@ -73,7 +74,7 @@ export function CompanyRuleEditor({
                 "domains",
                 "senders",
                 "aliases",
-                "subjectTerms",
+                "keywords",
                 "excludedTerms",
               ] as const)
                 form.set(key, values[key]);
