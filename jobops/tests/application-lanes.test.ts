@@ -157,6 +157,9 @@ describe("record status", () => {
     expect(closed({ closedReason: "REJECTED" }).label).toBe("Rejected");
     expect(closed({ status: "CLOSED", closedReason: "NO_REPLY" }).label).toBe("Closed, no reply");
     expect(closed({ status: "WITHDRAWN", closedReason: "WITHDREW" }).label).toBe("Withdrew");
+    expect(closed({ status: "CLOSED", closedReason: "WITHDREW", sentAt: null }).label).toBe(
+      "Not applying",
+    );
     expect(closed({ status: "CLOSED", closedReason: "ACCEPTED" })).toEqual({
       tone: "offer",
       label: "Accepted the offer",

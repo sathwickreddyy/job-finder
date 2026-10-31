@@ -78,7 +78,7 @@ function closedStatus(record: LaneSource): LaneStatus {
     case "NO_REPLY":
       return { tone: "closed", label: "Closed, no reply" };
     case "WITHDREW":
-      return { tone: "closed", label: "Withdrew" };
+      return { tone: "closed", label: record.sentAt ? "Withdrew" : "Not applying" };
   }
   if (record.closedReason === "REJECTED" || record.status === "REJECTED") {
     const settled = record.rounds
