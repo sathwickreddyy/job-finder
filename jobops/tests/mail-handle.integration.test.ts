@@ -235,6 +235,26 @@ describe.skipIf(!dbTests)("handling mail", () => {
     expect((await message(row.id)).classification).toBe("REJECTION");
   });
 
+  it("placing a rejection email later does not re-sort it", async () => {
+    const [round] = await db
+      .insert(applicationRounds)
+      .values({
+        applicationId: apps.single[0],
+        kind: "DSA",
+        position: 1,
+        outcome: "PASSED",
+        scheduledAt: new Date("2026-10-22T05:00:00Z"),
+      })
+      .returning();
+    try {
+      const row = await email({ companyKey: null, classification: "REJECTION" });
+      await updateMail(row.id, { company: keys.single });
+      expect((await message(row.id)).classification).toBe("REJECTION");
+    } finally {
+      await db.delete(applicationRounds).where(eq(applicationRounds.id, round.id));
+    }
+  });
+
   it("placing an email does not change attention", async () => {
     const row = await email({ companyKey: null });
     expect(await updateMail(row.id, { company: keys.single })).toMatchObject({

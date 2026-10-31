@@ -2,7 +2,16 @@ import { randomUUID } from "node:crypto";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { eq, inArray, like } from "drizzle-orm";
 import { closeDatabase, db } from "@/db";
-import { companyRecords, mailConnections, mailMessages, mailTracking, settings } from "@/db/schema";
+import {
+  applicationRounds,
+  applications,
+  companyRecords,
+  jobs,
+  mailConnections,
+  mailMessages,
+  mailTracking,
+  settings,
+} from "@/db/schema";
 import { normalizeCompany } from "@/features/applications/lanes";
 import { companySearchStep, readCompanySearch } from "@/features/mail/company-search";
 import { ruleKey } from "@/features/mail/context";
@@ -295,6 +304,45 @@ describe.skipIf(!dbTests)("company inbox search", () => {
       messageId: result.item.id,
       companyKeys: [key],
     });
+  });
+
+  it("include sorts a rescued rejection after a recorded round", async () => {
+    const [job] = await db
+      .insert(jobs)
+      .values({
+        company: name,
+        title: "Backend Engineer",
+        canonicalUrl: `https://fixture.invalid/${prefix}/job`,
+        dedupeKey: `${prefix}-job`,
+        source: "MANUAL",
+        status: "APPLIED",
+      })
+      .returning();
+    const [app] = await db
+      .insert(applications)
+      .values({ jobId: job.id, source: "MANUAL", status: "APPLIED" })
+      .returning();
+    try {
+      await db.insert(applicationRounds).values({
+        applicationId: app.id,
+        kind: "DSA",
+        position: 1,
+        outcome: "FAILED",
+        scheduledAt: new Date(Date.now() - 10 * 86_400_000),
+      });
+      const own = await connection();
+      const raw = mail("rejection", {
+        subject: "Update on your application",
+        bodyText: "Thank you for your time. We have decided not to proceed with your application.",
+      });
+      const row = await dropped(own, raw);
+      vi.spyOn(outlook, "folders").mockResolvedValue([]);
+      vi.spyOn(outlook, "fetchMessage").mockResolvedValue(raw);
+      expect((await includeMail(row.id, key)).item.tag).toBe("interviewRejected");
+    } finally {
+      await db.delete(applications).where(eq(applications.id, app.id));
+      await db.delete(jobs).where(eq(jobs.id, job.id));
+    }
   });
 
   it("does not add a shared sender", async () => {
