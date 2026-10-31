@@ -7,13 +7,16 @@ import { providerFor } from "@/services/mail/providers";
 import { withConnectionLock } from "@/services/mail/providers/connections";
 import type { MailConnection, MailFolder } from "@/services/mail/providers/types";
 import { loadMailContext, type MailContext } from "./context";
-import { ingestPage } from "./ingest";
+import { ingestPage, noCounts, type IngestCounts } from "./ingest";
 
 /** The pre-cutover unscoped latest-scan key; its window carries over as each account's last fetch. */
 export const checkKey = (connectionId: string) =>
   `mailScan:v2:${connectionId}:latest:d82b2b55630461181d24bf437edb43ac844dc4ae880a661a2e74a8a1d7564312`;
 export const coverageKey = (connectionId: string) => `mailCoverage:${connectionId}`;
 const overlapMs = 60 * 60 * 1000;
+const dayMs = 24 * 60 * 60 * 1000;
+/** Fetch reads every message in the window, so it stops at 180 days; company search goes further. */
+export const maxFetchDays = 180;
 
 export type CheckProgress = {
   since: string;
@@ -30,19 +33,36 @@ export type AccountCheck = {
   status: "done" | "more" | "failed";
   error: string | null;
   lastFetchedAt: string | null;
+  /** This step's page; the client adds steps up for the whole fetch. */
+  counts: IngestCounts;
+  /** Where the window being fetched starts, or null when it is not known yet. */
+  since: string | null;
 };
 export type CheckResult = { more: boolean; newAttention: number; accounts: AccountCheck[] };
 
-/** Resume an unfinished window unchanged; otherwise fetch from the last fetch (minus overlap) to now. */
+/**
+ * Resume an unfinished window unchanged; otherwise fetch from the last fetch (minus overlap)
+ * to now. `lastDays` starts a new window that reaches back that many days, or to the last
+ * fetch when that is earlier, so a fetch never leaves a gap.
+ */
 export function checkWindow(
   stored: CheckProgress | undefined,
   releasedAt: string,
   now: Date,
+  lastDays?: number,
 ): CheckProgress {
-  if (stored && !stored.complete) return stored;
+  if (stored && !stored.complete && lastDays === undefined) return stored;
   const until = now.toISOString();
+  // An unfinished window has only covered mail up to its start.
+  const covered = stored
+    ? stored.complete
+      ? Date.parse(stored.until) - overlapMs
+      : Date.parse(stored.since)
+    : Date.parse(releasedAt);
+  const since =
+    lastDays === undefined ? covered : Math.min(covered, now.getTime() - lastDays * dayMs);
   return {
-    since: stored ? new Date(Date.parse(stored.until) - overlapMs).toISOString() : releasedAt,
+    since: new Date(since).toISOString(),
     until,
     complete: false,
     scanned: 0,
@@ -64,7 +84,9 @@ function failureText(error: unknown) {
 export async function checkConnection(
   connection: MailConnection,
   context: MailContext,
+  lastDays?: number,
 ): Promise<AccountCheck & { newAttention: number }> {
+  let since: string | null = null;
   const failed = (error: unknown, lastFetchedAt: Date | null) => ({
     account: connection.email,
     provider: connection.provider,
@@ -72,6 +94,8 @@ export async function checkConnection(
     error: failureText(error),
     lastFetchedAt: lastFetchedAt?.toISOString() ?? null,
     newAttention: 0,
+    counts: noCounts(),
+    since,
   });
   try {
     return await withConnectionLock(connection.id, async (database, current) => {
@@ -92,7 +116,9 @@ export async function checkConnection(
           saved?.value as CheckProgress | undefined,
           releasedAt,
           new Date(),
+          lastDays,
         );
+        since = progress.since;
         const folders = await provider.folders(current);
         const coverage = {
           folders,
@@ -169,6 +195,8 @@ export async function checkConnection(
             error: null,
             lastFetchedAt: lastSyncedAt?.toISOString() ?? null,
             newAttention,
+            counts,
+            since: progress.since,
           };
         });
       } catch (error) {
@@ -194,7 +222,16 @@ export async function checkConnection(
  * finishes before new windows open; an account that failed mid-window does not
  * hold the others back. Only a step that checked every account can end the check.
  */
-export async function checkMailStep(): Promise<CheckResult> {
+export async function checkMailStep(options: { lastDays?: number } = {}): Promise<CheckResult> {
+  const { lastDays } = options;
+  if (
+    lastDays !== undefined &&
+    !(Number.isInteger(lastDays) && lastDays >= 1 && lastDays <= maxFetchDays)
+  )
+    throw new ApiError(
+      "Fetch goes back up to 180 days. For older mail, search a company from its page.",
+      400,
+    );
   const connections = await db.select().from(mailConnections).orderBy(mailConnections.createdAt);
   if (!connections.length) throw new ApiError("Connect an inbox before checking mail.", 409);
   const [context, saved] = await Promise.all([
@@ -214,8 +251,11 @@ export async function checkMailStep(): Promise<CheckResult> {
       !row.lastError &&
       saved.find((setting) => setting.key === checkKey(row.id))?.value.complete === false,
   );
-  const active = incomplete.length ? incomplete : connections;
-  const results = await Promise.allSettled(active.map((row) => checkConnection(row, context)));
+  // A last-N-days fetch starts a new window for every inbox, replacing unfinished ones.
+  const active = lastDays === undefined && incomplete.length ? incomplete : connections;
+  const results = await Promise.allSettled(
+    active.map((row) => checkConnection(row, context, lastDays)),
+  );
   const stepped = new Map(
     active.map((row, index) => {
       const result = results[index];
@@ -230,6 +270,8 @@ export async function checkMailStep(): Promise<CheckResult> {
               error: failureText(result.reason),
               lastFetchedAt: row.lastSyncedAt?.toISOString() ?? null,
               newAttention: 0,
+              counts: noCounts(),
+              since: null,
             },
       ];
     }),
@@ -243,6 +285,8 @@ export async function checkMailStep(): Promise<CheckResult> {
         status: result.status,
         error: result.error,
         lastFetchedAt: result.lastFetchedAt,
+        counts: result.counts,
+        since: result.since,
       };
     // Waiting for the step that checks every inbox from its last fetch to now.
     return {
@@ -251,11 +295,16 @@ export async function checkMailStep(): Promise<CheckResult> {
       status: "more",
       error: null,
       lastFetchedAt: row.lastSyncedAt?.toISOString() ?? null,
+      counts: noCounts(),
+      since:
+        (saved.find((setting) => setting.key === checkKey(row.id))?.value.since as string) ?? null,
     };
   });
   return {
     // Finishing or failing a resumed window still leaves later mail unchecked.
-    more: incomplete.length > 0 || accounts.some((row) => row.status === "more"),
+    more:
+      (lastDays === undefined && incomplete.length > 0) ||
+      accounts.some((row) => row.status === "more"),
     newAttention: [...stepped.values()].reduce((sum, row) => sum + row.newAttention, 0),
     accounts,
   };

@@ -19,10 +19,15 @@ function invalidate() {
   // Company pages show the same timeline and handle mail in place.
   revalidatePath("/companies/[slug]", "page");
 }
-/** One Check mail step across all accounts; the page loops while `mailCheck.more`. */
-export async function checkMail(): Promise<ActionState & { mailCheck?: CheckResult }> {
+/**
+ * One Fetch new mail step across all accounts; the page loops while `mailCheck.more`.
+ * `lastDays` starts a new window on the first step only.
+ */
+export async function checkMail(
+  lastDays?: number,
+): Promise<ActionState & { mailCheck?: CheckResult }> {
   try {
-    const mailCheck = await checkMailStep();
+    const mailCheck = await checkMailStep({ lastDays });
     invalidate();
     return { mailCheck };
   } catch (error) {

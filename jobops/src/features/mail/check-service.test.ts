@@ -40,3 +40,37 @@ it("fixes until at the first step", () => {
     first.until,
   );
 });
+
+const complete: CheckProgress = { ...stored, next: undefined, complete: true };
+const day = 86_400_000;
+
+it("last N days starts at the earlier bound", () => {
+  const tenDaysAgo = new Date(now.getTime() - 10 * day).toISOString();
+  const window = checkWindow({ ...complete, until: tenDaysAgo }, released, now, 3);
+  expect(window.since).toBe(new Date(now.getTime() - 10 * day - 3_600_000).toISOString());
+  expect(window).toMatchObject({ until: now.toISOString(), complete: false, scanned: 0 });
+});
+
+it("last N days reaches past the last fetch", () => {
+  const anHourAgo = new Date(now.getTime() - 3_600_000).toISOString();
+  const window = checkWindow({ ...complete, until: anHourAgo }, released, now, 30);
+  expect(window.since).toBe(new Date(now.getTime() - 30 * day).toISOString());
+});
+
+it("last N days replaces an incomplete window", () => {
+  const window = checkWindow(stored, released, now, 2);
+  expect(window).toMatchObject({
+    since: new Date(now.getTime() - 2 * day).toISOString(),
+    until: now.toISOString(),
+    complete: false,
+    scanned: 0,
+  });
+  expect(window.next).toBeUndefined();
+});
+
+it("last N days on a never-fetched account starts no later than release", () => {
+  expect(checkWindow(undefined, released, now, 1).since).toBe(released);
+  expect(checkWindow(undefined, released, now, 5).since).toBe(
+    new Date(now.getTime() - 5 * day).toISOString(),
+  );
+});

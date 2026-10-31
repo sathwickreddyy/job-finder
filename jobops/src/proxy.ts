@@ -35,7 +35,7 @@ export function proxy(request: NextRequest) {
   );
   // Local agent routes: companies, mail, application records and resume files.
   const agentApi =
-    /^\/api\/v1\/(?:companies(?:\/[^/]+)?|mail(?:\/check|\/[0-9a-f-]{36}(?:\/handle)?)?|applications|resumes)\/?$/.test(
+    /^\/api\/v1\/(?:companies(?:\/[^/]+)?|mail(?:\/check|\/dropped|\/[0-9a-f-]{36}(?:\/handle)?)?|applications|resumes)\/?$/.test(
       request.nextUrl.pathname,
     );
   if ((taskApi || agentApi) && request.headers.has("next-action"))
