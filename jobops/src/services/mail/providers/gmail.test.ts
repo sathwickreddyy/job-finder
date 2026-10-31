@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { gmail, GMAIL_READONLY_SCOPE } from "./gmail";
+import { gmailSearchQuery, type SearchRequest } from "./search-query";
 import { providerFor, providerBySlug } from "./index";
 function configure() {
   vi.stubEnv("APP_URL", "http://127.0.0.1:3210");
@@ -111,4 +112,72 @@ it("keeps a mail with many To addresses within the import display limit", async 
     externalId: "many-recipients",
     recipient: recipient.slice(0, 999) + "…",
   });
+});
+
+const search: SearchRequest = {
+  since: "2026-10-01T00:00:00Z",
+  until: "2026-10-31T00:00:00Z",
+  identity: { names: ["Northstar"], keywords: [], senders: [], domains: ["northstar.example"] },
+};
+const gmailMessage = (id: string, internalDate: string, labelIds = ["INBOX"]) => ({
+  id,
+  threadId: `thread-${id}`,
+  internalDate,
+  labelIds,
+  payload: {
+    headers: [
+      { name: "Subject", value: "Northstar interview" },
+      { name: "From", value: "Northstar Talent <talent@northstar.example>" },
+    ],
+  },
+});
+it("searchMail sends the built query and returns it", async () => {
+  vi.spyOn(gmail, "accessToken").mockResolvedValue("access");
+  const listed: string[] = [];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (url: string) => {
+      if (url.includes("messages?")) {
+        listed.push(url);
+        return Response.json({
+          messages: [{ id: "in" }, { id: "sent" }, { id: "late" }],
+          nextPageToken: "p2",
+        });
+      }
+      if (url.includes("/sent?"))
+        return Response.json(gmailMessage("sent", "1792454400000", ["SENT"]));
+      if (url.includes("/late?")) return Response.json(gmailMessage("late", "1793491200000"));
+      return Response.json(gmailMessage("in", "1792454400000"));
+    }),
+  );
+  const page = await gmail.searchMail({} as Parameters<typeof gmail.searchMail>[0], search, []);
+  const params = new URL(listed[0]).searchParams;
+  expect(params.get("q")).toBe(gmailSearchQuery(search));
+  expect(params.get("includeSpamTrash")).toBe("true");
+  expect(params.get("maxResults")).toBe("25");
+  expect(page.query).toBe(gmailSearchQuery(search));
+  expect(page.next).toBe("p2");
+  // Sent mail and mail outside the exact window are dropped.
+  expect(page.messages.map((message) => message.externalId)).toEqual(["in"]);
+  expect(page.messages[0]).toMatchObject({ senderName: "Northstar Talent", folders: ["INBOX"] });
+});
+it("fetchMessage returns null on 404", async () => {
+  vi.spyOn(gmail, "accessToken").mockResolvedValue("access");
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => Response.json({ error: { message: "Not found" } }, { status: 404 })),
+  );
+  expect(
+    await gmail.fetchMessage({} as Parameters<typeof gmail.fetchMessage>[0], "gone", []),
+  ).toBeNull();
+});
+it("fetchMessage reads one message", async () => {
+  vi.spyOn(gmail, "accessToken").mockResolvedValue("access");
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => Response.json(gmailMessage("one", "1792454400000"))),
+  );
+  expect(
+    await gmail.fetchMessage({} as Parameters<typeof gmail.fetchMessage>[0], "one", []),
+  ).toMatchObject({ externalId: "one", sender: "talent@northstar.example" });
 });

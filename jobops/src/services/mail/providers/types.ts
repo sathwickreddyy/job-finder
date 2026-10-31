@@ -1,6 +1,7 @@
 import type { z } from "zod";
 import type { mailConnections } from "@/db/schema";
 import type { mailImportSchema } from "@/features/mail/import";
+import type { SearchRequest } from "./search-query";
 export type ProviderId = "GMAIL" | "OUTLOOK";
 export type TokenSet = { accessToken: string; refreshToken: string | null; expiresAt: Date };
 export type MailConnection = typeof mailConnections.$inferSelect;
@@ -45,4 +46,16 @@ export type MailProvider = {
     skippedKnown?: number;
     skippedUnavailable?: number;
   }>;
+  /** One page of a company search; `query` is exactly what was sent. */
+  searchMail(
+    connection: MailConnection,
+    request: SearchRequest,
+    folders: MailFolder[],
+  ): Promise<{ messages: ScannedMessage[]; next?: string; query: string }>;
+  /** One message by its provider id, or null when the mailbox no longer has it. */
+  fetchMessage(
+    connection: MailConnection,
+    providerMessageId: string,
+    folders: MailFolder[],
+  ): Promise<ScannedMessage | null>;
 };
