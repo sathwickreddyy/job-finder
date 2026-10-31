@@ -62,6 +62,8 @@ export async function applyOutcome(
     outcome: OutcomeId;
     detail: OutcomeDetail;
     mailMessageId?: string;
+    /** Recorded by the mail rule rather than by hand; Undo reads the previous values. */
+    auto?: true;
   },
   now: Date,
 ) {
@@ -70,6 +72,7 @@ export async function applyOutcome(
       applicationId: z.uuid(),
       outcome: z.enum(outcomeIds),
       mailMessageId: z.uuid().optional(),
+      auto: z.literal(true).optional(),
       detail: z.object({
         kind: z.enum(roundKinds).optional(),
         at: z.date().optional(),
@@ -145,7 +148,10 @@ export async function applyOutcome(
       payload: {
         outcome: data.outcome,
         previousStatus: app.status,
+        previousClosedReason: app.closedReason,
+        previousJobStatus: job.status,
         nextStatus: plan.status,
+        ...(data.auto ? { auto: true } : {}),
         roundId,
         detail: {
           kind: data.detail.kind ?? null,

@@ -81,7 +81,14 @@ async function lockRecord(tx: MailTx, id: string) {
   return app;
 }
 
-export async function linkMailToRecord(tx: MailTx, mailId: string, recordId: string, now: Date) {
+/** `auto` marks the link event as made by the mail rule (`auto-apply.ts`), not by hand. */
+export async function linkMailToRecord(
+  tx: MailTx,
+  mailId: string,
+  recordId: string,
+  now: Date,
+  options: { auto?: true } = {},
+) {
   const app = await lockRecord(tx, recordId);
   const current = await lockMail(tx, mailId);
   if (
@@ -106,7 +113,7 @@ export async function linkMailToRecord(tx: MailTx, mailId: string, recordId: str
     eventType: ack ? "ACKNOWLEDGEMENT_RECEIVED" : "MAIL_LINKED",
     occurredAt: message.receivedAt,
     summary: `${ack ? "Application acknowledged" : "Mail linked"}: ${message.subject}`,
-    payload: { mailMessageId: mailId },
+    payload: { mailMessageId: mailId, ...(options.auto ? { auto: true } : {}) },
   });
   await tx.insert(activityLogs).values({
     action: "MAIL_LINKED",
