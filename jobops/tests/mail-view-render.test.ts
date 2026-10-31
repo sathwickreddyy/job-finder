@@ -12,7 +12,6 @@ vi.mock("@/features/mail/workspace-actions", () => ({
   handleMailAction: vi.fn(),
   placeMailAction: vi.fn(),
   reopenMailAction: vi.fn(),
-  retagMailAction: vi.fn(),
   retagMail: vi.fn(),
   restoreMailKind: vi.fn(),
   saveWorkspaceRule: vi.fn(),

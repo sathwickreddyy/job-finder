@@ -209,20 +209,6 @@ export async function restoreMailKind(id: string, classification: string): Promi
   }
 }
 
-/** The inline Change tag pills; removed with them in the row restructure. */
-export async function retagMailAction(
-  _previous: ActionState,
-  form: FormData,
-): Promise<ActionState> {
-  try {
-    const item = await updateMail(formString(form, "id"), { tag: formString(form, "tag") });
-    invalidate();
-    return { success: `Tagged as ${tagLabel[item.tag]}.` };
-  } catch (error) {
-    return actionError(error);
-  }
-}
-
 /** Place an email at an application or company; an empty value clears it. */
 export async function placeMailAction(
   _previous: ActionState,
