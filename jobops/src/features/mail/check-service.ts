@@ -1,15 +1,13 @@
-import { and, eq, inArray, or } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { ZodError } from "zod";
 import { db } from "@/db";
-import { mailConnections, mailEvents, mailMessages, mailTracking, settings } from "@/db/schema";
+import { mailConnections, mailTracking, settings } from "@/db/schema";
 import { ApiError } from "@/features/agent-api/http";
-import { classifyMail } from "@/services/mail/classifier";
 import { providerFor } from "@/services/mail/providers";
 import { withConnectionLock } from "@/services/mail/providers/connections";
 import type { MailConnection, MailFolder } from "@/services/mail/providers/types";
 import { loadMailContext, type MailContext } from "./context";
-import { importMailRecords, mailImportSchema } from "./import";
-import { matchMail } from "./matching";
+import { ingestPage } from "./ingest";
 
 /** The pre-cutover unscoped latest-scan key; its window carries over as each account's last fetch. */
 export const checkKey = (connectionId: string) =>
@@ -124,165 +122,19 @@ export async function checkConnection(
           folders,
         );
         return await database.transaction(async (tx) => {
-          let newAttention = 0;
-          const ids = page.messages.map((message) => message.externalId);
-          const internetIds = page.messages.flatMap((message) =>
-            message.internetMessageId ? [message.internetMessageId] : [],
-          );
-          const prior = ids.length
-            ? await tx
-                .select()
-                .from(mailTracking)
-                .where(
-                  and(
-                    eq(mailTracking.provider, current.provider),
-                    eq(mailTracking.accountEmail, current.email),
-                    or(
-                      inArray(mailTracking.providerMessageId, [
-                        ...ids,
-                        ...ids.map((id) => `legacy:${id}`),
-                      ]),
-                      ...(internetIds.length
-                        ? [inArray(mailTracking.internetMessageId, internetIds)]
-                        : []),
-                    ),
-                  ),
-                )
-            : [];
-          for (const raw of page.messages) {
-            if (raw.contextOnly) continue;
-            const previous =
-              prior.find((row) => row.providerMessageId === raw.externalId) ??
-              prior.find(
-                (row) =>
-                  row.providerMessageId.startsWith("legacy:") &&
-                  (row.providerMessageId === `legacy:${raw.externalId}` ||
-                    (raw.internetMessageId && row.internetMessageId === raw.internetMessageId)),
-              );
-            // A seen identity only records where it lives now; it is never re-imported or reopened.
-            if (previous) {
-              await tx
-                .update(mailTracking)
-                .set({ folders: raw.folders, updatedAt: new Date() })
-                .where(eq(mailTracking.id, previous.id));
-              if (previous.disposition === "kept" && previous.messageId)
-                await tx
-                  .update(mailMessages)
-                  .set({ folders: raw.folders })
-                  .where(eq(mailMessages.id, previous.messageId));
-              continue;
-            }
-            const decision = matchMail(raw, context, {
-              historical: false,
-              seen: false,
-              threadApplications: raw.threadId
-                ? threads
-                    .filter((row) => row.threadId === raw.threadId)
-                    .flatMap((row) => row.applicationIds)
-                : [],
-            });
-            const externalId = `${current.email}:${raw.externalId}`;
-            // Providers can return mail the importer cannot store (no sender, an over-long
-            // name). Record such an identity as excluded instead of failing the whole page.
-            const record = mailImportSchema.safeParse([
-              {
-                ...raw,
-                externalId,
-                subject: raw.subject.trim() || "(No subject)",
-                senderName: (raw.senderName ?? "").slice(0, 500),
-              },
-            ]);
-            const kept = decision.disposition !== "excluded" && record.success;
-            let messageId: string | null = null;
-            if (kept) {
-              const imported = await importMailRecords(
-                record.data!,
-                provider.id,
-                current.email,
-                tx,
-              );
-              const [message] = await tx
-                .select({ id: mailMessages.id })
-                .from(mailMessages)
-                .where(
-                  and(
-                    eq(mailMessages.provider, provider.id),
-                    eq(mailMessages.externalId, externalId),
-                  ),
-                );
-              messageId = message.id;
-              if (imported.imported) {
-                newAttention++;
-                const contactReply =
-                  decision.evidence.includes("Reply from a person you contacted") &&
-                  classifyMail(raw).type === "UNKNOWN";
-                await tx
-                  .update(mailMessages)
-                  .set({
-                    folders: raw.folders,
-                    attentionState: "OPEN",
-                    ...(decision.companyKeys.length === 1
-                      ? { companyKey: decision.companyKeys[0] }
-                      : {}),
-                    ...(contactReply ? { classification: "FOLLOW_UP" as const } : {}),
-                  })
-                  .where(eq(mailMessages.id, messageId));
-                const events = await tx
-                  .select()
-                  .from(mailEvents)
-                  .where(eq(mailEvents.mailMessageId, messageId));
-                for (const event of events) {
-                  const details = { ...event.details };
-                  delete details.suggestedApplicationId;
-                  await tx
-                    .update(mailEvents)
-                    .set({
-                      ...(contactReply ? { type: "FOLLOW_UP" as const, confidence: 0.75 } : {}),
-                      details: {
-                        ...details,
-                        ...(decision.applicationIds.length === 1
-                          ? { suggestedApplicationId: decision.applicationIds[0] }
-                          : {}),
-                        matchEvidence: decision.evidence,
-                      },
-                    })
-                    .where(eq(mailEvents.id, event.id));
-                }
-              }
-            }
-            const [saved] = await tx
-              .insert(mailTracking)
-              .values({
-                provider: current.provider,
-                accountEmail: current.email,
-                providerMessageId: raw.externalId,
-                internetMessageId: raw.internetMessageId ?? null,
-                messageId,
-                threadId: raw.threadId ?? null,
-                sender: raw.sender.slice(0, 1000),
-                senderName: (raw.senderName ?? "").slice(0, 500),
-                subject: raw.subject.slice(0, 2000),
-                receivedAt: new Date(raw.receivedAt),
-                folders: raw.folders,
-                companyKeys: decision.companyKeys,
-                applicationIds: decision.applicationIds,
-                disposition: kept ? "kept" : "excluded",
-                reason: record.success
-                  ? decision.reason
-                  : "Unreadable message; open it in your mailbox",
-                evidence: decision.evidence,
-              })
-              .onConflictDoNothing({
-                target: [
-                  mailTracking.provider,
-                  mailTracking.accountEmail,
-                  mailTracking.providerMessageId,
-                ],
-              })
-              .returning();
-            // Provider pages can repeat an identity within one page.
-            if (saved) prior.push(saved);
-          }
+          // Mail older than the normal window (last fetch minus the overlap) is recovered
+          // history: it is stored and shown, already handled.
+          const { counts } = await ingestPage(tx, {
+            connection: current,
+            providerId: provider.id,
+            messages: page.messages,
+            context,
+            threads,
+            recoveredBefore: current.lastSyncedAt
+              ? new Date(current.lastSyncedAt.getTime() - overlapMs)
+              : null,
+          });
+          const newAttention = counts.newAttention;
           const complete = !page.next;
           const checkpoint: CheckProgress = {
             ...progress,

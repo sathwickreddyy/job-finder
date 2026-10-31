@@ -103,6 +103,32 @@ describe.skipIf(!dbTests)("on-demand mail check", () => {
     expect(rows.every((row) => row.companyKey === "fixture")).toBe(true);
   });
 
+  it("keeps the overlap hour open and recovered history handled", async () => {
+    const own = await connection();
+    const lastSyncedAt = new Date("2026-10-30T12:00:00Z");
+    await db.update(mailConnections).set({ lastSyncedAt }).where(eq(mailConnections.id, own.id));
+    vi.spyOn(outlook, "folders").mockResolvedValue([]);
+    vi.spyOn(outlook, "scanMail").mockResolvedValue({
+      messages: [
+        mail("late-indexed", {
+          internetMessageId: "<late@fixture.invalid>",
+          receivedAt: "2026-10-30T11:30:00Z",
+        }),
+        mail("recovered", {
+          internetMessageId: "<recovered@fixture.invalid>",
+          receivedAt: "2026-10-27T09:00:00Z",
+        }),
+      ],
+    });
+    const result = await checkConnection(await current(own.id), context);
+    expect(result.newAttention).toBe(1);
+    const rows = await messages(own.email);
+    const state = (time: string) =>
+      rows.find((row) => row.receivedAt.toISOString().startsWith(time))?.attentionState;
+    expect(state("2026-10-30T11:30")).toBe("OPEN");
+    expect(state("2026-10-27T09:00")).toBe("DONE");
+  });
+
   it("keeps one identity across a rescan and folder move", async () => {
     const own = await connection();
     vi.spyOn(outlook, "folders").mockResolvedValue([]);
