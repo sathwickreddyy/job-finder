@@ -70,7 +70,7 @@ async function tagCounts(scope: SQL[]): Promise<TagCounts> {
 }
 
 /** Emails saved as openings read as recorded, so they never offer Just info's Undo. */
-async function markSavedOpenings(days: TimelineDay[]) {
+export async function markSavedOpenings(days: TimelineDay[]) {
   const ids = days.flatMap((day) =>
     day.entries.flatMap((entry) =>
       entry.type === "mail" && !entry.recorded ? [entry.item.id] : [],
