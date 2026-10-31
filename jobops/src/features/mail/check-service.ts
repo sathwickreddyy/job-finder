@@ -57,7 +57,14 @@ export function checkWindow(
   now: Date,
   lastDays?: number,
 ): CheckProgress {
-  if (stored && !stored.complete && lastDays === undefined) return stored;
+  // An unfinished window is resumed, also by a Last N days press it already reaches back
+  // for; restarting it would re-read the newest pages on every press.
+  if (
+    stored &&
+    !stored.complete &&
+    (lastDays === undefined || Date.parse(stored.since) <= now.getTime() - lastDays * dayMs)
+  )
+    return stored;
   const until = now.toISOString();
   // An unfinished window has only covered mail up to its start.
   const covered = stored
@@ -160,7 +167,10 @@ export async function checkConnection(
             messages: page.messages,
             context,
             threads,
-            recoveredBefore: recoveryCutoff(current.lastSyncedAt),
+            // A first Last N days fetch has no last fetch: mail before release is history too.
+            recoveredBefore:
+              recoveryCutoff(current.lastSyncedAt) ??
+              (lastDays !== undefined ? new Date(releasedAt) : null),
           });
           const newAttention = counts.newAttention;
           const complete = !page.next;

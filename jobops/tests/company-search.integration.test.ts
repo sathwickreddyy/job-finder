@@ -199,6 +199,39 @@ describe.skipIf(!dbTests)("company inbox search", () => {
     expect(second.run.since).toBe(first.run.since);
   });
 
+  it("a second press continues an unfinished search", async () => {
+    const own = await connection();
+    vi.spyOn(outlook, "folders").mockResolvedValue([]);
+    let page = 0;
+    const search = vi.spyOn(outlook, "searchMail").mockImplementation(async () => ({
+      messages: [],
+      next: `p${++page}`,
+      query: "q",
+    }));
+    const first = await companySearchStep(key, { lastDays: 30, accounts: [own.email] });
+    const second = await companySearchStep(key, { lastDays: 30, accounts: [own.email] });
+    expect(second.run.startedAt).toBe(first.run.startedAt);
+    expect(search.mock.calls[1][1]).toMatchObject({ next: "p1", since: first.run.since });
+  });
+
+  it("an inbox that failed is searched from its own coverage next time", async () => {
+    const a = await connection();
+    const b = await connection();
+    vi.spyOn(outlook, "folders").mockResolvedValue([]);
+    const search = vi.spyOn(outlook, "searchMail").mockImplementation(async (row, request) => {
+      if (row.id === a.id) throw new Error("Sign-in expired");
+      return { messages: [], query: outlookSearchQuery(request) };
+    });
+    await companySearchStep(key, { lastDays: 30 });
+    search.mockImplementation(async (_row, request) => ({
+      messages: [],
+      query: outlookSearchQuery(request),
+    }));
+    const again = await companySearchStep(key, {});
+    // a never finished the 30-day window, so the next search reaches the 90-day default for it.
+    expect(Date.parse(again.run.since)).toBeLessThanOrEqual(Date.now() - 89 * 86_400_000);
+  });
+
   it("a repeated search changes nothing", async () => {
     const own = await connection();
     vi.spyOn(outlook, "folders").mockResolvedValue([]);

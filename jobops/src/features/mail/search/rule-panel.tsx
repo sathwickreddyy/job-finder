@@ -90,7 +90,7 @@ export function RulePanel({
           companyKey,
           call === 0
             ? {
-                restart: true,
+                // The same inboxes and window continue an unfinished search.
                 accounts: [...chosen],
                 ...(frame === "days" ? { lastDays: days } : {}),
               }

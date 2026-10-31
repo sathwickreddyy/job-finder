@@ -74,3 +74,11 @@ it("last N days on a never-fetched account starts no later than release", () => 
     new Date(now.getTime() - 5 * day).toISOString(),
   );
 });
+
+it("last N days resumes an unfinished window that already reaches back that far", () => {
+  const reaching: CheckProgress = {
+    ...stored,
+    since: new Date(now.getTime() - 40 * day).toISOString(),
+  };
+  expect(checkWindow(reaching, released, now, 30)).toEqual(reaching);
+});

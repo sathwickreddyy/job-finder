@@ -377,6 +377,33 @@ describe.skipIf(!dbTests)("on-demand mail check", () => {
     expect((await messages(own.email))[0].attentionState).toBe("DONE");
   });
 
+  it("a second Last N days press continues the window instead of starting over", async () => {
+    const own = await connection();
+    vi.spyOn(outlook, "folders").mockResolvedValue([]);
+    let page = 0;
+    const scan = vi.spyOn(outlook, "scanMail").mockImplementation(async () => ({
+      messages: [],
+      next: `page-${++page}`,
+    }));
+    await checkMailStep({ lastDays: 30 });
+    await checkMailStep({ lastDays: 30 });
+    const [first, second] = scan.mock.calls.map((call) => call[1]);
+    expect(second).toMatchObject({ since: first.since, until: first.until, next: "page-1" });
+    expect(own.id).toBeTruthy();
+  });
+
+  it("the first Last N days fetch on a new inbox arrives handled", async () => {
+    const own = await connection();
+    vi.spyOn(outlook, "folders").mockResolvedValue([]);
+    const old = update(`${own.email}-first`);
+    vi.spyOn(outlook, "scanMail").mockResolvedValue({
+      messages: [{ ...old, receivedAt: new Date(Date.now() - 20 * 86_400_000).toISOString() }],
+    });
+    const result = await checkMailStep({ lastDays: 30 });
+    expect(result.newAttention).toBe(0);
+    expect((await messages(own.email))[0].attentionState).toBe("DONE");
+  });
+
   it("excludes an unreadable message instead of blocking the inbox", async () => {
     const own = await connection();
     vi.spyOn(outlook, "folders").mockResolvedValue([]);

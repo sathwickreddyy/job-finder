@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { mailConnections, mailTracking, settings } from "@/db/schema";
 import { ApiError } from "@/features/agent-api/http";
@@ -42,7 +42,11 @@ export type SearchRun = {
   counts: IngestCounts;
   ruleHits: RuleHits;
 };
-type SearchCursor = { startedAt: string; next?: string; complete: boolean };
+/**
+ * One inbox's place in a company's search. `coveredUntil` is how far this inbox has been
+ * searched without a gap, across runs, so a failed or unticked inbox is never skipped.
+ */
+type SearchCursor = { startedAt: string; next?: string; complete: boolean; coveredUntil?: string };
 
 const runKey = (key: string) => `companySearchRun:${key}`;
 const cursorKey = (key: string, connectionId: string) => `companySearch:${key}:${connectionId}`;
@@ -135,7 +139,9 @@ async function searchInbox(
     .where(eq(settings.key, cursorKey(company.id, connection.id)));
   const stored = saved?.value as SearchCursor | undefined;
   const cursor: SearchCursor =
-    stored?.startedAt === run.startedAt ? stored : { startedAt: run.startedAt, complete: false };
+    stored?.startedAt === run.startedAt
+      ? stored
+      : { startedAt: run.startedAt, complete: false, coveredUntil: stored?.coveredUntil };
   if (cursor.complete) return lane({});
   try {
     return await withConnectionLock(connection.id, async (database, current) => {
@@ -162,10 +168,15 @@ async function searchInbox(
           recoveredBefore: recoveryCutoff(current.lastSyncedAt) ?? new Date(run.startedAt),
           preferCompany: company.id,
         });
+        // Finishing a window that starts within this inbox's coverage extends it.
+        const extendsCoverage =
+          !page.next &&
+          (!cursor.coveredUntil || Date.parse(run.since) <= Date.parse(cursor.coveredUntil));
         const next: SearchCursor = {
           startedAt: run.startedAt,
           next: page.next,
           complete: !page.next,
+          coveredUntil: extendsCoverage ? run.until : cursor.coveredUntil,
         };
         await tx
           .insert(settings)
@@ -207,22 +218,46 @@ export async function companySearchStep(
   const connections = await db.select().from(mailConnections).orderBy(mailConnections.createdAt);
   if (!connections.length) throw new ApiError("Connect an inbox before searching mail.", 409);
   const previous = await readRun(company.id);
-  let run = previous;
-  if (!run || run.finishedAt || restart || lastDays !== undefined || accounts) {
-    const chosen = accounts
-      ? connections.filter((row) => accounts.includes(row.email))
-      : connections;
-    if (!chosen.length) throw new ApiError("Choose at least one connected inbox.", 400);
-    const now = new Date();
-    const since =
-      lastDays !== undefined
-        ? new Date(now.getTime() - lastDays * dayMs).toISOString()
-        : (previous?.until ?? new Date(now.getTime() - defaultSearchDays * dayMs).toISOString());
+  const now = new Date();
+  const chosen = accounts ? connections.filter((row) => accounts.includes(row.email)) : connections;
+  if (!chosen.length) throw new ApiError("Choose at least one connected inbox.", 400);
+  const emails = chosen.map((row) => row.email).sort();
+  // A press repeating an unfinished run's inboxes and window continues it, page by page.
+  const continues =
+    previous !== null &&
+    !previous.finishedAt &&
+    !restart &&
+    (!accounts || emails.join() === [...previous.accounts].sort().join()) &&
+    (lastDays === undefined || Date.parse(previous.since) <= now.getTime() - lastDays * dayMs);
+  let run: SearchRun;
+  if (continues) run = previous;
+  else {
+    let since = new Date(now.getTime() - (lastDays ?? defaultSearchDays) * dayMs).toISOString();
+    if (lastDays === undefined) {
+      // From the inbox searched least far, so none is left with a gap.
+      const cursors = await db
+        .select()
+        .from(settings)
+        .where(
+          inArray(
+            settings.key,
+            chosen.map((row) => cursorKey(company.id, row.id)),
+          ),
+        );
+      const covered = chosen.map(
+        (row) =>
+          (
+            cursors.find((item) => item.key === cursorKey(company.id, row.id))?.value as
+              SearchCursor | undefined
+          )?.coveredUntil,
+      );
+      if (covered.every(Boolean)) since = (covered as string[]).sort()[0];
+    }
     run = {
       key: company.id,
       since,
       until: now.toISOString(),
-      accounts: chosen.map((row) => row.email),
+      accounts: emails,
       startedAt: now.toISOString(),
       finishedAt: null,
       counts: noCounts(),
