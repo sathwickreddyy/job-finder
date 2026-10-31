@@ -13,6 +13,8 @@ vi.mock("@/features/mail/workspace-actions", () => ({
   placeMailAction: vi.fn(),
   reopenMailAction: vi.fn(),
   retagMailAction: vi.fn(),
+  retagMail: vi.fn(),
+  restoreMailKind: vi.fn(),
   saveWorkspaceRule: vi.fn(),
 }));
 const { MailView } = await import("@/features/timeline/mail-view");

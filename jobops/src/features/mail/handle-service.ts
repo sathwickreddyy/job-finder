@@ -5,6 +5,7 @@ import {
   activityLogs,
   applicationEvents,
   applications,
+  mailClassifications,
   mailEvents,
   mailMessages,
 } from "@/db/schema";
@@ -17,7 +18,13 @@ import { lockMail, type MailTx } from "./handling-service";
 import type { MailItem } from "./mail-item";
 import { readMailItem } from "./mail-list";
 import { mailIsOpen } from "./state";
-import { classificationForTag, tagFromParam, type MailTag } from "./tags";
+import {
+  classificationForTag,
+  tagFromParam,
+  tagOf,
+  type MailClassification,
+  type MailTag,
+} from "./tags";
 
 if (typeof window !== "undefined") throw new Error("Mail writes run on the server.");
 
@@ -54,13 +61,18 @@ export const updateSchema = z
         return tag as MailTag;
       })
       .optional(),
+    /** The exact kind to set, for Undo; a tag picks the tag's kind instead. */
+    classification: z.enum(mailClassifications).optional(),
     company: z.string().trim().min(1).max(300).nullable().optional(),
     application: z.uuid().nullable().optional(),
     /** Undo for Just info; refused once an outcome or a lane link came from the email. */
     attention: z.literal("open").optional(),
   })
   .refine((value) => Object.values(value).some((field) => field !== undefined), {
-    message: "Send tag, company, application or attention.",
+    message: "Send tag, classification, company, application or attention.",
+  })
+  .refine((value) => !(value.tag && value.classification), {
+    message: "Send tag or classification, not both.",
   });
 
 const closed = ["REJECTED", "WITHDRAWN", "CLOSED"];
@@ -229,12 +241,25 @@ export async function updateMail(
   input: unknown,
   now = new Date(),
 ): Promise<MailItem> {
+  return (await updateMailKind(mailId, input, now)).item;
+}
+
+/** `updateMail`, also returning the kind the email had before, which Undo puts back. */
+export async function updateMailKind(
+  mailId: string,
+  input: unknown,
+  now = new Date(),
+): Promise<{ item: MailItem; previous: MailClassification }> {
   const body = updateSchema.parse(input);
   const context = await loadMailContext();
+  let previous: MailClassification = "UNKNOWN";
   await db.transaction(async (tx) => {
     const { message, events } = await lockVisibleMail(tx, mailId, context);
-    if (body.tag) {
-      const classification = classificationForTag(body.tag, message.classification);
+    previous = message.classification;
+    const classification =
+      body.classification ??
+      (body.tag ? classificationForTag(body.tag, message.classification) : undefined);
+    if (classification) {
       if (classification !== message.classification) {
         await tx.update(mailMessages).set({ classification }).where(eq(mailMessages.id, mailId));
         for (const event of events)
@@ -246,7 +271,7 @@ export async function updateMail(
           action: "MAIL_RETAGGED",
           entityType: "MAIL",
           entityId: mailId,
-          summary: `Retagged an email as ${body.tag}`,
+          summary: `Retagged an email as ${tagOf(classification)}`,
           metadata: { from: message.classification, to: classification },
         });
       }
@@ -286,5 +311,5 @@ export async function updateMail(
       metadata: { company: companyKey, application: linked, at: now.toISOString() },
     });
   });
-  return readMailItem(mailId, context);
+  return { item: await readMailItem(mailId, context), previous };
 }

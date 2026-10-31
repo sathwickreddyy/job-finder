@@ -10,6 +10,8 @@ vi.mock("@/features/mail/workspace-actions", () => ({
   reopenMailAction: vi.fn(),
   placeMailAction: vi.fn(),
   retagMailAction: vi.fn(),
+  retagMail: vi.fn(),
+  restoreMailKind: vi.fn(),
 }));
 const { CompanyTimeline } = await import("@/features/timeline/timeline");
 
