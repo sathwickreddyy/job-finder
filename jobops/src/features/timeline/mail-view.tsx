@@ -5,13 +5,14 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, ChevronRight, Inbox, Search, SlidersHorizontal } from "lucide-react";
 import { CompanyRuleEditor } from "@/features/mail/company-rule-editor";
+import { FetchMail } from "@/features/mail/fetch-mail";
 import { InboxesPanel } from "@/features/mail/inboxes-panel";
 import { tagClass, tagIcon } from "@/features/mail/tag-pill";
 import { mailTags, tagLabel, type MailTag } from "@/features/mail/tags";
 import { cn } from "@/lib/utils";
+import type { ProviderId } from "@/services/mail/providers/types";
 import { PreviousBadge, StatusPill } from "@/features/companies/status-pill";
 import type { CompanyStatus } from "@/features/companies/status";
-import { CheckMail } from "./check-mail";
 import { ComingUp } from "./coming-up";
 import { Drawer } from "./drawer";
 import type { RailGroup, RailRow } from "./index-rows";
@@ -37,6 +38,11 @@ const rowShell = (selected: boolean) =>
     "block w-full rounded-2xl px-3 py-2.5 text-left text-foreground transition-colors hover:no-underline",
     selected ? "bg-selected text-selected-foreground" : "hover:bg-muted/70",
   );
+const fetchInboxes = (data: MailViewData) =>
+  data.inboxes.connections.map((row) => ({
+    account: row.email,
+    provider: row.provider as ProviderId,
+  }));
 const matchText = (count: number) => `${count} ${count === 1 ? "match" : "matches"}`;
 
 function NewBadge({ count }: { count: number }) {
@@ -145,9 +151,10 @@ function Rail({ data, selected }: { data: MailViewData; selected: string | null 
           <InboxesPanel inboxes={inboxes} />
         </Drawer>
       </div>
-      <CheckMail
-        lastChecked={data.lastChecked}
-        connected={inboxes.connections.length > 0}
+      <FetchMail
+        inboxes={fetchInboxes(data)}
+        lastFetched={data.lastChecked}
+        companies={data.placeOptions.companies}
         className="px-2 pt-3"
       />
       <form role="search" action="/mail" className="relative mt-3 block p-1">
@@ -352,13 +359,14 @@ function Pane({ data }: { data: MailViewData }) {
         <p className="m-0 max-w-sm text-sm text-muted-foreground">
           {filtered
             ? "Try another word, or clear the search and tag."
-            : "Every email is handled and no step is due. New mail arrives when you check."}
+            : "Every email is handled and no step is due. New mail arrives when you fetch it."}
         </p>
         {!filtered && (
-          <CheckMail
-            lastChecked={data.lastChecked}
-            connected={data.inboxes.connections.length > 0}
-            className="mx-auto"
+          <FetchMail
+            inboxes={fetchInboxes(data)}
+            lastFetched={data.lastChecked}
+            companies={data.placeOptions.companies}
+            className="mx-auto text-left"
           />
         )}
       </section>

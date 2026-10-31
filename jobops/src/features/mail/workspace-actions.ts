@@ -6,8 +6,10 @@ import { actionError, formString, type ActionState } from "@/lib/actions";
 import type { RoundKind } from "@/lib/round-kinds";
 import { checkMailStep, type CheckResult } from "./check-service";
 import { companySearchStep, type SearchLane, type SearchRun } from "./company-search";
+import { listDropped } from "./dropped";
 import { handleMail, updateMail } from "./handle-service";
 import { includeMail } from "./include";
+import type { IngestItem } from "./ingest";
 import type { MailItem } from "./mail-item";
 import { storeCompanyRule } from "./rule-store";
 
@@ -53,6 +55,19 @@ export async function saveCompanyRule(key: string, rule: unknown): Promise<Actio
     await storeCompanyRule(key, rule);
     invalidate();
     return { success: "Saved. Fetches and searches use it from now on." };
+  } catch (error) {
+    return actionError(error);
+  }
+}
+
+/** Dropped mail decided since a fetch or search started, with the reason for each. */
+export async function droppedMail(
+  since: string,
+  company?: string,
+): Promise<ActionState & { items?: IngestItem[] }> {
+  try {
+    if (!Number.isFinite(Date.parse(since))) throw new Error("Choose when the fetch started.");
+    return { items: await listDropped({ since, company }) };
   } catch (error) {
     return actionError(error);
   }

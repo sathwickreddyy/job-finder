@@ -48,7 +48,7 @@ export function InboxesPanel({ inboxes }: { inboxes: Inboxes }) {
                       ))}
                     </ul>
                   ) : (
-                    <p className="text-muted-foreground">Use Check mail to discover folders.</p>
+                    <p className="text-muted-foreground">Use Fetch new mail to discover folders.</p>
                   )}
                 </details>
               </li>
@@ -72,7 +72,8 @@ export function InboxesPanel({ inboxes }: { inboxes: Inboxes }) {
         )}
       </div>
       <p className="m-0 text-xs leading-6 text-muted-foreground">
-        Check mail reads from each account&apos;s last check to now. Permanently deleted mail and
+        Fetch new mail reads from each account&apos;s last fetch to now, or the last 1 to 180 days.
+        Older mail is found by searching a company from its page. Permanently deleted mail and
         separate online archive mailboxes cannot be recovered here.
       </p>
     </div>

@@ -14,7 +14,6 @@ export type SearchRequest = ScanRequest & { identity: SearchIdentity };
 /** A search term as a literal phrase. Quotes, backslashes and control characters are refused. */
 export function assertPhrase(value: string): string {
   const phrase = value.trim();
-  // eslint-disable-next-line no-control-regex
   if (!phrase || /["\\\u0000-\u001f\u007f]/.test(phrase))
     throw new Error(`"${phrase}" can't be searched: remove quotes, backslashes and line breaks.`);
   return phrase;

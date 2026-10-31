@@ -7,6 +7,7 @@ import type { MailViewData } from "@/features/timeline/mail-data";
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }) }));
 vi.mock("@/features/mail/workspace-actions", () => ({
   checkMail: vi.fn(),
+  droppedMail: vi.fn(),
   includeDroppedMail: vi.fn(),
   handleMailAction: vi.fn(),
   placeMailAction: vi.fn(),
@@ -119,11 +120,11 @@ const render = (value: MailViewData) =>
   renderToStaticMarkup(createElement(MailView, { data: value }));
 
 describe("MailView", () => {
-  it("says nothing needs you with the last check and Check mail", () => {
+  it("says nothing needs you with the last fetch and Fetch new mail", () => {
     const html = render(data());
     expect(html).toContain("Nothing needs you");
-    expect(html).toContain("Check mail");
-    expect(html).toContain("Checked ");
+    expect(html).toContain("Fetch new mail");
+    expect(html).toContain("for mail since 31 Oct, 9:30 am.");
     expect(html).toContain("Waiting on them");
     expect(html).not.toContain(">Needs you<");
   });
