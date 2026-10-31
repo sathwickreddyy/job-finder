@@ -7,4 +7,7 @@ export async function register() {
   await sortStoredRejectionsOnce().catch((error) =>
     console.error("Sorting stored rejection mail failed", error),
   );
+  // After the sort, so rejections after an interview already carry their own kind.
+  const { catchUpMailSync } = await import("@/features/mail/catch-up");
+  await catchUpMailSync().catch((error) => console.error("Mail catch-up failed", error));
 }
