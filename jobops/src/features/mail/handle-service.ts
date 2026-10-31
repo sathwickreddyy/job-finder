@@ -13,6 +13,7 @@ import { ApiError, refusal } from "@/features/agent-api/http";
 import { applyOutcome } from "@/features/applications/outcome-service";
 import { outcomeIds } from "@/features/applications/phase";
 import { roundKinds } from "@/lib/round-kinds";
+import { autoApplyMail, resetAutoEffect } from "./auto-apply";
 import { loadMailContext, type MailContext } from "./context";
 import { lockMail, type MailTx } from "./handling-service";
 import type { MailItem } from "./mail-item";
@@ -259,8 +260,11 @@ export async function updateMailKind(
     const classification =
       body.classification ??
       (body.tag ? classificationForTag(body.tag, message.classification) : undefined);
+    const retagged = !!classification && classification !== message.classification;
     if (classification) {
       if (classification !== message.classification) {
+        // A new reading of the email: put back what the mail rule did with the old one first.
+        await resetAutoEffect(tx, mailId, now);
         await tx.update(mailMessages).set({ classification }).where(eq(mailMessages.id, mailId));
         for (const event of events)
           await tx
@@ -298,18 +302,21 @@ export async function updateMailKind(
       companyKey = body.company;
     }
     if (body.attention === "open") await reopenMail(tx, message, events);
-    if (linked === message.linkedApplicationId && companyKey === message.companyKey) return;
-    await tx
-      .update(mailMessages)
-      .set({ linkedApplicationId: linked, companyKey })
-      .where(eq(mailMessages.id, mailId));
-    await tx.insert(activityLogs).values({
-      action: "MAIL_PLACED",
-      entityType: "MAIL",
-      entityId: mailId,
-      summary: "Placed an email at a company or application",
-      metadata: { company: companyKey, application: linked, at: now.toISOString() },
-    });
+    const placed = linked !== message.linkedApplicationId || companyKey !== message.companyKey;
+    if (placed) {
+      await tx
+        .update(mailMessages)
+        .set({ linkedApplicationId: linked, companyKey })
+        .where(eq(mailMessages.id, mailId));
+      await tx.insert(activityLogs).values({
+        action: "MAIL_PLACED",
+        entityType: "MAIL",
+        entityId: mailId,
+        summary: "Placed an email at a company or application",
+        metadata: { company: companyKey, application: linked, at: now.toISOString() },
+      });
+    }
+    if (retagged || placed) await autoApplyMail(tx, mailId, context, now);
   });
   return { item: await readMailItem(mailId, context), previous };
 }

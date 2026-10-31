@@ -5,6 +5,7 @@ import type { MailConnection, ProviderId, ScannedMessage } from "@/services/mail
 import type { MailContext } from "./context";
 import type { MailTx } from "./handling-service";
 import { previousJobFor } from "@/features/companies/previous-job";
+import { autoApplyMail } from "./auto-apply";
 import { importMailRecords, mailImportSchema } from "./import";
 import { matchMail, type Match } from "./matching";
 import { sortRejection } from "./rejection-sort";
@@ -163,6 +164,8 @@ export async function ingestPage(
       Date.parse(raw.receivedAt) < input.recoveredBefore.getTime();
     let messageId: string | null = null;
     let tag: MailTag | null = null;
+    /** Stored for the first time here, so the mail rule reads it once the ledger row exists. */
+    let fresh: { handled: boolean } | null = null;
     if (kept) {
       const imported = await importMailRecords(record.data!, providerId, connection.email, tx);
       const [message] = await tx
@@ -222,6 +225,7 @@ export async function ingestPage(
             .where(eq(mailEvents.id, event.id));
         }
         if (await sortRejection(tx, messageId, context)) tag = "interviewRejected";
+        fresh = { handled };
       }
     }
     const values = {
@@ -267,6 +271,14 @@ export async function ingestPage(
     }
     // Provider pages can repeat an identity within one page.
     if (!saved) continue;
+    if (fresh && messageId) {
+      // Clear outcomes update their application; asking mail stays open, even from history.
+      const effect = await autoApplyMail(tx, messageId, context, new Date());
+      const opened = effect.kind === "ask";
+      if (fresh.handled && opened) counts.newAttention++;
+      if (!fresh.handled && (effect.kind === "acknowledge" || effect.kind === "outcome"))
+        counts.newAttention--;
+    }
     if (!previous) prior.push(saved);
     if (kept) counts.kept++;
     else counts.dropped++;

@@ -1,15 +1,24 @@
-import { and, desc, eq, gt, ne, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, ne, sql } from "drizzle-orm";
 import {
   activityLogs,
   applicationEvents,
+  applicationRounds,
   applications,
   jobs,
   mailEvents,
   mailMessages,
+  mailTracking,
 } from "@/db/schema";
 import { ApiError } from "@/features/agent-api/http";
 import { applyOutcome } from "@/features/applications/outcome-service";
-import type { MailEffect } from "./auto-apply-rule";
+import { availableOutcomes, phaseOf, recordStateFrom } from "@/features/applications/phase";
+import {
+  decideMailEffect,
+  type MailEffect,
+  type RuleApplication,
+  type RuleMail,
+} from "./auto-apply-rule";
+import type { MailContext } from "./context";
 import { linkMailToRecord, lockMail, type MailTx } from "./handling-service";
 
 if (typeof window !== "undefined") throw new Error("Mail writes run on the server.");
@@ -139,4 +148,151 @@ export async function undoAutoOutcome(tx: MailTx, messageId: string, now: Date) 
     entityId: messageId,
     summary: `Undid "${event.summary}" recorded from an email`,
   });
+}
+
+const userDecisions = ["justInfo", "triageDismissal", "savedOpeningId"];
+
+/** The email and its company's applications, read inside the caller's transaction. */
+export async function ruleInputs(
+  tx: MailTx,
+  messageId: string,
+  context: MailContext,
+): Promise<{ mail: RuleMail; applications: RuleApplication[] }> {
+  const [message] = await tx.select().from(mailMessages).where(eq(mailMessages.id, messageId));
+  if (!message) throw new Error("This message no longer exists.");
+  const [events, tracked, handEvents] = await Promise.all([
+    tx.select().from(mailEvents).where(eq(mailEvents.mailMessageId, messageId)),
+    tx
+      .select({ applicationIds: mailTracking.applicationIds })
+      .from(mailTracking)
+      .where(eq(mailTracking.messageId, messageId)),
+    tx
+      .select({ id: applicationEvents.id })
+      .from(applicationEvents)
+      .where(
+        and(
+          sql`${applicationEvents.payload}->>'mailMessageId' = ${messageId}`,
+          sql`coalesce(${applicationEvents.payload}->>'auto', '') <> 'true'`,
+        ),
+      )
+      .limit(1),
+  ]);
+  const marked = events.some((event) => event.details.autoApplied || event.details.autoUndone);
+  const blocked =
+    marked ||
+    message.linkedApplicationId !== null ||
+    handEvents.length > 0 ||
+    events.some((event) => userDecisions.some((key) => event.details[key]));
+  const named = [
+    message.linkedApplicationId,
+    ...events.map((event) => event.details.suggestedApplicationId),
+    ...tracked.flatMap((row) => row.applicationIds),
+  ].filter((id): id is string => typeof id === "string" && id.length > 0);
+  const mail: RuleMail = {
+    classification: message.classification,
+    receivedAt: message.receivedAt,
+    companyKey: message.companyKey,
+    namedApplicationIds: [...new Set(named)],
+    blocked,
+  };
+  const workspace = context.applications.filter((app) => app.company === message.companyKey);
+  if (!message.companyKey || !workspace.length) return { mail, applications: [] };
+  const ids = workspace.map((app) => app.id);
+  const [rows, ownEvents, rounds, linkedMail] = await Promise.all([
+    tx.select().from(applications).where(inArray(applications.id, ids)),
+    tx.select().from(applicationEvents).where(inArray(applicationEvents.applicationId, ids)),
+    tx
+      .select()
+      .from(applicationRounds)
+      .where(inArray(applicationRounds.applicationId, ids))
+      .orderBy(asc(applicationRounds.position)),
+    tx
+      .select({
+        applicationId: mailMessages.linkedApplicationId,
+        classification: mailMessages.classification,
+        receivedAt: mailMessages.receivedAt,
+        attentionState: mailMessages.attentionState,
+      })
+      .from(mailMessages)
+      .where(inArray(mailMessages.linkedApplicationId, ids)),
+  ]);
+  const previous = new Set(workspace.filter((app) => app.previousJob).map((app) => app.id));
+  return {
+    mail,
+    applications: rows.map((app) => {
+      const own = ownEvents.filter((event) => event.applicationId === app.id);
+      const ownRounds = rounds.filter((round) => round.applicationId === app.id);
+      const state = recordStateFrom(
+        {
+          ...app,
+          events: own,
+          linkedMail: linkedMail.filter((row) => row.applicationId === app.id),
+        },
+        ownRounds,
+        own.map((event) => event.eventType),
+      );
+      return {
+        id: app.id,
+        source: app.source,
+        previousJob: previous.has(app.id) || app.source === "PREVIOUS_JOB",
+        sentAt:
+          app.appliedAt ??
+          own.find((event) => event.eventType === "OUTREACH_SENT")?.occurredAt ??
+          null,
+        phase: phaseOf(state),
+        outcomes: availableOutcomes(state),
+        bookedRound: ownRounds.some((round) => round.outcome === "SCHEDULED"),
+      };
+    }),
+  };
+}
+
+/** Decides and applies what an email does to its application, in the caller's transaction. */
+export async function autoApplyMail(
+  tx: MailTx,
+  messageId: string,
+  context: MailContext,
+  now: Date,
+): Promise<MailEffect> {
+  const { mail, applications: apps } = await ruleInputs(tx, messageId, context);
+  const effect = decideMailEffect(mail, apps);
+  await applyMailEffect(tx, messageId, effect, now);
+  return effect;
+}
+
+/**
+ * Before a retag: undoes the rule's outcome while it can still be undone, then drops the
+ * rule's link and markers so the rule reads the email afresh. Returns false, changing
+ * nothing, once the user has recorded something newer (spec §1, Undo).
+ */
+export async function resetAutoEffect(tx: MailTx, messageId: string, now: Date) {
+  const found = await autoOutcomeEvent(tx, messageId);
+  if (found && !found.undoable) return false;
+  if (found) await undoAutoOutcome(tx, messageId, now);
+  const { message, events } = await lockMail(tx, messageId);
+  if (!events.some((event) => event.details.autoApplied || event.details.autoUndone)) return true;
+  if (message.linkedApplicationId) {
+    await tx
+      .delete(applicationEvents)
+      .where(
+        and(
+          sql`${applicationEvents.payload}->>'mailMessageId' = ${messageId}`,
+          sql`${applicationEvents.payload}->>'auto' = 'true'`,
+        ),
+      );
+    await tx
+      .update(mailMessages)
+      .set({ linkedApplicationId: null })
+      .where(eq(mailMessages.id, messageId));
+  }
+  for (const event of events) {
+    const details = { ...event.details };
+    delete details.autoApplied;
+    delete details.autoUndone;
+    await tx
+      .update(mailEvents)
+      .set({ details, linkedApplicationId: null })
+      .where(eq(mailEvents.id, event.id));
+  }
+  return true;
 }

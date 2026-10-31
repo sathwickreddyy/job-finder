@@ -345,6 +345,46 @@ describe.skipIf(!dbTests)("company inbox search", () => {
     }
   });
 
+  it("including a dropped rejection applies it", async () => {
+    const [job] = await db
+      .insert(jobs)
+      .values({
+        company: name,
+        title: "Platform Engineer",
+        canonicalUrl: `https://fixture.invalid/${prefix}/include-job`,
+        dedupeKey: `${prefix}-include-job`,
+        source: "MANUAL",
+        status: "APPLIED",
+      })
+      .returning();
+    const [app] = await db
+      .insert(applications)
+      .values({
+        jobId: job.id,
+        source: "MANUAL",
+        status: "APPLIED",
+        appliedAt: new Date(Date.now() - 20 * 86_400_000),
+      })
+      .returning();
+    try {
+      const own = await connection();
+      const raw = mail("include-rejection", {
+        subject: "Update on your application",
+        bodyText: "Thank you for your time. We have decided not to proceed with your application.",
+      });
+      const row = await dropped(own, raw);
+      vi.spyOn(outlook, "folders").mockResolvedValue([]);
+      vi.spyOn(outlook, "fetchMessage").mockResolvedValue(raw);
+      const { item } = await includeMail(row.id, key);
+      expect(item.application?.id).toBe(app.id);
+      const [stored] = await db.select().from(applications).where(eq(applications.id, app.id));
+      expect(stored).toMatchObject({ status: "REJECTED", closedReason: "REJECTED" });
+    } finally {
+      await db.delete(applications).where(eq(applications.id, app.id));
+      await db.delete(jobs).where(eq(jobs.id, job.id));
+    }
+  });
+
   it("does not add a shared sender", async () => {
     const own = await connection();
     const raw = mail("shared", {

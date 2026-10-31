@@ -8,11 +8,23 @@ import {
   applications,
   companyRecords,
   jobs,
+  mailConnections,
   mailEvents,
   mailMessages,
+  mailTracking,
 } from "@/db/schema";
 import { applyOutcome } from "@/features/applications/outcome-service";
-import { applyMailEffect, autoOutcomeEvent, undoAutoOutcome } from "@/features/mail/auto-apply";
+import {
+  applyMailEffect,
+  autoApplyMail,
+  autoOutcomeEvent,
+  resetAutoEffect,
+  undoAutoOutcome,
+} from "@/features/mail/auto-apply";
+import { loadMailContext, type MailContext } from "@/features/mail/context";
+import { updateMail } from "@/features/mail/handle-service";
+import { ingestPage } from "@/features/mail/ingest";
+import type { ScannedMessage } from "@/services/mail/providers/types";
 import { assertE2eDatabase, dbTests } from "./helpers/e2e-db";
 
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
@@ -105,7 +117,9 @@ describe.skipIf(!dbTests)("auto-applying mail", () => {
     const entities = [...mail.map((row) => row.id), ...ids.apps];
     if (entities.length)
       await db.delete(activityLogs).where(inArray(activityLogs.entityId, entities));
+    await db.delete(mailTracking).where(like(mailTracking.accountEmail, `${prefix}%`));
     await db.delete(mailMessages).where(like(mailMessages.accountEmail, `${prefix}%`));
+    await db.delete(mailConnections).where(like(mailConnections.email, `${prefix}%`));
     if (ids.jobs.length) {
       await db.delete(applications).where(inArray(applications.jobId, ids.jobs));
       await db.delete(jobs).where(inArray(jobs.id, ids.jobs));
@@ -235,5 +249,276 @@ describe.skipIf(!dbTests)("auto-applying mail", () => {
       message: "This outcome can no longer be undone. Correct it on the application.",
     });
     expect((await record(app.id)).status).toBe(after);
+  });
+
+  const auto = async (id: string) => {
+    const context = await loadMailContext();
+    return run((tx) => autoApplyMail(tx, id, context, NOW));
+  };
+  const retag = async (
+    id: string,
+    classification: typeof mailMessages.$inferInsert.classification,
+  ) => {
+    await run(async (tx) => {
+      await resetAutoEffect(tx, id, NOW);
+      await tx.update(mailMessages).set({ classification }).where(eq(mailMessages.id, id));
+    });
+    return auto(id);
+  };
+
+  it("autoApplyMail rejects recovered history for a single-application company", async () => {
+    const { app, mail } = await fixture("REJECTION");
+    expect(await auto(mail.id)).toEqual({
+      kind: "outcome",
+      applicationId: app.id,
+      outcome: "rejected",
+    });
+    expect((await record(app.id)).status).toBe("REJECTED");
+  });
+
+  it("autoApplyMail keeps an assessment open with a suggestion", async () => {
+    const { app, mail } = await fixture("ASSESSMENT");
+    expect(await auto(mail.id)).toEqual({ kind: "ask", applicationId: app.id });
+    expect((await message(mail.id)).attentionState).toBe("OPEN");
+    expect((await record(app.id)).status).toBe("APPLIED");
+  });
+
+  it("does not apply an email twice", async () => {
+    const { mail } = await fixture("REJECTION");
+    await auto(mail.id);
+    expect(await auto(mail.id)).toEqual({ kind: "none" });
+    expect(await eventsFor(mail.id)).toHaveLength(1);
+  });
+
+  it("marked Just info is never auto-applied", async () => {
+    const { app, mail } = await fixture("REJECTION");
+    await db
+      .update(mailEvents)
+      .set({ details: { justInfo: true } })
+      .where(eq(mailEvents.mailMessageId, mail.id));
+    expect(await auto(mail.id)).toEqual({ kind: "none" });
+    expect((await record(app.id)).status).toBe("APPLIED");
+  });
+
+  it("an email linked by hand is never auto-applied", async () => {
+    const { app, mail } = await fixture("REJECTION", { attentionState: "OPEN" });
+    await db
+      .update(mailMessages)
+      .set({ linkedApplicationId: app.id, attentionState: "DONE" })
+      .where(eq(mailMessages.id, mail.id));
+    expect(await auto(mail.id)).toEqual({ kind: "none" });
+    expect((await record(app.id)).status).toBe("APPLIED");
+  });
+
+  it("never re-applies an email whose outcome was undone", async () => {
+    const { app, mail } = await fixture("REJECTION");
+    await auto(mail.id);
+    await run((tx) => undoAutoOutcome(tx, mail.id, NOW));
+    expect(await auto(mail.id)).toEqual({ kind: "none" });
+    expect((await record(app.id)).status).toBe("APPLIED");
+  });
+
+  it("retagging rejection to acknowledgement undoes then acknowledges", async () => {
+    const { app, mail } = await fixture("REJECTION");
+    await auto(mail.id);
+    expect(await retag(mail.id, "APPLICATION_ACKNOWLEDGEMENT")).toEqual({
+      kind: "acknowledge",
+      applicationId: app.id,
+    });
+    expect((await record(app.id)).status).toBe("ACKNOWLEDGED");
+    const events = await eventsFor(mail.id);
+    expect(events.map((event) => event.eventType)).toEqual(["ACKNOWLEDGEMENT_RECEIVED"]);
+  });
+
+  it("retagging after Undo re-runs the rule when the tag changes", async () => {
+    const { app, mail } = await fixture("REJECTION");
+    await auto(mail.id);
+    await run((tx) => undoAutoOutcome(tx, mail.id, NOW));
+    expect(await retag(mail.id, "OFFER")).toEqual({
+      kind: "outcome",
+      applicationId: app.id,
+      outcome: "offer",
+    });
+    expect((await record(app.id)).status).toBe("OFFER");
+  });
+
+  it("retagging an acknowledgement as a rejection drops the automatic link", async () => {
+    const { app, mail } = await fixture("APPLICATION_ACKNOWLEDGEMENT");
+    await auto(mail.id);
+    expect(await retag(mail.id, "REJECTION")).toMatchObject({
+      kind: "outcome",
+      outcome: "rejected",
+    });
+    expect((await record(app.id)).status).toBe("REJECTED");
+    expect((await eventsFor(mail.id)).map((event) => event.eventType)).toEqual([
+      "REJECTION_RECEIVED",
+    ]);
+  });
+
+  it("retagging keeps an outcome that can no longer be undone", async () => {
+    const { app, mail } = await fixture("OFFER");
+    await auto(mail.id);
+    await run((tx) =>
+      applyOutcome(
+        tx,
+        {
+          applicationId: app.id,
+          outcome: "accepted",
+          detail: { name: "", note: "", happenedAt: NOW },
+        },
+        NOW,
+      ),
+    );
+    const status = (await record(app.id)).status;
+    expect(await retag(mail.id, "REJECTION")).toEqual({ kind: "none" });
+    expect((await record(app.id)).status).toBe(status);
+  });
+
+  /** Fetch new mail for one inbox whose only company is the fixture's, with its application. */
+  async function fetchPage(
+    found: Awaited<ReturnType<typeof fixture>>,
+    messages: ScannedMessage[],
+    recoveredBefore: Date | null,
+  ) {
+    const [connection] = await db
+      .insert(mailConnections)
+      .values({
+        provider: "OUTLOOK",
+        email: `${prefix}-inbox-${++counter}@fixture.invalid`,
+        encryptedAccessToken: "unused-fixture",
+      })
+      .returning();
+    const key = found.mail.companyKey!;
+    const context: MailContext = {
+      baselineAt: "2026-10-01T00:00:00Z",
+      companies: [
+        {
+          id: key,
+          name: found.job.company,
+          slug: null,
+          baselineAt: "2026-10-01T00:00:00Z",
+          ruleSource: "test",
+          rule: {
+            company: found.job.company,
+            aliases: [],
+            domains: [`${key.replace(/[^a-z0-9]/g, "")}.invalid`],
+            senders: [],
+            keywords: [],
+            excludedTerms: [],
+          },
+        },
+      ],
+      applications: [
+        {
+          id: found.app.id,
+          company: key,
+          role: "Backend Engineer",
+          recipient: null,
+          sentAt: found.app.appliedAt!.toISOString(),
+        },
+      ],
+      outbound: [],
+    };
+    const run = (page: ScannedMessage[]) =>
+      db.transaction((tx) =>
+        ingestPage(tx, {
+          connection,
+          providerId: "OUTLOOK",
+          messages: page,
+          context,
+          threads: [],
+          recoveredBefore,
+        }),
+      );
+    return { first: await run(messages), again: () => run(messages), connection };
+  }
+  const scanned = (
+    found: Awaited<ReturnType<typeof fixture>>,
+    patch: Partial<ScannedMessage>,
+  ): ScannedMessage => ({
+    externalId: `${prefix}-scan-${++counter}`,
+    sender: `talent@${found.mail.companyKey!.replace(/[^a-z0-9]/g, "")}.invalid`,
+    senderName: "Talent team",
+    subject: "Update on your application",
+    bodyText: "Thank you for your time. We have decided not to proceed with your application.",
+    receivedAt: "2026-10-29T05:00:00Z",
+    folders: ["Inbox"],
+    ...patch,
+  });
+  const fetched = async (connection: { email: string }) =>
+    (
+      await db.select().from(mailMessages).where(eq(mailMessages.accountEmail, connection.email))
+    )[0];
+
+  it("fetching a rejection for a single-application company marks it Rejected", async () => {
+    const found = await fixture("FOLLOW_UP");
+    const { connection } = await fetchPage(
+      found,
+      [scanned(found, {})],
+      new Date("2026-10-31T00:00:00Z"),
+    );
+    const mail = await fetched(connection);
+    expect(mail).toMatchObject({
+      classification: "REJECTION",
+      attentionState: "DONE",
+      linkedApplicationId: found.app.id,
+    });
+    expect((await record(found.app.id)).status).toBe("REJECTED");
+  });
+
+  it("fetching an assessment keeps it open with a suggestion", async () => {
+    const found = await fixture("FOLLOW_UP");
+    const { connection } = await fetchPage(
+      found,
+      [
+        scanned(found, {
+          subject: "Online assessment invitation",
+          bodyText: "Please complete the online assessment by Friday.",
+        }),
+      ],
+      new Date("2026-10-31T00:00:00Z"),
+    );
+    const mail = await fetched(connection);
+    expect(mail).toMatchObject({ classification: "ASSESSMENT", attentionState: "OPEN" });
+    expect(await details(mail.id)).toEqual([
+      expect.objectContaining({ suggestedApplicationId: found.app.id }),
+    ]);
+    expect((await record(found.app.id)).status).toBe("APPLIED");
+  });
+
+  it("does not apply an email twice when its page is ingested again", async () => {
+    const found = await fixture("FOLLOW_UP");
+    const { connection, again } = await fetchPage(found, [scanned(found, {})], null);
+    await again();
+    const mail = await fetched(connection);
+    expect(
+      (await eventsFor(mail.id)).filter((event) => event.eventType === "REJECTION_RECEIVED"),
+    ).toHaveLength(1);
+  });
+
+  it("placing an unplaced acknowledgement at the company acknowledges", async () => {
+    const found = await fixture("APPLICATION_ACKNOWLEDGEMENT", {
+      companyKey: null,
+      attentionState: "OPEN",
+    });
+    const key = (await loadMailContext()).companies.find(
+      (company) => company.name === found.job.company,
+    )!.id;
+    await updateMail(found.mail.id, { company: key });
+    expect((await record(found.app.id)).status).toBe("ACKNOWLEDGED");
+    expect(await message(found.mail.id)).toMatchObject({
+      attentionState: "DONE",
+      linkedApplicationId: found.app.id,
+    });
+  });
+
+  it("retagging through updateMail undoes the old outcome and applies the new one", async () => {
+    const { app, mail } = await fixture("REJECTION");
+    await auto(mail.id);
+    await updateMail(mail.id, { classification: "APPLICATION_ACKNOWLEDGEMENT" });
+    expect((await record(app.id)).status).toBe("ACKNOWLEDGED");
+    expect((await eventsFor(mail.id)).map((event) => event.eventType)).toEqual([
+      "ACKNOWLEDGEMENT_RECEIVED",
+    ]);
   });
 });
