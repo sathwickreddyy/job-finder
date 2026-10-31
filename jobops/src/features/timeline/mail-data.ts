@@ -1,7 +1,6 @@
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { companyRecords } from "@/db/schema";
-import type { CompanyMailRule } from "@/features/mail/company-rules";
 import { companyKeyFor, loadMailContext } from "@/features/mail/context";
 import { readInboxes, type Inboxes } from "@/features/mail/inboxes";
 import type { MailItem } from "@/features/mail/mail-item";
@@ -36,7 +35,6 @@ export type MailPane =
       row: RailRow | null;
       roles: { id: string; role: string; href: string }[];
       allRolesHref: string;
-      rule: { company: string; rule: CompanyMailRule; source: string } | null;
     })
   | (PaneTimeline & { kind: "home" })
   | (PaneTimeline & { kind: "all" })
@@ -160,7 +158,6 @@ export async function readMailView(
       (item) => item.company?.key === key,
     );
     shown = { ...shown, cursor };
-    const listed = context.companies.find((company) => company.id === key);
     pane = {
       kind: "company",
       company: timeline.company,
@@ -175,7 +172,6 @@ export async function readMailView(
         href: at({ role: role.id }),
       })),
       allRolesHref: at({ role: null }),
-      rule: listed ? { company: listed.id, rule: listed.rule, source: listed.ruleSource } : null,
       tags: timeline.tags,
       ...paging(timeline.nextCursor, cursor),
     };

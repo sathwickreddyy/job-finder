@@ -1,10 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { ArrowLeft, ChevronRight, Inbox, Search, SlidersHorizontal } from "lucide-react";
-import { CompanyRuleEditor } from "@/features/mail/company-rule-editor";
 import { FetchMail } from "@/features/mail/fetch-mail";
 import { InboxesPanel } from "@/features/mail/inboxes-panel";
 import { tagClass, tagIcon } from "@/features/mail/tag-pill";
@@ -16,7 +14,7 @@ import type { CompanyStatus } from "@/features/companies/status";
 import { ComingUp } from "./coming-up";
 import { Drawer } from "./drawer";
 import type { RailGroup, RailRow } from "./index-rows";
-import type { MailPane, MailViewData } from "./mail-data";
+import type { MailViewData } from "./mail-data";
 import { mailHref, type MailQuery } from "./query";
 import type { TagCounts } from "./read";
 import { CompanyTimeline } from "./timeline";
@@ -297,44 +295,6 @@ function TagPills({ query, tags }: { query: MailQuery; tags: TagCounts }) {
   );
 }
 
-function RuleDrawer({
-  rule,
-}: {
-  rule: NonNullable<Extract<MailPane, { kind: "company" }>["rule"]>;
-}) {
-  const router = useRouter();
-  const [saved, setSaved] = useState("");
-  const [pending, setPending] = useState(false);
-  return (
-    <Drawer
-      label="Mail rule"
-      icon={<SlidersHorizontal size={15} aria-hidden />}
-      title={`Mail rule for ${rule.rule.company}`}
-      description={rule.source}
-    >
-      {
-        <div className="space-y-4">
-          {saved && (
-            <p role="status" className="m-0 rounded-2xl bg-foreground p-3 text-sm text-background">
-              {saved}
-            </p>
-          )}
-          <CompanyRuleEditor
-            company={rule.company}
-            rule={rule.rule}
-            disabled={pending}
-            onPending={setPending}
-            onSaved={(message) => {
-              setSaved(message);
-              router.refresh();
-            }}
-          />
-        </div>
-      }
-    </Drawer>
-  );
-}
-
 function Pane({ data }: { data: MailViewData }) {
   const { pane, query } = data;
   const back = (
@@ -424,7 +384,15 @@ function Pane({ data }: { data: MailViewData }) {
             </p>
           )}
         </div>
-        {company?.rule && <RuleDrawer key={company.company.key} rule={company.rule} />}
+        {company?.company.slug && (
+          <Link
+            href={`/companies/${company.company.slug}?tab=timeline#mail-search`}
+            className="inline-flex h-9 items-center gap-1.5 rounded-full px-3 text-sm font-medium text-link ring-1 ring-border hover:bg-muted hover:no-underline"
+          >
+            <SlidersHorizontal size={15} aria-hidden />
+            How we find its mail
+          </Link>
+        )}
       </header>
       <div className="mt-4 mb-5">
         <TagPills query={query} tags={pane.tags} />

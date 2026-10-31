@@ -4,6 +4,7 @@ import { normalizeCompany } from "@/features/applications/lanes";
 import { methodLabel } from "@/features/applications/phase";
 import { displayDate, type DisplayPreferences } from "@/features/candidate/preferences";
 import type { CompanyTimelinePanel } from "@/features/timeline/company-panel";
+import { RulePanel } from "@/features/mail/search/rule-panel";
 import { mailHref } from "@/features/timeline/query";
 import { CompanyTimeline } from "@/features/timeline/timeline";
 import { cn } from "@/lib/utils";
@@ -23,6 +24,7 @@ import type { CompaniesData } from "./read";
 import { CompanyResearch } from "./research";
 import { compensationAmount, publicationYear, type ResearchFact } from "./research-data";
 import { CompanyResumeReference } from "./resume-reference";
+import { PreviousBadge, StatusPill } from "./status-pill";
 import type { CompanySummary } from "./summary";
 
 export type DetailProps = {
@@ -87,7 +89,11 @@ export function DetailHeader({
   company,
   summary,
   next,
-}: Pick<DetailProps, "company" | "summary"> & { next?: CompanyTimelinePanel["next"] }) {
+  status,
+}: Pick<DetailProps, "company" | "summary"> & {
+  next?: CompanyTimelinePanel["next"];
+  status?: CompanyTimelinePanel["status"];
+}) {
   const action = nextAction(summary);
   const modes = [...new Set(company.locations?.flatMap((row) => row.workModes) ?? [])];
   return (
@@ -102,6 +108,8 @@ export function DetailHeader({
             <h1 className="text-3xl font-semibold tracking-tight">{company.name}</h1>
             <p className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
               <StageChip stage={summary.stage} />
+              {status && <StatusPill status={status} />}
+              {status?.previous && <PreviousBadge joined={status.previous.joined} />}
               <span>{company.cities.join(", ") || "Location not recorded"}</span>
               {!!modes.length && (
                 <span className="capitalize">
@@ -729,7 +737,21 @@ function TimelineTab(props: DetailProps & { timeline: CompanyTimelinePanel }) {
       </section>
       <div className="order-1 min-w-0 lg:order-2">
         <TimelineAside {...props} />
+        {timeline.search && (
+          <a href="#mail-search" className="mt-6 inline-block text-sm text-link">
+            How we find {props.company.name}&apos;s mail
+          </a>
+        )}
       </div>
+      {timeline.search && (
+        <div className="order-3 min-w-0 lg:col-span-2">
+          <RulePanel
+            data={timeline.search}
+            companyKey={normalizeCompany(props.company.name)}
+            companyName={props.company.name}
+          />
+        </div>
+      )}
     </div>
   );
 }
@@ -840,7 +862,7 @@ export function CompanyDetail(
 ) {
   return (
     <div className="space-y-8">
-      <DetailHeader {...props} next={props.timeline.next} />
+      <DetailHeader {...props} next={props.timeline.next} status={props.timeline.status} />
       <DetailTabs
         key={props.tab}
         initial={props.tab}
