@@ -8,16 +8,9 @@ import { companyResolver, normalizeCompany } from "@/features/applications/lanes
 import type { WorkspaceApplication } from "@/features/mail/context";
 import type { MailClassification } from "@/features/mail/tags";
 
-/** A job the user held before, recorded with "Add previous job". Months are `YYYY-MM`. */
-export type PreviousJob = {
-  applicationId: string;
-  companyKey: string;
-  role: string;
-  joinedOn: string;
-  leftOn: string | null;
-};
+import { PREVIOUS_JOB, type PreviousJob } from "./previous-source";
 
-export const PREVIOUS_JOB = "PREVIOUS_JOB";
+export { PREVIOUS_JOB, type PreviousJob };
 /** Previous jobs need a canonical URL; this internal key never pretends to be a posting. */
 export const previousJobUrl = (id: string) => `jobops:previous/${id}`;
 /** Leaves previous jobs out of everything that treats jobs as openings. */

@@ -134,7 +134,9 @@ export async function readMailView(
       pane = {
         kind: "all",
         days: data.days,
-        handling: handlingFor(openMail(data.days), (item) => suggestHandling(item, [])),
+        handling: handlingFor(openMail(data.days), (item) =>
+          suggestHandling(item, item.company ? (data.roles[item.company.key] ?? []) : []),
+        ),
         tags: data.tags,
         ...paging(data.nextCursor, cursor),
       };

@@ -133,4 +133,18 @@ describe.skipIf(!dbTests)("the Mail view", () => {
     expect(view.pane.kind).toBe("all");
     expect(mailIds(view)).toEqual([newer.id, unplaced.id, older.id]);
   });
+
+  it("All job mail suggests the outcome for the email's company role", async () => {
+    const word = `suggest${randomUUID().slice(0, 8)}`;
+    const invite = await email({
+      subject: `${word} interview invitation`,
+      classification: "INTERVIEW",
+      attentionState: "OPEN",
+      receivedAt: new Date("2026-10-31T02:00:00Z"),
+    });
+    const view = await readMailView({ view: "all", q: word }, now);
+    expect(view.pane.kind).toBe("all");
+    const handling = view.pane.kind === "all" ? view.pane.handling[invite.id] : undefined;
+    expect(handling?.suggested).toBe("scheduled");
+  });
 });

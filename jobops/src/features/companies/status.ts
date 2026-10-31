@@ -1,5 +1,5 @@
 import { laneStatus, type LaneSource, type StatusTone } from "@/features/applications/lanes";
-import { PREVIOUS_JOB, type PreviousJob } from "./previous-job";
+import { PREVIOUS_JOB, type PreviousJob } from "./previous-source";
 
 export type CompanyStatusTone = StatusTone | "accepted" | "mailOnly" | "none";
 /** One derived status per company, never hand-picked; a previous job is a badge beside it. */

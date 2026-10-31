@@ -33,11 +33,15 @@ async function companyWithMail(
   return { company, subject, id };
 }
 
-test("opens the first Needs you company", async ({ page }) => {
+test("opens All job mail, then a Needs you company from the rail", async ({ page }) => {
   const { company } = await companyWithMail("INTERVIEW");
   await page.goto("/mail");
+  await expect(rail(page).getByRole("link", { name: /All job mail/ })).toHaveAttribute(
+    "aria-current",
+    "page",
+  );
   const needs = rail(page).getByRole("region", { name: "Needs you" });
-  await expect(needs.getByRole("link").first()).toHaveAttribute("aria-current", "page");
+  await expect(needs.getByRole("link", { name: new RegExp(company) })).toBeVisible();
   await expect(railRow(page, company)).toContainText("New: 1");
   await railRow(page, company).click();
   await expect(page.getByRole("heading", { level: 2, name: company })).toBeVisible();
@@ -63,9 +67,9 @@ test("Just info and Undo", async ({ page }) => {
   await openCompany(page, company);
   await page.getByRole("button", { name: "Just info", exact: true }).click();
   await expect(page.getByText("Marked as just info")).toBeVisible();
-  await expect(mailRow(page, subject)).not.toContainText("Needs you");
+  await expect(mailRow(page, subject)).not.toContainText("needs you");
   await page.getByRole("button", { name: "Undo", exact: true }).click();
-  await expect(mailRow(page, subject)).toContainText("Needs you");
+  await expect(mailRow(page, subject)).toContainText("needs you");
   await expect(page.getByRole("button", { name: "Record round scheduled" })).toBeVisible();
 });
 
@@ -139,7 +143,8 @@ test("places a Needs a home email", async ({ page }) => {
   const id = await seedMail({ subject, classification: "UNKNOWN" });
   await page.goto(`/mail?view=home&mail=${id}`);
   await expect(page.getByRole("heading", { level: 2, name: "Needs a home" })).toBeVisible();
-  await expect(page.getByText(`${subject} full message`)).toBeVisible();
+  // The row previews the first line, and the opened email repeats it in full.
+  await expect(page.getByText(`${subject} full message`).last()).toBeVisible();
   await page.getByText("Place at…").click();
   await page.getByLabel("Company or application").selectOption({ label: company });
   await page.getByRole("button", { name: "Place", exact: true }).click();
@@ -153,7 +158,7 @@ test("old single-email links open the email in its timeline", async ({ page }) =
   await page.goto(`/mail/${id}`);
   await expect(page).toHaveURL(new RegExp(`/mail\\?company=.+&mail=${id}$`));
   await expect(page.getByRole("heading", { level: 2, name: company })).toBeVisible();
-  await expect(page.getByText(`${subject} full message`)).toBeVisible();
+  await expect(page.getByText(`${subject} full message`).last()).toBeVisible();
   await page.goto(`/mail/${randomUUID()}`);
   await expect(page.getByRole("heading", { name: /not found/i })).toBeVisible();
 });
@@ -171,7 +176,7 @@ test("legacy handled mail stays handled despite a pending review event", async (
   });
   await openCompany(page, company);
   await expect(mailRow(page, subject)).toBeVisible();
-  await expect(mailRow(page, subject)).not.toContainText("Needs you");
+  await expect(mailRow(page, subject)).not.toContainText("needs you");
   await expect(page.getByRole("button", { name: "Record round scheduled" })).toHaveCount(0);
 });
 
@@ -201,7 +206,7 @@ test("company page opens on Timeline with the aside", async ({ page }) => {
   ).toHaveCount(0);
   await page.getByRole("button", { name: "Just info", exact: true }).click();
   await expect(page.getByText("Marked as just info")).toBeVisible();
-  await expect(mailRow(page, subject)).not.toContainText("Needs you");
+  await expect(mailRow(page, subject)).not.toContainText("needs you");
 });
 
 test("progress tab opens Timeline", async ({ page }) => {
@@ -309,11 +314,11 @@ test("long role names keep the phone layout", async ({ page }) => {
   expect(await fitsWidth(page)).toBe(true);
 });
 
-test("landing on Mail names the shown company on a wide screen only", async ({ page }) => {
+test("landing on Mail names All job mail on a wide screen only", async ({ page }) => {
   await companyWithMail("INTERVIEW");
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto("/mail");
-  await expect(page).toHaveURL(/\/mail\?company=/);
+  await expect(page).toHaveURL(/\/mail\?view=all$/);
   await page.setViewportSize({ width: 375, height: 812 });
   await page.goto("/mail");
   await expect(rail(page)).toBeVisible();

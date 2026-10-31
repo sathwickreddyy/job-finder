@@ -9,7 +9,7 @@ import { PREVIOUS_JOB, previousJobs } from "@/features/companies/previous-job";
 import { companyStatus, monthLabel, type CompanyStatus } from "@/features/companies/status";
 import type { MailItem } from "@/features/mail/mail-item";
 import type { ComingUpItem } from "./coming-up";
-import { readApplications } from "@/features/applications/read";
+import { readApplications, type ApplicationRecord } from "@/features/applications/read";
 import { loadMailContext } from "@/features/mail/context";
 import { ApiError } from "@/features/agent-api/http";
 import {
@@ -42,6 +42,21 @@ export type CompanyTimelineData = {
   nextCursor: string | null;
   tags: TagCounts;
 };
+
+/** An application as the handling bar sees it: its role, phase and recorded state. */
+export function timelineRole(record: ApplicationRecord): TimelineRole {
+  return {
+    id: record.id,
+    role: record.role,
+    source: record.source,
+    phase: record.phase,
+    state: recordStateFrom(
+      record,
+      record.rounds,
+      record.events.map((event) => event.eventType),
+    ),
+  };
+}
 
 async function tagCounts(scope: SQL[]): Promise<TagCounts> {
   const rows = await db
@@ -109,20 +124,7 @@ export async function readCompanyTimeline(
       slug: listed?.slug ?? null,
       city: own[0]?.city ?? "",
     },
-    roles: own.map((record) => {
-      const state = recordStateFrom(
-        record,
-        record.rounds,
-        record.events.map((event) => event.eventType),
-      );
-      return {
-        id: record.id,
-        role: record.role,
-        source: record.source,
-        phase: record.phase,
-        state,
-      };
-    }),
+    roles: own.map(timelineRole),
     days: await markSavedOpenings(
       timelineEntries({
         mail: items,
@@ -167,15 +169,28 @@ export async function readHomeMail(
   };
 }
 
-/** All job mail: every kept email, newest first, whichever company it belongs to. */
+/**
+ * All job mail: every kept email, newest first, whichever company it belongs to, with each
+ * company's roles so open mail gets the same suggestion as on the company's own timeline.
+ */
 export async function readAllMail(
   filters: { tag?: MailTag; q?: string; cursor?: string },
   now = new Date(),
-): Promise<{ days: TimelineDay[]; nextCursor: string | null; tags: TagCounts }> {
-  const [{ items, nextCursor }, tags] = await Promise.all([
+): Promise<{
+  days: TimelineDay[];
+  nextCursor: string | null;
+  tags: TagCounts;
+  roles: Record<string, TimelineRole[]>;
+}> {
+  const [{ items, nextCursor }, tags, { records }] = await Promise.all([
     listMail({ attention: "all", ...filters }),
     tagCounts([notExcluded]),
+    readApplications(),
   ]);
+  const roles: Record<string, TimelineRole[]> = {};
+  for (const record of records)
+    if (record.source !== PREVIOUS_JOB)
+      (roles[record.companyKey] ??= []).push(timelineRole(record));
   return {
     days: await markSavedOpenings(
       timelineEntries({
@@ -189,6 +204,7 @@ export async function readAllMail(
     ),
     nextCursor,
     tags,
+    roles,
   };
 }
 
@@ -288,13 +304,15 @@ export async function readCompanyIndex(
     previous: joined,
   });
   const totals = new Map(facts.map((row) => [row.key, row.total]));
+  // Every rail company, plus former employers that have no lane or mail yet.
+  const shown = new Set([...rows.map((row) => row.key), ...previous.map((job) => job.companyKey)]);
   const statuses = Object.fromEntries(
-    rows.map((row) => [
-      row.key,
+    [...shown].map((key) => [
+      key,
       companyStatus({
-        records: records.filter((record) => record.companyKey === row.key),
-        mailCount: totals.get(row.key) ?? 0,
-        previousJobs: previous.filter((job) => job.companyKey === row.key),
+        records: records.filter((record) => record.companyKey === key),
+        mailCount: totals.get(key) ?? 0,
+        previousJobs: previous.filter((job) => job.companyKey === key),
         now,
       }),
     ]),

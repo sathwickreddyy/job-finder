@@ -403,7 +403,9 @@ function Pane({ data }: { data: MailViewData }) {
           Back to the newest
         </Link>
       )}
+      {/* A new pane remounts the rows, so no email keeps the last pane's handling. */}
       <CompanyTimeline
+        key={company ? `company:${company.company.key}` : pane.kind}
         days={pane.days}
         handling={pane.handling}
         roles={company?.roles ?? []}
