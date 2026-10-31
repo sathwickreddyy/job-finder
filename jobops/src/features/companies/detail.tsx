@@ -727,41 +727,42 @@ export function TimelineAside({
 function TimelineTab(props: DetailProps & { timeline: CompanyTimelinePanel }) {
   const { timeline } = props;
   return (
-    <div className="grid min-w-0 gap-8 lg:grid-cols-[minmax(0,1fr)_17rem]">
-      <section aria-label="Timeline" className="order-2 min-w-0 lg:order-1">
-        {timeline.newestHref && (
-          <Link href={timeline.newestHref} className="mb-3 inline-block text-sm text-link">
-            Back to the newest
-          </Link>
-        )}
-        <CompanyTimeline
-          days={timeline.days}
-          handling={timeline.handling}
-          roles={timeline.roles}
-          allRolesHref={timeline.allRolesHref}
-          role={timeline.role}
-          openMail={null}
-          olderHref={timeline.olderHref}
-          inboxes={timeline.search?.inboxes.map((row) => row.account)}
-        />
-      </section>
-      {/* Sticky as one block, so the facts never slide over the link below them. */}
-      <div className="order-1 min-w-0 self-start lg:sticky lg:top-6 lg:order-2">
-        <TimelineAside {...props} />
-        {timeline.search && (
-          <a href="#mail-search" className="mt-6 inline-block text-sm text-link">
-            How we find {props.company.name}&apos;s mail
-          </a>
-        )}
+    <div className="min-w-0 space-y-8">
+      {/* The facts stick within this grid only, so they stop before the search panel below. */}
+      <div className="grid min-w-0 gap-8 lg:grid-cols-[minmax(0,1fr)_17rem]">
+        <section aria-label="Timeline" className="order-2 min-w-0 lg:order-1">
+          {timeline.newestHref && (
+            <Link href={timeline.newestHref} className="mb-3 inline-block text-sm text-link">
+              Back to the newest
+            </Link>
+          )}
+          <CompanyTimeline
+            days={timeline.days}
+            handling={timeline.handling}
+            roles={timeline.roles}
+            allRolesHref={timeline.allRolesHref}
+            role={timeline.role}
+            openMail={null}
+            olderHref={timeline.olderHref}
+            inboxes={timeline.search?.inboxes.map((row) => row.account)}
+          />
+        </section>
+        {/* Sticky as one block, so the facts never slide over the link below them. */}
+        <div className="order-1 min-w-0 self-start lg:sticky lg:top-6 lg:order-2">
+          <TimelineAside {...props} />
+          {timeline.search && (
+            <a href="#mail-search" className="mt-6 inline-block text-sm text-link">
+              How we find {props.company.name}&apos;s mail
+            </a>
+          )}
+        </div>
       </div>
       {timeline.search && (
-        <div className="order-3 min-w-0 lg:col-span-2">
-          <RulePanel
-            data={timeline.search}
-            companyKey={normalizeCompany(props.company.name)}
-            companyName={props.company.name}
-          />
-        </div>
+        <RulePanel
+          data={timeline.search}
+          companyKey={normalizeCompany(props.company.name)}
+          companyName={props.company.name}
+        />
       )}
     </div>
   );

@@ -169,7 +169,7 @@ test('company panel edits a keyword, refuses "interview", and runs a search with
   await expect(panel.getByText(/needs reconnecting in Inboxes/)).toBeVisible();
 });
 
-test("the sticky company facts never cover the How we find link while scrolling", async ({
+test("the sticky company facts never cover the How we find link or the search panel while scrolling", async ({
   page,
 }) => {
   const name = unique(`Sticky ${prefix}`);
@@ -190,19 +190,19 @@ test("the sticky company facts never cover the How we find link while scrolling"
   for (let y = 0; y < height; y += 150) {
     await page.evaluate((top) => window.scrollTo(0, top), y);
     const overlap = await page.evaluate(() => {
+      const meets = (a: DOMRect, b: DOMRect) =>
+        a.top < b.bottom && b.top < a.bottom && a.left < b.right && b.left < a.right;
       const anchor = document.querySelector('a[href="#mail-search"]')!.getBoundingClientRect();
+      const panel = document.querySelector("#mail-search")!.getBoundingClientRect();
       const facts = document.querySelector('aside[aria-label="Company facts"]')!;
-      return [...facts.querySelectorAll("a, button, select")].some((node) => {
-        const box = node.getBoundingClientRect();
-        return (
-          box.top < anchor.bottom &&
-          anchor.top < box.bottom &&
-          box.left < anchor.right &&
-          anchor.left < box.right
-        );
-      });
+      return {
+        link: [...facts.querySelectorAll("a, button, select")].some((node) =>
+          meets(node.getBoundingClientRect(), anchor),
+        ),
+        panel: meets(facts.getBoundingClientRect(), panel),
+      };
     });
-    expect(overlap, `overlap at scroll ${y}`).toBe(false);
+    expect(overlap, `overlap at scroll ${y}`).toEqual({ link: false, panel: false });
   }
 });
 
