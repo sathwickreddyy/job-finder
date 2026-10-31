@@ -623,7 +623,7 @@ export function TimelineAside({
   return (
     <aside
       aria-label="Company facts"
-      className="grid min-w-0 grid-cols-2 gap-x-4 gap-y-6 self-start lg:sticky lg:top-6 lg:grid-cols-1 [&>*]:min-w-0"
+      className="grid min-w-0 grid-cols-2 gap-x-4 gap-y-6 lg:grid-cols-1 [&>*]:min-w-0"
     >
       {/* On a phone: roles across the top, pay and the loop side by side, then the resume. */}
       <div id="applications" className="col-span-2 space-y-2 lg:col-span-1">
@@ -744,7 +744,8 @@ function TimelineTab(props: DetailProps & { timeline: CompanyTimelinePanel }) {
           olderHref={timeline.olderHref}
         />
       </section>
-      <div className="order-1 min-w-0 lg:order-2">
+      {/* Sticky as one block, so the facts never slide over the link below them. */}
+      <div className="order-1 min-w-0 self-start lg:sticky lg:top-6 lg:order-2">
         <TimelineAside {...props} />
         {timeline.search && (
           <a href="#mail-search" className="mt-6 inline-block text-sm text-link">

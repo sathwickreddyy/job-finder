@@ -169,6 +169,43 @@ test('company panel edits a keyword, refuses "interview", and runs a search with
   await expect(panel.getByText(/needs reconnecting in Inboxes/)).toBeVisible();
 });
 
+test("the sticky company facts never cover the How we find link while scrolling", async ({
+  page,
+}) => {
+  const name = unique(`Sticky ${prefix}`);
+  const record = await company(name);
+  for (let day = 0; day < 24; day += 1)
+    await seedMail({
+      subject: unique(`Update ${day}`),
+      classification: "RECRUITER_OUTREACH",
+      companyKey: keyOf(name),
+      attentionState: "DONE",
+      receivedAt: new Date(Date.now() - day * 86_400_000),
+    });
+  await page.setViewportSize({ width: 1024, height: 700 });
+  await page.goto(`/companies/${record.slug}?tab=timeline`);
+  const link = page.getByRole("link", { name: `How we find ${name}'s mail` });
+  await expect(link).toBeVisible();
+  const height = await page.evaluate(() => document.documentElement.scrollHeight);
+  for (let y = 0; y < height; y += 150) {
+    await page.evaluate((top) => window.scrollTo(0, top), y);
+    const overlap = await page.evaluate(() => {
+      const anchor = document.querySelector('a[href="#mail-search"]')!.getBoundingClientRect();
+      const facts = document.querySelector('aside[aria-label="Company facts"]')!;
+      return [...facts.querySelectorAll("a, button, select")].some((node) => {
+        const box = node.getBoundingClientRect();
+        return (
+          box.top < anchor.bottom &&
+          anchor.top < box.bottom &&
+          box.left < anchor.right &&
+          anchor.left < box.right
+        );
+      });
+    });
+    expect(overlap, `overlap at scroll ${y}`).toBe(false);
+  }
+});
+
 test("add a previous employer from Companies", async ({ page }) => {
   const name = unique(`Former ${prefix}`);
   await page.goto("/companies");
