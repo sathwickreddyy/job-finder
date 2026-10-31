@@ -26,6 +26,8 @@
   --accent-soft: var(--primary-container);
   --amber: #fdd663;
   --amber-soft: #41331c;
+  --purple: #d7aefb;
+  --purple-soft: #3b2b4f;
   --review: #fbbc04;
   --review-hover: #f9ab00;
   --review-foreground: #202124;
@@ -65,6 +67,8 @@
   --link: #1967d2;
   --amber: #8a5000;
   --amber-soft: #fef7e0;
+  --purple: #8430ce;
+  --purple-soft: #f3e8fd;
   --teal: #188038;
   --teal-soft: #e6f4ea;
   --danger: #c5221f;

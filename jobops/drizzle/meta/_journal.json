@@ -92,6 +92,13 @@
       "when": 1793370262171,
       "tag": "0012_shared_mail_foundation",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1793431276395,
+      "tag": "0013_job_mail_tags",
+      "breakpoints": true
     }
   ]
 }

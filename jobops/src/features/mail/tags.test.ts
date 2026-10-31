@@ -1,36 +1,51 @@
 import { expect, it } from "vitest";
-import { classificationForTag, classificationsFor, tagLabel, tagOf } from "./tags";
+import {
+  classificationForTag,
+  classificationsFor,
+  parseTagParam,
+  tagLabel,
+  tagOf,
+  tagStage,
+} from "./tags";
 
-it("maps every classification to its tag", () => {
-  expect(tagOf("RECRUITER_OUTREACH")).toBe("opportunity");
-  for (const kind of [
-    "APPLICATION_ACKNOWLEDGEMENT",
-    "FOLLOW_UP",
-    "ASSESSMENT",
-    "INTERVIEW",
+it("maps every classification to its new tag", () => {
+  for (const [kind, tag] of [
+    ["APPLICATION_ACKNOWLEDGEMENT", "application"],
+    ["FOLLOW_UP", "application"],
+    ["REFERRAL", "referral"],
+    ["INTERVIEW", "interviewCall"],
+    ["ASSESSMENT", "interviewCall"],
+    ["INTERVIEW_UPDATE", "interviewProcess"],
+    ["OFFER", "offer"],
+    ["REJECTION", "rejection"],
+    ["BACKGROUND_CHECK", "backgroundCheck"],
+    ["ONBOARDING", "joining"],
+    ["RECRUITER_OUTREACH", "opportunity"],
+    ["UNKNOWN", "other"],
   ] as const)
-    expect(tagOf(kind)).toBe("process");
-  expect(tagOf("OFFER")).toBe("offer");
-  expect(tagOf("REJECTION")).toBe("rejected");
-  expect(tagOf("UNKNOWN")).toBe("other");
-  expect(classificationsFor("process")).toEqual([
-    "APPLICATION_ACKNOWLEDGEMENT",
-    "FOLLOW_UP",
-    "ASSESSMENT",
-    "INTERVIEW",
-  ]);
-  expect(tagLabel).toEqual({
-    opportunity: "Job opportunity",
-    process: "Application / interview",
-    offer: "Offer",
-    rejected: "Rejected",
-    other: "Other",
-  });
+    expect(tagOf(kind)).toBe(tag);
+  expect(classificationsFor("interviewCall")).toEqual(["INTERVIEW", "ASSESSMENT"]);
+  expect(tagStage.backgroundCheck).toBe("offerJoining");
+  expect(tagStage.referral).toBe("before");
+  expect(tagLabel.backgroundCheck).toBe("Background verification");
+  expect(tagLabel.interviewCall).toBe("Interview call");
 });
 
-it("retagging to process keeps an existing process kind", () => {
-  expect(classificationForTag("process", "INTERVIEW")).toBe("INTERVIEW");
-  expect(classificationForTag("process", "OFFER")).toBe("FOLLOW_UP");
+it("reads new and legacy tag ids from links", () => {
+  expect(parseTagParam("process")).toEqual(["application", "interviewCall", "interviewProcess"]);
+  expect(parseTagParam("rejected")).toEqual(["rejection"]);
+  expect(parseTagParam("joining")).toEqual(["joining"]);
+  expect(parseTagParam("bogus")).toBeNull();
+});
+
+it("retagging keeps a kind that already belongs to the tag", () => {
+  expect(classificationForTag("interviewCall", "ASSESSMENT")).toBe("ASSESSMENT");
+  expect(classificationForTag("interviewCall", "OFFER")).toBe("INTERVIEW");
+  expect(classificationForTag("application", "OFFER")).toBe("FOLLOW_UP");
+  expect(classificationForTag("application", "APPLICATION_ACKNOWLEDGEMENT")).toBe(
+    "APPLICATION_ACKNOWLEDGEMENT",
+  );
   expect(classificationForTag("offer", "INTERVIEW")).toBe("OFFER");
+  expect(classificationForTag("joining", "OFFER")).toBe("ONBOARDING");
   expect(classificationForTag("other", "OFFER")).toBe("UNKNOWN");
 });

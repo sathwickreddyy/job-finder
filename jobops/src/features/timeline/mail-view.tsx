@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { ArrowLeft, ChevronRight, Inbox, Search, SlidersHorizontal } from "lucide-react";
 import { CompanyRuleEditor } from "@/features/mail/company-rule-editor";
 import { InboxesPanel } from "@/features/mail/inboxes-panel";
+import { tagClass, tagIcon } from "@/features/mail/tag-pill";
 import { mailTags, tagLabel, type MailTag } from "@/features/mail/tags";
 import { cn } from "@/lib/utils";
 import { CheckMail } from "./check-mail";
@@ -24,16 +25,8 @@ const groupLabel: Record<RailGroup | "home", string> = {
 };
 const dueTone = {
   now: "text-link font-medium",
-  late: "text-tag-process font-medium",
+  late: "text-warning font-medium",
   calm: "text-muted-foreground",
-};
-/** Literal class names so Tailwind keeps every tag colour pair. */
-const pillTone: Record<MailTag, string> = {
-  opportunity: "bg-tag-opportunity-container text-tag-opportunity",
-  process: "bg-tag-process-container text-tag-process",
-  offer: "bg-tag-offer-container text-tag-offer",
-  rejected: "bg-tag-rejected-container text-tag-rejected",
-  other: "bg-tag-other-container text-tag-other",
 };
 const rowShell = (selected: boolean) =>
   cn(
@@ -219,6 +212,11 @@ function Rail({ data, selected }: { data: MailViewData; selected: string | null 
   );
 }
 
+function TagIcon({ tag }: { tag: MailTag }) {
+  const Icon = tagIcon[tag];
+  return <Icon aria-hidden size={14} strokeWidth={2.2} />;
+}
+
 /** Gallery tags B: tonal pills that carry the colour, one tag at a time. */
 function TagPills({ query, tags }: { query: MailQuery; tags: TagCounts }) {
   const total = Object.values(tags).reduce((sum, count) => sum + count, 0);
@@ -236,21 +234,24 @@ function TagPills({ query, tags }: { query: MailQuery; tags: TagCounts }) {
       >
         All <span className="tabular-nums opacity-70">{total}</span>
       </Link>
-      {mailTags.map((tag) => (
-        <Link
-          key={tag}
-          href={mailHref({ ...base, tag })}
-          scroll={false}
-          aria-current={query.tag === tag ? "page" : undefined}
-          className={cn(
-            "pressable inline-flex h-9 items-center gap-1.5 rounded-full px-4 text-sm font-medium hover:no-underline",
-            pillTone[tag],
-            query.tag === tag ? "ring-2 ring-current" : query.tag && "opacity-60",
-          )}
-        >
-          {tagLabel[tag]} <span className="tabular-nums opacity-70">{tags[tag]}</span>
-        </Link>
-      ))}
+      {mailTags
+        .filter((tag) => tags[tag] > 0 || query.tag === tag)
+        .map((tag) => (
+          <Link
+            key={tag}
+            href={mailHref({ ...base, tag })}
+            scroll={false}
+            aria-current={query.tag === tag ? "page" : undefined}
+            className={cn(
+              "pressable inline-flex h-9 items-center gap-1.5 rounded-full px-4 text-sm font-medium hover:no-underline",
+              tagClass[tag].tonal,
+              query.tag === tag ? "ring-2 ring-current" : query.tag && "opacity-60",
+            )}
+          >
+            <TagIcon tag={tag} />
+            {tagLabel[tag]} <span className="tabular-nums opacity-70">{tags[tag]}</span>
+          </Link>
+        ))}
     </nav>
   );
 }

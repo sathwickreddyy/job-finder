@@ -24,7 +24,7 @@ const item = (id: string, patch: Partial<MailItem> = {}): MailItem => ({
   text: "Hello",
   company: { key: "northstar", name: "Northstar" },
   application: null,
-  tag: "process",
+  tag: "interviewCall",
   kind: "Interview",
   attention: "open",
   handledAt: null,

@@ -19,7 +19,7 @@ const mail = (id: string, receivedAt: string, extra: Partial<MailItem> = {}): Ma
   text: "Hello",
   company: { key: "northstar", name: "Northstar" },
   application: null,
-  tag: "process",
+  tag: "interviewCall",
   kind: "Interview",
   attention: "open",
   handledAt: null,

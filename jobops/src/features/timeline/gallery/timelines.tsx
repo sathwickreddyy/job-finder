@@ -2,7 +2,7 @@
 
 import { useState, type ReactNode } from "react";
 import { Check, Hourglass, Mail } from "lucide-react";
-import { tagLabel } from "@/features/mail/tags";
+import { tagLabel } from "./legacy-tags";
 import { cn } from "@/lib/utils";
 import { ChipRow } from "./handling";
 import { NOW, type Company, type Entry, type MailEntry, type StepEntry } from "./data";

@@ -37,3 +37,12 @@ it("hides internal errors", async () => {
   expect(response.status).toBe(500);
   expect(JSON.stringify(await response.json())).not.toContain("secret-host");
 });
+
+it("accepts new and legacy tag filters", async () => {
+  listMail.mockResolvedValue({ items: [], nextCursor: null, openCount: 0 });
+  for (const tag of ["interviewCall", "backgroundCheck", "process", "rejected"]) {
+    const response = await GET(new Request(`http://localhost/api/v1/mail?tag=${tag}`));
+    expect(response.status).toBe(200);
+  }
+  expect((await GET(new Request("http://localhost/api/v1/mail?tag=nope"))).status).toBe(400);
+});

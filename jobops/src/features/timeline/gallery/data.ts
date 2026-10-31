@@ -1,5 +1,5 @@
 import type { OutcomeId } from "@/features/applications/phase";
-import type { MailTag } from "@/features/mail/tags";
+import type { MailTag } from "./legacy-tags";
 
 /** Sample companies pinned to Sat 31 Oct 2026, 10:30 am IST. Fictional names only. */
 export const NOW = new Date("2026-10-31T10:30:00+05:30");

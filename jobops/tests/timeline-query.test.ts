@@ -55,7 +55,7 @@ describe("mail query", () => {
     const query: MailQuery = {
       company: "acme labs",
       home: false,
-      tag: "process",
+      tag: "interviewCall",
       q: "next round",
       role: app,
       mail: mailId,

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { mailTags, type MailTag } from "@/features/mail/tags";
+import { tagFromParam, type MailTag } from "@/features/mail/tags";
 
 /** `<receivedAt ISO>|<id>`, the position after the last email of a page. */
 export const mailCursor = z
@@ -36,7 +36,7 @@ export function parseMailQuery(
   return {
     company: home ? null : (named ?? (role ? (roleCompany(role) ?? null) : null)),
     home,
-    tag: mailTags.find((tag) => tag === raw.tag) ?? null,
+    tag: raw.tag ? tagFromParam(raw.tag) : null,
     q: q || null,
     role: home ? null : role,
     mail: uuid(raw.mail),

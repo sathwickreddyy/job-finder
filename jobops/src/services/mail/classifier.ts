@@ -22,11 +22,36 @@ const rules: { type: MailClassification; confidence: number; patterns: RegExp[] 
       /\b(?:offer of employment|employment offer|offer letter|pleased to offer you|job offer)\b/i,
     ],
   },
+  // Joining mail often mentions the offer letter, so it comes after OFFER.
+  {
+    type: "ONBOARDING",
+    confidence: 0.9,
+    patterns: [
+      /\b(?:date of joining|joining (?:date|details|formalities)|pre-?joining|onboarding|welcome aboard|your first day)\b/i,
+    ],
+  },
+  // Background checks and interview updates say "interview" or "offer" too, so they come
+  // before INTERVIEW and never count as conflicting with it.
+  {
+    type: "BACKGROUND_CHECK",
+    confidence: 0.9,
+    patterns: [
+      /\b(?:background (?:check|screen|screening|verification)|employment verification)\b/i,
+    ],
+  },
+  {
+    type: "INTERVIEW_UPDATE",
+    confidence: 0.85,
+    patterns: [
+      /\b(?:interview (?:preparation|prep|feedback)|feedback\b[^\n]{0,40}\binterview|next round)\b/i,
+    ],
+  },
   {
     type: "INTERVIEW",
     confidence: 0.9,
     patterns: [
       /\b(?:interview (?:availability|invitation|scheduled|with|for)|technical interview|schedule (?:an |your |the )?interview|invite you (?:for|to) (?:an )?interview)\b/i,
+      /\b(?:interview\s*[-–—:]?\s*confirmation|on-?site interview)\b/i,
     ],
   },
   {
@@ -37,10 +62,18 @@ const rules: { type: MailClassification; confidence: number; patterns: RegExp[] 
     ],
   },
   {
+    type: "REFERRAL",
+    confidence: 0.88,
+    patterns: [
+      /\b(?:referred you|you've been referred|you have been referred|referral (?:submitted|received))\b/i,
+    ],
+  },
+  {
     type: "APPLICATION_ACKNOWLEDGEMENT",
     confidence: 0.94,
     patterns: [
       /\b(?:thank you for applying|application (?:has been |was )?received|we (?:have )?received your application|thanks for your application)\b/i,
+      /\b(?:thank you for your (?:application|interest in)|your application (?:to|for)|application submitted)\b/i,
     ],
   },
   {
@@ -59,11 +92,26 @@ const rules: { type: MailClassification; confidence: number; patterns: RegExp[] 
   },
 ];
 
+/** Background-check vendors send nothing else, so their address alone decides. */
+const backgroundVendors = ["fadv.com", "hireright.com", "authbridge.com"];
+const fromVendor = (sender: string) => {
+  const domain = sender.toLowerCase().split("@").at(-1) ?? "";
+  return backgroundVendors.some((vendor) => domain === vendor || domain.endsWith(`.${vendor}`));
+};
+
 export function classifyMail(message: {
   subject: string;
   bodyText?: string | null;
   snippet?: string | null;
+  sender?: string | null;
 }): MailClassificationResult {
+  if (message.sender && fromVendor(message.sender))
+    return {
+      type: "BACKGROUND_CHECK",
+      confidence: 0.9,
+      reasons: ["Sent by a background-check vendor"],
+      relevant: true,
+    };
   const text = `${message.subject}\n${message.bodyText ?? ""}\n${message.snippet ?? ""}`;
   const matched = rules.filter((rule) => rule.patterns.some((pattern) => pattern.test(text)));
   if (!matched.length)

@@ -2,30 +2,15 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import {
-  CalendarClock,
-  Circle,
-  CircleCheck,
-  CircleSlash,
-  FileText,
-  Mail,
-  Send,
-} from "lucide-react";
+import { CalendarClock, Circle, CircleCheck, CircleSlash, FileText, Send } from "lucide-react";
 import { formatTime, formatWeekday } from "@/features/applications/dates";
 import type { MailItem } from "@/features/mail/mail-item";
+import { tagClass, tagIcon } from "@/features/mail/tag-pill";
 import { cn } from "@/lib/utils";
 import type { TimelineDay, TimelineMail, TimelineStep } from "./entries";
 import { HandledLine, HandlingBar, type PlaceOptions } from "./handling";
 import type { Handling } from "./suggest";
 
-/** Literal class names so Tailwind keeps every tag colour pair. */
-const tagTone: Record<MailItem["tag"], string> = {
-  opportunity: "bg-tag-opportunity-container text-tag-opportunity",
-  process: "bg-tag-process-container text-tag-process",
-  offer: "bg-tag-offer-container text-tag-offer",
-  rejected: "bg-tag-rejected-container text-tag-rejected",
-  other: "bg-tag-other-container text-tag-other",
-};
 function StepIcon({ eventType }: { eventType: string }) {
   const props = { "aria-hidden": true, size: 14, strokeWidth: 2 };
   if (/^ROUND_BOOKED$|SCHEDULED/.test(eventType)) return <CalendarClock {...props} />;
@@ -114,6 +99,7 @@ function MailRow({
     if (startOpen) row.current?.scrollIntoView({ block: "center" });
   }, [startOpen]);
   const name = item.senderName || item.sender;
+  const TagIcon = tagIcon[item.tag];
   const note = folderNote(item);
   const bar = needs && handling && (
     <HandlingBar item={item} handling={handling} placeOptions={placeOptions} />
@@ -134,8 +120,10 @@ function MailRow({
         onClick={() => setOpen(!open)}
         className="grid w-full grid-cols-[2rem_minmax(0,1fr)_auto] items-center gap-3 rounded-xl py-2 text-left hover:bg-muted/60"
       >
-        <span className={cn("grid size-8 place-items-center rounded-full", tagTone[item.tag])}>
-          <Mail aria-hidden size={15} />
+        <span
+          className={cn("grid size-8 place-items-center rounded-full", tagClass[item.tag].tonal)}
+        >
+          <TagIcon aria-hidden size={15} />
           <span className="sr-only">{item.kind}</span>
         </span>
         <span className="min-w-0">

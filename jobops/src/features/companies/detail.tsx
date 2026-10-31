@@ -79,7 +79,7 @@ function nextAction(summary: CompanySummary) {
 
 const dueTone = {
   now: "text-link font-medium",
-  late: "text-tag-process font-medium",
+  late: "text-warning font-medium",
   calm: "text-muted-foreground",
 };
 

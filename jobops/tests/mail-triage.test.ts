@@ -62,6 +62,10 @@ describe("triage buckets", () => {
       RECRUITER_OUTREACH: "heard",
       APPLICATION_ACKNOWLEDGEMENT: null,
       UNKNOWN: null,
+      REFERRAL: "referred",
+      INTERVIEW_UPDATE: "heard",
+      BACKGROUND_CHECK: null,
+      ONBOARDING: null,
     });
   });
 

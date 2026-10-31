@@ -7,12 +7,16 @@ import type { MailFacts } from "@/features/timeline/index-rows";
 import { mailCursor } from "@/features/timeline/query";
 import { loadMailContext, type MailContext } from "./context";
 import { mailLookup, toMailItem, type MailItem } from "./mail-item";
-import { classificationsFor, kindLabel, mailTags, type MailTag } from "./tags";
+import { classificationsFor, kindLabel, parseTagParam, type MailTag } from "./tags";
 
 const pageSize = 50;
 export const mailListSchema = z.object({
   attention: z.enum(["open", "all"]).default("all"),
-  tag: z.enum(mailTags).optional(),
+  /** A tag id, or a legacy id from an older link that covers several tags. */
+  tag: z
+    .string()
+    .refine((value) => parseTagParam(value) !== null, "Unknown tag.")
+    .optional(),
   company: z.string().trim().min(1).max(300).optional(),
   application: z.uuid().optional(),
   q: z.string().trim().max(200).optional(),
@@ -30,7 +34,8 @@ const outcome = sql<
 /** The rows a list query covers before attention and paging; the rail counts with it too. */
 export function mailScope(query: z.output<typeof mailListSchema>, context: MailContext): SQL[] {
   const scope: SQL[] = [notExcluded];
-  if (query.tag) scope.push(inArray(mailMessages.classification, classificationsFor(query.tag)));
+  const tags = query.tag ? parseTagParam(query.tag) : null;
+  if (tags) scope.push(inArray(mailMessages.classification, tags.flatMap(classificationsFor)));
   if (query.application) scope.push(eq(mailMessages.linkedApplicationId, query.application));
   if (query.company) {
     const ids = context.applications

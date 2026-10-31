@@ -84,6 +84,10 @@ export const mailClassifications = [
   "RECRUITER_OUTREACH",
   "FOLLOW_UP",
   "UNKNOWN",
+  "REFERRAL",
+  "INTERVIEW_UPDATE",
+  "BACKGROUND_CHECK",
+  "ONBOARDING",
 ] as const;
 export const contactVerificationStatuses = [
   "UNKNOWN",

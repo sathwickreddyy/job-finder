@@ -41,8 +41,10 @@ it("update requires at least one field", () => {
   expect(updateSchema.safeParse({ tag: "spam" }).success).toBe(false);
   expect(updateSchema.safeParse({ tag: "offer", extra: true }).success).toBe(false);
   expect(updateSchema.parse({ company: null })).toEqual({ company: null });
-  expect(updateSchema.parse({ application: id, tag: "process" })).toEqual({
+  expect(updateSchema.parse({ application: id, tag: "interviewCall" })).toEqual({
     application: id,
-    tag: "process",
+    tag: "interviewCall",
   });
+  // A legacy id from an older client becomes its first new tag.
+  expect(updateSchema.parse({ tag: "process" })).toEqual({ tag: "application" });
 });
