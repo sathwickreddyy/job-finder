@@ -34,5 +34,6 @@ export async function listDropped(filter: {
     tag: null,
     reason: row.reason,
     companyKeys: row.companyKeys,
+    evidence: row.evidence,
   }));
 }

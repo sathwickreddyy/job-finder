@@ -1,17 +1,15 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, eq, isNull } from "drizzle-orm";
-import { db } from "@/db";
-import { mailMessages, settings } from "@/db/schema";
 import { outcomeDetail, type OutcomeId } from "@/features/applications/phase";
 import { actionError, formString, type ActionState } from "@/lib/actions";
 import type { RoundKind } from "@/lib/round-kinds";
-import { companyRuleSchema, loadMailContext, ruleKey } from "./context";
 import { checkMailStep, type CheckResult } from "./check-service";
+import { companySearchStep, type SearchLane, type SearchRun } from "./company-search";
 import { handleMail, updateMail } from "./handle-service";
-import { notExcluded } from "./mail-list";
-import { matchMail } from "./matching";
+import { includeMail } from "./include";
+import type { MailItem } from "./mail-item";
+import { storeCompanyRule } from "./rule-store";
 
 function invalidate() {
   for (const path of ["/mail", "/applications", "/companies", "/settings", "/"])
@@ -35,16 +33,61 @@ export async function checkMail(
   }
 }
 
+/** One company search step; the panel loops while `search.more`, sending options only first. */
+export async function searchCompanyMail(
+  key: string,
+  options: { lastDays?: number; accounts?: string[]; restart?: boolean } = {},
+): Promise<ActionState & { search?: { more: boolean; run: SearchRun; lanes: SearchLane[] } }> {
+  try {
+    const search = await companySearchStep(key, options);
+    invalidate();
+    return { search };
+  } catch (error) {
+    return actionError(error);
+  }
+}
+
+/** Save a company's rule from the panel; a refused keyword comes back as `error`. */
+export async function saveCompanyRule(key: string, rule: unknown): Promise<ActionState> {
+  try {
+    await storeCompanyRule(key, rule);
+    invalidate();
+    return { success: "Saved. Fetches and searches use it from now on." };
+  } catch (error) {
+    return actionError(error);
+  }
+}
+
+/** Include this on a dropped email, for one company. */
+export async function includeDroppedMail(
+  trackingId: string,
+  company: string,
+): Promise<
+  ActionState & {
+    included?: {
+      item: MailItem;
+      addedSender: string | null;
+      skippedShared: string | null;
+      suggestedKeyword: string | null;
+    };
+  }
+> {
+  try {
+    const included = await includeMail(trackingId, company);
+    invalidate();
+    return { included };
+  } catch (error) {
+    return actionError(error);
+  }
+}
+
 export async function saveWorkspaceRule(
   _previous: ActionState,
   form: FormData,
 ): Promise<ActionState> {
   try {
-    const key = formString(form, "company");
-    const context = await loadMailContext();
-    const company = context.companies.find((row) => row.id === key);
-    if (!company) throw new Error("Choose an existing company.");
-    const parsed = companyRuleSchema(company.name).safeParse(
+    const { placed, company } = await storeCompanyRule(
+      formString(form, "company"),
       Object.fromEntries(
         ["aliases", "domains", "senders", "keywords", "excludedTerms"].map((field) => [
           field,
@@ -55,58 +98,9 @@ export async function saveWorkspaceRule(
         ]),
       ),
     );
-    if (!parsed.success) return { error: parsed.error.issues[0].message };
-    const rule = parsed.data;
-    await db
-      .insert(settings)
-      .values({
-        key: ruleKey(key),
-        value: { rule, revisedAt: new Date().toISOString() },
-      })
-      .onConflictDoUpdate({
-        target: settings.key,
-        set: {
-          value: { rule, revisedAt: new Date().toISOString() },
-          updatedAt: new Date(),
-        },
-      });
-    const updated = await loadMailContext();
-    const savedCompany = updated.companies.find((item) => item.id === key)!;
-    const scoped = { ...updated, companies: [savedCompany] };
-    // Place kept, unlinked, unplaced mail the new pattern matches. Attention never changes.
-    const unplaced = await db
-      .select()
-      .from(mailMessages)
-      .where(
-        and(isNull(mailMessages.companyKey), isNull(mailMessages.linkedApplicationId), notExcluded),
-      );
-    let placed = 0;
-    for (const message of unplaced) {
-      const decision = matchMail(
-        {
-          ...message,
-          externalId: message.externalId,
-          threadId: message.threadId ?? undefined,
-          folders: message.folders,
-          bodyText: message.bodyText ?? "",
-          receivedAt: message.receivedAt.toISOString(),
-        },
-        scoped,
-        { historical: true, seen: true },
-      );
-      // Dropped decisions name the company they nearly matched; only kept ones place mail.
-      if (
-        decision.disposition === "excluded" ||
-        decision.companyKeys.length !== 1 ||
-        decision.companyKeys[0] !== key
-      )
-        continue;
-      await db.update(mailMessages).set({ companyKey: key }).where(eq(mailMessages.id, message.id));
-      placed++;
-    }
     invalidate();
     return {
-      success: `Company pattern saved.${placed ? ` ${placed} unplaced ${placed === 1 ? "email" : "emails"} now ${placed === 1 ? "belongs" : "belong"} to ${savedCompany.name}.` : ""} New mail uses this pattern from the next check.`,
+      success: `Company pattern saved.${placed ? ` ${placed} unplaced ${placed === 1 ? "email" : "emails"} now ${placed === 1 ? "belongs" : "belong"} to ${company}.` : ""} New mail uses this pattern from the next check.`,
     };
   } catch (error) {
     return actionError(error);

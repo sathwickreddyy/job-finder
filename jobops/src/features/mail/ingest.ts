@@ -27,6 +27,8 @@ export type IngestItem = {
   tag: MailTag | null;
   reason: string;
   companyKeys: string[];
+  /** Why the sorter decided as it did, such as "Company sender domain". */
+  evidence: string[];
 };
 export const noCounts = (): IngestCounts => ({
   fetched: 0,
@@ -88,10 +90,16 @@ export async function ingestPage(
         : [],
     };
     const decision = matchMail(raw, context, options);
-    if (!input.preferCompany || !decision.reason.startsWith("Ambiguous company match"))
-      return decision;
-    const preferred = context.companies.filter((row) => row.id === input.preferCompany);
-    return matchMail(raw, { ...context, companies: preferred }, options);
+    const company = input.preferCompany;
+    if (!company) return decision;
+    if (decision.reason.startsWith("Ambiguous company match")) {
+      const preferred = context.companies.filter((row) => row.id === company);
+      return matchMail(raw, { ...context, companies: preferred }, options);
+    }
+    // The company's own search found it, so its dropped list keeps it even without evidence.
+    if (decision.disposition === "excluded" && !decision.companyKeys.length)
+      return { ...decision, companyKeys: [company] };
+    return decision;
   };
 
   for (const raw of input.messages) {
@@ -258,6 +266,7 @@ export async function ingestPage(
       tag,
       reason,
       companyKeys: decision.companyKeys,
+      evidence: decision.evidence,
     });
   }
   return { counts, items };

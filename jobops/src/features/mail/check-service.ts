@@ -17,6 +17,12 @@ const overlapMs = 60 * 60 * 1000;
 const dayMs = 24 * 60 * 60 * 1000;
 /** Fetch reads every message in the window, so it stops at 180 days; company search goes further. */
 export const maxFetchDays = 180;
+/**
+ * Mail older than this was due in an earlier fetch: found now, it is recovered history and
+ * arrives handled. The overlap hour stays open for late-indexed mail.
+ */
+export const recoveryCutoff = (lastSyncedAt: Date | null) =>
+  lastSyncedAt ? new Date(lastSyncedAt.getTime() - overlapMs) : null;
 
 export type CheckProgress = {
   since: string;
@@ -71,7 +77,7 @@ export function checkWindow(
   };
 }
 
-function failureText(error: unknown) {
+export function failureText(error: unknown) {
   return error instanceof Error &&
     !(error instanceof ZodError) &&
     !error.cause &&
@@ -148,17 +154,13 @@ export async function checkConnection(
           folders,
         );
         return await database.transaction(async (tx) => {
-          // Mail older than the normal window (last fetch minus the overlap) is recovered
-          // history: it is stored and shown, already handled.
           const { counts } = await ingestPage(tx, {
             connection: current,
             providerId: provider.id,
             messages: page.messages,
             context,
             threads,
-            recoveredBefore: current.lastSyncedAt
-              ? new Date(current.lastSyncedAt.getTime() - overlapMs)
-              : null,
+            recoveredBefore: recoveryCutoff(current.lastSyncedAt),
           });
           const newAttention = counts.newAttention;
           const complete = !page.next;
