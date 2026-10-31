@@ -108,7 +108,7 @@ export function MailWorkspaceGallery() {
     changeScope("application");
   }
   function changeRule(
-    key: "aliases" | "domains" | "senders" | "subjectTerms" | "excludedTerms",
+    key: "aliases" | "domains" | "senders" | "keywords" | "excludedTerms",
     text: string,
   ) {
     setRules((previous) => ({
@@ -627,7 +627,7 @@ export function MailWorkspaceGallery() {
                     ["aliases", "Company names", "Alternate names"],
                     ["domains", "Sender domains", "company.example"],
                     ["senders", "Exact email addresses", "recruiter@company.example"],
-                    ["subjectTerms", "Subject includes", "Optional words or application ID"],
+                    ["keywords", "Keywords", "Subject or sender name"],
                     ["excludedTerms", "Exclude phrases", "Optional phrases"],
                   ] as const
                 ).map(([key, label, placeholder]) => (

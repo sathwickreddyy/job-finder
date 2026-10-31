@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { outcomeMeta, type OutcomeId } from "@/features/applications/phase";
 import { roundKindLabel } from "@/features/companies/metrics";
-import { tagLabel, type MailTag } from "@/features/mail/tags";
+import { tagLabel, type MailTag } from "./legacy-tags";
 import { roundKinds } from "@/lib/round-kinds";
 import { cn } from "@/lib/utils";
 import { NOW, type MailEntry, type StepIcon } from "./data";

@@ -1,7 +1,8 @@
 import { recipientPreview } from "./display-metadata";
 import { oauthConfiguration, parseTokenResponse } from "./oauth";
 import { accessTokenFor } from "./connections";
-import type { MailProvider, TokenSet } from "./types";
+import type { MailFolder, MailProvider, ScannedMessage, TokenSet } from "./types";
+import { gmailSearchQuery, inWindow } from "./search-query";
 import { plainText } from "./plain-text";
 class GmailReadError extends Error {
   constructor(
@@ -11,17 +12,11 @@ class GmailReadError extends Error {
     super(message);
   }
 }
-export const GMAIL_READONLY_SCOPE =
-  "https://www.googleapis.com/auth/gmail.readonly";
-async function token(
-  body: Record<string, string>,
-  refreshing: boolean,
-): Promise<TokenSet> {
+export const GMAIL_READONLY_SCOPE = "https://www.googleapis.com/auth/gmail.readonly";
+async function token(body: Record<string, string>, refreshing: boolean): Promise<TokenSet> {
   const config = gmail.configuration();
   if (!config.configured)
-    throw new Error(
-      `Gmail is not configured. Set ${config.missing.join(", ")}.`,
-    );
+    throw new Error(`Gmail is not configured. Set ${config.missing.join(", ")}.`);
   const response = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
     body: new URLSearchParams({
@@ -42,14 +37,10 @@ async function token(
   try {
     data = await response.json();
   } catch {
-    throw new Error(
-      "Google returned an invalid token response. Reconnect Gmail.",
-    );
+    throw new Error("Google returned an invalid token response. Reconnect Gmail.");
   }
   const scope =
-    data && typeof data === "object"
-      ? (data as Record<string, unknown>).scope
-      : undefined;
+    data && typeof data === "object" ? (data as Record<string, unknown>).scope : undefined;
   if (
     !(refreshing && scope === undefined) &&
     !(
@@ -67,15 +58,12 @@ async function token(
   return parseTokenResponse(data);
 }
 async function gmailRequest<T>(path: string, accessToken: string): Promise<T> {
-  const response = await fetch(
-    `https://gmail.googleapis.com/gmail/v1/users/me/${path}`,
-    {
-      headers: { Authorization: `Bearer ${accessToken}` },
-      cache: "no-store",
-      redirect: "error",
-      signal: AbortSignal.timeout(20000),
-    },
-  );
+  const response = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/${path}`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    cache: "no-store",
+    redirect: "error",
+    signal: AbortSignal.timeout(20000),
+  });
   if (!response.ok) {
     let rateLimited = response.status === 429;
     if (response.status === 403) {
@@ -85,11 +73,9 @@ async function gmailRequest<T>(path: string, accessToken: string): Promise<T> {
         };
         rateLimited =
           error.error?.errors?.some((row) =>
-            [
-              "rateLimitExceeded",
-              "userRateLimitExceeded",
-              "dailyLimitExceeded",
-            ].includes(row.reason ?? ""),
+            ["rateLimitExceeded", "userRateLimitExceeded", "dailyLimitExceeded"].includes(
+              row.reason ?? "",
+            ),
           ) ?? false;
       } catch {
         /* Provider bodies never appear in logs or UI. */
@@ -134,6 +120,60 @@ function htmlBody(part?: GmailPart): string {
     return plainText(Buffer.from(part.body.data, "base64url").toString("utf8"));
   return (part.parts ?? []).map(htmlBody).filter(Boolean).join("\n");
 }
+/** A Gmail message in the shape every mail path stores. */
+function toScanned(message: GmailMessage, folders: MailFolder[]): ScannedMessage {
+  const header = (name: string) =>
+    message.payload?.headers?.find((row) => row.name.toLowerCase() === name.toLowerCase())?.value ??
+    "";
+  const from = header("From");
+  const address = from.match(/<([^>]+)>/);
+  const labels = message.labelIds ?? [];
+  const names = labels.map((id) => folders.find((folder) => folder.id === id)?.name ?? id);
+  if (!labels.some((id) => ["INBOX", "SPAM", "TRASH", "SENT", "DRAFT"].includes(id)))
+    names.push("Archive");
+  return {
+    externalId: message.id,
+    internetMessageId: header("Message-ID"),
+    threadId: message.threadId,
+    sender: address?.[1] ?? from,
+    senderName: address ? from.split("<")[0].trim().replace(/^"|"$/g, "") : "",
+    recipient: recipientPreview(header("To")),
+    subject: header("Subject") || "(No subject)",
+    snippet: (message.snippet ?? "").slice(0, 2000),
+    bodyText: (
+      textBody(message.payload) ||
+      htmlBody(message.payload) ||
+      message.snippet ||
+      ""
+    ).slice(0, 100000),
+    receivedAt: new Date(Number(message.internalDate)).toISOString(),
+    folders: names,
+    contextOnly: labels.some((id) => ["SENT", "DRAFT"].includes(id)),
+  };
+}
+/** One full message, or null when Gmail no longer has it. */
+async function readMessage(id: string, accessToken: string) {
+  try {
+    return await gmailRequest<GmailMessage>(
+      `messages/${encodeURIComponent(id)}?format=full`,
+      accessToken,
+    );
+  } catch (error) {
+    if (error instanceof GmailReadError && [404, 410].includes(error.status)) return null;
+    throw error;
+  }
+}
+/** Full messages two at a time, skipping ones that disappeared since they were listed. */
+async function readMessages(ids: string[], accessToken: string, folders: MailFolder[]) {
+  const messages: ScannedMessage[] = [];
+  for (let offset = 0; offset < ids.length; offset += 2) {
+    const chunk = await Promise.all(
+      ids.slice(offset, offset + 2).map((id) => readMessage(id, accessToken)),
+    );
+    for (const message of chunk) if (message) messages.push(toScanned(message, folders));
+  }
+  return messages;
+}
 export const gmail: MailProvider = {
   id: "GMAIL",
   slug: "gmail",
@@ -166,17 +206,12 @@ export const gmail: MailProvider = {
       },
       false,
     );
-    const profile = await gmailRequest<{ emailAddress?: unknown }>(
-      "profile",
-      tokens.accessToken,
-    );
+    const profile = await gmailRequest<{ emailAddress?: unknown }>("profile", tokens.accessToken);
     if (
       typeof profile.emailAddress !== "string" ||
       !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(profile.emailAddress)
     )
-      throw new Error(
-        "Google did not return an account email. Reconnect Gmail.",
-      );
+      throw new Error("Google did not return an account email. Reconnect Gmail.");
     return { email: profile.emailAddress.toLowerCase(), tokens };
   },
   refreshTokens: (refreshToken) =>
@@ -199,8 +234,7 @@ export const gmail: MailProvider = {
       "-in:drafts",
       `before:${Math.ceil(Date.parse(request.until) / 1000)}`,
     ];
-    if (request.since)
-      terms.push(`after:${Math.floor(Date.parse(request.since) / 1000)}`);
+    if (request.since) terms.push(`after:${Math.floor(Date.parse(request.since) / 1000)}`);
     const params = new URLSearchParams({
       q: terms.join(" "),
       maxResults: "25",
@@ -211,70 +245,40 @@ export const gmail: MailProvider = {
       messages?: { id: string }[];
       nextPageToken?: string;
     }>(`messages?${params}`, accessToken);
-    const messages = [];
     const listed = page.messages ?? [];
     const known = new Set(request.skipIds ?? []);
-    const ids = listed.filter((row) => !known.has(row.id));
-    for (let offset = 0; offset < ids.length; offset += 2) {
-      const chunk = await Promise.all(
-        ids.slice(offset, offset + 2).map(async (row) => {
-          try {
-            return await gmailRequest<GmailMessage>(
-              `messages/${encodeURIComponent(row.id)}?format=full`,
-              accessToken,
-            );
-          } catch (error) {
-            if (
-              error instanceof GmailReadError &&
-              [404, 410].includes(error.status)
-            )
-              return null;
-            throw error;
-          }
-        }),
-      );
-      for (const message of chunk) {
-        if (!message) continue;
-        const header = (name: string) =>
-          message.payload?.headers?.find(
-            (row) => row.name.toLowerCase() === name.toLowerCase(),
-          )?.value ?? "";
-        const from = header("From");
-        const address = from.match(/<([^>]+)>/);
-        const labels = message.labelIds ?? [];
-        const names = labels.map(
-          (id) => folders.find((folder) => folder.id === id)?.name ?? id,
-        );
-        if (
-          !labels.some((id) =>
-            ["INBOX", "SPAM", "TRASH", "SENT", "DRAFT"].includes(id),
-          )
-        )
-          names.push("Archive");
-        messages.push({
-          externalId: message.id,
-          internetMessageId: header("Message-ID"),
-          threadId: message.threadId,
-          sender: address?.[1] ?? from,
-          senderName: address
-            ? from.split("<")[0].trim().replace(/^"|"$/g, "")
-            : "",
-          recipient: recipientPreview(header("To")),
-          subject: header("Subject") || "(No subject)",
-          snippet: (message.snippet ?? "").slice(0, 2000),
-          bodyText: (
-            textBody(message.payload) ||
-            htmlBody(message.payload) ||
-            message.snippet ||
-            ""
-          ).slice(0, 100000),
-          receivedAt: new Date(Number(message.internalDate)).toISOString(),
-          folders: names,
-          contextOnly: labels.some((id) => ["SENT", "DRAFT"].includes(id)),
-        });
-      }
-    }
-    return { messages, next: page.nextPageToken,
-      ...(request.skipIds ? { fetched: listed.length, skippedKnown: listed.length - ids.length } : {}) };
+    const ids = listed.filter((row) => !known.has(row.id)).map((row) => row.id);
+    const messages = await readMessages(ids, accessToken, folders);
+    return {
+      messages,
+      next: page.nextPageToken,
+      ...(request.skipIds
+        ? { fetched: listed.length, skippedKnown: listed.length - ids.length }
+        : {}),
+    };
+  },
+  async searchMail(connection, request, folders) {
+    const accessToken = await gmail.accessToken(connection);
+    const query = gmailSearchQuery(request);
+    const params = new URLSearchParams({ q: query, maxResults: "25", includeSpamTrash: "true" });
+    if (request.next) params.set("pageToken", request.next);
+    const page = await gmailRequest<{ messages?: { id: string }[]; nextPageToken?: string }>(
+      `messages?${params}`,
+      accessToken,
+    );
+    const messages = await readMessages(
+      (page.messages ?? []).map((row) => row.id),
+      accessToken,
+      folders,
+    );
+    return {
+      messages: messages.filter((message) => inWindow(request, message)),
+      next: page.nextPageToken,
+      query,
+    };
+  },
+  async fetchMessage(connection, providerMessageId, folders) {
+    const message = await readMessage(providerMessageId, await gmail.accessToken(connection));
+    return message ? toScanned(message, folders) : null;
   },
 };

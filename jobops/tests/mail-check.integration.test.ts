@@ -16,7 +16,7 @@ const rule = {
   aliases: [],
   domains: ["fixture.invalid"],
   senders: [],
-  subjectTerms: [],
+  keywords: [],
   excludedTerms: [],
 };
 const context: MailContext = {
@@ -101,6 +101,32 @@ describe.skipIf(!dbTests)("on-demand mail check", () => {
     expect(rows.map((row) => row.attentionState)).toEqual(["OPEN", "OPEN"]);
     expect(rows.map((row) => row.folders).sort()).toEqual([["Deleted Items"], ["Junk"]]);
     expect(rows.every((row) => row.companyKey === "fixture")).toBe(true);
+  });
+
+  it("keeps the overlap hour open and recovered history handled", async () => {
+    const own = await connection();
+    const lastSyncedAt = new Date("2026-10-30T12:00:00Z");
+    await db.update(mailConnections).set({ lastSyncedAt }).where(eq(mailConnections.id, own.id));
+    vi.spyOn(outlook, "folders").mockResolvedValue([]);
+    vi.spyOn(outlook, "scanMail").mockResolvedValue({
+      messages: [
+        mail("late-indexed", {
+          internetMessageId: "<late@fixture.invalid>",
+          receivedAt: "2026-10-30T11:30:00Z",
+        }),
+        mail("recovered", {
+          internetMessageId: "<recovered@fixture.invalid>",
+          receivedAt: "2026-10-27T09:00:00Z",
+        }),
+      ],
+    });
+    const result = await checkConnection(await current(own.id), context);
+    expect(result.newAttention).toBe(1);
+    const rows = await messages(own.email);
+    const state = (time: string) =>
+      rows.find((row) => row.receivedAt.toISOString().startsWith(time))?.attentionState;
+    expect(state("2026-10-30T11:30")).toBe("OPEN");
+    expect(state("2026-10-27T09:00")).toBe("DONE");
   });
 
   it("keeps one identity across a rescan and folder move", async () => {
@@ -285,6 +311,97 @@ describe.skipIf(!dbTests)("on-demand mail check", () => {
         .sort(),
     ).toEqual([a.id, b.id].sort());
     expect(fresh.more).toBe(false);
+  });
+
+  it("rejects 181 days", async () => {
+    await expect(checkMailStep({ lastDays: 181 })).rejects.toMatchObject({
+      status: 400,
+      message: "Fetch goes back up to 180 days. For older mail, search a company from its page.",
+    });
+    await expect(checkMailStep({ lastDays: 0 })).rejects.toMatchObject({ status: 400 });
+  });
+
+  it("reports per-account counts", async () => {
+    const own = await connection();
+    vi.spyOn(outlook, "folders").mockResolvedValue([]);
+    vi.spyOn(outlook, "scanMail").mockResolvedValue({
+      messages: [
+        update(`${own.email}-kept`),
+        mail("digest", {
+          internetMessageId: "<counts-digest@fixture.invalid>",
+          sender: "messages-noreply@linkedin.com",
+          subject: "You have 10+ new invitations",
+        }),
+      ],
+    });
+    const result = await checkMailStep();
+    const [account] = result.accounts;
+    expect(account.counts).toEqual({
+      fetched: 2,
+      alreadyHere: 0,
+      kept: 1,
+      dropped: 1,
+      newAttention: 1,
+    });
+    expect(Number.isFinite(Date.parse(account.since ?? ""))).toBe(true);
+  });
+
+  it("moves the last fetch to the window end when complete", async () => {
+    const own = await connection();
+    const lastSyncedAt = new Date(Date.now() - 2 * 3_600_000);
+    await db.update(mailConnections).set({ lastSyncedAt }).where(eq(mailConnections.id, own.id));
+    await db.insert(settings).values({
+      key: checkKey(own.id),
+      value: {
+        since: new Date(lastSyncedAt.getTime() - 86_400_000).toISOString(),
+        until: lastSyncedAt.toISOString(),
+        complete: true,
+        scanned: 0,
+        folders: [],
+        checkedAt: lastSyncedAt.toISOString(),
+      },
+    });
+    vi.spyOn(outlook, "folders").mockResolvedValue([]);
+    const old = update(`${own.email}-old`);
+    const scan = vi.spyOn(outlook, "scanMail").mockResolvedValue({
+      messages: [{ ...old, receivedAt: new Date(Date.now() - 20 * 86_400_000).toISOString() }],
+    });
+    const before = Date.now();
+    const result = await checkMailStep({ lastDays: 30 });
+    const request = scan.mock.calls[0][1];
+    expect(Date.parse(request.since!)).toBeLessThanOrEqual(before - 30 * 86_400_000 + 1000);
+    expect(result.accounts[0]).toMatchObject({ status: "done", since: request.since });
+    expect((await current(own.id)).lastSyncedAt?.toISOString()).toBe(request.until);
+    // Mail from before the last fetch arrives handled, so it never floods Needs you.
+    expect(result.newAttention).toBe(0);
+    expect((await messages(own.email))[0].attentionState).toBe("DONE");
+  });
+
+  it("a second Last N days press continues the window instead of starting over", async () => {
+    const own = await connection();
+    vi.spyOn(outlook, "folders").mockResolvedValue([]);
+    let page = 0;
+    const scan = vi.spyOn(outlook, "scanMail").mockImplementation(async () => ({
+      messages: [],
+      next: `page-${++page}`,
+    }));
+    await checkMailStep({ lastDays: 30 });
+    await checkMailStep({ lastDays: 30 });
+    const [first, second] = scan.mock.calls.map((call) => call[1]);
+    expect(second).toMatchObject({ since: first.since, until: first.until, next: "page-1" });
+    expect(own.id).toBeTruthy();
+  });
+
+  it("the first Last N days fetch on a new inbox arrives handled", async () => {
+    const own = await connection();
+    vi.spyOn(outlook, "folders").mockResolvedValue([]);
+    const old = update(`${own.email}-first`);
+    vi.spyOn(outlook, "scanMail").mockResolvedValue({
+      messages: [{ ...old, receivedAt: new Date(Date.now() - 20 * 86_400_000).toISOString() }],
+    });
+    const result = await checkMailStep({ lastDays: 30 });
+    expect(result.newAttention).toBe(0);
+    expect((await messages(own.email))[0].attentionState).toBe("DONE");
   });
 
   it("excludes an unreadable message instead of blocking the inbox", async () => {

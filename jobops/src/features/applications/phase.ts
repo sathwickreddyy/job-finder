@@ -18,6 +18,7 @@ export const methodLabel: Record<string, string> = {
   REFERRAL: "Referral ask",
   COLD_EMAIL: "Cold email",
   LINKEDIN_MESSAGE: "LinkedIn message",
+  PREVIOUS_JOB: "Previous job",
 };
 
 export type LinkedMailEvidence = {

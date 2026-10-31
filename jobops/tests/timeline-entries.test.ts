@@ -19,7 +19,7 @@ const mail = (id: string, receivedAt: string, extra: Partial<MailItem> = {}): Ma
   text: "Hello",
   company: { key: "northstar", name: "Northstar" },
   application: null,
-  tag: "process",
+  tag: "interviewCall",
   kind: "Interview",
   attention: "open",
   handledAt: null,
@@ -159,6 +159,34 @@ describe("timelineEntries", () => {
     expect(days.map((day) => [day.key, day.label])).toEqual([
       ["2026-10-30", "Yesterday"],
       ["2026-10-27", "Tue 27 Oct"],
+    ]);
+  });
+
+  it("puts the year on days outside this year", () => {
+    const days = build({ mail: [mail("m1", "2025-08-21T16:45:00+05:30")] });
+    expect(days[0]).toMatchObject({ key: "2025-08-21", label: "Thu 21 Aug 2025" });
+  });
+
+  it("stamps each dated day for the date column, spelling Sep by hand", () => {
+    const days = build({
+      mail: [
+        mail("m1", "2026-10-31T09:00:00+05:30"),
+        mail("m2", "2026-09-01T10:00:00+05:30"),
+        mail("m3", "2024-05-03T14:47:00+05:30"),
+      ],
+      rounds: [round("r1", "2026-11-01T15:00:00+05:30")],
+    });
+    expect(days.map((day) => [day.label, day.stamp])).toEqual([
+      ["Coming up", null],
+      ["Today", { weekday: "Sat", day: 31, month: "Oct", year: 2026, thisYear: true, today: true }],
+      [
+        "Tue 1 Sep",
+        { weekday: "Tue", day: 1, month: "Sep", year: 2026, thisYear: true, today: false },
+      ],
+      [
+        "Fri 3 May 2024",
+        { weekday: "Fri", day: 3, month: "May", year: 2024, thisYear: false, today: false },
+      ],
     ]);
   });
 

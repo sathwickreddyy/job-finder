@@ -5,6 +5,11 @@ import {
   companyResumeSchema,
 } from "@/features/companies/domain";
 import { companies } from "@/features/companies/catalog";
+import { companyMetrics } from "@/features/companies/metrics";
+import { shortlistViews, type CompanySummary } from "@/features/companies/summary";
+import { CompareTable } from "@/features/companies/views";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 
 describe("company application references", () => {
   const amazon = companies.find((company) => company.id === "amazon")!;
@@ -115,4 +120,49 @@ describe("company application references", () => {
       ).sent,
     ).toBe(1);
   });
+});
+
+const summary = (patch: Partial<CompanySummary>): CompanySummary => ({
+  id: "x",
+  name: "X",
+  focus: "",
+  cities: ["Bengaluru"],
+  careersUrl: "",
+  metrics: companyMetrics([]),
+  stage: "Not started",
+  applications: 0,
+  openings: 0,
+  previousEmployer: false,
+  ...patch,
+});
+
+it("hides previous employers from the shortlist views", () => {
+  const paid = companyMetrics([]);
+  paid.fixed = { n: 1, min: 18, p25: 18, median: 18, p75: 18, max: 18, points: [] };
+  const rows = [
+    summary({ id: "oracle", name: "Oracle" }),
+    summary({ id: "tcs", name: "TCS", previousEmployer: true }),
+    summary({ id: "amazon", name: "Amazon", previousEmployer: true, metrics: paid }),
+  ];
+  const { shortlist, previous } = shortlistViews(rows);
+  expect(shortlist.map((row) => row.id)).toEqual(["oracle", "amazon"]);
+  expect(previous.map((row) => row.id)).toEqual(["tcs"]);
+});
+
+it("shows the same status pill as Mail", () => {
+  const html = renderToStaticMarkup(
+    createElement(CompareTable, {
+      companies: [
+        summary({
+          id: "oracle",
+          name: "Oracle",
+          status: { tone: "quiet", label: "Quiet", detail: "Quiet for 9 days", previous: null },
+        }),
+      ],
+      scaleMax: 50,
+      basePath: "/companies",
+    }),
+  );
+  expect(html).toContain("Quiet for 9 days");
+  expect(html).toContain(">Quiet<");
 });

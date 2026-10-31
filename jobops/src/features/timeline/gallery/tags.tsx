@@ -2,7 +2,7 @@
 
 import { useState, type ReactNode } from "react";
 import { Check } from "lucide-react";
-import { mailTags, tagLabel, type MailTag } from "@/features/mail/tags";
+import { mailTags, tagLabel, type MailTag } from "./legacy-tags";
 import { cn } from "@/lib/utils";
 import { allMail } from "./data";
 import { TagDot, TagPill, shortDay, tagClass } from "./primitives";

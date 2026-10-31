@@ -25,31 +25,61 @@
   --radius-md: 0.45rem;
   --radius-lg: 0.65rem;
   --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  --color-tag-opportunity: var(--tag-opportunity);
-  --color-tag-opportunity-container: var(--tag-opportunity-container);
-  --color-tag-process: var(--tag-process);
-  --color-tag-process-container: var(--tag-process-container);
+  --color-tag-application: var(--tag-application);
+  --color-tag-application-container: var(--tag-application-container);
+  --color-tag-referral: var(--tag-referral);
+  --color-tag-referral-container: var(--tag-referral-container);
+  --color-tag-interview-call: var(--tag-interview-call);
+  --color-tag-interview-call-container: var(--tag-interview-call-container);
+  --color-tag-interview-process: var(--tag-interview-process);
+  --color-tag-interview-process-container: var(--tag-interview-process-container);
   --color-tag-offer: var(--tag-offer);
   --color-tag-offer-container: var(--tag-offer-container);
-  --color-tag-rejected: var(--tag-rejected);
-  --color-tag-rejected-container: var(--tag-rejected-container);
+  --color-tag-rejection: var(--tag-rejection);
+  --color-tag-rejection-container: var(--tag-rejection-container);
+  --color-tag-background-check: var(--tag-background-check);
+  --color-tag-background-check-container: var(--tag-background-check-container);
+  --color-tag-joining: var(--tag-joining);
+  --color-tag-joining-container: var(--tag-joining-container);
+  --color-tag-opportunity: var(--tag-opportunity);
+  --color-tag-opportunity-container: var(--tag-opportunity-container);
   --color-tag-other: var(--tag-other);
   --color-tag-other-container: var(--tag-other-container);
+  /* Frozen for the 2026-10-31 timeline gallery's five-tag palette. */
+  --color-tag-process: var(--tag-process);
+  --color-tag-process-container: var(--tag-process-container);
+  --color-tag-rejected: var(--tag-rejected);
+  --color-tag-rejected-container: var(--tag-rejected-container);
 }
 
-/* Mail tags: blue opportunity, yellow process, green offer, red rejection, grey other.
+/* Mail tags are coloured by stage: purple before applying, blue applied, amber
+   interviewing, green offer and joining, red rejected, an outline for other.
    Each pair follows the active light or dark theme through the referenced tokens. */
 :root {
-  --tag-opportunity: var(--link);
-  --tag-opportunity-container: var(--primary-container);
-  --tag-process: var(--amber);
-  --tag-process-container: var(--amber-soft);
+  --tag-application: var(--link);
+  --tag-application-container: var(--primary-container);
+  --tag-referral: var(--purple);
+  --tag-referral-container: var(--purple-soft);
+  --tag-interview-call: var(--amber);
+  --tag-interview-call-container: var(--amber-soft);
+  --tag-interview-process: var(--amber);
+  --tag-interview-process-container: var(--amber-soft);
   --tag-offer: var(--teal);
   --tag-offer-container: var(--teal-soft);
+  --tag-rejection: var(--danger);
+  --tag-rejection-container: var(--danger-soft);
+  --tag-background-check: var(--teal);
+  --tag-background-check-container: var(--teal-soft);
+  --tag-joining: var(--teal);
+  --tag-joining-container: var(--teal-soft);
+  --tag-opportunity: var(--purple);
+  --tag-opportunity-container: var(--purple-soft);
+  --tag-other: var(--muted-foreground);
+  --tag-other-container: transparent;
+  --tag-process: var(--amber);
+  --tag-process-container: var(--amber-soft);
   --tag-rejected: var(--danger);
   --tag-rejected-container: var(--danger-soft);
-  --tag-other: var(--muted-foreground);
-  --tag-other-container: var(--muted);
 }
 
 @layer base {

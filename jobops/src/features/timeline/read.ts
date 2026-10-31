@@ -3,8 +3,13 @@ import { db } from "@/db";
 import { mailEvents, mailMessages } from "@/db/schema";
 import { buildLanes, pendingMailFrom } from "@/features/applications/lanes";
 import { recordStateFrom, type Phase, type RecordState } from "@/features/applications/phase";
-import { buildQueue } from "@/features/applications/queue";
-import { readApplications } from "@/features/applications/read";
+import { istDaysBetween } from "@/features/applications/dates";
+import { buildQueue, type QueueItem } from "@/features/applications/queue";
+import { PREVIOUS_JOB, previousJobs } from "@/features/companies/previous-job";
+import { companyStatus, monthLabel, type CompanyStatus } from "@/features/companies/status";
+import type { MailItem } from "@/features/mail/mail-item";
+import type { ComingUpItem } from "./coming-up";
+import { readApplications, type ApplicationRecord } from "@/features/applications/read";
 import { loadMailContext } from "@/features/mail/context";
 import { ApiError } from "@/features/agent-api/http";
 import {
@@ -37,6 +42,21 @@ export type CompanyTimelineData = {
   nextCursor: string | null;
   tags: TagCounts;
 };
+
+/** An application as the handling bar sees it: its role, phase and recorded state. */
+export function timelineRole(record: ApplicationRecord): TimelineRole {
+  return {
+    id: record.id,
+    role: record.role,
+    source: record.source,
+    phase: record.phase,
+    state: recordStateFrom(
+      record,
+      record.rounds,
+      record.events.map((event) => event.eventType),
+    ),
+  };
+}
 
 async function tagCounts(scope: SQL[]): Promise<TagCounts> {
   const rows = await db
@@ -104,20 +124,7 @@ export async function readCompanyTimeline(
       slug: listed?.slug ?? null,
       city: own[0]?.city ?? "",
     },
-    roles: own.map((record) => {
-      const state = recordStateFrom(
-        record,
-        record.rounds,
-        record.events.map((event) => event.eventType),
-      );
-      return {
-        id: record.id,
-        role: record.role,
-        source: record.source,
-        phase: record.phase,
-        state,
-      };
-    }),
+    roles: own.map(timelineRole),
     days: await markSavedOpenings(
       timelineEntries({
         mail: items,
@@ -162,33 +169,161 @@ export async function readHomeMail(
   };
 }
 
+/**
+ * All job mail: every kept email, newest first, whichever company it belongs to, with each
+ * company's roles so open mail gets the same suggestion as on the company's own timeline.
+ */
+export async function readAllMail(
+  filters: { tag?: MailTag; q?: string; cursor?: string },
+  now = new Date(),
+): Promise<{
+  days: TimelineDay[];
+  nextCursor: string | null;
+  tags: TagCounts;
+  roles: Record<string, TimelineRole[]>;
+}> {
+  const [{ items, nextCursor }, tags, { records }] = await Promise.all([
+    listMail({ attention: "all", ...filters }),
+    tagCounts([notExcluded]),
+    readApplications(),
+  ]);
+  const roles: Record<string, TimelineRole[]> = {};
+  for (const record of records)
+    if (record.source !== PREVIOUS_JOB)
+      (roles[record.companyKey] ??= []).push(timelineRole(record));
+  return {
+    days: await markSavedOpenings(
+      timelineEntries({
+        mail: items,
+        events: [],
+        rounds: [],
+        complete: nextCursor === null,
+        filtered: Boolean(filters.tag || filters.q),
+        now,
+      }),
+    ),
+    nextCursor,
+    tags,
+    roles,
+  };
+}
+
 export type CompanyIndex = {
   rows: RailRow[];
   home: { open: number; total: number; matches: number | null };
 };
 
+const comingUpDay = new Intl.DateTimeFormat("en-IN", {
+  timeZone: "Asia/Kolkata",
+  weekday: "short",
+  day: "numeric",
+  month: "short",
+});
+/** "Overdue", "Today", "Tomorrow", then "Mon 2 Nov". */
+function dueLabel(at: Date, now: Date) {
+  const days = istDaysBetween(now, at);
+  if (days < 0) return "Overdue";
+  if (days === 0) return "Today";
+  if (days === 1) return "Tomorrow";
+  const parts = Object.fromEntries(
+    comingUpDay.formatToParts(at).map((part) => [part.type, part.value]),
+  );
+  return `${parts.weekday} ${parts.day} ${parts.month}`;
+}
+/**
+ * Coming up: booked rounds, OA deadlines and follow-ups due within the queue's horizon,
+ * soonest first, then up to 10 open emails that have no date.
+ */
+export function comingUpFrom(input: {
+  items: QueueItem[];
+  records: { id: string; companyKey: string; companyName: string }[];
+  openMail: MailItem[];
+  now: Date;
+}): ComingUpItem[] {
+  const recordOf = new Map(input.records.map((record) => [record.id, record]));
+  const dated = input.items
+    .filter((item) => ["round", "deadline", "followup"].includes(item.reason) && item.recordId)
+    .flatMap((item) => {
+      const record = recordOf.get(item.recordId!);
+      return record
+        ? [
+            {
+              id: item.key,
+              at: item.dueAt.toISOString(),
+              label: dueLabel(item.dueAt, input.now),
+              title: item.title,
+              companyKey: record.companyKey,
+              companyName: record.companyName,
+              tag: null,
+              mailId: null,
+            },
+          ]
+        : [];
+    })
+    .sort((a, b) => a.at.localeCompare(b.at));
+  const undated = input.openMail.slice(0, 10).map((item) => ({
+    id: `mail:${item.id}`,
+    at: null,
+    label: "No date",
+    title: item.subject,
+    companyKey: item.company?.key ?? "",
+    companyName: item.company?.name ?? "Needs a home",
+    tag: item.tag,
+    mailId: item.id,
+  }));
+  return [...dated, ...undated];
+}
+
 /** The Mail rail: Applications' lanes (the same needs-you signal) joined with visible mail. */
 export async function readCompanyIndex(
   filters: { tag?: MailTag; q?: string },
   now = new Date(),
-): Promise<CompanyIndex> {
-  const [context, { records, snoozes }] = await Promise.all([
+): Promise<CompanyIndex & { statuses: Record<string, CompanyStatus>; comingUp: ComingUpItem[] }> {
+  const [context, { records: all, snoozes }, previous] = await Promise.all([
     loadMailContext(),
     readApplications(),
+    previousJobs(),
   ]);
+  // Previous jobs are history: never lanes, queue items or Needs you.
+  const records = all.filter((record) => record.source !== PREVIOUS_JOB);
   const triage = await readMailTriage(records);
   const items = buildQueue({ records, mail: queueMailFrom(triage.messages), snoozes, now });
   const lanes = buildLanes({ records, items, pending: pendingMailFrom(triage.messages), now });
   const keys = new Map(context.applications.map((app) => [app.id, app.company]));
   const { facts, matches } = await mailFacts(context, (id) => keys.get(id), filters);
+  const joined = new Map<string, string>();
+  for (const job of previous)
+    if (!joined.has(job.companyKey))
+      joined.set(job.companyKey, `Joined ${monthLabel(job.joinedOn)}`);
   const { rows, home } = companyRows({
     lanes,
     mail: facts,
     names: new Map(context.companies.map((company) => [company.id, company])),
     matches:
       matches && new Map([...matches].flatMap(([key, count]) => (key ? [[key, count]] : []))),
+    previous: joined,
   });
-  return { rows, home: { ...home, matches: matches ? (matches.get(null) ?? 0) : null } };
+  const totals = new Map(facts.map((row) => [row.key, row.total]));
+  // Every rail company, plus former employers that have no lane or mail yet.
+  const shown = new Set([...rows.map((row) => row.key), ...previous.map((job) => job.companyKey)]);
+  const statuses = Object.fromEntries(
+    [...shown].map((key) => [
+      key,
+      companyStatus({
+        records: records.filter((record) => record.companyKey === key),
+        mailCount: totals.get(key) ?? 0,
+        previousJobs: previous.filter((job) => job.companyKey === key),
+        now,
+      }),
+    ]),
+  );
+  const open = await listMail({ attention: "open" }, context);
+  return {
+    rows,
+    home: { ...home, matches: matches ? (matches.get(null) ?? 0) : null },
+    statuses,
+    comingUp: comingUpFrom({ items, records, openMail: open.items, now }),
+  };
 }
 
 /** Where an old `/mail/<id>` link now opens; null when the email is missing or excluded. */

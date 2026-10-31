@@ -1,17 +1,20 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { ArrowLeft, ChevronRight, Inbox, Search, SlidersHorizontal } from "lucide-react";
-import { CompanyRuleEditor } from "@/features/mail/company-rule-editor";
+import { FetchMail } from "@/features/mail/fetch-mail";
 import { InboxesPanel } from "@/features/mail/inboxes-panel";
+import { tagClass, tagIcon } from "@/features/mail/tag-pill";
 import { mailTags, tagLabel, type MailTag } from "@/features/mail/tags";
 import { cn } from "@/lib/utils";
-import { CheckMail } from "./check-mail";
+import type { ProviderId } from "@/services/mail/providers/types";
+import { PreviousBadge, StatusPill } from "@/features/companies/status-pill";
+import type { CompanyStatus } from "@/features/companies/status";
+import { ComingUp } from "./coming-up";
 import { Drawer } from "./drawer";
 import type { RailGroup, RailRow } from "./index-rows";
-import type { MailPane, MailViewData } from "./mail-data";
+import type { MailViewData } from "./mail-data";
 import { mailHref, type MailQuery } from "./query";
 import type { TagCounts } from "./read";
 import { CompanyTimeline } from "./timeline";
@@ -20,26 +23,24 @@ const groupLabel: Record<RailGroup | "home", string> = {
   needs: "Needs you",
   waiting: "Waiting on them",
   closed: "Closed",
+  previous: "Previous employers",
   home: "Needs a home",
 };
 const dueTone = {
   now: "text-link font-medium",
-  late: "text-tag-process font-medium",
+  late: "text-warning font-medium",
   calm: "text-muted-foreground",
-};
-/** Literal class names so Tailwind keeps every tag colour pair. */
-const pillTone: Record<MailTag, string> = {
-  opportunity: "bg-tag-opportunity-container text-tag-opportunity",
-  process: "bg-tag-process-container text-tag-process",
-  offer: "bg-tag-offer-container text-tag-offer",
-  rejected: "bg-tag-rejected-container text-tag-rejected",
-  other: "bg-tag-other-container text-tag-other",
 };
 const rowShell = (selected: boolean) =>
   cn(
     "block w-full rounded-2xl px-3 py-2.5 text-left text-foreground transition-colors hover:no-underline",
     selected ? "bg-selected text-selected-foreground" : "hover:bg-muted/70",
   );
+const fetchInboxes = (data: MailViewData) =>
+  data.inboxes.connections.map((row) => ({
+    account: row.email,
+    provider: row.provider as ProviderId,
+  }));
 const matchText = (count: number) => `${count} ${count === 1 ? "match" : "matches"}`;
 
 function NewBadge({ count }: { count: number }) {
@@ -53,7 +54,17 @@ function NewBadge({ count }: { count: number }) {
 }
 
 /** Gallery rail A: two lines, the latest signal under the name and the due day on the right. */
-function RailLink({ row, selected, href }: { row: RailRow; selected: boolean; href: string }) {
+function RailLink({
+  row,
+  selected,
+  href,
+  status,
+}: {
+  row: RailRow;
+  selected: boolean;
+  href: string;
+  status?: CompanyStatus;
+}) {
   return (
     <Link
       href={href}
@@ -66,6 +77,7 @@ function RailLink({ row, selected, href }: { row: RailRow; selected: boolean; hr
           {row.name}
         </span>
         <NewBadge count={row.newCount} />
+        {status && <StatusPill status={status} className="h-5 px-2" />}
         {row.due && (
           <span className={cn("ml-auto shrink-0 text-xs", dueTone[row.due.tone])}>
             {row.due.label}
@@ -110,9 +122,10 @@ function Group({
 
 function Rail({ data, selected }: { data: MailViewData; selected: string | null }) {
   const { query, index, inboxes } = data;
+  const allShown = data.pane.kind === "all";
   const filtered = Boolean(query.tag || query.q);
   const keep = { tag: query.tag, q: query.q };
-  const groups = (["needs", "waiting", "closed"] as const).map((group) => ({
+  const groups = (["needs", "waiting", "closed", "previous"] as const).map((group) => ({
     group,
     rows: index.rows.filter((row) => row.group === group),
   }));
@@ -136,9 +149,10 @@ function Rail({ data, selected }: { data: MailViewData; selected: string | null 
           <InboxesPanel inboxes={inboxes} />
         </Drawer>
       </div>
-      <CheckMail
-        lastChecked={data.lastChecked}
-        connected={inboxes.connections.length > 0}
+      <FetchMail
+        inboxes={fetchInboxes(data)}
+        lastFetched={data.lastChecked}
+        companies={data.placeOptions.companies}
         className="px-2 pt-3"
       />
       <form role="search" action="/mail" className="relative mt-3 block p-1">
@@ -171,13 +185,30 @@ function Rail({ data, selected }: { data: MailViewData; selected: string | null 
           </Link>
         </p>
       )}
+      <div className="pt-3">
+        <Link
+          href={mailHref({ ...keep, all: true })}
+          scroll={false}
+          aria-current={allShown ? "page" : undefined}
+          className={rowShell(allShown)}
+        >
+          <span className="block truncate font-medium">All job mail</span>
+          <span className="block truncate text-sm text-muted-foreground">
+            Every job email, newest first
+          </span>
+        </Link>
+      </div>
       {groups.map(({ group, rows }) =>
         rows.length ? (
           <Group
             key={group}
             label={groupLabel[group]}
             count={rows.length}
-            open={group !== "closed" || filtered || rows.some((row) => row.key === selected)}
+            open={
+              (group !== "closed" && group !== "previous") ||
+              filtered ||
+              rows.some((row) => row.key === selected)
+            }
           >
             {rows.map((row) => (
               <RailLink
@@ -185,6 +216,7 @@ function Rail({ data, selected }: { data: MailViewData; selected: string | null 
                 row={row}
                 selected={!query.home && row.key === selected}
                 href={mailHref({ ...keep, company: row.key })}
+                status={data.statuses[row.key]}
               />
             ))}
           </Group>
@@ -219,6 +251,11 @@ function Rail({ data, selected }: { data: MailViewData; selected: string | null 
   );
 }
 
+function TagIcon({ tag }: { tag: MailTag }) {
+  const Icon = tagIcon[tag];
+  return <Icon aria-hidden size={14} strokeWidth={2.2} />;
+}
+
 /** Gallery tags B: tonal pills that carry the colour, one tag at a time. */
 function TagPills({ query, tags }: { query: MailQuery; tags: TagCounts }) {
   const total = Object.values(tags).reduce((sum, count) => sum + count, 0);
@@ -236,60 +273,25 @@ function TagPills({ query, tags }: { query: MailQuery; tags: TagCounts }) {
       >
         All <span className="tabular-nums opacity-70">{total}</span>
       </Link>
-      {mailTags.map((tag) => (
-        <Link
-          key={tag}
-          href={mailHref({ ...base, tag })}
-          scroll={false}
-          aria-current={query.tag === tag ? "page" : undefined}
-          className={cn(
-            "pressable inline-flex h-9 items-center gap-1.5 rounded-full px-4 text-sm font-medium hover:no-underline",
-            pillTone[tag],
-            query.tag === tag ? "ring-2 ring-current" : query.tag && "opacity-60",
-          )}
-        >
-          {tagLabel[tag]} <span className="tabular-nums opacity-70">{tags[tag]}</span>
-        </Link>
-      ))}
+      {mailTags
+        .filter((tag) => tags[tag] > 0 || query.tag === tag)
+        .map((tag) => (
+          <Link
+            key={tag}
+            href={mailHref({ ...base, tag })}
+            scroll={false}
+            aria-current={query.tag === tag ? "page" : undefined}
+            className={cn(
+              "pressable inline-flex h-9 items-center gap-1.5 rounded-full px-4 text-sm font-medium hover:no-underline",
+              tagClass[tag].tonal,
+              query.tag === tag ? "ring-2 ring-current" : query.tag && "opacity-60",
+            )}
+          >
+            <TagIcon tag={tag} />
+            {tagLabel[tag]} <span className="tabular-nums opacity-70">{tags[tag]}</span>
+          </Link>
+        ))}
     </nav>
-  );
-}
-
-function RuleDrawer({
-  rule,
-}: {
-  rule: NonNullable<Extract<MailPane, { kind: "company" }>["rule"]>;
-}) {
-  const router = useRouter();
-  const [saved, setSaved] = useState("");
-  const [pending, setPending] = useState(false);
-  return (
-    <Drawer
-      label="Mail rule"
-      icon={<SlidersHorizontal size={15} aria-hidden />}
-      title={`Mail rule for ${rule.rule.company}`}
-      description={rule.source}
-    >
-      {
-        <div className="space-y-4">
-          {saved && (
-            <p role="status" className="m-0 rounded-2xl bg-foreground p-3 text-sm text-background">
-              {saved}
-            </p>
-          )}
-          <CompanyRuleEditor
-            company={rule.company}
-            rule={rule.rule}
-            disabled={pending}
-            onPending={setPending}
-            onSaved={(message) => {
-              setSaved(message);
-              router.refresh();
-            }}
-          />
-        </div>
-      }
-    </Drawer>
   );
 }
 
@@ -317,19 +319,22 @@ function Pane({ data }: { data: MailViewData }) {
         <p className="m-0 max-w-sm text-sm text-muted-foreground">
           {filtered
             ? "Try another word, or clear the search and tag."
-            : "Every email is handled and no step is due. New mail arrives when you check."}
+            : "Every email is handled and no step is due. New mail arrives when you fetch it."}
         </p>
         {!filtered && (
-          <CheckMail
-            lastChecked={data.lastChecked}
-            connected={data.inboxes.connections.length > 0}
-            className="mx-auto"
+          <FetchMail
+            inboxes={fetchInboxes(data)}
+            lastFetched={data.lastChecked}
+            companies={data.placeOptions.companies}
+            className="mx-auto text-left"
           />
         )}
       </section>
     );
   }
   const company = pane.kind === "company" ? pane : null;
+  const all = pane.kind === "all";
+  const status = company ? data.statuses[company.company.key] : undefined;
   return (
     <section
       aria-labelledby="mail-pane-title"
@@ -351,13 +356,21 @@ function Pane({ data }: { data: MailViewData }) {
                 {company.company.name}
               </Link>
             ) : (
-              (company?.company.name ?? "Needs a home")
+              (company?.company.name ?? (all ? "All job mail" : "Needs a home"))
             )}
           </h2>
+          {status && (status.tone !== "none" || status.previous) && (
+            <p className="m-0 mt-2 flex flex-wrap items-center gap-2">
+              <StatusPill status={status} />
+              {status.previous && <PreviousBadge joined={status.previous.joined} />}
+            </p>
+          )}
           <p className="m-0 mt-1 text-sm text-muted-foreground">
             {company
               ? company.company.city || "Company mail"
-              : "Mail that matched no company yet. Place it at a company, or mark it as just info."}
+              : all
+                ? "Every job email from your inboxes, newest first. Spam and promotions are left out."
+                : "Mail that matched no company yet. Place it at a company, or mark it as just info."}
           </p>
           {company?.row?.next && (
             <p className="m-0 mt-2 text-sm">
@@ -371,17 +384,28 @@ function Pane({ data }: { data: MailViewData }) {
             </p>
           )}
         </div>
-        {company?.rule && <RuleDrawer key={company.company.key} rule={company.rule} />}
+        {company?.company.slug && (
+          <Link
+            href={`/companies/${company.company.slug}?tab=timeline#mail-search`}
+            className="inline-flex h-9 items-center gap-1.5 rounded-full px-3 text-sm font-medium text-link ring-1 ring-border hover:bg-muted hover:no-underline"
+          >
+            <SlidersHorizontal size={15} aria-hidden />
+            How we find its mail
+          </Link>
+        )}
       </header>
       <div className="mt-4 mb-5">
         <TagPills query={query} tags={pane.tags} />
       </div>
+      {all && !query.tag && !query.q && !query.cursor && <ComingUp items={data.comingUp} />}
       {pane.newestHref && (
         <Link href={pane.newestHref} scroll={false} className="mb-3 inline-block text-sm text-link">
           Back to the newest
         </Link>
       )}
+      {/* A new pane remounts the rows, so no email keeps the last pane's handling. */}
       <CompanyTimeline
+        key={company ? `company:${company.company.key}` : pane.kind}
         days={pane.days}
         handling={pane.handling}
         roles={company?.roles ?? []}
@@ -390,6 +414,8 @@ function Pane({ data }: { data: MailViewData }) {
         openMail={query.mail}
         olderHref={pane.olderHref}
         placeOptions={data.placeOptions}
+        showCompany={all}
+        inboxes={data.inboxes.connections.map((row) => row.email)}
       />
     </section>
   );

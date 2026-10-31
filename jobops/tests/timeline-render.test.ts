@@ -24,13 +24,22 @@ const item = (id: string, patch: Partial<MailItem> = {}): MailItem => ({
   text: "Hello",
   company: { key: "northstar", name: "Northstar" },
   application: null,
-  tag: "process",
+  tag: "interviewCall",
   kind: "Interview",
   attention: "open",
   handledAt: null,
   outcome: null,
   ...patch,
 });
+const stamp = (weekday: string, day: number, month: string, year = 2026) => ({
+  weekday,
+  day,
+  month,
+  year,
+  thisYear: year === 2026,
+  today: year === 2026 && month === "Oct" && day === 31,
+});
+const today = stamp("Sat", 31, "Oct");
 const handling: Handling = {
   applications: [{ id: "a", role: "Backend", outcomes: ["heard", "scheduled", "rejected"] }],
   chosen: "a",
@@ -41,6 +50,7 @@ const days: TimelineDay[] = [
   {
     key: "upcoming",
     label: "Coming up",
+    stamp: null,
     entries: [
       {
         type: "step",
@@ -56,11 +66,13 @@ const days: TimelineDay[] = [
   {
     key: "2026-10-31",
     label: "Today",
+    stamp: today,
     entries: [{ type: "mail", at: "2026-10-31T04:00:00.000Z", item: item("m1"), recorded: null }],
   },
   {
     key: "2026-10-30",
     label: "Fri 30 Oct",
+    stamp: stamp("Fri", 30, "Oct"),
     entries: [
       {
         type: "step",
@@ -93,10 +105,86 @@ describe("CompanyTimeline", () => {
   it("renders day headings and rows", () => {
     const html = render();
     for (const heading of ["Coming up", "Today", "Fri 30 Oct"]) expect(html).toContain(heading);
-    expect(html).toContain("Needs you");
+    // Open mail reads bold with a blue edge; screen readers hear that it needs you.
+    expect(html).toContain(", needs you");
+    expect(html).toContain("w-[3px]");
+    expect(html).not.toContain("bg-selected/40");
     expect(html).toContain("Record round scheduled");
     expect(html).toContain("Suggested for an interview email.");
     expect(html).toContain("Applied for Backend");
+  });
+
+  it("lays days out as one ledger with a date column and a band where an older year starts", () => {
+    const old = (id: string, at: string, key: string, label: string, day: number) => ({
+      key,
+      label,
+      stamp: stamp("Thu", day, "Aug", 2025),
+      entries: [{ type: "mail" as const, at, item: item(id, { receivedAt: at }), recorded: null }],
+    });
+    const html = render({
+      days: [
+        ...days,
+        old("m7", "2025-08-21T11:15:00.000Z", "2025-08-21", "Thu 21 Aug 2025", 21),
+        old("m8", "2025-08-14T11:15:00.000Z", "2025-08-14", "Thu 14 Aug 2025", 14),
+      ],
+    });
+    expect(html).toContain("rounded-3xl bg-card ring-1 ring-border");
+    expect(html).toMatch(/<section[^>]*aria-label="Fri 30 Oct"/);
+    expect(html).toMatch(/<h3 class="sr-only">Thu 21 Aug 2025<\/h3>/);
+    // The stamp is visual; the hidden heading carries the full date.
+    expect(html).toMatch(/aria-hidden="true"[^>]*>(<[^>]+>)*Fri<[\s\S]*?>30<[\s\S]*?>Oct</);
+    expect(html.match(/>2025</g)).toHaveLength(1);
+    expect(html).not.toContain(">2026<");
+  });
+
+  it("aligns tag, sender, subject with a clean preview, then time and inbox", () => {
+    const at = "2026-10-31T04:00:00.000Z";
+    const junk = item("m5", {
+      account: "me@example.com",
+      folders: ["Junk Email"],
+      attention: "handled",
+      text: "Hi Priya,\n\u200c\u00a0\u200c\u00a0\nPlease share slots for Tuesday.",
+    });
+    const html = render({
+      inboxes: ["me@example.com", "you@outlook.in"],
+      days: [
+        {
+          key: "2026-10-31",
+          label: "Today",
+          stamp: today,
+          entries: [{ type: "mail", at, item: junk, recorded: null }],
+        },
+      ],
+    });
+    // Columns follow the feed's own width: three when it is medium, four when it is wide.
+    expect(html).toMatch(/<ul class="[^"]*@container/);
+    expect(html).toContain("@xl:grid-cols-[9rem_9rem_minmax(0,1fr)]");
+    expect(html).toContain("@4xl:grid-cols-[9.5rem_10rem_minmax(0,1fr)_auto]");
+    expect(html).toContain("Please share slots for Tuesday.");
+    expect(html).not.toContain("Hi Priya,");
+    expect(html).toContain(">example.com, Junk<");
+    expect(html).toContain('title="Found in me@example.com, Junk Email"');
+    // A company's own timeline names the sender and their address in the second column.
+    expect(html).toMatch(/>Priya<[\s\S]*?>priya@northstar\.dev</);
+    const all = render({
+      showCompany: true,
+      days: [
+        {
+          key: "2026-10-31",
+          label: "Today",
+          stamp: today,
+          entries: [{ type: "mail", at, item: junk, recorded: null }],
+        },
+      ],
+    });
+    expect(all).toMatch(/>Northstar<[\s\S]*?>Priya</);
+  });
+
+  it("labels steps in the tag column so they read apart from emails", () => {
+    const html = render();
+    expect(html).toMatch(/>DSA round</);
+    expect(html).toMatch(/>Booked<\/span>/);
+    expect(html).toMatch(/>Recorded<\/span>[\s\S]*?Applied for Backend/);
   });
 
   it("role chips only with two roles", () => {
@@ -115,6 +203,7 @@ describe("CompanyTimeline", () => {
         {
           key: "2026-10-31",
           label: "Today",
+          stamp: today,
           entries: [
             { type: "mail", at: handled.receivedAt, item: handled, recorded: "Round scheduled" },
           ],
@@ -134,6 +223,7 @@ describe("CompanyTimeline", () => {
         {
           key: "2026-10-31",
           label: "Today",
+          stamp: today,
           entries: [{ type: "mail", at: handled.receivedAt, item: handled, recorded: null }],
         },
       ],
@@ -149,6 +239,7 @@ describe("CompanyTimeline", () => {
         {
           key: "2026-10-31",
           label: "Today",
+          stamp: today,
           entries: [
             {
               type: "mail",
@@ -171,6 +262,7 @@ describe("CompanyTimeline", () => {
         {
           key: "2026-10-30",
           label: "Fri 30 Oct",
+          stamp: stamp("Fri", 30, "Oct"),
           entries: [
             {
               type: "step",

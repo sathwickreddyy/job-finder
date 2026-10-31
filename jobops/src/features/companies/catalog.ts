@@ -12,6 +12,8 @@ export type Company = {
   portalNote: string;
   facts?: (typeof companyFacts.$inferSelect)[];
   locations?: (typeof companyLocations.$inferSelect)[];
+  /** A former employer recorded outside the shortlist policy. */
+  kind?: "SHORTLIST" | "PREVIOUS_EMPLOYER";
 };
 
 // Official careers/location sources reviewed on 1 October 2026.

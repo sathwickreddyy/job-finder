@@ -11,6 +11,7 @@ const parse = (raw: Record<string, string | undefined>) =>
 const empty: MailQuery = {
   company: null,
   home: false,
+  all: false,
   tag: null,
   q: null,
   role: null,
@@ -55,7 +56,8 @@ describe("mail query", () => {
     const query: MailQuery = {
       company: "acme labs",
       home: false,
-      tag: "process",
+      all: false,
+      tag: "interviewCall",
       q: "next round",
       role: app,
       mail: mailId,
@@ -73,5 +75,11 @@ describe("mail query", () => {
     ).toEqual(query);
     expect(mailHref({})).toBe("/mail");
     expect(mailHref({ home: true, mail: mailId })).toBe(`/mail?view=home&mail=${mailId}`);
+  });
+
+  it("reads and writes All job mail as view=all", () => {
+    expect(parse({ view: "all" })).toEqual({ ...empty, all: true });
+    expect(parse({ view: "all", company: "acme" }).all).toBe(false);
+    expect(mailHref({ all: true, tag: "offer" })).toBe("/mail?view=all&tag=offer");
   });
 });

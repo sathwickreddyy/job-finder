@@ -61,7 +61,7 @@ it("serializes DONE as handled and OPEN as open", () => {
   expect(open).toMatchObject({
     attention: "open",
     handledAt: null,
-    tag: "process",
+    tag: "interviewCall",
     kind: "Interview",
   });
   const done = toMailItem(

@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { inArray, like } from "drizzle-orm";
 import { closeDatabase, db } from "@/db";
-import { applications, jobs, mailMessages } from "@/db/schema";
+import { applications, jobs, mailMessages, mailTracking } from "@/db/schema";
 import { readMailView } from "@/features/timeline/mail-data";
 import { assertE2eDatabase, dbTests } from "./helpers/e2e-db";
 
@@ -60,6 +60,7 @@ describe.skipIf(!dbTests)("the Mail view", () => {
   });
   afterAll(async () => {
     await assertE2eDatabase();
+    await db.delete(mailTracking).where(like(mailTracking.accountEmail, `${prefix}%`));
     await db.delete(mailMessages).where(like(mailMessages.accountEmail, `${prefix}%`));
     await db.delete(applications).where(inArray(applications.jobId, jobIds));
     await db.delete(jobs).where(inArray(jobs.id, jobIds));
@@ -81,11 +82,12 @@ describe.skipIf(!dbTests)("the Mail view", () => {
     expect(view).toMatchObject({ pinned: true, query: { company: key } });
     const landing = await readMailView({}, now);
     expect(landing.pinned).toBe(false);
-    if (landing.pane.kind === "company")
-      expect(landing.query.company).toBe(landing.pane.company.key);
+    expect(landing.pane.kind).toBe("all");
+    expect(landing.query).toMatchObject({ company: null, all: true });
+    expect((await readMailView({ view: "all" }, now)).pinned).toBe(true);
   });
 
-  it("falls back to Needs a home when only unplaced mail matches", async () => {
+  it("shows a search over unplaced mail in All job mail", async () => {
     const word = `homeonly${randomUUID().slice(0, 8)}`;
     const unplaced = await email({
       companyKey: null,
@@ -94,8 +96,55 @@ describe.skipIf(!dbTests)("the Mail view", () => {
     });
     const view = await readMailView({ q: word }, now);
     expect(view.index.rows).toEqual([]);
-    expect(view.pane.kind).toBe("home");
-    expect(view.query.home).toBe(true);
+    expect(view.pane.kind).toBe("all");
     expect(mailIds(view)).toEqual([unplaced.id]);
+  });
+
+  it("All job mail lists every kept email newest first and never excluded mail", async () => {
+    const word = `feed${randomUUID().slice(0, 8)}`;
+    const older = await email({
+      subject: `${word} older`,
+      receivedAt: new Date("2026-10-29T05:00:00Z"),
+    });
+    const unplaced = await email({
+      subject: `${word} unplaced`,
+      companyKey: null,
+      receivedAt: new Date("2026-10-30T05:00:00Z"),
+    });
+    const newer = await email({
+      subject: `${word} newer`,
+      receivedAt: new Date("2026-10-31T03:00:00Z"),
+    });
+    const hidden = await email({
+      subject: `${word} hidden`,
+      receivedAt: new Date("2026-10-31T04:00:00Z"),
+    });
+    await db.insert(mailTracking).values({
+      provider: "GMAIL",
+      accountEmail: account,
+      providerMessageId: `${prefix}-hidden`,
+      messageId: hidden.id,
+      sender: hidden.sender,
+      subject: hidden.subject,
+      receivedAt: hidden.receivedAt,
+      disposition: "excluded",
+    });
+    const view = await readMailView({ view: "all", q: word }, now);
+    expect(view.pane.kind).toBe("all");
+    expect(mailIds(view)).toEqual([newer.id, unplaced.id, older.id]);
+  });
+
+  it("All job mail suggests the outcome for the email's company role", async () => {
+    const word = `suggest${randomUUID().slice(0, 8)}`;
+    const invite = await email({
+      subject: `${word} interview invitation`,
+      classification: "INTERVIEW",
+      attentionState: "OPEN",
+      receivedAt: new Date("2026-10-31T02:00:00Z"),
+    });
+    const view = await readMailView({ view: "all", q: word }, now);
+    expect(view.pane.kind).toBe("all");
+    const handling = view.pane.kind === "all" ? view.pane.handling[invite.id] : undefined;
+    expect(handling?.suggested).toBe("scheduled");
   });
 });

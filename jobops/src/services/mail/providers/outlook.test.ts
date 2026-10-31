@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { outlook, OUTLOOK_SCOPES, readOnlyScopes } from "./outlook";
 import { providerFor, providerBySlug } from "./index";
 import type { MailConnection } from "./types";
+import { outlookSearchQuery, type SearchRequest } from "./search-query";
 
 const origin = "http://127.0.0.1:3210";
 const connection = { lastSyncedAt: new Date("2026-10-02T00:00:00Z") } as MailConnection;
@@ -166,15 +167,13 @@ it("keeps a mail with many To recipients within the import display limit", async
   vi.spyOn(outlook, "accessToken").mockResolvedValue("access");
   vi.stubGlobal(
     "fetch",
-    vi
-      .fn()
-      .mockResolvedValue(
-        Response.json({
-          value: [
-            message({ toRecipients: addresses.map((address) => ({ emailAddress: { address } })) }),
-          ],
-        }),
-      ),
+    vi.fn().mockResolvedValue(
+      Response.json({
+        value: [
+          message({ toRecipients: addresses.map((address) => ({ emailAddress: { address } })) }),
+        ],
+      }),
+    ),
   );
   const page = await outlook.scanMail(connection, { until: "2026-10-30T00:00:00Z" }, []);
   expect(page.messages).toHaveLength(1);
@@ -182,4 +181,43 @@ it("keeps a mail with many To recipients within the import display limit", async
     externalId: "AAMk-MovedID",
     recipient: addresses.join(", ").slice(0, 999) + "…",
   });
+});
+
+const search: SearchRequest = {
+  since: "2026-10-01T00:00:00Z",
+  until: "2026-10-31T00:00:00Z",
+  identity: { names: ["Northstar"], keywords: [], senders: [], domains: ["example.invalid"] },
+};
+it("searchMail sends the built query and enforces the exact window", async () => {
+  vi.spyOn(outlook, "accessToken").mockResolvedValue("access");
+  const request = vi.fn().mockResolvedValue(
+    Response.json({
+      value: [
+        message({ id: "inside", parentFolderId: "junk" }),
+        message({ id: "draft", parentFolderId: "drafts", isDraft: true }),
+        message({ id: "early", receivedDateTime: "2026-09-30T20:00:00Z", parentFolderId: "junk" }),
+      ],
+    }),
+  );
+  vi.stubGlobal("fetch", request);
+  const folders = [
+    { id: "junk", name: "Junk Email" },
+    { id: "drafts", name: "Drafts", contextOnly: true },
+  ];
+  const page = await outlook.searchMail(connection, search, folders);
+  const url = new URL(request.mock.calls[0][0]);
+  expect(url.pathname).toBe("/v1.0/me/messages");
+  expect(url.searchParams.get("$search")).toBe(outlookSearchQuery(search));
+  expect(url.searchParams.get("$top")).toBe("25");
+  expect(page.query).toBe(outlookSearchQuery(search));
+  expect(page.messages.map((row) => row.externalId)).toEqual(["inside"]);
+  expect(page.messages[0].folders).toEqual(["Junk Email"]);
+});
+it("Outlook fetchMessage returns null on 404", async () => {
+  vi.spyOn(outlook, "accessToken").mockResolvedValue("access");
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockResolvedValue(Response.json({ error: { message: "missing" } }, { status: 404 })),
+  );
+  expect(await outlook.fetchMessage(connection, "gone", [])).toBeNull();
 });

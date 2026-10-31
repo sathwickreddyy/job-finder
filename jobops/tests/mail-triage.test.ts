@@ -62,6 +62,10 @@ describe("triage buckets", () => {
       RECRUITER_OUTREACH: "heard",
       APPLICATION_ACKNOWLEDGEMENT: null,
       UNKNOWN: null,
+      REFERRAL: "referred",
+      INTERVIEW_UPDATE: "heard",
+      BACKGROUND_CHECK: null,
+      ONBOARDING: null,
     });
   });
 
@@ -138,5 +142,17 @@ describe("triage buckets", () => {
       receivedAt,
       primary: { label: "Save as opening", href: `/jobs/new?fromMail=${record}` },
     });
+  });
+
+  it("counts referral, interview process, background check and joining mail as updates", () => {
+    for (const classification of [
+      "REFERRAL",
+      "INTERVIEW_UPDATE",
+      "BACKGROUND_CHECK",
+      "ONBOARDING",
+    ] as const)
+      expect(bucketOf({ sender: "hr@northstar.example", classification, recordId: "r1" })).toBe(
+        "updates",
+      );
   });
 });

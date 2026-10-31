@@ -1,16 +1,18 @@
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { companyRecords } from "@/db/schema";
-import type { CompanyMailRule } from "@/features/mail/company-rules";
 import { companyKeyFor, loadMailContext } from "@/features/mail/context";
 import { readInboxes, type Inboxes } from "@/features/mail/inboxes";
 import type { MailItem } from "@/features/mail/mail-item";
 import { readMailItem } from "@/features/mail/mail-list";
+import type { CompanyStatus } from "@/features/companies/status";
+import type { ComingUpItem } from "./coming-up";
 import type { TimelineDay } from "./entries";
 import type { PlaceOptions } from "./handling";
 import type { RailRow } from "./index-rows";
 import { mailHref, parseMailQuery, type MailQuery } from "./query";
 import {
+  readAllMail,
   readCompanyIndex,
   readCompanyTimeline,
   readHomeMail,
@@ -33,9 +35,9 @@ export type MailPane =
       row: RailRow | null;
       roles: { id: string; role: string; href: string }[];
       allRolesHref: string;
-      rule: { company: string; rule: CompanyMailRule; source: string } | null;
     })
   | (PaneTimeline & { kind: "home" })
+  | (PaneTimeline & { kind: "all" })
   | { kind: "empty" };
 export type MailViewData = {
   /** What is shown, including the default company the URL left out. */
@@ -48,6 +50,10 @@ export type MailViewData = {
   inboxes: Inboxes;
   lastChecked: string | null;
   notice: string | null;
+  /** What is due in the next week, above the feed. */
+  comingUp: ComingUpItem[];
+  /** One derived status per company key, for the rail and pane header. */
+  statuses: Record<string, CompanyStatus>;
 };
 
 const openMail = (days: TimelineDay[]) =>
@@ -65,8 +71,8 @@ const cursorAt = (item: MailItem) =>
   `${new Date(Date.parse(item.receivedAt) + 1).toISOString()}|00000000-0000-0000-0000-000000000000`;
 
 /**
- * Everything `/mail` shows: the rail, then one company's timeline (the URL's, else the
- * first that needs you), Needs a home, or nothing to do.
+ * Everything `/mail` shows: the rail, then All job mail (the default), one company's
+ * timeline, Needs a home, or nothing to do.
  */
 export async function readMailView(
   raw: Record<string, string | undefined>,
@@ -87,14 +93,9 @@ export async function readMailView(
     (id) => companyOf.get(id),
   );
   const filters = { tag: query.tag ?? undefined, q: query.q ?? undefined };
-  const index = await readCompanyIndex(filters, now);
-  const filtered = Boolean(query.tag || query.q);
-  const fallback =
-    index.rows.find((row) => row.group === "needs") ?? (filtered ? index.rows[0] : undefined);
-  // A search that matches only unplaced mail opens Needs a home rather than "No mail matches".
-  const home =
-    query.home || (!query.company && !fallback && filtered && (index.home.matches ?? 0) > 0);
-  const key = home ? null : (query.company ?? fallback?.key ?? null);
+  const { statuses, comingUp, ...index } = await readCompanyIndex(filters, now);
+  const home = query.home;
+  const key = home ? null : query.company;
   /**
    * Reads a page; an email named in the URL but older than the newest page opens the page
    * that starts at it.
@@ -123,7 +124,23 @@ export async function readMailView(
     newestHref: cursor ? at({}) : null,
   });
   let pane: MailPane = { kind: "empty" };
-  if (home) {
+  if (!home && !key) {
+    const { data, cursor } = await page(
+      (cursor) => readAllMail({ ...filters, cursor }, now),
+      () => true,
+    );
+    shown = { ...shown, cursor, all: true };
+    if (data.days.length || cursor)
+      pane = {
+        kind: "all",
+        days: data.days,
+        handling: handlingFor(openMail(data.days), (item) =>
+          suggestHandling(item, item.company ? (data.roles[item.company.key] ?? []) : []),
+        ),
+        tags: data.tags,
+        ...paging(data.nextCursor, cursor),
+      };
+  } else if (home) {
     const { data, cursor } = await page(
       (cursor) => readHomeMail({ ...filters, cursor }, now),
       (item) => !item.company && !item.application,
@@ -143,7 +160,6 @@ export async function readMailView(
       (item) => item.company?.key === key,
     );
     shown = { ...shown, cursor };
-    const listed = context.companies.find((company) => company.id === key);
     pane = {
       kind: "company",
       company: timeline.company,
@@ -158,7 +174,6 @@ export async function readMailView(
         href: at({ role: role.id }),
       })),
       allRolesHref: at({ role: null }),
-      rule: listed ? { company: listed.id, rule: listed.rule, source: listed.ruleSource } : null,
       tags: timeline.tags,
       ...paging(timeline.nextCursor, cursor),
     };
@@ -167,7 +182,7 @@ export async function readMailView(
   const checked = inboxes.connections.flatMap((row) => (row.lastChecked ? [row.lastChecked] : []));
   return {
     query: shown,
-    pinned: Boolean(query.company || query.home),
+    pinned: Boolean(query.company || query.home || query.all),
     index,
     pane,
     placeOptions: {
@@ -180,5 +195,7 @@ export async function readMailView(
     inboxes,
     lastChecked: checked.sort().at(-1) ?? null,
     notice: raw.notice?.slice(0, 300) || null,
+    comingUp,
+    statuses,
   };
 }

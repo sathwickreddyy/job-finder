@@ -27,7 +27,7 @@ test("core pages fit a phone and preserve the selected theme", async ({ page }) 
     "href",
     "/mail",
   );
-  await expect(page.locator("a").filter({ hasText: "Check mail" })).toHaveAttribute(
+  await expect(page.locator("a").filter({ hasText: "Fetch new mail" })).toHaveAttribute(
     "href",
     "/mail",
   );

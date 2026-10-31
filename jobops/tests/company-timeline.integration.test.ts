@@ -184,9 +184,20 @@ describe.skipIf(!dbTests)("company timeline", () => {
 
   it("counts the company's mail by tag", async () => {
     const all = await readCompanyTimeline(key, { tag: "offer" }, now);
-    expect(all.tags).toEqual({ opportunity: 0, process: 3, offer: 1, rejected: 0, other: 0 });
+    expect(all.tags).toEqual({
+      application: 3,
+      referral: 0,
+      interviewCall: 0,
+      interviewProcess: 0,
+      offer: 1,
+      rejection: 0,
+      backgroundCheck: 0,
+      joining: 0,
+      opportunity: 0,
+      other: 0,
+    });
     const role = await readCompanyTimeline(key, { application: ids.apps[1] }, now);
-    expect(role.tags).toMatchObject({ process: 1, offer: 0 });
+    expect(role.tags).toMatchObject({ application: 1, offer: 0 });
   });
 
   it("leaves steps newer than an older page out of it", async () => {

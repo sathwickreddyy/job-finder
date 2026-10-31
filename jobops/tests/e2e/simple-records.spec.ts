@@ -61,9 +61,12 @@ test("a saved job supports resume prompts, referral records and a separate direc
   await expect(page.getByRole("region", { name: "History" })).toContainText("DSA round scheduled");
   await expect(page.getByTestId("phase-label")).toHaveText(/Interviewing/);
   await page.goto("/applications");
-  const lane = page.getByRole("group", { name: company, exact: true });
-  await expect(lane).toHaveCount(1);
-  await expect(lane.getByTestId("lane-status")).toHaveText("Interviewing · round 1");
+  // The referral and the direct application each get their own lane.
+  const lanes = page.getByRole("group", { name: company, exact: true });
+  await expect(lanes).toHaveCount(2);
+  await expect(
+    lanes.getByTestId("lane-status").filter({ hasText: "Interviewing · round 1" }),
+  ).toHaveCount(1);
   await page.goto(referralPath);
   await expect(page.getByText("Sent", { exact: true })).toBeVisible();
 });

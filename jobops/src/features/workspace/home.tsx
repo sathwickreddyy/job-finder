@@ -134,7 +134,7 @@ export function WorkspaceHome({ data }: { data: WorkspaceData }) {
           </li>
           <li>
             <Link href="/mail" className="text-link">
-              Check mail
+              Fetch new mail
             </Link>{" "}
             when you want to check replies and deadlines.
           </li>

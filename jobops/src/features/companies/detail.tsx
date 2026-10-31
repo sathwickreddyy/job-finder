@@ -4,6 +4,7 @@ import { normalizeCompany } from "@/features/applications/lanes";
 import { methodLabel } from "@/features/applications/phase";
 import { displayDate, type DisplayPreferences } from "@/features/candidate/preferences";
 import type { CompanyTimelinePanel } from "@/features/timeline/company-panel";
+import { RulePanel } from "@/features/mail/search/rule-panel";
 import { mailHref } from "@/features/timeline/query";
 import { CompanyTimeline } from "@/features/timeline/timeline";
 import { cn } from "@/lib/utils";
@@ -23,6 +24,8 @@ import type { CompaniesData } from "./read";
 import { CompanyResearch } from "./research";
 import { compensationAmount, publicationYear, type ResearchFact } from "./research-data";
 import { CompanyResumeReference } from "./resume-reference";
+import { PreviousJobForm } from "./previous-job-form";
+import { PreviousBadge, StatusPill } from "./status-pill";
 import type { CompanySummary } from "./summary";
 
 export type DetailProps = {
@@ -79,7 +82,7 @@ function nextAction(summary: CompanySummary) {
 
 const dueTone = {
   now: "text-link font-medium",
-  late: "text-tag-process font-medium",
+  late: "text-warning font-medium",
   calm: "text-muted-foreground",
 };
 
@@ -87,7 +90,11 @@ export function DetailHeader({
   company,
   summary,
   next,
-}: Pick<DetailProps, "company" | "summary"> & { next?: CompanyTimelinePanel["next"] }) {
+  status,
+}: Pick<DetailProps, "company" | "summary"> & {
+  next?: CompanyTimelinePanel["next"];
+  status?: CompanyTimelinePanel["status"];
+}) {
   const action = nextAction(summary);
   const modes = [...new Set(company.locations?.flatMap((row) => row.workModes) ?? [])];
   return (
@@ -102,6 +109,8 @@ export function DetailHeader({
             <h1 className="text-3xl font-semibold tracking-tight">{company.name}</h1>
             <p className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
               <StageChip stage={summary.stage} />
+              {status && <StatusPill status={status} />}
+              {status?.previous && <PreviousBadge joined={status.previous.joined} />}
               <span>{company.cities.join(", ") || "Location not recorded"}</span>
               {!!modes.length && (
                 <span className="capitalize">
@@ -147,6 +156,14 @@ export function DetailHeader({
           )}
         </p>
       )}
+      <details className="group max-w-md">
+        <summary className="inline-flex cursor-pointer list-none items-center gap-1 text-sm font-medium text-link [&::-webkit-details-marker]:hidden">
+          Add previous job
+        </summary>
+        <div className="mt-3 rounded-card border border-border bg-card p-4">
+          <PreviousJobForm company={{ key: normalizeCompany(company.name), name: company.name }} />
+        </div>
+      </details>
     </header>
   );
 }
@@ -606,7 +623,7 @@ export function TimelineAside({
   return (
     <aside
       aria-label="Company facts"
-      className="grid min-w-0 grid-cols-2 gap-x-4 gap-y-6 self-start lg:sticky lg:top-6 lg:grid-cols-1 [&>*]:min-w-0"
+      className="grid min-w-0 grid-cols-2 gap-x-4 gap-y-6 lg:grid-cols-1 [&>*]:min-w-0"
     >
       {/* On a phone: roles across the top, pay and the loop side by side, then the resume. */}
       <div id="applications" className="col-span-2 space-y-2 lg:col-span-1">
@@ -725,11 +742,27 @@ function TimelineTab(props: DetailProps & { timeline: CompanyTimelinePanel }) {
           role={timeline.role}
           openMail={null}
           olderHref={timeline.olderHref}
+          inboxes={timeline.search?.inboxes.map((row) => row.account)}
         />
       </section>
-      <div className="order-1 min-w-0 lg:order-2">
+      {/* Sticky as one block, so the facts never slide over the link below them. */}
+      <div className="order-1 min-w-0 self-start lg:sticky lg:top-6 lg:order-2">
         <TimelineAside {...props} />
+        {timeline.search && (
+          <a href="#mail-search" className="mt-6 inline-block text-sm text-link">
+            How we find {props.company.name}&apos;s mail
+          </a>
+        )}
       </div>
+      {timeline.search && (
+        <div className="order-3 min-w-0 lg:col-span-2">
+          <RulePanel
+            data={timeline.search}
+            companyKey={normalizeCompany(props.company.name)}
+            companyName={props.company.name}
+          />
+        </div>
+      )}
     </div>
   );
 }
@@ -840,7 +873,7 @@ export function CompanyDetail(
 ) {
   return (
     <div className="space-y-8">
-      <DetailHeader {...props} next={props.timeline.next} />
+      <DetailHeader {...props} next={props.timeline.next} status={props.timeline.status} />
       <DetailTabs
         key={props.tab}
         initial={props.tab}

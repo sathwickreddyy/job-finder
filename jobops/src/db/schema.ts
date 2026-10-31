@@ -84,6 +84,10 @@ export const mailClassifications = [
   "RECRUITER_OUTREACH",
   "FOLLOW_UP",
   "UNKNOWN",
+  "REFERRAL",
+  "INTERVIEW_UPDATE",
+  "BACKGROUND_CHECK",
+  "ONBOARDING",
 ] as const;
 export const contactVerificationStatuses = [
   "UNKNOWN",
@@ -637,12 +641,15 @@ export const companyRecords = pgTable(
     careersUrl: text("careers_url"),
     portalNote: text("portal_note").notNull().default(""),
     status: text("status").notNull().default("ACTIVE"),
+    /** Shortlisted under the pay policy, or one of the user's former employers. */
+    kind: text("kind").notNull().default("SHORTLIST"),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
   (t) => [
     uniqueIndex("companies_slug_idx").on(t.slug),
     check("companies_status_check", sql`${t.status} IN ('ACTIVE','ARCHIVED')`),
+    check("companies_kind_check", sql`${t.kind} IN ('SHORTLIST','PREVIOUS_EMPLOYER')`),
   ],
 );
 
@@ -759,6 +766,8 @@ export const mailTracking = pgTable(
     disposition: text("disposition").notNull().default("kept"),
     reason: text("reason").notNull().default(""),
     evidence: strings("evidence"),
+    /** Received before the window the fetch or search was due to cover: history, not new mail. */
+    recovered: boolean("recovered").notNull().default(false),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },

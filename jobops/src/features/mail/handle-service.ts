@@ -17,7 +17,7 @@ import { lockMail, type MailTx } from "./handling-service";
 import type { MailItem } from "./mail-item";
 import { readMailItem } from "./mail-list";
 import { mailIsOpen } from "./state";
-import { classificationForTag, mailTags } from "./tags";
+import { classificationForTag, tagFromParam, type MailTag } from "./tags";
 
 if (typeof window !== "undefined") throw new Error("Mail writes run on the server.");
 
@@ -45,7 +45,15 @@ export const handleSchema = z.union([
 ]);
 export const updateSchema = z
   .strictObject({
-    tag: z.enum(mailTags).optional(),
+    /** A legacy tag id is read as its first new tag. */
+    tag: z
+      .string()
+      .transform((value, ctx) => {
+        const tag = tagFromParam(value);
+        if (!tag) ctx.addIssue({ code: "custom", message: "Unknown tag." });
+        return tag as MailTag;
+      })
+      .optional(),
     company: z.string().trim().min(1).max(300).nullable().optional(),
     application: z.uuid().nullable().optional(),
     /** Undo for Just info; refused once an outcome or a lane link came from the email. */

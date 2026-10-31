@@ -56,11 +56,9 @@ test("opening a lane records an OA without leaving the page", async ({ page }) =
   await expect(lane(page, company).getByRole("button", { name: /OA closes/ })).toBeVisible();
 });
 
-test("two roles at one company share a lane and the role switcher scopes outcomes", async ({
-  page,
-}) => {
+test("two roles at one company get a lane each, labelled with the role", async ({ page }) => {
   const company = `Two Roles ${Date.now()}`;
-  const first = await seedRecord({
+  await seedRecord({
     company,
     title: "Backend Engineer",
     source: "DIRECT",
@@ -73,19 +71,18 @@ test("two roles at one company share a lane and the role switcher scopes outcome
     sentDaysAgo: 3,
   });
   await page.goto("/applications");
-  await expect(lane(page, company)).toHaveCount(1);
-  await expect(lane(page, company).getByTestId("lane-status")).toHaveText(
-    "Applied · yesterday · +1 role",
-  );
-  await page.goto(`/applications?open=${first.applicationId}`);
-  const roles = page.getByRole("navigation", { name: "Roles" });
-  await roles.getByRole("link", { name: /Platform Engineer/ }).click();
-  await expect(page).toHaveURL(new RegExp(`open=${second.applicationId}$`));
+  await expect(lane(page, company)).toHaveCount(2);
+  const backend = lane(page, company).filter({ hasText: "Backend Engineer" });
+  const platform = lane(page, company).filter({ hasText: "Platform Engineer" });
+  await expect(backend.getByTestId("lane-status")).toHaveText("Applied · yesterday");
+  await expect(platform.getByTestId("lane-status")).toHaveText("Applied · 3 days");
+  await page.goto(`/applications?open=${second.applicationId}`);
   const detail = page.getByRole("region", { name: `${company} timeline` });
   await detail.getByRole("button", { name: "Rejected", exact: true }).click();
   await detail.getByRole("button", { name: "Save", exact: true }).click();
-  await expect(roles.getByRole("link", { name: /Platform Engineer.*Rejected/ })).toBeVisible();
-  await expect(lane(page, company).getByTestId("lane-status")).toHaveText("Applied · yesterday");
+  await expect(platform.getByTestId("lane-status")).toHaveText("Rejected");
+  // The other application's lane is untouched.
+  await expect(backend.getByTestId("lane-status")).toHaveText("Applied · yesterday");
 });
 
 test("a matched assessment email waits on its lane until Link it adds the OA", async ({ page }) => {
@@ -296,26 +293,18 @@ test("notes only offer Show all when four rendered lines actually overflow", asy
 test("Later stacks never cover an event at the end of this week's window", async ({ page }) => {
   const company = `Future Lane ${Date.now()}`;
   const { applicationId } = await seedRecord({ company, source: "DIRECT", sentDaysAgo: 0 });
-  const second = await seedRecord({
-    company,
-    title: "Platform Engineer",
-    source: "DIRECT",
-    sentDaysAgo: 0,
+  // Each application now has its own lane and one booked round at a time, so the dot past
+  // the window is the same application's follow-up date.
+  await db.insert(applicationRounds).values({
+    applicationId,
+    kind: "DSA",
+    position: 1,
+    scheduledAt: new Date(`${istDay(7)}T23:59:00+05:30`),
   });
-  await db.insert(applicationRounds).values([
-    {
-      applicationId,
-      kind: "DSA",
-      position: 1,
-      scheduledAt: new Date(`${istDay(7)}T23:59:00+05:30`),
-    },
-    {
-      applicationId: second.applicationId,
-      kind: "DSA",
-      position: 2,
-      scheduledAt: new Date(`${istDay(60)}T11:00:00+05:30`),
-    },
-  ]);
+  await db
+    .update(applications)
+    .set({ nextActionAt: new Date(`${istDay(60)}T11:00:00+05:30`), nextActionNote: "Follow up" })
+    .where(eq(applications.id, applicationId));
   await page.goto("/applications");
   const row = lane(page, company);
   const inside = row.getByRole("button", { name: /Round 1/ });

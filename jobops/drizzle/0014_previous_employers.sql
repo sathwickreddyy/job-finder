@@ -1,0 +1,2 @@
+ALTER TABLE "companies" ADD COLUMN "kind" text DEFAULT 'SHORTLIST' NOT NULL;--> statement-breakpoint
+ALTER TABLE "companies" ADD CONSTRAINT "companies_kind_check" CHECK ("companies"."kind" IN ('SHORTLIST','PREVIOUS_EMPLOYER'));

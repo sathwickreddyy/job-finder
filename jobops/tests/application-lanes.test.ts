@@ -7,7 +7,9 @@ import {
   normalizeCompany,
   pendingMailFrom,
   recordStatus,
+  buildLanes,
   type LaneSource,
+  type PendingMail,
 } from "@/features/applications/lanes";
 import { NOW, at, event, lanesFor, record, round, uid } from "./lane-fixtures";
 
@@ -501,5 +503,72 @@ describe("next steps and groups", () => {
       action: "I followed up",
     });
     expect(lane.group).toBe("needs");
+  });
+});
+
+describe("lanes per application", () => {
+  const byApplication = (records: LaneSource[], pending: PendingMail[] = []) =>
+    buildLanes({ records, items: [], pending, now: NOW, by: "application" });
+
+  it("one lane per application when grouped by application", () => {
+    const a = record({
+      company: "Northstar",
+      companyKey: "northstar",
+      companyName: "Northstar",
+      role: "Backend II",
+    });
+    const b = record({
+      company: "Northstar",
+      companyKey: "northstar",
+      companyName: "Northstar",
+      role: "Platform",
+    });
+    const lanes = byApplication([a, b]);
+    expect(lanes.map((lane) => lane.key).sort()).toEqual([a.id, b.id].sort());
+    expect(lanes.every((lane) => lane.company === "Northstar" && lane.roles.length === 1)).toBe(
+      true,
+    );
+    expect(lanesFor([a, b])).toHaveLength(1);
+  });
+
+  it("mail dots carry their tag", () => {
+    const linked = record({
+      linkedMail: [
+        {
+          id: "m1",
+          subject: "Interview invitation",
+          classification: "INTERVIEW",
+          receivedAt: at("2026-10-01T10:00:00"),
+          attentionState: "DONE",
+        },
+      ],
+    });
+    const pending: PendingMail = {
+      id: "m2",
+      recordId: linked.id,
+      subject: "Background verification",
+      classification: "BACKGROUND_CHECK",
+      receivedAt: at("2026-10-02T10:00:00"),
+      outcome: null,
+    };
+    const [lane] = byApplication([linked], [pending]);
+    const tags = Object.fromEntries(lane.dots.map((dot) => [dot.mailId ?? dot.key, dot.tag]));
+    expect(tags.m1).toBe("interviewCall");
+    expect(tags.m2).toBe("backgroundCheck");
+    expect(lane.dots.find((dot) => dot.mailId === "m2")?.label).toBe(
+      "Background verification email · not added yet",
+    );
+    expect(lane.dots.find((dot) => dot.tone === "sent")?.tag ?? null).toBeNull();
+  });
+
+  it("previous jobs are not lanes", () => {
+    const previous = record({
+      source: "PREVIOUS_JOB",
+      phase: "Closed",
+      status: "CLOSED",
+      closedReason: "ACCEPTED",
+    });
+    expect(byApplication([previous, record()])).toHaveLength(1);
+    expect(lanesFor([previous])).toEqual([]);
   });
 });
