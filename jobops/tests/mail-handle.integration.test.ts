@@ -22,7 +22,8 @@ import { listMail } from "@/features/mail/mail-list";
 import {
   handleMailAction,
   reopenMailAction,
-  retagMailAction,
+  restoreMailKind,
+  retagMail,
 } from "@/features/mail/workspace-actions";
 import { assertE2eDatabase, dbTests } from "./helpers/e2e-db";
 
@@ -218,21 +219,76 @@ describe.skipIf(!dbTests)("handling mail", () => {
     });
   });
 
-  it("the Change tag action retags handled mail and leaves it handled", async () => {
+  it("retag then Undo restores the exact kind", async () => {
+    const row = await email({ classification: "ASSESSMENT" });
+    expect(await retagMail(row.id, "applicationRejected")).toEqual({
+      success: "Tagged as Application rejected",
+      previous: "ASSESSMENT",
+    });
+    expect((await message(row.id)).classification).toBe("REJECTION");
+    expect(await restoreMailKind(row.id, "ASSESSMENT")).toEqual({ success: "Tag restored." });
+    expect((await message(row.id)).classification).toBe("ASSESSMENT");
+    const events = await db.select().from(mailEvents).where(eq(mailEvents.mailMessageId, row.id));
+    expect(events.map((event) => event.type)).toEqual(["ASSESSMENT"]);
+    expect(await logs(row.id, "MAIL_RETAGGED")).toHaveLength(2);
+  });
+
+  it("retagging handled mail leaves it handled", async () => {
     const row = await email({ companyKey: keys.single, classification: "INTERVIEW" });
     await handleMail(row.id, { justInfo: true });
-    expect(await retagMailAction({}, form({ id: row.id, tag: "applicationRejected" }))).toEqual({
-      success: "Tagged as Application rejected.",
+    expect(await retagMail(row.id, "interviewRejected")).toEqual({
+      success: "Tagged as Rejected after interview",
+      previous: "INTERVIEW",
     });
     expect(await message(row.id)).toMatchObject({
-      classification: "REJECTION",
+      classification: "INTERVIEW_REJECTION",
       attentionState: "DONE",
       companyKey: keys.single,
     });
-    expect(await retagMailAction({}, form({ id: row.id, tag: "nonsense" }))).toEqual({
-      error: "tag: Unknown tag.",
+  });
+
+  it("retagging to the same tag twice logs once", async () => {
+    const row = await email({ classification: "INTERVIEW" });
+    await retagMail(row.id, "offer");
+    expect(await retagMail(row.id, "offer")).toEqual({
+      success: "Tagged as Offer",
+      previous: "OFFER",
     });
-    expect((await message(row.id)).classification).toBe("REJECTION");
+    expect(await logs(row.id, "MAIL_RETAGGED")).toHaveLength(1);
+  });
+
+  it("restoring an unknown email is refused", async () => {
+    expect(await restoreMailKind(randomUUID(), "OFFER")).toEqual({ error: "Email not found." });
+  });
+
+  it("unknown tags and kinds are refused", async () => {
+    const row = await email({ classification: "INTERVIEW" });
+    expect(await retagMail(row.id, "nonsense")).toEqual({ error: "tag: Unknown tag." });
+    expect((await restoreMailKind(row.id, "NOPE")).error).toMatch(/^classification:/);
+    await expect(updateMail(row.id, { tag: "offer", classification: "OFFER" })).rejects.toThrow(
+      "Send tag or classification, not both.",
+    );
+    expect((await message(row.id)).classification).toBe("INTERVIEW");
+  });
+
+  it("placing a rejection email later does not re-sort it", async () => {
+    const [round] = await db
+      .insert(applicationRounds)
+      .values({
+        applicationId: apps.single[0],
+        kind: "DSA",
+        position: 1,
+        outcome: "PASSED",
+        scheduledAt: new Date("2026-10-22T05:00:00Z"),
+      })
+      .returning();
+    try {
+      const row = await email({ companyKey: null, classification: "REJECTION" });
+      await updateMail(row.id, { company: keys.single });
+      expect((await message(row.id)).classification).toBe("REJECTION");
+    } finally {
+      await db.delete(applicationRounds).where(eq(applicationRounds.id, round.id));
+    }
   });
 
   it("placing an email does not change attention", async () => {

@@ -9,7 +9,8 @@ vi.mock("@/features/mail/workspace-actions", () => ({
   handleMailAction: vi.fn(),
   reopenMailAction: vi.fn(),
   placeMailAction: vi.fn(),
-  retagMailAction: vi.fn(),
+  retagMail: vi.fn(),
+  restoreMailKind: vi.fn(),
 }));
 const { CompanyTimeline } = await import("@/features/timeline/timeline");
 
@@ -233,24 +234,17 @@ describe("CompanyTimeline", () => {
     expect(html).toContain("Undo");
   });
 
-  it("an opened email offers every tag with its own marked", () => {
-    expect(render()).not.toContain("Change tag…");
-    const handled = item("m6", { attention: "handled", tag: "applicationRejected" });
-    const html = render({
-      openMail: "m6",
-      days: [
-        {
-          key: "2026-10-31",
-          label: "Today",
-          stamp: today,
-          entries: [{ type: "mail", at: handled.receivedAt, item: handled, recorded: null }],
-        },
-      ],
-    });
-    expect(html).toContain("Change tag…");
-    expect(html.match(/name="tag"/g)).toHaveLength(11);
-    expect(html).toMatch(/value="applicationRejected" disabled="" aria-pressed="true"/);
-    expect(html).toMatch(/value="offer" aria-pressed="false"/);
+  it("each row has a pencil outside its toggle", () => {
+    const html = render();
+    expect(html).toContain('aria-label="Edit tag"');
+    const toggles = html.match(/<button[^>]*aria-expanded[\s\S]*?<\/button>/g) ?? [];
+    expect(toggles.length).toBeGreaterThan(0);
+    for (const toggle of toggles) expect(toggle).not.toContain('aria-label="Edit tag"');
+  });
+
+  it("the toggle still names the tag for screen readers", () => {
+    const toggle = render().match(/<button[^>]*aria-expanded[\s\S]*?<\/button>/)?.[0];
+    expect(toggle).toContain('<span class="sr-only">Interview call, </span>');
   });
 
   it("never renders HTML", () => {

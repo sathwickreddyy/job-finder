@@ -9,6 +9,7 @@ import { assertPhrase } from "@/services/mail/providers/search-query";
 import type { ProviderId } from "@/services/mail/providers/types";
 import { isSharedSender, keywordProblem, loadMailContext } from "./context";
 import { importMailRecords, mailImportSchema } from "./import";
+import { sortRejection } from "./rejection-sort";
 import { readMailItem } from "./mail-list";
 import type { MailItem } from "./mail-item";
 import { storeCompanyRule } from "./rule-store";
@@ -99,6 +100,7 @@ export async function includeMail(
             : {}),
         })
         .where(eq(mailMessages.id, message.id));
+      if (imported.imported) await sortRejection(tx, message.id, context);
       await tx
         .update(mailTracking)
         .set({

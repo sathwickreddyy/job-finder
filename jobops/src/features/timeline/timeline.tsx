@@ -7,10 +7,12 @@ import { formatTime, formatWeekday } from "@/features/applications/dates";
 import type { MailItem } from "@/features/mail/mail-item";
 import { inboxLabels, previewLine } from "@/features/mail/row-text";
 import { TagPill } from "@/features/mail/tag-pill";
+import { tagLabel } from "@/features/mail/tags";
 import { SourceChip } from "./source-chip";
 import { cn } from "@/lib/utils";
+import { EditTag } from "./edit-tag";
 import type { TimelineDay, TimelineMail, TimelineStep } from "./entries";
-import { ChangeTag, HandledLine, HandlingBar, type PlaceOptions } from "./handling";
+import { HandledLine, HandlingBar, type PlaceOptions } from "./handling";
 import type { Handling } from "./suggest";
 
 function StepIcon({ eventType }: { eventType: string }) {
@@ -132,41 +134,54 @@ function MailRow({
       {needs && (
         <span aria-hidden className="absolute inset-y-3 left-0 w-[3px] rounded-r-full bg-primary" />
       )}
-      <button
-        type="button"
-        aria-expanded={open}
-        onClick={() => setOpen(!open)}
-        className="grid w-full min-w-0 gap-x-4 gap-y-1 px-4 py-3 text-left transition-colors hover:bg-muted/50 focus-visible:bg-muted/50 @xl:grid-cols-[9rem_9rem_minmax(0,1fr)] @xl:items-start @4xl:grid-cols-[9.5rem_10rem_minmax(0,1fr)_auto]"
-      >
-        <span className="flex min-w-0 items-center justify-between gap-2 @xl:grid @xl:justify-items-start @xl:gap-1">
-          <TagPill tag={item.tag} />
+      {/* The toggle stretches over the whole row; the pencil beside the tag sits above it. */}
+      <div className="group relative grid w-full min-w-0 gap-x-4 gap-y-1 px-4 py-3 transition-colors hover:bg-muted/50 has-[:focus-visible]:bg-muted/50 @xl:grid-cols-[9rem_9rem_minmax(0,1fr)] @xl:items-start @4xl:grid-cols-[9.5rem_10rem_minmax(0,1fr)_auto]">
+        <button
+          type="button"
+          aria-expanded={open}
+          onClick={() => setOpen(!open)}
+          className="grid min-w-0 gap-x-4 gap-y-1 text-left after:absolute after:inset-0 after:rounded-[inherit] after:content-[''] focus-visible:outline-none focus-visible:after:outline-2 focus-visible:after:-outline-offset-2 focus-visible:after:outline-primary @xl:col-span-2 @xl:grid-cols-subgrid @4xl:col-span-3"
+        >
+          <span className="sr-only">{`${tagLabel[item.tag]}, `}</span>
+          <span className="flex min-w-0 items-baseline gap-2 @xl:grid @xl:gap-0">
+            <span className={cn("truncate text-sm", needs ? "font-semibold" : "font-medium")}>
+              {showCompany ? (item.company?.name ?? "Needs a home") : name}
+            </span>
+            <span className="truncate text-xs text-muted-foreground">
+              {showCompany ? name : item.sender}
+            </span>
+          </span>
+          <span className="grid min-w-0">
+            <span className={cn("truncate text-sm", needs && "font-medium")}>
+              {item.subject || "(no subject)"}
+              {role && <span className="text-muted-foreground"> ({role})</span>}
+            </span>
+            {preview && <span className="truncate text-xs text-muted-foreground">{preview}</span>}
+          </span>
+          <span className="hidden justify-items-end gap-0.5 text-xs text-muted-foreground tabular-nums @4xl:grid">
+            <span className="whitespace-nowrap">{when}</span>
+            {chip("-mr-1.5")}
+          </span>
+          <span className="sr-only">{needs ? ", needs you" : ""}</span>
+        </button>
+        <div className="order-first flex min-w-0 items-center justify-between gap-2 @xl:grid @xl:justify-items-start @xl:gap-1">
+          <span className="flex min-w-0 items-center gap-1">
+            {/* The toggle names the tag; reading it here again would say it twice. */}
+            <span aria-hidden className="flex">
+              <TagPill tag={item.tag} />
+            </span>
+            <EditTag
+              item={item}
+              className="relative z-10 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100"
+            />
+          </span>
           {/* Beside the tag on a narrow feed, under it on a medium one; a wide feed gives it a column. */}
           <span className="flex min-w-0 flex-wrap items-center justify-end gap-x-1 text-xs text-muted-foreground tabular-nums @xl:justify-start @4xl:hidden">
             {chip("hidden @md:inline-flex @xl:order-2 @xl:-ml-1.5")}
             <span className="whitespace-nowrap @xl:order-1">{when}</span>
           </span>
-        </span>
-        <span className="flex min-w-0 items-baseline gap-2 @xl:grid @xl:gap-0">
-          <span className={cn("truncate text-sm", needs ? "font-semibold" : "font-medium")}>
-            {showCompany ? (item.company?.name ?? "Needs a home") : name}
-          </span>
-          <span className="truncate text-xs text-muted-foreground">
-            {showCompany ? name : item.sender}
-          </span>
-        </span>
-        <span className="grid min-w-0">
-          <span className={cn("truncate text-sm", needs && "font-medium")}>
-            {item.subject || "(no subject)"}
-            {role && <span className="text-muted-foreground"> ({role})</span>}
-          </span>
-          {preview && <span className="truncate text-xs text-muted-foreground">{preview}</span>}
-        </span>
-        <span className="hidden justify-items-end gap-0.5 text-xs text-muted-foreground tabular-nums @4xl:grid">
-          <span className="whitespace-nowrap">{when}</span>
-          {chip("-mr-1.5")}
-        </span>
-        <span className="sr-only">{needs ? ", needs you" : ""}</span>
-      </button>
+        </div>
+      </div>
       {open ? (
         <div className="reveal mx-3 mb-3 min-w-0 rounded-2xl bg-muted/45 p-4 sm:mx-4">
           <p className="m-0 flex min-w-0 flex-wrap items-baseline gap-x-2 text-sm">
@@ -184,7 +199,6 @@ function MailRow({
           <div className="mt-3">
             {needs ? bar : <HandledLine item={item} recorded={entry.recorded} />}
           </div>
-          <ChangeTag item={item} />
         </div>
       ) : (
         bar && <div className="px-4 pb-3">{bar}</div>

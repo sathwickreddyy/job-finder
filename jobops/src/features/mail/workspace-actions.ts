@@ -7,12 +7,12 @@ import type { RoundKind } from "@/lib/round-kinds";
 import { checkMailStep, type CheckResult } from "./check-service";
 import { companySearchStep, type SearchLane, type SearchRun } from "./company-search";
 import { listDropped } from "./dropped";
-import { handleMail, updateMail } from "./handle-service";
+import { handleMail, updateMail, updateMailKind } from "./handle-service";
 import { includeMail } from "./include";
 import type { IngestItem } from "./ingest";
 import type { MailItem } from "./mail-item";
 import { storeCompanyRule } from "./rule-store";
-import { tagLabel } from "./tags";
+import { tagLabel, type MailClassification } from "./tags";
 
 function invalidate() {
   for (const path of ["/mail", "/applications", "/companies", "/settings", "/"])
@@ -185,15 +185,25 @@ export async function reopenMailAction(
   }
 }
 
-/** Correct a wrong tag; attention and placement stay as they were. */
-export async function retagMailAction(
-  _previous: ActionState,
-  form: FormData,
-): Promise<ActionState> {
+export type RetagState = ActionState & { previous?: MailClassification };
+
+/** Edit tag: correct a wrong tag; attention and placement stay as they were. */
+export async function retagMail(id: string, tag: string): Promise<RetagState> {
   try {
-    const item = await updateMail(formString(form, "id"), { tag: formString(form, "tag") });
+    const { item, previous } = await updateMailKind(id, { tag });
     invalidate();
-    return { success: `Tagged as ${tagLabel[item.tag]}.` };
+    return { success: `Tagged as ${tagLabel[item.tag]}`, previous };
+  } catch (error) {
+    return actionError(error);
+  }
+}
+
+/** Undo for Edit tag: put back the exact kind the email had, not just its tag. */
+export async function restoreMailKind(id: string, classification: string): Promise<ActionState> {
+  try {
+    await updateMail(id, { classification });
+    invalidate();
+    return { success: "Tag restored." };
   } catch (error) {
     return actionError(error);
   }

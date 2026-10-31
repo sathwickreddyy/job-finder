@@ -7,6 +7,7 @@ import type { MailTx } from "./handling-service";
 import { previousJobFor } from "@/features/companies/previous-job";
 import { importMailRecords, mailImportSchema } from "./import";
 import { matchMail, type Match } from "./matching";
+import { sortRejection } from "./rejection-sort";
 import { tagOf, type MailTag } from "./tags";
 
 export type IngestCounts = {
@@ -220,6 +221,7 @@ export async function ingestPage(
             })
             .where(eq(mailEvents.id, event.id));
         }
+        if (await sortRejection(tx, messageId, context)) tag = "interviewRejected";
       }
     }
     const values = {

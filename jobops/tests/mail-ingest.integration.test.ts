@@ -2,7 +2,15 @@ import { randomUUID } from "node:crypto";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { eq, like } from "drizzle-orm";
 import { closeDatabase, db } from "@/db";
-import { mailConnections, mailMessages, mailTracking } from "@/db/schema";
+import {
+  applicationRounds,
+  applications,
+  jobs,
+  mailConnections,
+  mailEvents,
+  mailMessages,
+  mailTracking,
+} from "@/db/schema";
 import type { CompanyMailRule } from "@/features/mail/company-rules";
 import type { MailContext } from "@/features/mail/context";
 import { ingestPage } from "@/features/mail/ingest";
@@ -84,7 +92,83 @@ describe.skipIf(!dbTests)("one mail ingest path", () => {
     await db.delete(mailMessages).where(like(mailMessages.accountEmail, `${prefix}%`));
     await db.delete(mailConnections).where(like(mailConnections.email, `${prefix}%`));
   });
-  afterAll(closeDatabase);
+  afterAll(async () => {
+    await assertE2eDatabase();
+    if (interviewed) {
+      await db.delete(applications).where(eq(applications.id, interviewed.app));
+      await db.delete(jobs).where(eq(jobs.id, interviewed.job));
+    }
+    await closeDatabase();
+  });
+
+  /** An Oracle application with one round on 2026-10-22, before the rejection below. */
+  let interviewed: { app: string; job: string } | null = null;
+  async function withRound(): Promise<MailContext> {
+    if (!interviewed) {
+      const [job] = await db
+        .insert(jobs)
+        .values({
+          company: "Oracle",
+          title: "Backend Engineer",
+          canonicalUrl: `https://fixture.invalid/${prefix}/job`,
+          dedupeKey: `${prefix}-job`,
+          source: "MANUAL",
+          status: "APPLIED",
+        })
+        .returning();
+      const [app] = await db
+        .insert(applications)
+        .values({ jobId: job.id, source: "MANUAL", status: "APPLIED" })
+        .returning();
+      await db.insert(applicationRounds).values({
+        applicationId: app.id,
+        kind: "DSA",
+        position: 1,
+        outcome: "PASSED",
+        scheduledAt: new Date("2026-10-22T05:00:00Z"),
+      });
+      interviewed = { app: app.id, job: job.id };
+    }
+    return {
+      ...context,
+      applications: [
+        {
+          id: interviewed.app,
+          company: "oracle",
+          role: "Backend Engineer",
+          recipient: null,
+          sentAt: null,
+        },
+      ],
+    };
+  }
+  const rejection = (id: string) =>
+    mail(id, {
+      subject: "Update on your Oracle application",
+      bodyText: "Thank you for your time. We have decided not to proceed with your application.",
+      receivedAt: "2026-10-25T06:00:00Z",
+    });
+
+  it("sorts a new rejection after a recorded round as Rejected after interview", async () => {
+    const own = await connection();
+    const { items } = await ingest(own, [rejection("after-round")], { context: await withRound() });
+    const [stored] = await messages(own.email);
+    expect(stored.classification).toBe("INTERVIEW_REJECTION");
+    const events = await db
+      .select()
+      .from(mailEvents)
+      .where(eq(mailEvents.mailMessageId, stored.id));
+    expect(events.map((event) => event.type)).toEqual(["INTERVIEW_REJECTION"]);
+    expect(items).toEqual([expect.objectContaining({ tag: "interviewRejected" })]);
+  });
+
+  it("keeps a new rejection without rounds as Application rejected", async () => {
+    const own = await connection();
+    const { items } = await ingest(own, [rejection("no-round")]);
+    const [stored] = await messages(own.email);
+    expect(stored.classification).toBe("REJECTION");
+    expect(items).toEqual([expect.objectContaining({ tag: "applicationRejected" })]);
+  });
 
   it("re-decides an excluded identity that now matches", async () => {
     const own = await connection();
