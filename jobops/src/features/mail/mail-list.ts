@@ -30,6 +30,10 @@ export const notExcluded = sql`NOT EXISTS (SELECT 1 FROM mail_tracking t WHERE t
 const outcome = sql<
   string | null
 >`(SELECT e.payload->>'outcome' FROM application_events e WHERE e.payload->>'mailMessageId' = "mail_messages"."id"::text AND e.payload->>'outcome' IS NOT NULL ORDER BY e.created_at DESC LIMIT 1)`;
+/** Null unless the mail rule recorded an outcome from it; true while nothing newer was recorded. */
+const autoUndoable = sql<
+  boolean | null
+>`(SELECT NOT EXISTS (SELECT 1 FROM application_events n WHERE n.application_id = e.application_id AND n.id <> e.id AND n.created_at > e.created_at AND n.payload ? 'outcome') FROM application_events e WHERE e.payload->>'mailMessageId' = "mail_messages"."id"::text AND e.payload->>'auto' = 'true' AND e.payload ? 'outcome' ORDER BY e.created_at DESC LIMIT 1)`;
 
 /** The rows a list query covers before attention and paging; the rail counts with it too. */
 export function mailScope(query: z.output<typeof mailListSchema>, context: MailContext): SQL[] {
@@ -82,7 +86,7 @@ export async function listMail(
   }
   const [rows, [counted]] = await Promise.all([
     db
-      .select({ message: mailMessages, outcome })
+      .select({ message: mailMessages, outcome, autoUndoable })
       .from(mailMessages)
       .where(and(...page))
       .orderBy(desc(mailMessages.receivedAt), desc(mailMessages.id))
@@ -95,7 +99,9 @@ export async function listMail(
   const lookup = mailLookup(context);
   const items = rows
     .slice(0, pageSize)
-    .map(({ message, outcome }) => toMailItem({ ...message, outcome }, lookup));
+    .map(({ message, outcome, autoUndoable }) =>
+      toMailItem({ ...message, outcome, autoUndoable }, lookup),
+    );
   const last = items.at(-1);
   return {
     items,
@@ -108,13 +114,13 @@ export async function listMail(
 export async function readMailItem(id: string, context?: MailContext): Promise<MailItem> {
   const [row] = z.uuid().safeParse(id).success
     ? await db
-        .select({ message: mailMessages, outcome })
+        .select({ message: mailMessages, outcome, autoUndoable })
         .from(mailMessages)
         .where(and(eq(mailMessages.id, id), notExcluded))
     : [];
   if (!row) throw new ApiError("Email not found.", 404);
   return toMailItem(
-    { ...row.message, outcome: row.outcome },
+    { ...row.message, outcome: row.outcome, autoUndoable: row.autoUndoable },
     mailLookup(context ?? (await loadMailContext())),
   );
 }

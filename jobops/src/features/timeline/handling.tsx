@@ -18,6 +18,7 @@ import {
   handleMailAction,
   placeMailAction,
   reopenMailAction,
+  undoAutoOutcomeAction,
 } from "@/features/mail/workspace-actions";
 import type { ActionState } from "@/lib/actions";
 import { roundKinds } from "@/lib/round-kinds";
@@ -315,8 +316,46 @@ export function HandlingBar({
   );
 }
 
-/** What was done with a handled email; only Just info can be undone here. */
+/**
+ * What was done with a handled email. Just info can be undone here, and so can an outcome the
+ * mail rule recorded, while nothing newer was recorded on its application.
+ */
 export function HandledLine({ item, recorded }: { item: MailItem; recorded: string | null }) {
+  if (item.autoOutcome) return <AutoOutcomeLine item={item} recorded={recorded} />;
+  return <ManualLine item={item} recorded={recorded} />;
+}
+
+function AutoOutcomeLine({ item, recorded }: { item: MailItem; recorded: string | null }) {
+  const { state, pending, submit } = useSubmit(undoAutoOutcomeAction);
+  const outcome = recorded ?? (item.outcome ? outcomeMeta[item.outcome].label : "an outcome");
+  return (
+    <div>
+      <form
+        onSubmit={submit}
+        aria-busy={pending}
+        className="m-0 flex flex-wrap items-center gap-2 text-sm text-muted-foreground"
+      >
+        <Check aria-hidden size={15} className="shrink-0 text-tag-offer" />
+        <span className="min-w-0 break-words">Recorded from this email: {outcome}</span>
+        {item.autoOutcome?.undoable && (
+          <>
+            <input type="hidden" name="id" value={item.id} />
+            <button
+              type="submit"
+              className="pressable inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium text-link hover:bg-selected"
+            >
+              <Undo2 aria-hidden size={13} />
+              Undo
+            </button>
+          </>
+        )}
+      </form>
+      <Refusal state={state} />
+    </div>
+  );
+}
+
+function ManualLine({ item, recorded }: { item: MailItem; recorded: string | null }) {
   const { state, pending, submit } = useSubmit(reopenMailAction);
   const outcome = recorded ?? (item.outcome ? outcomeMeta[item.outcome].label : null);
   return (

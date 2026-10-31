@@ -11,6 +11,7 @@ vi.mock("@/features/mail/workspace-actions", () => ({
   placeMailAction: vi.fn(),
   retagMail: vi.fn(),
   restoreMailKind: vi.fn(),
+  undoAutoOutcomeAction: vi.fn(),
 }));
 const { CompanyTimeline } = await import("@/features/timeline/timeline");
 
@@ -215,6 +216,41 @@ describe("CompanyTimeline", () => {
     expect(html).toContain("Recorded: Round scheduled");
     expect(html).not.toContain("Undo");
     expect(html).not.toContain("Needs you");
+  });
+
+  it("HandledLine offers Undo for an undoable automatic outcome", () => {
+    const rejected = (undoable: boolean) =>
+      item("m4", {
+        tag: "applicationRejected",
+        kind: "Rejection",
+        attention: "handled",
+        handledAt: "2026-10-31T05:00:00.000Z",
+        outcome: "rejected",
+        autoOutcome: { undoable },
+      });
+    const html = (undoable: boolean) =>
+      render({
+        openMail: "m4",
+        days: [
+          {
+            key: "2026-10-31",
+            label: "Today",
+            stamp: today,
+            entries: [
+              {
+                type: "mail",
+                at: rejected(undoable).receivedAt,
+                item: rejected(undoable),
+                recorded: "Rejected",
+              },
+            ],
+          },
+        ],
+      });
+    expect(html(true)).toContain("Recorded from this email: Rejected");
+    expect(html(true)).toMatch(/<button[^>]*type="submit"[^>]*>.*Undo<\/button>/s);
+    expect(html(false)).toContain("Recorded from this email: Rejected");
+    expect(html(false)).not.toContain("Undo");
   });
 
   it("offers Undo only for just info", () => {

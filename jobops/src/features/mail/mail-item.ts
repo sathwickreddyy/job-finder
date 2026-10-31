@@ -21,6 +21,8 @@ export type MailItem = {
   attention: "open" | "handled";
   handledAt: string | null;
   outcome: OutcomeId | null;
+  /** The mail rule recorded this email's outcome; Undo shows while nothing newer was recorded. */
+  autoOutcome?: { undoable: boolean } | null;
 };
 export type MailLookup = {
   companies: Map<string, string>;
@@ -37,7 +39,10 @@ export function mailLookup(context: MailContext): MailLookup {
 }
 
 export function toMailItem(
-  row: typeof mailMessages.$inferSelect & { outcome: string | null },
+  row: typeof mailMessages.$inferSelect & {
+    outcome: string | null;
+    autoUndoable?: boolean | null;
+  },
   lookup: MailLookup,
 ): MailItem {
   const app = row.linkedApplicationId
@@ -64,5 +69,9 @@ export function toMailItem(
     attention: row.attentionState === "DONE" ? "handled" : "open",
     handledAt: row.attentionState === "DONE" ? (row.processedAt?.toISOString() ?? null) : null,
     outcome: outcomeIds.includes(row.outcome as OutcomeId) ? (row.outcome as OutcomeId) : null,
+    autoOutcome:
+      row.autoUndoable === null || row.autoUndoable === undefined
+        ? null
+        : { undoable: row.autoUndoable },
   };
 }

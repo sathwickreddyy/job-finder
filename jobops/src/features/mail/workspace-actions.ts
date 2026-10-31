@@ -1,9 +1,12 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
+import { db } from "@/db";
 import { outcomeDetail, type OutcomeId } from "@/features/applications/phase";
 import { actionError, formString, type ActionState } from "@/lib/actions";
 import type { RoundKind } from "@/lib/round-kinds";
+import { undoAutoOutcome } from "./auto-apply";
 import { checkMailStep, type CheckResult } from "./check-service";
 import { companySearchStep, type SearchLane, type SearchRun } from "./company-search";
 import { listDropped } from "./dropped";
@@ -180,6 +183,21 @@ export async function reopenMailAction(
     await updateMail(formString(form, "id"), { attention: "open" });
     invalidate();
     return { success: "Back in Needs you." };
+  } catch (error) {
+    return actionError(error);
+  }
+}
+
+/** Undo an outcome the mail rule recorded from this email; the email stays as information. */
+export async function undoAutoOutcomeAction(
+  _previous: ActionState,
+  form: FormData,
+): Promise<ActionState> {
+  try {
+    const id = z.uuid().parse(formString(form, "id"));
+    await db.transaction((tx) => undoAutoOutcome(tx, id, new Date()));
+    invalidate();
+    return { success: "Undone. The email stays on the application as information." };
   } catch (error) {
     return actionError(error);
   }

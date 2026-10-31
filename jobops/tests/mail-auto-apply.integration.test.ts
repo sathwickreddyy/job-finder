@@ -24,6 +24,8 @@ import {
 import { loadMailContext, type MailContext } from "@/features/mail/context";
 import { updateMail } from "@/features/mail/handle-service";
 import { ingestPage } from "@/features/mail/ingest";
+import { readMailItem } from "@/features/mail/mail-list";
+import { undoAutoOutcomeAction } from "@/features/mail/workspace-actions";
 import type { ScannedMessage } from "@/services/mail/providers/types";
 import { assertE2eDatabase, dbTests } from "./helpers/e2e-db";
 
@@ -520,5 +522,38 @@ describe.skipIf(!dbTests)("auto-applying mail", () => {
     expect((await eventsFor(mail.id)).map((event) => event.eventType)).toEqual([
       "ACKNOWLEDGEMENT_RECEIVED",
     ]);
+  });
+
+  it("lists autoOutcome for an auto-applied email", async () => {
+    const { app, mail } = await fixture("OFFER");
+    expect((await readMailItem(mail.id)).autoOutcome).toBeNull();
+    await auto(mail.id);
+    expect((await readMailItem(mail.id)).autoOutcome).toEqual({ undoable: true });
+    await run((tx) =>
+      applyOutcome(
+        tx,
+        {
+          applicationId: app.id,
+          outcome: "accepted",
+          detail: { name: "", note: "", happenedAt: NOW },
+        },
+        NOW,
+      ),
+    );
+    expect((await readMailItem(mail.id)).autoOutcome).toEqual({ undoable: false });
+  });
+
+  it("Undo on the email puts the application back", async () => {
+    const { app, mail } = await fixture("REJECTION");
+    await auto(mail.id);
+    const form = new FormData();
+    form.set("id", mail.id);
+    expect(await undoAutoOutcomeAction({}, form)).toEqual({
+      success: "Undone. The email stays on the application as information.",
+    });
+    expect((await record(app.id)).status).toBe("APPLIED");
+    expect(await undoAutoOutcomeAction({}, form)).toMatchObject({
+      error: "This outcome can no longer be undone. Correct it on the application.",
+    });
   });
 });
