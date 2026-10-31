@@ -9,7 +9,10 @@ import { InboxesPanel } from "@/features/mail/inboxes-panel";
 import { tagClass, tagIcon } from "@/features/mail/tag-pill";
 import { mailTags, tagLabel, type MailTag } from "@/features/mail/tags";
 import { cn } from "@/lib/utils";
+import { PreviousBadge, StatusPill } from "@/features/companies/status-pill";
+import type { CompanyStatus } from "@/features/companies/status";
 import { CheckMail } from "./check-mail";
+import { ComingUp } from "./coming-up";
 import { Drawer } from "./drawer";
 import type { RailGroup, RailRow } from "./index-rows";
 import type { MailPane, MailViewData } from "./mail-data";
@@ -21,6 +24,7 @@ const groupLabel: Record<RailGroup | "home", string> = {
   needs: "Needs you",
   waiting: "Waiting on them",
   closed: "Closed",
+  previous: "Previous employers",
   home: "Needs a home",
 };
 const dueTone = {
@@ -46,7 +50,17 @@ function NewBadge({ count }: { count: number }) {
 }
 
 /** Gallery rail A: two lines, the latest signal under the name and the due day on the right. */
-function RailLink({ row, selected, href }: { row: RailRow; selected: boolean; href: string }) {
+function RailLink({
+  row,
+  selected,
+  href,
+  status,
+}: {
+  row: RailRow;
+  selected: boolean;
+  href: string;
+  status?: CompanyStatus;
+}) {
   return (
     <Link
       href={href}
@@ -59,6 +73,7 @@ function RailLink({ row, selected, href }: { row: RailRow; selected: boolean; hr
           {row.name}
         </span>
         <NewBadge count={row.newCount} />
+        {status && <StatusPill status={status} className="h-5 px-2" />}
         {row.due && (
           <span className={cn("ml-auto shrink-0 text-xs", dueTone[row.due.tone])}>
             {row.due.label}
@@ -103,9 +118,10 @@ function Group({
 
 function Rail({ data, selected }: { data: MailViewData; selected: string | null }) {
   const { query, index, inboxes } = data;
+  const allShown = data.pane.kind === "all";
   const filtered = Boolean(query.tag || query.q);
   const keep = { tag: query.tag, q: query.q };
-  const groups = (["needs", "waiting", "closed"] as const).map((group) => ({
+  const groups = (["needs", "waiting", "closed", "previous"] as const).map((group) => ({
     group,
     rows: index.rows.filter((row) => row.group === group),
   }));
@@ -164,13 +180,30 @@ function Rail({ data, selected }: { data: MailViewData; selected: string | null 
           </Link>
         </p>
       )}
+      <div className="pt-3">
+        <Link
+          href={mailHref({ ...keep, all: true })}
+          scroll={false}
+          aria-current={allShown ? "page" : undefined}
+          className={rowShell(allShown)}
+        >
+          <span className="block truncate font-medium">All job mail</span>
+          <span className="block truncate text-sm text-muted-foreground">
+            Every job email, newest first
+          </span>
+        </Link>
+      </div>
       {groups.map(({ group, rows }) =>
         rows.length ? (
           <Group
             key={group}
             label={groupLabel[group]}
             count={rows.length}
-            open={group !== "closed" || filtered || rows.some((row) => row.key === selected)}
+            open={
+              (group !== "closed" && group !== "previous") ||
+              filtered ||
+              rows.some((row) => row.key === selected)
+            }
           >
             {rows.map((row) => (
               <RailLink
@@ -178,6 +211,7 @@ function Rail({ data, selected }: { data: MailViewData; selected: string | null 
                 row={row}
                 selected={!query.home && row.key === selected}
                 href={mailHref({ ...keep, company: row.key })}
+                status={data.statuses[row.key]}
               />
             ))}
           </Group>
@@ -331,6 +365,8 @@ function Pane({ data }: { data: MailViewData }) {
     );
   }
   const company = pane.kind === "company" ? pane : null;
+  const all = pane.kind === "all";
+  const status = company ? data.statuses[company.company.key] : undefined;
   return (
     <section
       aria-labelledby="mail-pane-title"
@@ -352,13 +388,21 @@ function Pane({ data }: { data: MailViewData }) {
                 {company.company.name}
               </Link>
             ) : (
-              (company?.company.name ?? "Needs a home")
+              (company?.company.name ?? (all ? "All job mail" : "Needs a home"))
             )}
           </h2>
+          {status && (status.tone !== "none" || status.previous) && (
+            <p className="m-0 mt-2 flex flex-wrap items-center gap-2">
+              <StatusPill status={status} />
+              {status.previous && <PreviousBadge joined={status.previous.joined} />}
+            </p>
+          )}
           <p className="m-0 mt-1 text-sm text-muted-foreground">
             {company
               ? company.company.city || "Company mail"
-              : "Mail that matched no company yet. Place it at a company, or mark it as just info."}
+              : all
+                ? "Every job email from your inboxes, newest first. Spam and promotions are left out."
+                : "Mail that matched no company yet. Place it at a company, or mark it as just info."}
           </p>
           {company?.row?.next && (
             <p className="m-0 mt-2 text-sm">
@@ -377,6 +421,7 @@ function Pane({ data }: { data: MailViewData }) {
       <div className="mt-4 mb-5">
         <TagPills query={query} tags={pane.tags} />
       </div>
+      {all && !query.tag && !query.q && !query.cursor && <ComingUp items={data.comingUp} />}
       {pane.newestHref && (
         <Link href={pane.newestHref} scroll={false} className="mb-3 inline-block text-sm text-link">
           Back to the newest
@@ -391,6 +436,7 @@ function Pane({ data }: { data: MailViewData }) {
         openMail={query.mail}
         olderHref={pane.olderHref}
         placeOptions={data.placeOptions}
+        showCompany={all}
       />
     </section>
   );

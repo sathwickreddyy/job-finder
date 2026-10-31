@@ -10,6 +10,13 @@ export type CompanyStatus = {
   previous: { role: string; joined: string; left: string | null } | null;
 };
 
+const months = "Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec".split(" ");
+/** "2022-04" as "Apr 2022". */
+export const monthLabel = (value: string) => {
+  const [year, month] = value.split("-").map(Number);
+  return months[month - 1] ? `${months[month - 1]} ${year}` : value;
+};
+
 const toneLabel: Record<CompanyStatusTone, string> = {
   preparing: "Preparing",
   applied: "Applied",

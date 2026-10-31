@@ -93,7 +93,9 @@ describe("CompanyTimeline", () => {
   it("renders day headings and rows", () => {
     const html = render();
     for (const heading of ["Coming up", "Today", "Fri 30 Oct"]) expect(html).toContain(heading);
-    expect(html).toContain("Needs you");
+    // Open mail reads bold on a tint; screen readers hear that it needs you.
+    expect(html).toContain(", needs you");
+    expect(html).toContain("bg-selected/40");
     expect(html).toContain("Record round scheduled");
     expect(html).toContain("Suggested for an interview email.");
     expect(html).toContain("Applied for Backend");

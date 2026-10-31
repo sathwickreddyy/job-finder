@@ -5,7 +5,8 @@ import Link from "next/link";
 import { CalendarClock, Circle, CircleCheck, CircleSlash, FileText, Send } from "lucide-react";
 import { formatTime, formatWeekday } from "@/features/applications/dates";
 import type { MailItem } from "@/features/mail/mail-item";
-import { tagClass, tagIcon } from "@/features/mail/tag-pill";
+import { TagPill } from "@/features/mail/tag-pill";
+import { SourceChip } from "./source-chip";
 import { cn } from "@/lib/utils";
 import type { TimelineDay, TimelineMail, TimelineStep } from "./entries";
 import { HandledLine, HandlingBar, type PlaceOptions } from "./handling";
@@ -72,18 +73,25 @@ function StepRow({ step, role }: { step: TimelineStep; role?: string }) {
   );
 }
 
+/**
+ * Gallery feed B, two lines and a preview: who it is from with the inbox and time, then the
+ * tag and subject, then the email's first line. Mail and company pages share this row.
+ */
 function MailRow({
   entry,
   handling,
   role,
   startOpen,
   placeOptions,
+  showCompany,
 }: {
   entry: TimelineMail;
   handling?: Handling;
   role?: string;
   startOpen: boolean;
   placeOptions?: PlaceOptions;
+  /** All job mail names the company first; a company's own timeline leaves it out. */
+  showCompany?: boolean;
 }) {
   const { item } = entry;
   const needs = item.attention === "open";
@@ -99,8 +107,12 @@ function MailRow({
     if (startOpen) row.current?.scrollIntoView({ block: "center" });
   }, [startOpen]);
   const name = item.senderName || item.sender;
-  const TagIcon = tagIcon[item.tag];
   const note = folderNote(item);
+  const preview =
+    item.text
+      .split("\n")
+      .find((line) => line.trim())
+      ?.trim() ?? "";
   const bar = needs && handling && (
     <HandlingBar item={item} handling={handling} placeOptions={placeOptions} />
   );
@@ -118,34 +130,52 @@ function MailRow({
         type="button"
         aria-expanded={open}
         onClick={() => setOpen(!open)}
-        className="grid w-full grid-cols-[2rem_minmax(0,1fr)_auto] items-center gap-3 rounded-xl py-2 text-left hover:bg-muted/60"
+        className={cn(
+          "grid w-full min-w-0 gap-1 rounded-2xl px-2 py-2.5 text-left hover:bg-muted/60",
+          needs && "bg-selected/40",
+        )}
       >
-        <span
-          className={cn("grid size-8 place-items-center rounded-full", tagClass[item.tag].tonal)}
-        >
-          <TagIcon aria-hidden size={15} />
-          <span className="sr-only">{item.kind}</span>
-        </span>
-        <span className="min-w-0">
-          <span className="flex min-w-0 items-baseline gap-2">
-            <span className={cn("truncate", needs ? "font-semibold" : "font-medium")}>{name}</span>
-            {needs && (
-              <span className="shrink-0 rounded-full bg-selected px-2 text-xs font-medium text-selected-foreground">
-                Needs you
-              </span>
+        <span className="flex min-w-0 items-center gap-2 text-sm">
+          {showCompany && (
+            <span className={cn("truncate", needs ? "font-semibold" : "font-medium")}>
+              {item.company?.name ?? "Needs a home"}
+            </span>
+          )}
+          <span
+            className={cn(
+              "truncate",
+              showCompany
+                ? "text-xs text-muted-foreground"
+                : needs
+                  ? "font-semibold"
+                  : "font-medium",
             )}
+          >
+            {name}
           </span>
-          <span className="block truncate text-sm text-muted-foreground">
+          <span className="ml-auto flex shrink-0 items-center gap-2">
+            <SourceChip
+              account={item.account}
+              folders={item.folders}
+              className="hidden sm:inline-flex"
+            />
+            <span className="text-xs whitespace-nowrap text-muted-foreground tabular-nums">
+              {clock(item.receivedAt)}
+            </span>
+          </span>
+        </span>
+        <span className="flex min-w-0 items-center gap-2">
+          <TagPill tag={item.tag} />
+          <span className="truncate text-sm">
             {item.subject || "(no subject)"}
-            {role && ` (${role})`}
+            {role && <span className="text-muted-foreground"> ({role})</span>}
           </span>
+          <span className="sr-only">{needs ? ", needs you" : ""}</span>
         </span>
-        <span className="text-xs whitespace-nowrap text-muted-foreground tabular-nums">
-          {clock(item.receivedAt)}
-        </span>
+        {preview && <span className="line-clamp-1 text-xs text-muted-foreground">{preview}</span>}
       </button>
       {open ? (
-        <div className="reveal mb-2 ml-11 min-w-0 rounded-2xl bg-card p-4 ring-1 ring-border">
+        <div className="reveal mb-2 ml-2 min-w-0 rounded-2xl bg-card p-4 ring-1 ring-border">
           <p className="m-0 flex min-w-0 flex-wrap items-baseline gap-x-2 text-sm">
             <span className="min-w-0 truncate font-semibold">{name}</span>
             <span className="min-w-0 truncate text-xs text-muted-foreground">{item.sender}</span>
@@ -163,7 +193,7 @@ function MailRow({
           </div>
         </div>
       ) : (
-        bar && <div className="ml-11 pb-2">{bar}</div>
+        bar && <div className="ml-2 pb-2">{bar}</div>
       )}
     </li>
   );
@@ -183,6 +213,7 @@ export function CompanyTimeline({
   openMail,
   olderHref,
   placeOptions,
+  showCompany,
 }: {
   days: TimelineDay[];
   handling: Record<string, Handling>;
@@ -193,6 +224,7 @@ export function CompanyTimeline({
   openMail: string | null;
   olderHref: string | null;
   placeOptions?: PlaceOptions;
+  showCompany?: boolean;
 }) {
   const several = roles.length > 1;
   const roleOf = (id: string | undefined) =>
@@ -234,6 +266,7 @@ export function CompanyTimeline({
                       role={roleOf(entry.item.application?.id)}
                       startOpen={openMail === entry.item.id}
                       placeOptions={placeOptions}
+                      showCompany={showCompany}
                     />
                   ) : (
                     <StepRow key={entry.id} step={entry} role={roleOf(entry.applicationId)} />

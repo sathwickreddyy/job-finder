@@ -1,6 +1,6 @@
 import type { Lane, LaneGroup, LaneNext } from "@/features/applications/lanes";
 
-export type RailGroup = "needs" | "waiting" | "closed";
+export type RailGroup = "needs" | "waiting" | "closed" | "previous";
 export type RailDue = { label: string; tone: "now" | "late" | "calm" };
 export type RailRow = {
   key: string;
@@ -46,6 +46,8 @@ export function companyRows(input: {
   mail: MailFacts[];
   names: Map<string, { name: string; slug: string | null }>;
   matches: Map<string, number> | null;
+  /** Former employers: listed under Previous employers unless their mail needs you. */
+  previous?: Map<string, string>;
 }): { rows: RailRow[]; home: { open: number; total: number } } {
   const byKey = new Map(input.mail.map((facts) => [facts.key, facts]));
   const laneRows: RailRow[] = input.lanes.map((lane) => {
@@ -74,8 +76,8 @@ export function companyRows(input: {
       key: facts.key,
       name: input.names.get(facts.key)?.name ?? facts.key,
       slug: input.names.get(facts.key)?.slug ?? null,
-      group: facts.open ? "needs" : "closed",
-      signal: facts.latestOpenKind ?? "No application recorded",
+      group: facts.open ? "needs" : input.previous?.has(facts.key) ? "previous" : "closed",
+      signal: facts.latestOpenKind ?? input.previous?.get(facts.key) ?? "No application recorded",
       next: null,
       due: null,
       newCount: facts.open,
