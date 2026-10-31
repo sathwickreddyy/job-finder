@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { isSharedSender, keywordProblem, ruleSchema, storedRule } from "./context";
+import {
+  companyRuleSchema,
+  isSharedSender,
+  keywordProblem,
+  ruleSchema,
+  storedRule,
+} from "./context";
+import { checkChip } from "./search/chips";
 import { evaluateCompanyMail, type CompanyMailRule, type MailEvidence } from "./company-rules";
 
 const rule: CompanyMailRule = {
@@ -235,9 +242,56 @@ describe("company keywords and specific reasons", () => {
   });
   it("recognises shared senders by domain or subdomain", () => {
     expect(isSharedSender("meera.k@gmail.com")).toBe(true);
-    expect(isSharedSender("no-reply@us.greenhouse-mail.io")).toBe(false);
+    expect(isSharedSender("no-reply@us.greenhouse-mail.io")).toBe(true);
+    for (const address of [
+      "jobs@foundit.in",
+      "me@yahoo.co.in",
+      "me@rediffmail.com",
+      "noreply@workablemail.com",
+      "careers@zohorecruit.com",
+    ])
+      expect(isSharedSender(address)).toBe(true);
     expect(isSharedSender("noreply@mail.myworkday.com")).toBe(true);
     expect(isSharedSender("hireright.com")).toBe(true);
     expect(isSharedSender("talent@northstar.example")).toBe(false);
+  });
+});
+
+describe("rules that would claim everyone's mail", () => {
+  it("refuses phrases made only of generic words or tool names", () => {
+    for (const phrase of [
+      "Hiring Team",
+      "Talent Acquisition",
+      "Recruiting Team",
+      "Job Application",
+      "Workday",
+      "The HR Team",
+    ])
+      expect(keywordProblem(phrase, "Oracle"), phrase).toEqual(
+        expect.stringContaining("appears in every company's mail"),
+      );
+    for (const phrase of ["Level AI Hiring Team", "Oracle Talent Acquisition", "Northstar Talent"])
+      expect(keywordProblem(phrase, "Oracle"), phrase).toBeNull();
+  });
+  it("refuses a shared domain as a company domain", () => {
+    const rule = {
+      aliases: [],
+      domains: ["myworkday.com"],
+      senders: [],
+      keywords: [],
+      excludedTerms: [],
+    };
+    const parsed = companyRuleSchema("Oracle").safeParse(rule);
+    expect(parsed.success).toBe(false);
+    expect(parsed.error?.issues[0].message).toBe(
+      "myworkday.com is shared by many companies, so it can't identify Oracle. Add the recruiter's exact address instead.",
+    );
+    expect(ruleSchema.safeParse({ ...rule, domains: ["oracle.com"] }).success).toBe(true);
+    expect(storedRule({ ...rule, domains: ["oracle.com", "gmail.com"] })?.domains).toEqual([
+      "oracle.com",
+    ]);
+    expect(checkChip("domains", "greenhouse.io", { company: "Oracle", existing: [] })).toBe(
+      "greenhouse.io is shared by many companies, so it can't identify Oracle. Add the recruiter's exact address instead.",
+    );
   });
 });

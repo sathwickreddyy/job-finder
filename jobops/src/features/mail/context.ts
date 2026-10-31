@@ -13,8 +13,14 @@ import {
 import { normalizeCompany, companyResolver } from "@/features/applications/lanes";
 import type { CompanyMailRule } from "./company-rules";
 
-export { genericJobWords, isSharedSender, keywordProblem, sharedSenderDomains } from "./keywords";
-import { isSharedSender, keywordProblem } from "./keywords";
+export {
+  domainProblem,
+  genericJobWords,
+  isSharedSender,
+  keywordProblem,
+  sharedSenderDomains,
+} from "./keywords";
+import { domainProblem, isSharedSender, keywordProblem } from "./keywords";
 
 const term = z.string().trim().min(1).max(150);
 const ruleFields = {
@@ -50,17 +56,24 @@ export function companyRuleSchema(company?: string) {
           if (problem) ctx.addIssue({ code: "custom", message: problem });
         }
       }),
+      domains: ruleFields.domains.superRefine((domains, ctx) => {
+        for (const domain of domains) {
+          const problem = domainProblem(domain, company);
+          if (problem) ctx.addIssue({ code: "custom", message: problem });
+        }
+      }),
     }),
   );
 }
 export const ruleSchema = companyRuleSchema();
-/** A saved rule; keywords refused since it was saved are dropped so its addresses still apply. */
+/** A saved rule; keywords and domains refused since it was saved are dropped, so the rest applies. */
 export function storedRule(value: unknown) {
   const parsed = z.preprocess(withKeywords, z.object(ruleFields)).safeParse(value);
   if (!parsed.success) return null;
   return {
     ...parsed.data,
     keywords: parsed.data.keywords.filter((keyword) => !keywordProblem(keyword)),
+    domains: parsed.data.domains.filter((domain) => !domainProblem(domain)),
   };
 }
 /** The lane key for a company name, joining listed names and aliases to their company record. */

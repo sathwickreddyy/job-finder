@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Plus, X } from "lucide-react";
-import { keywordProblem } from "@/features/mail/keywords";
+import { domainProblem, keywordProblem } from "@/features/mail/keywords";
 
 export type RuleField = "senders" | "domains" | "keywords" | "excludedTerms";
 const noun: Record<RuleField, string> = {
@@ -33,6 +33,10 @@ export function checkChip(
     return "Enter an email address.";
   if (field === "domains" && !domainPattern.test(value.toLowerCase().replace(/^@/, "")))
     return "Enter a domain like northstar.com.";
+  if (field === "domains") {
+    const problem = domainProblem(value, rule.company);
+    if (problem) return problem;
+  }
   if (field === "keywords") {
     const problem = keywordProblem(value, rule.company);
     if (problem) return problem;
