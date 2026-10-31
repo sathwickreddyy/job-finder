@@ -32,22 +32,35 @@ describe("record status", () => {
       "preparing",
       record({ phase: "Preparing", status: "PREPARING", sentAt: null }),
       "preparing",
-      "Not sent yet",
+      "Not sent",
     ],
-    ["sent today", record({ sentAt: at("2026-10-03T09:00:00") }), "applied", "Applied · today"],
+    ["sent today", record({ sentAt: at("2026-10-03T09:00:00") }), "applied", "Applied"],
+    ["sent yesterday", record({ sentAt: at("2026-10-02T18:30:00") }), "applied", "Applied"],
+    ["below threshold", record({ sentAt: at("2026-09-29T10:00:00") }), "applied", "Applied"],
     [
-      "sent yesterday",
-      record({ sentAt: at("2026-10-02T18:30:00") }),
+      "acknowledged inside the clock",
+      record({ status: "ACKNOWLEDGED", sentAt: at("2026-09-29T10:00:00") }),
       "applied",
-      "Applied · yesterday",
+      "Acknowledged",
+    ],
+    ["quiet direct", record({ sentAt: at("2026-09-20T12:00:00") }), "quiet", "Quiet 13 days"],
+    [
+      "online assessment",
+      record({
+        id: "oa-1",
+        phase: "Interviewing",
+        status: "ASSESSMENT",
+        rounds: [round("oa-1", { kind: "ONLINE_ASSESSMENT" })],
+      }),
+      "interviewing",
+      "Online assessment",
     ],
     [
-      "below threshold",
-      record({ sentAt: at("2026-09-29T10:00:00") }),
-      "applied",
-      "Applied · 4 days",
+      "rejected",
+      record({ phase: "Closed", status: "REJECTED", closedReason: "REJECTED" }),
+      "rejected",
+      "Rejected",
     ],
-    ["quiet direct", record({ sentAt: at("2026-09-20T12:00:00") }), "quiet", "Quiet for 13 days"],
     [
       "outreach below threshold",
       record({ source: "COLD_EMAIL", sentAt: at("2026-09-30T10:00:00") }),
@@ -140,10 +153,13 @@ describe("record status", () => {
           round(id, { kind: "DSA", outcome: "FAILED", position: 2 }),
         ],
       }),
-    ).toEqual({ tone: "closed", label: "Rejected after DSA" });
+    ).toEqual({ tone: "rejected", label: "Rejected after DSA" });
     expect(closed({ closedReason: "REJECTED" }).label).toBe("Rejected");
     expect(closed({ status: "CLOSED", closedReason: "NO_REPLY" }).label).toBe("Closed, no reply");
     expect(closed({ status: "WITHDRAWN", closedReason: "WITHDREW" }).label).toBe("Withdrew");
+    expect(closed({ status: "CLOSED", closedReason: "WITHDREW", sentAt: null }).label).toBe(
+      "Not applying",
+    );
     expect(closed({ status: "CLOSED", closedReason: "ACCEPTED" })).toEqual({
       tone: "offer",
       label: "Accepted the offer",
@@ -188,7 +204,7 @@ describe("lead and lane status", () => {
 
   it("marks new email only while the lead is Applied, and leads closed lanes with the latest record", () => {
     expect(laneStatus([record({ sentAt: at("2026-10-02T18:30:00") })], NOW, true).label).toBe(
-      "Applied · yesterday · new email",
+      "Applied · new email",
     );
     const older = record({
       phase: "Closed",
@@ -203,7 +219,7 @@ describe("lead and lane status", () => {
       sentAt: at("2026-09-20T10:00:00"),
     });
     expect(leadOf([older, newer]).id).toBe(newer.id);
-    expect(laneStatus([older, newer], NOW, true)).toEqual({ tone: "closed", label: "Rejected" });
+    expect(laneStatus([older, newer], NOW, true)).toEqual({ tone: "rejected", label: "Rejected" });
   });
 });
 
@@ -413,7 +429,7 @@ describe("next steps and groups", () => {
     const next = Object.fromEntries(lanes.map((lane) => [lane.company, lane.next]));
     expect(next.Flipkart).toMatchObject({
       due: "overdue",
-      when: "6 days late",
+      when: "Overdue since 27 Sept",
       action: "I followed up",
       href: `/applications?open=${quiet.id}&outcome=followup`,
     });
@@ -456,21 +472,63 @@ describe("next steps and groups", () => {
     const byCompany = Object.fromEntries(lanes.map((lane) => [lane.company, lane]));
     expect(byCompany.Oracle.next).toMatchObject({
       due: null,
-      when: "Fri, 9 Oct",
+      when: "By Fri 9 Oct",
       text: "Follow up if it stays quiet",
       action: "Open",
     });
     expect(byCompany.Quizizz.next).toMatchObject({
       due: null,
-      when: "Not sent",
-      text: "Finish and send it",
+      when: "Posting date unknown",
+      text: "Check the posting date",
     });
     expect(byCompany.Nutanix.next).toBeNull();
     expect(lanes.map((lane) => [lane.company, lane.group])).toEqual([
+      ["Quizizz", "needs"],
       ["Oracle", "active"],
-      ["Quizizz", "active"],
       ["Nutanix", "closed"],
     ]);
+  });
+
+  it("words due lines as By, a day and time, or Overdue since", () => {
+    const source = record();
+    const item = (due: "overdue" | "week", dueAt: Date, reason: "followup" | "round") => ({
+      key: `${reason}-${due}`,
+      recordId: source.id,
+      company: "Oracle",
+      due,
+      dueAt,
+      reason,
+      title: "Next",
+      detail: "",
+      primary: { label: "Open", href: "/" },
+    });
+    const when = (entry: ReturnType<typeof item>) =>
+      buildLanes({ records: [source], items: [entry], pending: [], now: NOW })[0].next?.when;
+    expect(when(item("week", at("2026-10-06T10:00:00"), "followup"))).toBe("By Tue 6 Oct");
+    expect(when(item("week", at("2026-10-06T15:00:00"), "round"))).toBe("Tue 6 Oct, 3:00 pm");
+    expect(when(item("overdue", at("2026-09-29T10:00:00"), "followup"))).toBe(
+      "Overdue since 29 Sept",
+    );
+  });
+
+  it("follows the 14-day freshness window for unsent records", () => {
+    const now = at("2026-10-31T10:30:00");
+    const unsent = (postedAt: Date) =>
+      record({ phase: "Preparing", status: "PREPARING", sentAt: null, postedAt });
+    const next = (postedAt: Date) =>
+      buildLanes({ records: [unsent(postedAt)], items: [], pending: [], now })[0].next;
+    expect(next(at("2026-10-21T09:00:00"))).toMatchObject({
+      text: "Apply by Wed 4 Nov",
+      action: "Record application",
+    });
+    expect(next(at("2026-10-17T09:00:00"))).toMatchObject({
+      text: "Apply by Sat 31 Oct",
+      action: "Record application",
+    });
+    expect(next(at("2026-10-13T09:00:00"))).toMatchObject({
+      text: "Posting is 18 days old",
+      action: "Not applying",
+    });
   });
 
   it("merges a company's roles into one lane and names the role in its next step", () => {
@@ -496,7 +554,7 @@ describe("next steps and groups", () => {
     const [lane] = lanes;
     expect(lane.leadId).toBe(a.id);
     expect(lane.roles.map((role) => role.recordId)).toEqual([a.id, b.id]);
-    expect(lane.status.label).toBe("Applied · yesterday · +1 role");
+    expect(lane.status.label).toBe("Applied · +1 role");
     expect(lane.next).toMatchObject({
       due: "overdue",
       text: "SDE II, Storage: No reply from Microsoft",

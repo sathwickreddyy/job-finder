@@ -9,6 +9,7 @@ const statusTone: Record<StatusTone, { pill: string; dot: string | null }> = {
   quiet: { pill: "bg-muted text-foreground", dot: "bg-review" },
   applied: { pill: "bg-muted text-foreground", dot: "bg-muted-foreground" },
   preparing: { pill: "border border-dashed border-border text-muted-foreground", dot: null },
+  rejected: { pill: "bg-danger-soft text-destructive", dot: "bg-destructive" },
   closed: { pill: "bg-muted text-destructive", dot: "bg-destructive" },
 };
 

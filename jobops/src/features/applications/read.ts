@@ -44,6 +44,9 @@ export type ApplicationRecord = Omit<QueueRecord, "events" | "rounds" | "linkedM
   closedReason: CloseReason | null;
   phase: Phase;
   typicalRounds: number | null;
+  /** The sourced posting date; `postedAtKind` says whether it is the original or a repost. */
+  postedAt: Date | null;
+  postedAtKind: string | null;
   linkedIds: string[];
   latest: { summary: string; at: Date } | null;
 };
@@ -157,6 +160,8 @@ export async function readApplications() {
       closedReason: app.closedReason,
       phase: phaseOf(state),
       typicalRounds: typical(job.company),
+      postedAt: job.postedAt,
+      postedAtKind: job.postedAtKind,
       linkedIds: linked(app),
       latest: own[0] ? { summary: own[0].summary, at: own[0].occurredAt } : null,
     };

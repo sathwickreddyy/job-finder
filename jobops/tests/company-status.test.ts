@@ -82,5 +82,15 @@ it("carries the lane detail, such as how long it has been quiet", () => {
     previousJobs: [],
     now: NOW,
   });
-  expect(status).toMatchObject({ tone: "quiet", label: "Quiet", detail: "Quiet for 13 days" });
+  expect(status).toMatchObject({ tone: "quiet", label: "Quiet", detail: "Quiet 13 days" });
+});
+
+it("a rejected company says Rejected, never Quiet", () => {
+  const status = companyStatus({
+    records: [record({ phase: "Closed", status: "REJECTED", closedReason: "REJECTED" })],
+    mailCount: 1,
+    previousJobs: [],
+    now: NOW,
+  });
+  expect(status).toMatchObject({ tone: "rejected", label: "Rejected", detail: "Rejected" });
 });

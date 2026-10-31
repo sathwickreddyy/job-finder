@@ -62,6 +62,8 @@ export async function applyOutcome(
     outcome: OutcomeId;
     detail: OutcomeDetail;
     mailMessageId?: string;
+    /** Recorded by the mail rule rather than by hand; Undo reads the previous values. */
+    auto?: true;
   },
   now: Date,
 ) {
@@ -70,6 +72,7 @@ export async function applyOutcome(
       applicationId: z.uuid(),
       outcome: z.enum(outcomeIds),
       mailMessageId: z.uuid().optional(),
+      auto: z.literal(true).optional(),
       detail: z.object({
         kind: z.enum(roundKinds).optional(),
         at: z.date().optional(),
@@ -145,7 +148,10 @@ export async function applyOutcome(
       payload: {
         outcome: data.outcome,
         previousStatus: app.status,
+        previousClosedReason: app.closedReason,
+        previousJobStatus: job.status,
         nextStatus: plan.status,
+        ...(data.auto ? { auto: true } : {}),
         roundId,
         detail: {
           kind: data.detail.kind ?? null,
@@ -174,6 +180,38 @@ export async function applyOutcome(
     summary: `${job.company}: ${plan.summary}`,
   });
   return { eventId: event.id, roundId, company: job.company };
+}
+
+/** Closes a saved, unsent record the user decided not to send; nothing closes by itself. */
+export async function closeUnsentRecord(tx: Tx, data: { id: string }, now: Date) {
+  const app = await lockApplication(tx, data.id);
+  const evidence = await recordEvidence(tx, app.id);
+  const state = recordStateFrom({ ...app, ...evidence }, [], []);
+  if (phaseOf(state) !== "Preparing" || state.sent)
+    throw new Error("This record has already been sent or closed. Refresh the page.");
+  const [job] = await tx.select().from(jobs).where(eq(jobs.id, app.jobId)).for("update");
+  if (!job) throw new Error("The linked opening no longer exists.");
+  await tx
+    .update(applications)
+    .set({ status: "CLOSED", closedReason: "WITHDREW", updatedAt: now })
+    .where(eq(applications.id, app.id));
+  await tx.insert(applicationEvents).values({
+    applicationId: app.id,
+    eventType: "WITHDRAWN",
+    occurredAt: now,
+    summary: "Not applying",
+    payload: { previousStatus: app.status, nextStatus: "CLOSED" },
+  });
+  await tx
+    .update(jobs)
+    .set({ status: jobStateForApplication("CLOSED", job.status), updatedAt: now })
+    .where(eq(jobs.id, job.id));
+  await tx.insert(activityLogs).values({
+    action: "APPLICATION_NOT_APPLYING",
+    entityType: "APPLICATION",
+    entityId: app.id,
+    summary: `${job.company}: Not applying`,
+  });
 }
 
 /** Sent records retain the exact submitted file, including legacy rows without sent dates. */

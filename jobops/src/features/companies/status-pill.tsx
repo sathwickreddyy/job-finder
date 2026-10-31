@@ -10,6 +10,7 @@ const tone: Record<CompanyStatusTone, string> = {
   interviewing: "bg-warning-soft text-warning",
   offer: "bg-success-soft text-success",
   accepted: "bg-success-soft text-success",
+  rejected: "bg-danger-soft text-destructive",
   closed: "bg-muted text-muted-foreground",
   mailOnly: "text-muted-foreground ring-1 ring-inset ring-border",
   none: "",

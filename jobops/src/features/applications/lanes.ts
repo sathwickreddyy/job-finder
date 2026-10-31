@@ -63,11 +63,11 @@ export type LaneSource = Pick<
   | "closedReason"
   | "phase"
   | "typicalRounds"
+  | "postedAt"
 >;
-export type StatusTone = "preparing" | "applied" | "quiet" | "interviewing" | "offer" | "closed";
+export type StatusTone =
+  "preparing" | "applied" | "quiet" | "interviewing" | "offer" | "rejected" | "closed";
 export type LaneStatus = { tone: StatusTone; label: string };
-
-const dayWord = (days: number) => (days <= 0 ? "today" : days === 1 ? "yesterday" : `${days} days`);
 
 function closedStatus(record: LaneSource): LaneStatus {
   switch (record.closedReason) {
@@ -78,14 +78,14 @@ function closedStatus(record: LaneSource): LaneStatus {
     case "NO_REPLY":
       return { tone: "closed", label: "Closed, no reply" };
     case "WITHDREW":
-      return { tone: "closed", label: "Withdrew" };
+      return { tone: "closed", label: record.sentAt ? "Withdrew" : "Not applying" };
   }
   if (record.closedReason === "REJECTED" || record.status === "REJECTED") {
     const settled = record.rounds
       .filter((round) => round.outcome === "PASSED" || round.outcome === "FAILED")
       .at(-1);
     return {
-      tone: "closed",
+      tone: "rejected",
       label: settled ? `Rejected after ${roundKindLabel[settled.kind]}` : "Rejected",
     };
   }
@@ -94,7 +94,7 @@ function closedStatus(record: LaneSource): LaneStatus {
 
 /** One record's status in plain words, derived from recorded facts only. */
 export function recordStatus(record: LaneSource, now: Date): LaneStatus {
-  if (record.phase === "Preparing") return { tone: "preparing", label: "Not sent yet" };
+  if (record.phase === "Preparing") return { tone: "preparing", label: "Not sent" };
   if (record.phase === "Closed") return closedStatus(record);
   if (record.phase === "Decision")
     return {
@@ -104,6 +104,9 @@ export function recordStatus(record: LaneSource, now: Date): LaneStatus {
         : "Offer received",
     };
   if (record.phase === "Interviewing") {
+    const unsettled = record.rounds.filter((round) => round.outcome === "SCHEDULED");
+    if (unsettled.length === 1 && unsettled[0].kind === "ONLINE_ASSESSMENT")
+      return { tone: "interviewing", label: "Online assessment" };
     const rounds = record.rounds.filter((round) => round.outcome !== "CANCELLED").length;
     if (!rounds) return { tone: "interviewing", label: "Interviewing" };
     const of =
@@ -118,17 +121,16 @@ export function recordStatus(record: LaneSource, now: Date): LaneStatus {
   )
     return { tone: "applied", label: `${method} · replied` };
   const clock = silenceClock(record, now);
-  if (!clock) return { tone: "applied", label: outreach ? method : "Applied" };
+  const sent = record.status === "ACKNOWLEDGED" ? "Acknowledged" : "Applied";
+  if (!clock) return { tone: "applied", label: outreach ? method : sent };
   if (clock.days >= clock.threshold)
     return {
       tone: "quiet",
-      label: outreach ? `${method} · ${clock.days} days quiet` : `Quiet for ${clock.days} days`,
+      label: outreach ? `${method} · ${clock.days} days quiet` : `Quiet ${clock.days} days`,
     };
   return {
     tone: "applied",
-    label: outreach
-      ? `${method} · ${clock.days} of ${clock.threshold} days`
-      : `Applied · ${dayWord(clock.days)}`,
+    label: outreach ? `${method} · ${clock.days} of ${clock.threshold} days` : sent,
   };
 }
 
@@ -417,17 +419,50 @@ export type Lane = {
   lastActivity: number;
 };
 
-function whenText(item: QueueItem, now: Date) {
+/** "Tue 3 Nov" in India time. */
+const dayName = (value: Date) => formatWeekday(value).replace(",", "");
+
+/** "Overdue since 9 Oct", "Today, 3:00 pm", "By Tue 3 Nov" or "Tue 3 Nov, 3:00 pm" (spec §3). */
+function whenText(item: QueueItem) {
   if (item.reason === "mail") return "New email";
   const timed = item.reason === "round" || item.reason === "deadline";
-  if (item.due === "overdue") {
-    const days = Math.max(1, istDaysBetween(item.dueAt, now));
-    return `${days} ${days === 1 ? "day" : "days"} late`;
-  }
+  if (item.due === "overdue") return `Overdue since ${formatDay(item.dueAt)}`;
   if (item.due === "today") return timed ? `Today, ${formatTime(item.dueAt)}` : "Today";
-  return timed
-    ? `${formatWeekday(item.dueAt)}, ${formatTime(item.dueAt)}`
-    : formatWeekday(item.dueAt);
+  return timed ? `${dayName(item.dueAt)}, ${formatTime(item.dueAt)}` : `By ${dayName(item.dueAt)}`;
+}
+
+/** Apply only to openings published within the last 14 India calendar days, inclusive. */
+const FRESH_DAYS = 14;
+
+/** An unsent record's next step follows the freshness policy (spec §4). */
+function preparingNext(record: LaneSource, now: Date, href: string): LaneNext {
+  const base = { recordId: record.id, due: null, href };
+  if (!record.postedAt)
+    return {
+      ...base,
+      at: null,
+      when: "Posting date unknown",
+      text: "Check the posting date",
+      action: "Open",
+    };
+  const age = istDaysBetween(record.postedAt, now);
+  if (age <= FRESH_DAYS) {
+    const deadline = addDays(istDayStart(record.postedAt), FRESH_DAYS);
+    return {
+      ...base,
+      at: deadline,
+      when: "Not sent",
+      text: `Apply by ${dayName(deadline)}`,
+      action: "Record application",
+    };
+  }
+  return {
+    ...base,
+    at: null,
+    when: "Not sent",
+    text: `Posting is ${age} days old`,
+    action: "Not applying",
+  };
 }
 
 /** Matched mail first (linking it usually settles the rest), else the first queue item, else a fallback. */
@@ -455,7 +490,7 @@ export function recordNext(
   const item = items.find((entry) => entry.recordId === record.id);
   const href = laneHref(record.id);
   if (item) {
-    const base = { recordId: record.id, due: item.due, at: item.dueAt, when: whenText(item, now) };
+    const base = { recordId: record.id, due: item.due, at: item.dueAt, when: whenText(item) };
     if (item.reason === "silence")
       return {
         ...base,
@@ -467,16 +502,7 @@ export function recordNext(
     return { ...base, text: item.title, action: settle ? "Record result" : "Open", href };
   }
   if (record.phase === "Closed") return null;
-  if (record.phase === "Preparing")
-    return {
-      recordId: record.id,
-      due: null,
-      at: null,
-      when: "Not sent",
-      text: "Finish and send it",
-      action: "Open",
-      href,
-    };
+  if (record.phase === "Preparing") return preparingNext(record, now, href);
   const clock = silenceClock(record, now);
   if (!clock) return null;
   const at = addDays(istDayStart(clock.since), clock.threshold);
@@ -484,7 +510,7 @@ export function recordNext(
     recordId: record.id,
     due: null,
     at,
-    when: formatWeekday(at),
+    when: `By ${dayName(at)}`,
     text: "Follow up if it stays quiet",
     action: "Open",
     href,
@@ -565,7 +591,9 @@ export function buildLanes(input: {
           ? "needs"
           : closed
             ? "closed"
-            : next?.due === "overdue" || next?.due === "today"
+            : next?.due === "overdue" ||
+                next?.due === "today" ||
+                records.some((record) => record.phase === "Preparing")
               ? "needs"
               : "active",
       lastActivity: Math.max(0, ...records.map(activityOf)),
