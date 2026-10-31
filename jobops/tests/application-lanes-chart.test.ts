@@ -50,7 +50,7 @@ it("draws each open company as a labelled lane with status, dots, Today and its 
     createElement(LanesChart, { ...view, openKey: null, detail: null }),
   );
   expect(html).toContain('role="group" aria-label="Flipkart"');
-  expect(html).toContain("Quiet for 13 days");
+  expect(html).toContain("Quiet 13 days");
   expect(html).toContain(">Today<");
   expect(html).toContain(`href="/applications?open=${quiet.id}&amp;outcome=followup"`);
   expect(html).toContain(

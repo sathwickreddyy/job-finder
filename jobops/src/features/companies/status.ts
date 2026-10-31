@@ -23,6 +23,7 @@ const toneLabel: Record<CompanyStatusTone, string> = {
   quiet: "Quiet",
   interviewing: "Interviewing",
   offer: "Offer",
+  rejected: "Rejected",
   closed: "Closed",
   accepted: "Accepted",
   mailOnly: "Mail only",
