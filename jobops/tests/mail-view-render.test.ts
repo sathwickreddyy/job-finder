@@ -103,6 +103,7 @@ const allPane = (items: MailItem[]): MailViewData["pane"] => ({
     {
       key: "2026-10-31",
       label: "Today",
+      stamp: { weekday: "Sat", day: 31, month: "Oct", year: 2026, thisYear: true, today: true },
       entries: items.map((item) => ({
         type: "mail" as const,
         at: item.receivedAt,
@@ -180,7 +181,7 @@ describe("MailView", () => {
     expect(html).toContain("Interview call");
     expect(html).toContain("Please share your availability this week.");
     expect(html).not.toContain("Thanks, Lumen</span>");
-    expect(html).toMatch(/bg-warning-soft[^"]*"[^>]*>[\s\S]*?Junk Email/);
+    expect(html).toMatch(/bg-warning-soft[^"]*"[^>]*>[\s\S]*?outlook\.in, Junk</);
     const inbox = render(data({ pane: allPane([mail({ folders: ["Inbox"] })]) }));
     expect(inbox).not.toContain("bg-warning-soft");
   });

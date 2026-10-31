@@ -2,14 +2,19 @@ import { Inbox } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const unusualFolder = /junk|spam|trash|deleted/i;
+const shortFolder = (folder: string) =>
+  /spam/i.test(folder) ? "Spam" : /junk/i.test(folder) ? "Junk" : "Trash";
 
 /** Which inbox and folder an email came from; quiet unless it sat in Junk, Spam or Trash. */
 export function SourceChip({
   account,
+  label,
   folders,
   className,
 }: {
   account: string;
+  /** What tells the inbox apart, such as "outlook.in"; the full address is in the tooltip. */
+  label: string;
   folders: string[];
   className?: string;
 }) {
@@ -24,8 +29,7 @@ export function SourceChip({
       )}
     >
       <Inbox aria-hidden size={12} className="shrink-0" />
-      <span className="truncate">{account.split("@")[0]}</span>
-      {unusual && <span className="shrink-0">{unusual}</span>}
+      <span className="truncate">{unusual ? `${label}, ${shortFolder(unusual)}` : label}</span>
     </span>
   );
 }

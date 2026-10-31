@@ -742,6 +742,7 @@ function TimelineTab(props: DetailProps & { timeline: CompanyTimelinePanel }) {
           role={timeline.role}
           openMail={null}
           olderHref={timeline.olderHref}
+          inboxes={timeline.search?.inboxes.map((row) => row.account)}
         />
       </section>
       {/* Sticky as one block, so the facts never slide over the link below them. */}

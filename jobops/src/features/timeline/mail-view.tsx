@@ -415,6 +415,7 @@ function Pane({ data }: { data: MailViewData }) {
         olderHref={pane.olderHref}
         placeOptions={data.placeOptions}
         showCompany={all}
+        inboxes={data.inboxes.connections.map((row) => row.email)}
       />
     </section>
   );

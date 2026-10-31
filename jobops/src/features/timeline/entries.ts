@@ -17,7 +17,22 @@ export type TimelineStep = {
 };
 export type TimelineMail = { type: "mail"; at: string; item: MailItem; recorded: string | null };
 export type TimelineEntry = TimelineStep | TimelineMail;
-export type TimelineDay = { key: string; label: string; entries: TimelineEntry[] };
+/** What the date column shows for a day; the year is only spelled out when it isn't this one. */
+export type DayStamp = {
+  weekday: string;
+  day: number;
+  month: string;
+  year: number;
+  thisYear: boolean;
+  today: boolean;
+};
+export type TimelineDay = {
+  key: string;
+  label: string;
+  /** Null for Coming up, whose rows carry their own dates. */
+  stamp: DayStamp | null;
+  entries: TimelineEntry[];
+};
 
 /** The email itself shows these, so they never appear as steps. */
 const mailDriven = new Set(["MAIL_LINKED", "MAIL_UNLINKED", "ACKNOWLEDGEMENT_RECEIVED"]);
@@ -30,21 +45,29 @@ const recordedText = (event: EventRow | undefined) =>
         ? "Application acknowledged"
         : event.summary;
 const DAY = 86_400_000;
-const weekday = new Intl.DateTimeFormat("en-IN", {
-  timeZone: "Asia/Kolkata",
-  weekday: "short",
-  day: "numeric",
-  month: "short",
-});
+// Spelled by hand so every runtime shows "Sep", never "Sept".
+const months = "Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec".split(" ");
+const weekdays = "Sun Mon Tue Wed Thu Fri Sat".split(" ");
 
-function dayLabel(key: string, now: Date) {
+function dayStamp(key: string, now: Date): DayStamp {
+  const [year, month, day] = key.split("-").map(Number);
+  const today = indiaDate(now);
+  return {
+    weekday: weekdays[new Date(Date.UTC(year, month - 1, day)).getUTCDay()],
+    day,
+    month: months[month - 1],
+    year,
+    thisYear: year === Number(today.slice(0, 4)),
+    today: key === today,
+  };
+}
+
+/** "Today", "Yesterday", "Tue 27 Oct", and "Thu 21 Aug 2025" outside this year. */
+function dayLabel(key: string, stamp: DayStamp, now: Date) {
   const days = Math.round((Date.parse(indiaDate(now)) - Date.parse(key)) / DAY);
   if (days === 0) return "Today";
   if (days === 1) return "Yesterday";
-  const parts = Object.fromEntries(
-    weekday.formatToParts(new Date(`${key}T12:00:00+05:30`)).map((part) => [part.type, part.value]),
-  );
-  return `${parts.weekday} ${parts.day} ${parts.month}`;
+  return `${stamp.weekday} ${stamp.day} ${stamp.month}${stamp.thisYear ? "" : ` ${stamp.year}`}`;
 }
 
 /**
@@ -112,12 +135,15 @@ export function timelineEntries(input: {
   ].sort((a, b) => b.at.localeCompare(a.at));
   const days: TimelineDay[] = [];
   if (upcoming.length && !input.filtered)
-    days.push({ key: "upcoming", label: "Coming up", entries: upcoming });
+    days.push({ key: "upcoming", label: "Coming up", stamp: null, entries: upcoming });
   for (const entry of past) {
     const key = indiaDate(new Date(entry.at));
     const last = days.at(-1);
     if (last?.key === key) last.entries.push(entry);
-    else days.push({ key, label: dayLabel(key, input.now), entries: [entry] });
+    else {
+      const stamp = dayStamp(key, input.now);
+      days.push({ key, label: dayLabel(key, stamp, input.now), stamp, entries: [entry] });
+    }
   }
   return days;
 }
