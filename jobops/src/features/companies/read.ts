@@ -11,6 +11,7 @@ import {
   settings,
 } from "@/db/schema";
 import type { Company } from "./catalog";
+import { notPreviousJob } from "./previous-job";
 
 export async function readCompanies() {
   const [records, openings, families, references, storedCompanies, locations, facts] =
@@ -36,10 +37,12 @@ export async function readCompanies() {
         .from(applications)
         .innerJoin(jobs, eq(jobs.id, applications.jobId))
         .leftJoin(resumeVersions, eq(resumeVersions.id, applications.resumeVersionId))
+        .where(notPreviousJob)
         .orderBy(desc(applications.updatedAt)),
       db
         .select({ id: jobs.id, company: jobs.company, location: jobs.location, title: jobs.title })
         .from(jobs)
+        .where(notPreviousJob)
         .orderBy(desc(jobs.createdAt)),
       db
         .select({

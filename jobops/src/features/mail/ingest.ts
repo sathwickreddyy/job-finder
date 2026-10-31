@@ -4,6 +4,7 @@ import { classifyMail } from "@/services/mail/classifier";
 import type { MailConnection, ProviderId, ScannedMessage } from "@/services/mail/providers/types";
 import type { MailContext } from "./context";
 import type { MailTx } from "./handling-service";
+import { previousJobFor } from "@/features/companies/previous-job";
 import { importMailRecords, mailImportSchema } from "./import";
 import { matchMail, type Match } from "./matching";
 import { tagOf, type MailTag } from "./tags";
@@ -170,18 +171,30 @@ export async function ingestPage(
         const recovered =
           input.recoveredBefore !== null &&
           Date.parse(raw.receivedAt) < input.recoveredBefore.getTime();
-        if (!recovered) counts.newAttention++;
         const contactReply =
           decision.evidence.includes("Reply from a person you contacted") &&
           classifyMail(raw).type === "UNKNOWN";
         if (contactReply) tag = tagOf("FOLLOW_UP");
+        // Offer, background-check and joining mail from a previous job is history, not a task.
+        const previousJob =
+          decision.companyKeys.length === 1
+            ? previousJobFor(
+                context.applications,
+                decision.companyKeys[0],
+                message.classification,
+                new Date(raw.receivedAt),
+              )
+            : null;
+        const handled = recovered || previousJob !== null;
+        if (!handled) counts.newAttention++;
         await tx
           .update(mailMessages)
           .set({
             folders: raw.folders,
-            ...(recovered
+            ...(handled
               ? { attentionState: "DONE" as const, processedAt: new Date() }
               : { attentionState: "OPEN" as const }),
+            ...(previousJob ? { linkedApplicationId: previousJob } : {}),
             ...(decision.companyKeys.length === 1 ? { companyKey: decision.companyKeys[0] } : {}),
             ...(contactReply ? { classification: "FOLLOW_UP" as const } : {}),
           })

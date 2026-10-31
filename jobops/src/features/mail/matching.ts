@@ -178,7 +178,8 @@ export function matchMail(
     );
   }
   const { company, result, threadApplications, ownContacts } = matches[0];
-  const apps = context.applications.filter((app) => app.company === company.id);
+  // A previous job is never guessed as an email's role; the previous-job rule links it.
+  const apps = context.applications.filter((app) => app.company === company.id && !app.previousJob);
   let applicationIds = [
     ...new Set([...threadApplications, ...ownContacts.map((person) => person.applicationId)]),
   ];

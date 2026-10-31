@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { eq, like } from "drizzle-orm";
+import { eq, inArray, like } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
 import {
@@ -153,6 +153,10 @@ export type WorkspaceApplication = {
   role: string;
   recipient: string | null;
   sentAt: string | null;
+  /** Rejected, withdrawn or closed. */
+  closed?: boolean;
+  /** Set for a job the user held before; mail links to it only by the previous-job rule. */
+  previousJob?: { joinedOn: string } | null;
 };
 export type OutboundContact = {
   applicationId: string;
@@ -180,10 +184,19 @@ export async function loadMailContext(): Promise<MailContext> {
   const [companies, rows, events, people, storedRules, marker] = await Promise.all([
     db.select().from(companyRecords).where(eq(companyRecords.status, "ACTIVE")),
     db
-      .select({ id: applications.id, company: jobs.company, role: jobs.title })
+      .select({
+        id: applications.id,
+        company: jobs.company,
+        role: jobs.title,
+        status: applications.status,
+        source: applications.source,
+      })
       .from(applications)
       .innerJoin(jobs, eq(jobs.id, applications.jobId)),
-    db.select().from(applicationEvents).where(eq(applicationEvents.eventType, "OUTREACH_SENT")),
+    db
+      .select()
+      .from(applicationEvents)
+      .where(inArray(applicationEvents.eventType, ["OUTREACH_SENT", "JOINED"])),
     db.select().from(contacts),
     db.select().from(settings).where(like(settings.key, "mailRule:%")),
     db.select().from(settings).where(eq(settings.key, "mailMonitorStartedAt")),
@@ -247,7 +260,13 @@ export async function loadMailContext(): Promise<MailContext> {
       });
     }
     const sent = events.find(
-      (event) => event.applicationId === row.id && event.payload.humanConfirmed !== false,
+      (event) =>
+        event.applicationId === row.id &&
+        event.eventType === "OUTREACH_SENT" &&
+        event.payload.humanConfirmed !== false,
+    );
+    const joined = events.find(
+      (event) => event.applicationId === row.id && event.eventType === "JOINED",
     );
     return {
       id: row.id,
@@ -255,6 +274,11 @@ export async function loadMailContext(): Promise<MailContext> {
       role: row.role,
       recipient: typeof sent?.payload.recipient === "string" ? sent.payload.recipient : null,
       sentAt: sent?.occurredAt.toISOString() ?? null,
+      closed: ["REJECTED", "WITHDRAWN", "CLOSED"].includes(row.status),
+      previousJob:
+        row.source === "PREVIOUS_JOB" && typeof joined?.payload.joinedOn === "string"
+          ? { joinedOn: joined.payload.joinedOn }
+          : null,
     };
   });
   const outbound: OutboundContact[] = [];

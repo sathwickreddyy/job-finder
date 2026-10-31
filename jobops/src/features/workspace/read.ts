@@ -11,6 +11,7 @@ import {
   settings,
 } from "@/db/schema";
 
+import { notPreviousJob } from "@/features/companies/previous-job";
 import { identityFrom } from "./identity";
 import { jobPreferencesContext } from "./prompts";
 
@@ -36,6 +37,7 @@ export async function readWorkspace() {
         createdAt: jobs.createdAt,
       })
       .from(jobs)
+      .where(notPreviousJob)
       .orderBy(desc(jobs.createdAt)),
     db
       .select({
@@ -47,7 +49,8 @@ export async function readWorkspace() {
         appliedAt: applications.appliedAt,
       })
       .from(applications)
-      .innerJoin(jobs, eq(applications.jobId, jobs.id)),
+      .innerJoin(jobs, eq(applications.jobId, jobs.id))
+      .where(notPreviousJob),
     db
       .select({
         id: resumeVersions.id,

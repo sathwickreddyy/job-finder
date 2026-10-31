@@ -9,6 +9,7 @@ import {
   normalizeJobUrl,
   resolveDuplicateId,
 } from "@/features/jobs/import";
+import { notPreviousJob } from "@/features/companies/previous-job";
 import { importJobRows } from "@/features/jobs/service";
 import { companyKeyFor } from "@/features/mail/context";
 import { indiaDate } from "@/features/mail/attention";
@@ -231,7 +232,7 @@ export async function findApplications(query: { url?: string; company?: string }
     })
     .from(applications)
     .innerJoin(jobs, eq(jobs.id, applications.jobId))
-    .where(canonical ? eq(jobs.canonicalUrl, canonical) : undefined)
+    .where(canonical ? and(eq(jobs.canonicalUrl, canonical), notPreviousJob) : notPreviousJob)
     .orderBy(desc(applications.createdAt));
   let matches = rows;
   if (parsed.data.company) {

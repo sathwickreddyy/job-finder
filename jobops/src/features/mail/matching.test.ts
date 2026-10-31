@@ -296,3 +296,22 @@ describe("specific reasons on dropped mail", () => {
     expect(result.companyKeys).toEqual([]);
   });
 });
+
+it("never guesses a previous job as an email's role", () => {
+  const own: MailContext = {
+    ...context,
+    applications: [
+      {
+        id: "prev",
+        company: "acme",
+        role: "SDE I",
+        recipient: null,
+        sentAt: null,
+        closed: true,
+        previousJob: { joinedOn: "2022-04" },
+      },
+    ],
+    outbound: [],
+  };
+  expect(matchMail(message, own, { historical: false, seen: false }).applicationIds).toEqual([]);
+});

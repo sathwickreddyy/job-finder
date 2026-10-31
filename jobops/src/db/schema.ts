@@ -641,12 +641,15 @@ export const companyRecords = pgTable(
     careersUrl: text("careers_url"),
     portalNote: text("portal_note").notNull().default(""),
     status: text("status").notNull().default("ACTIVE"),
+    /** Shortlisted under the pay policy, or one of the user's former employers. */
+    kind: text("kind").notNull().default("SHORTLIST"),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
   (t) => [
     uniqueIndex("companies_slug_idx").on(t.slug),
     check("companies_status_check", sql`${t.status} IN ('ACTIVE','ARCHIVED')`),
+    check("companies_kind_check", sql`${t.kind} IN ('SHORTLIST','PREVIOUS_EMPLOYER')`),
   ],
 );
 
