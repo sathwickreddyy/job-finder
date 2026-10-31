@@ -18,7 +18,7 @@ export const monthLabel = (value: string) => {
 };
 
 const toneLabel: Record<CompanyStatusTone, string> = {
-  preparing: "Preparing",
+  preparing: "Not sent",
   applied: "Applied",
   quiet: "Quiet",
   interviewing: "Interviewing",

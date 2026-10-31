@@ -94,3 +94,13 @@ it("a rejected company says Rejected, never Quiet", () => {
   });
   expect(status).toMatchObject({ tone: "rejected", label: "Rejected", detail: "Rejected" });
 });
+
+it("an unsent record reads Not sent, the same word as Applications", () => {
+  const status = companyStatus({
+    records: [record({ phase: "Preparing", status: "PREPARING", sentAt: null })],
+    mailCount: 0,
+    previousJobs: [],
+    now: NOW,
+  });
+  expect(status).toMatchObject({ tone: "preparing", label: "Not sent", detail: "Not sent" });
+});
