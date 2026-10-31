@@ -12,6 +12,7 @@ import { includeMail } from "./include";
 import type { IngestItem } from "./ingest";
 import type { MailItem } from "./mail-item";
 import { storeCompanyRule } from "./rule-store";
+import { tagLabel } from "./tags";
 
 function invalidate() {
   for (const path of ["/mail", "/applications", "/companies", "/settings", "/"])
@@ -179,6 +180,20 @@ export async function reopenMailAction(
     await updateMail(formString(form, "id"), { attention: "open" });
     invalidate();
     return { success: "Back in Needs you." };
+  } catch (error) {
+    return actionError(error);
+  }
+}
+
+/** Correct a wrong tag; attention and placement stay as they were. */
+export async function retagMailAction(
+  _previous: ActionState,
+  form: FormData,
+): Promise<ActionState> {
+  try {
+    const item = await updateMail(formString(form, "id"), { tag: formString(form, "tag") });
+    invalidate();
+    return { success: `Tagged as ${tagLabel[item.tag]}.` };
   } catch (error) {
     return actionError(error);
   }

@@ -14,10 +14,13 @@ import { useLoadingTask } from "@/components/loading/overlay";
 import { outcomeMeta, type OutcomeId } from "@/features/applications/phase";
 import { roundKindLabel } from "@/features/companies/metrics";
 import type { MailItem } from "@/features/mail/mail-item";
+import { TagPill } from "@/features/mail/tag-pill";
+import { mailTags } from "@/features/mail/tags";
 import {
   handleMailAction,
   placeMailAction,
   reopenMailAction,
+  retagMailAction,
 } from "@/features/mail/workspace-actions";
 import type { ActionState } from "@/lib/actions";
 import { roundKinds } from "@/lib/round-kinds";
@@ -160,6 +163,47 @@ function PlaceAt({ item, options }: { item: MailItem; options: PlaceOptions }) {
         >
           Place
         </button>
+      </form>
+      <Refusal state={state} />
+    </details>
+  );
+}
+
+/** "Change tag…": one click on the right tag fixes a wrongly tagged email, open or handled. */
+export function ChangeTag({ item }: { item: MailItem }) {
+  const { state, pending, submit } = useSubmit(retagMailAction);
+  return (
+    <details className="mt-2">
+      <summary className="inline-flex h-9 cursor-pointer items-center rounded-full px-3 text-sm font-medium text-link hover:bg-muted">
+        Change tag…
+      </summary>
+      <form
+        onSubmit={submit}
+        aria-busy={pending}
+        role="group"
+        aria-label="Tag"
+        className="mt-2 flex flex-wrap gap-1.5"
+      >
+        <input type="hidden" name="id" value={item.id} />
+        {mailTags.map((tag) => {
+          const current = tag === item.tag;
+          return (
+            <button
+              key={tag}
+              type="submit"
+              name="tag"
+              value={tag}
+              disabled={current}
+              aria-pressed={current}
+              className={cn(
+                "pressable rounded-full",
+                current ? "ring-2 ring-primary" : "hover:opacity-80",
+              )}
+            >
+              <TagPill tag={tag} />
+            </button>
+          );
+        })}
       </form>
       <Refusal state={state} />
     </details>

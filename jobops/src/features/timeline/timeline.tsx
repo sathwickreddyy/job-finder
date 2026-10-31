@@ -10,7 +10,7 @@ import { TagPill } from "@/features/mail/tag-pill";
 import { SourceChip } from "./source-chip";
 import { cn } from "@/lib/utils";
 import type { TimelineDay, TimelineMail, TimelineStep } from "./entries";
-import { HandledLine, HandlingBar, type PlaceOptions } from "./handling";
+import { ChangeTag, HandledLine, HandlingBar, type PlaceOptions } from "./handling";
 import type { Handling } from "./suggest";
 
 function StepIcon({ eventType }: { eventType: string }) {
@@ -184,6 +184,7 @@ function MailRow({
           <div className="mt-3">
             {needs ? bar : <HandledLine item={item} recorded={entry.recorded} />}
           </div>
+          <ChangeTag item={item} />
         </div>
       ) : (
         bar && <div className="px-4 pb-3">{bar}</div>

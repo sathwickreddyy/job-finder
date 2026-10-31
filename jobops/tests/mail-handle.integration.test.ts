@@ -19,7 +19,11 @@ import {
   unlinkMailFromRecord,
 } from "@/features/mail/handling-service";
 import { listMail } from "@/features/mail/mail-list";
-import { handleMailAction, reopenMailAction } from "@/features/mail/workspace-actions";
+import {
+  handleMailAction,
+  reopenMailAction,
+  retagMailAction,
+} from "@/features/mail/workspace-actions";
 import { assertE2eDatabase, dbTests } from "./helpers/e2e-db";
 
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
@@ -212,6 +216,23 @@ describe.skipIf(!dbTests)("handling mail", () => {
       from: "INTERVIEW",
       to: "OFFER",
     });
+  });
+
+  it("the Change tag action retags handled mail and leaves it handled", async () => {
+    const row = await email({ companyKey: keys.single, classification: "INTERVIEW" });
+    await handleMail(row.id, { justInfo: true });
+    expect(await retagMailAction({}, form({ id: row.id, tag: "rejection" }))).toEqual({
+      success: "Tagged as Rejection.",
+    });
+    expect(await message(row.id)).toMatchObject({
+      classification: "REJECTION",
+      attentionState: "DONE",
+      companyKey: keys.single,
+    });
+    expect(await retagMailAction({}, form({ id: row.id, tag: "nonsense" }))).toEqual({
+      error: "tag: Unknown tag.",
+    });
+    expect((await message(row.id)).classification).toBe("REJECTION");
   });
 
   it("placing an email does not change attention", async () => {

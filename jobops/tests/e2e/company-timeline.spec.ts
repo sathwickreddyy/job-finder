@@ -136,6 +136,25 @@ test("search narrows rail and timeline", async ({ page }) => {
   await expect(mailRow(page, match.subject)).toHaveCount(0);
 });
 
+test("Change tag fixes a wrong tag and keeps it on reload", async ({ page }) => {
+  const { company, subject, id } = await companyWithMail("INTERVIEW");
+  await page.goto(`/mail?${new URLSearchParams({ company, mail: id })}`);
+  await expect(mailRow(page, subject)).toContainText("Interview call");
+  await page.getByText("Change tag…").click();
+  const tags = page.getByRole("group", { name: "Tag" });
+  await expect(tags.getByRole("button", { name: "Interview call" })).toBeDisabled();
+  await tags.getByRole("button", { name: "Rejection" }).click();
+  await expect(mailRow(page, subject)).toContainText("Rejection");
+  await expect(tags.getByRole("button", { name: "Rejection" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  // Retagging is not handling: the email still needs you.
+  await expect(mailRow(page, subject)).toContainText("needs you");
+  await page.reload();
+  await expect(mailRow(page, subject)).toContainText("Rejection");
+});
+
 test("places a Needs a home email", async ({ page }) => {
   const company = unique("Home Co");
   await seedRecord({ company, source: "DIRECT", sentDaysAgo: 2 });

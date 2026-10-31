@@ -9,6 +9,7 @@ vi.mock("@/features/mail/workspace-actions", () => ({
   handleMailAction: vi.fn(),
   reopenMailAction: vi.fn(),
   placeMailAction: vi.fn(),
+  retagMailAction: vi.fn(),
 }));
 const { CompanyTimeline } = await import("@/features/timeline/timeline");
 
@@ -230,6 +231,26 @@ describe("CompanyTimeline", () => {
     });
     expect(html).toContain("Marked as just info");
     expect(html).toContain("Undo");
+  });
+
+  it("an opened email offers every tag with its own marked", () => {
+    expect(render()).not.toContain("Change tag…");
+    const handled = item("m6", { attention: "handled", tag: "rejection" });
+    const html = render({
+      openMail: "m6",
+      days: [
+        {
+          key: "2026-10-31",
+          label: "Today",
+          stamp: today,
+          entries: [{ type: "mail", at: handled.receivedAt, item: handled, recorded: null }],
+        },
+      ],
+    });
+    expect(html).toContain("Change tag…");
+    expect(html.match(/name="tag"/g)).toHaveLength(10);
+    expect(html).toMatch(/value="rejection" disabled="" aria-pressed="true"/);
+    expect(html).toMatch(/value="offer" aria-pressed="false"/);
   });
 
   it("never renders HTML", () => {
