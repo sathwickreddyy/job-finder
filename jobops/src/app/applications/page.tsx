@@ -10,6 +10,8 @@ import { LaneDetail } from "@/features/applications/views/lane-detail";
 import { LanesChart } from "@/features/applications/views/lanes";
 import { readMailTriage, readOpenMail } from "@/features/mail/read";
 import { queueMailFrom } from "@/features/mail/triage";
+import { PREVIOUS_JOB, previousJobs } from "@/features/companies/previous-job";
+import { monthLabel } from "@/features/companies/status";
 
 export const dynamic = "force-dynamic";
 
@@ -32,15 +34,25 @@ export default async function Applications({
     );
   const view = resolveLanesView(query);
   const now = new Date();
-  const { records, snoozes } = await readApplications();
+  const [{ records: all, snoozes }, previous] = await Promise.all([
+    readApplications(),
+    previousJobs(),
+  ]);
+  // Previous jobs are history: listed under the chart, never lanes or queue items.
+  const records = all.filter((record) => record.source !== PREVIOUS_JOB);
   const triage = await readMailTriage(records);
   const items = buildQueue({ records, mail: queueMailFrom(triage.messages), snoozes, now });
-  const lanes = buildLanes({ records, items, pending: pendingMailFrom(triage.messages), now });
+  const lanes = buildLanes({
+    records,
+    items,
+    pending: pendingMailFrom(triage.messages),
+    now,
+    by: "application",
+  });
   const chart = laneViews(lanes, laneWindow(lanes, now), now);
   const openRecord = view.open ? records.find((record) => record.id === view.open) : undefined;
-  const openLane = openRecord
-    ? lanes.find((lane) => lane.key === openRecord.companyKey)
-    : undefined;
+  const openLane = openRecord ? lanes.find((lane) => lane.key === openRecord.id) : undefined;
+  const companyName = new Map(all.map((record) => [record.id, record.companyName]));
   let mail = null;
   let mailError: string | undefined;
   if (openRecord && view.mail !== null) {
@@ -63,7 +75,7 @@ export default async function Applications({
     <div className="flex flex-col gap-6">
       <PageHeader
         title="Applications"
-        description="Every company on one calendar: what happened, where it stands and what to do next."
+        description="Every application on one calendar: what happened, where it stands and what to do next."
         actions={
           <>
             <Button variant="outline" asChild>
@@ -117,6 +129,25 @@ export default async function Applications({
             </div>
           }
         />
+      )}
+      {previous.length > 0 && (
+        <details className="group rounded-3xl bg-card p-4 ring-1 ring-border">
+          <summary className="cursor-pointer text-sm font-semibold">
+            Previous jobs ({previous.length})
+          </summary>
+          <ul className="m-0 mt-3 grid list-none gap-2 p-0">
+            {previous.map((job) => (
+              <li key={job.applicationId} className="flex flex-wrap items-baseline gap-x-2 text-sm">
+                <span className="font-medium">{companyName.get(job.applicationId)}</span>
+                <span>{job.role}</span>
+                <span className="text-muted-foreground">
+                  {job.joinedOn ? monthLabel(job.joinedOn) : "Joined month not recorded"}
+                  {job.leftOn ? ` to ${monthLabel(job.leftOn)}` : ""}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </details>
       )}
     </div>
   );

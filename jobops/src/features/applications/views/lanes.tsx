@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ChevronDown } from "lucide-react";
+import { TagPill } from "@/features/mail/tag-pill";
 import { cn } from "@/lib/utils";
 import type { ChartView, LaneView, StackView } from "../lanes";
 import { laneHref } from "../navigation";
@@ -204,7 +205,14 @@ export function LanesChart({
                   >
                     <span className="flex w-full min-w-0 items-center gap-2.5">
                       <CompanyMark company={lane.company} size="sm" />
-                      <span className="truncate text-sm font-semibold">{lane.company}</span>
+                      <span className="min-w-0">
+                        <span className="block truncate text-sm font-semibold">{lane.company}</span>
+                        {lane.role && (
+                          <span className="block truncate text-xs text-muted-foreground">
+                            {lane.role}
+                          </span>
+                        )}
+                      </span>
                     </span>
                     <StatusPill status={lane.status} />
                   </Link>
@@ -331,7 +339,11 @@ function Track({
             )}
             style={{ left: `${stack.pct}%` }}
           >
-            <DotIcon tone={stack.tone} size="sm" />
+            {stack.tag ? (
+              <TagPill tag={stack.tag} short className="relative z-10" />
+            ) : (
+              <DotIcon tone={stack.tone} size="sm" />
+            )}
             {stack.count > 1 && (
               <span
                 aria-hidden

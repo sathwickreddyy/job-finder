@@ -1,4 +1,5 @@
 import { roundKindLabel } from "@/features/companies/metrics";
+import { tagOf, type MailClassification, type MailTag } from "@/features/mail/tags";
 import { suggestedOutcome, type TriageInput } from "@/features/mail/triage";
 import {
   addDays,
@@ -185,6 +186,8 @@ export type LaneDot = {
   via: string | null;
   mailId: string | null;
   outcome: OutcomeId | null;
+  /** The email's tag for mail dots, linked or pending; null for every other dot. */
+  tag: MailTag | null;
 };
 export type PendingMail = {
   id: string;
@@ -286,6 +289,7 @@ export function laneDots(records: LaneSource[], pending: PendingMail[], now: Dat
       via: isOutreach(record.source) ? (methodLabel[record.source] ?? null) : null,
       mailId: null,
       outcome: null,
+      tag: null,
     };
     const referenced = new Set(
       record.events
@@ -317,6 +321,7 @@ export function laneDots(records: LaneSource[], pending: PendingMail[], now: Dat
         label: mailLabel[mail.classification] ?? "Email",
         detail: clip(mail.subject, 160),
         mailId: mail.id,
+        tag: tagOf(mail.classification as MailClassification),
       });
     }
     if (!record.events.length && record.sentAt)
@@ -366,6 +371,7 @@ export function laneDots(records: LaneSource[], pending: PendingMail[], now: Dat
       via: null,
       mailId: mail.id,
       outcome: mail.outcome,
+      tag: tagOf(mail.classification as MailClassification),
     });
   }
   return dots
@@ -485,17 +491,24 @@ const nextRank = (next: LaneNext | null) => (!next ? 4 : next.due ? dueRank[next
 const nextTime = (next: LaneNext | null) => next?.at?.getTime() ?? Number.MAX_SAFE_INTEGER;
 const groupRank: Record<LaneGroup, number> = { needs: 0, active: 1, closed: 2 };
 
-/** One lane per company key, sorted needs → active → closed (spec §2.5). */
+/**
+ * One lane per company key (or per application with `by: "application"`), sorted needs →
+ * active → closed (spec §2.5). Previous jobs are history and never get a lane.
+ */
 export function buildLanes(input: {
   records: LaneSource[];
   items: QueueItem[];
   pending: PendingMail[];
   now: Date;
+  by?: "company" | "application";
 }): Lane[] {
   const { now } = input;
   const byKey = new Map<string, LaneSource[]>();
-  for (const record of input.records)
-    byKey.set(record.companyKey, [...(byKey.get(record.companyKey) ?? []), record]);
+  for (const record of input.records) {
+    if (record.source === "PREVIOUS_JOB") continue;
+    const key = input.by === "application" ? record.id : record.companyKey;
+    byKey.set(key, [...(byKey.get(key) ?? []), record]);
+  }
   const lanes: Lane[] = [];
   for (const [key, records] of byKey) {
     const lead = leadOf(records);
@@ -644,6 +657,8 @@ export type StackView = {
   key: string;
   pct: number;
   tone: DotTone;
+  /** Set when the stack's first dot is an email: the chart draws its tag icon. */
+  tag: MailTag | null;
   count: number;
   label: string;
   lines: string[];
@@ -660,6 +675,8 @@ export type StackView = {
 export type LaneView = {
   key: string;
   company: string;
+  /** The role under the company name when the lane holds one application. */
+  role: string | null;
   leadId: string;
   status: LaneStatus;
   group: LaneGroup;
@@ -695,6 +712,7 @@ export function laneViews(lanes: Lane[], window: LaneWindow, now: Date): ChartVi
       return {
         key: lane.key,
         company: lane.company,
+        role: lane.roles.length === 1 ? lane.roles[0].role : null,
         leadId: lane.leadId,
         status: lane.status,
         group: lane.group,
@@ -705,6 +723,7 @@ export function laneViews(lanes: Lane[], window: LaneWindow, now: Date): ChartVi
             key: stack.dots[0].key,
             pct: stack.pct,
             tone: stack.lead.tone,
+            tag: stack.lead.tag,
             count: stack.dots.length,
             lines,
             edge: stack.earlier ? "earlier" : stack.later ? "later" : null,
