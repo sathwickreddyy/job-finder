@@ -319,6 +319,25 @@ describe.skipIf(!dbTests)("company inbox search", () => {
     expect((await storedMail(own.email))[0].companyKey).toBe(key);
   });
 
+  it("include keeps rescued new mail open and recovered history handled", async () => {
+    const own = await connection();
+    await db
+      .update(mailConnections)
+      .set({ lastSyncedAt: new Date() })
+      .where(eq(mailConnections.id, own.id));
+    const fresh = mail("rescued", { receivedAt: recent(0.125), subject: "Interview invitation" });
+    const old = mail("history", { receivedAt: recent(40), subject: "Interview invitation" });
+    const freshRow = await dropped(own, fresh);
+    const oldRow = await dropped(own, old);
+    await db.update(mailTracking).set({ recovered: true }).where(eq(mailTracking.id, oldRow.id));
+    vi.spyOn(outlook, "folders").mockResolvedValue([]);
+    vi.spyOn(outlook, "fetchMessage").mockImplementation(async (_row, id) =>
+      id === fresh.externalId ? fresh : old,
+    );
+    expect((await includeMail(freshRow.id, key)).item.attention).toBe("open");
+    expect((await includeMail(oldRow.id, key)).item.attention).toBe("handled");
+  });
+
   it("include refuses an already kept identity with 409", async () => {
     const own = await connection();
     const [row] = await db

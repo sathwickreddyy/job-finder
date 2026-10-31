@@ -216,4 +216,16 @@ describe.skipIf(!dbTests)("one mail ingest path", () => {
     const [stored] = await messages(own.email);
     expect(stored.companyKey).toBe("weave");
   });
+
+  it("remembers on the ledger whether dropped mail was recovered history", async () => {
+    const own = await connection();
+    const promo = (id: string) =>
+      mail(id, { sender: "news@example.invalid", subject: "Weekend reading", bodyText: "" });
+    await ingest(own, [promo("old-drop")], { recoveredBefore: new Date("2026-10-30T00:00:00Z") });
+    await ingest(own, [promo("new-drop")], { recoveredBefore: new Date("2026-10-19T00:00:00Z") });
+    const rows = await ledger(own.email);
+    const of = (id: string) => rows.find((row) => row.providerMessageId === `${prefix}-${id}`);
+    expect(of("old-drop")?.recovered).toBe(true);
+    expect(of("new-drop")?.recovered).toBe(false);
+  });
 });

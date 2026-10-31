@@ -766,6 +766,8 @@ export const mailTracking = pgTable(
     disposition: text("disposition").notNull().default("kept"),
     reason: text("reason").notNull().default(""),
     evidence: strings("evidence"),
+    /** Received before the window the fetch or search was due to cover: history, not new mail. */
+    recovered: boolean("recovered").notNull().default(false),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },

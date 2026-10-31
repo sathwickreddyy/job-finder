@@ -157,6 +157,9 @@ export async function ingestPage(
       counts.alreadyHere++;
       continue;
     }
+    const recovered =
+      input.recoveredBefore !== null &&
+      Date.parse(raw.receivedAt) < input.recoveredBefore.getTime();
     let messageId: string | null = null;
     let tag: MailTag | null = null;
     if (kept) {
@@ -168,9 +171,6 @@ export async function ingestPage(
       messageId = message.id;
       tag = tagOf(message.classification);
       if (imported.imported) {
-        const recovered =
-          input.recoveredBefore !== null &&
-          Date.parse(raw.receivedAt) < input.recoveredBefore.getTime();
         const contactReply =
           decision.evidence.includes("Reply from a person you contacted") &&
           classifyMail(raw).type === "UNKNOWN";
@@ -230,6 +230,7 @@ export async function ingestPage(
       disposition: kept ? "kept" : "excluded",
       reason,
       evidence: decision.evidence,
+      recovered,
     };
     let saved: Row | undefined;
     if (previous) {

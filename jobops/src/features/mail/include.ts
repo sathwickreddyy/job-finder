@@ -7,7 +7,6 @@ import { providerFor } from "@/services/mail/providers";
 import { withConnectionLock } from "@/services/mail/providers/connections";
 import { assertPhrase } from "@/services/mail/providers/search-query";
 import type { ProviderId } from "@/services/mail/providers/types";
-import { recoveryCutoff } from "./check-service";
 import { isSharedSender, keywordProblem, loadMailContext } from "./context";
 import { importMailRecords, mailImportSchema } from "./import";
 import { readMailItem } from "./mail-list";
@@ -85,8 +84,9 @@ export async function includeMail(
         .where(
           and(eq(mailMessages.provider, provider.id), eq(mailMessages.externalId, externalId)),
         );
-      const cutoff = recoveryCutoff(current.lastSyncedAt);
-      const recovered = cutoff !== null && Date.parse(raw.receivedAt) < cutoff.getTime();
+      // Whether it was history was decided when the fetch or search saw it; the inbox's
+      // last fetch has moved on since, so it can't decide that now.
+      const recovered = row.recovered;
       await tx
         .update(mailMessages)
         .set({

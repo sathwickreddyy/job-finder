@@ -1,0 +1,1 @@
+ALTER TABLE "mail_tracking" ADD COLUMN "recovered" boolean DEFAULT false NOT NULL;
