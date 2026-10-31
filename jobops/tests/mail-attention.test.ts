@@ -11,6 +11,13 @@ describe("mail attention", () => {
     expect(
       mailAttention({ ...base, classification: "REJECTION", subject: "Your deadline has passed" }),
     ).toBeNull();
+    expect(
+      mailAttention({
+        ...base,
+        classification: "INTERVIEW_REJECTION",
+        subject: "Your deadline has passed",
+      }),
+    ).toBeNull();
   });
   it("flags deadline language without inventing a calendar deadline", () => {
     expect(

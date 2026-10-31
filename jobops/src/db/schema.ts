@@ -88,6 +88,7 @@ export const mailClassifications = [
   "INTERVIEW_UPDATE",
   "BACKGROUND_CHECK",
   "ONBOARDING",
+  "INTERVIEW_REJECTION",
 ] as const;
 export const contactVerificationStatuses = [
   "UNKNOWN",

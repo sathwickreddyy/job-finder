@@ -240,6 +240,7 @@ const mailLabel: Record<string, string> = {
   ASSESSMENT: "Assessment invite",
   OFFER: "Offer email",
   REJECTION: "Rejection email",
+  INTERVIEW_REJECTION: "Rejection email",
   FOLLOW_UP: "Recruiter reply",
   RECRUITER_OUTREACH: "Recruiter email",
   APPLICATION_ACKNOWLEDGEMENT: "Automatic “we received it”",

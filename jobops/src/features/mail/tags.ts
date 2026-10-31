@@ -7,7 +7,8 @@ export const mailTags = [
   "interviewCall",
   "interviewProcess",
   "offer",
-  "rejection",
+  "applicationRejected",
+  "interviewRejected",
   "backgroundCheck",
   "joining",
   "opportunity",
@@ -22,7 +23,8 @@ const tagClassifications: Record<MailTag, MailClassification[]> = {
   interviewCall: ["INTERVIEW", "ASSESSMENT"],
   interviewProcess: ["INTERVIEW_UPDATE"],
   offer: ["OFFER"],
-  rejection: ["REJECTION"],
+  applicationRejected: ["REJECTION"],
+  interviewRejected: ["INTERVIEW_REJECTION"],
   backgroundCheck: ["BACKGROUND_CHECK"],
   joining: ["ONBOARDING"],
   opportunity: ["RECRUITER_OUTREACH"],
@@ -34,7 +36,8 @@ export const tagLabel: Record<MailTag, string> = {
   interviewCall: "Interview call",
   interviewProcess: "Interview process",
   offer: "Offer",
-  rejection: "Rejection",
+  applicationRejected: "Application rejected",
+  interviewRejected: "Rejected after interview",
   backgroundCheck: "Background verification",
   joining: "Joining",
   opportunity: "Opportunity",
@@ -53,19 +56,40 @@ export const tagStage: Record<MailTag, TagStage> = {
   offer: "offerJoining",
   backgroundCheck: "offerJoining",
   joining: "offerJoining",
-  rejection: "rejected",
+  applicationRejected: "rejected",
+  interviewRejected: "rejected",
   other: "other",
 };
 
-/** The five tags links used before 2026-10-31, read as the tags they became. */
+/** What each tag means, in the order of the search it belongs to (the Edit tag popup). */
+export const tagMeaning: Record<MailTag, string> = {
+  referral: "Someone offering or confirming a referral.",
+  opportunity: "A recruiter or company reaching out about a role.",
+  application: "Your application was received or updated.",
+  applicationRejected: "Turned down before any interview.",
+  interviewCall: "An invite to book a round or take an assessment.",
+  interviewProcess: "Updates while rounds are under way.",
+  interviewRejected: "Turned down after one or more rounds.",
+  offer: "An offer or a conversation about one.",
+  backgroundCheck: "Documents and checks after an offer.",
+  joining: "Onboarding and first-day details.",
+  other: "Job mail that fits none of these.",
+};
+export const tagsByStage = Object.keys(tagMeaning) as readonly MailTag[];
+
+/**
+ * Tag ids links used before, read as the tags they became: the five from before 2026-10-31 and
+ * `rejection`, split in two on 2026-11-01.
+ */
 export const legacyTags: Record<
-  "opportunity" | "process" | "offer" | "rejected" | "other",
+  "opportunity" | "process" | "offer" | "rejected" | "rejection" | "other",
   MailTag[]
 > = {
   opportunity: ["opportunity"],
   process: ["application", "interviewCall", "interviewProcess"],
   offer: ["offer"],
-  rejected: ["rejection"],
+  rejected: ["applicationRejected", "interviewRejected"],
+  rejection: ["applicationRejected", "interviewRejected"],
   other: ["other"],
 };
 
@@ -73,7 +97,8 @@ export const kindLabel: Record<MailClassification, string> = {
   INTERVIEW: "Interview",
   ASSESSMENT: "Assessment",
   OFFER: "Offer",
-  REJECTION: "Application outcome",
+  REJECTION: "Application rejected",
+  INTERVIEW_REJECTION: "Rejected after interview",
   FOLLOW_UP: "Application update",
   RECRUITER_OUTREACH: "Hiring conversation",
   APPLICATION_ACKNOWLEDGEMENT: "Application received",

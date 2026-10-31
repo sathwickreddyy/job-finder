@@ -1,0 +1,1 @@
+ALTER TYPE "public"."mail_classification" ADD VALUE 'INTERVIEW_REJECTION';

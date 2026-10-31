@@ -50,6 +50,9 @@ describe("triage buckets", () => {
     expect(
       bucketOf({ sender: "hr@linkedin.com", classification: "RECRUITER_OUTREACH", recordId: null }),
     ).toBe("roles");
+    expect(
+      bucketOf({ sender: "hr@oracle.com", classification: "INTERVIEW_REJECTION", recordId: null }),
+    ).toBe("updates");
   });
 
   it("maps each classification to its intended outcome, leaving acknowledgements outcome-free", () => {
@@ -66,6 +69,7 @@ describe("triage buckets", () => {
       INTERVIEW_UPDATE: "heard",
       BACKGROUND_CHECK: null,
       ONBOARDING: null,
+      INTERVIEW_REJECTION: "rejected",
     });
   });
 

@@ -221,8 +221,8 @@ describe.skipIf(!dbTests)("handling mail", () => {
   it("the Change tag action retags handled mail and leaves it handled", async () => {
     const row = await email({ companyKey: keys.single, classification: "INTERVIEW" });
     await handleMail(row.id, { justInfo: true });
-    expect(await retagMailAction({}, form({ id: row.id, tag: "rejection" }))).toEqual({
-      success: "Tagged as Rejection.",
+    expect(await retagMailAction({}, form({ id: row.id, tag: "applicationRejected" }))).toEqual({
+      success: "Tagged as Application rejected.",
     });
     expect(await message(row.id)).toMatchObject({
       classification: "REJECTION",

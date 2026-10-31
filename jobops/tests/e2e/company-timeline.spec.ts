@@ -143,16 +143,16 @@ test("Change tag fixes a wrong tag and keeps it on reload", async ({ page }) => 
   await page.getByText("Change tag…").click();
   const tags = page.getByRole("group", { name: "Tag" });
   await expect(tags.getByRole("button", { name: "Interview call" })).toBeDisabled();
-  await tags.getByRole("button", { name: "Rejection" }).click();
-  await expect(mailRow(page, subject)).toContainText("Rejection");
-  await expect(tags.getByRole("button", { name: "Rejection" })).toHaveAttribute(
+  await tags.getByRole("button", { name: "Application rejected" }).click();
+  await expect(mailRow(page, subject)).toContainText("Application rejected");
+  await expect(tags.getByRole("button", { name: "Application rejected" })).toHaveAttribute(
     "aria-pressed",
     "true",
   );
   // Retagging is not handling: the email still needs you.
   await expect(mailRow(page, subject)).toContainText("needs you");
   await page.reload();
-  await expect(mailRow(page, subject)).toContainText("Rejection");
+  await expect(mailRow(page, subject)).toContainText("Application rejected");
 });
 
 test("places a Needs a home email", async ({ page }) => {

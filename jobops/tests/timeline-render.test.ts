@@ -235,7 +235,7 @@ describe("CompanyTimeline", () => {
 
   it("an opened email offers every tag with its own marked", () => {
     expect(render()).not.toContain("Change tag…");
-    const handled = item("m6", { attention: "handled", tag: "rejection" });
+    const handled = item("m6", { attention: "handled", tag: "applicationRejected" });
     const html = render({
       openMail: "m6",
       days: [
@@ -248,8 +248,8 @@ describe("CompanyTimeline", () => {
       ],
     });
     expect(html).toContain("Change tag…");
-    expect(html.match(/name="tag"/g)).toHaveLength(10);
-    expect(html).toMatch(/value="rejection" disabled="" aria-pressed="true"/);
+    expect(html.match(/name="tag"/g)).toHaveLength(11);
+    expect(html).toMatch(/value="applicationRejected" disabled="" aria-pressed="true"/);
     expect(html).toMatch(/value="offer" aria-pressed="false"/);
   });
 

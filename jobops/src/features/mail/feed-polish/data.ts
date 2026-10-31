@@ -83,7 +83,7 @@ export const polishFeed: PolishMail[] = [
     sender: "recruiting@arcadia.example",
     inbox: "outlook.com",
     folder: "Inbox",
-    tag: "rejection",
+    tag: "interviewRejected",
     subject: "Update on your Senior Engineer application",
     text: "Dear Sathwick,\n\nThank you for your time with the team. We have decided to move forward with other candidates for this role.",
     open: false,

@@ -1,12 +1,13 @@
 import {
   Award,
   CalendarPlus,
-  CircleX,
   DoorOpen,
+  FileX,
   Handshake,
   Mail,
   Megaphone,
   MessagesSquare,
+  MessageSquareX,
   Send,
   ShieldCheck,
   type LucideIcon,
@@ -20,7 +21,8 @@ export const tagIcon: Record<MailTag, LucideIcon> = {
   interviewCall: CalendarPlus,
   interviewProcess: MessagesSquare,
   offer: Award,
-  rejection: CircleX,
+  applicationRejected: FileX,
+  interviewRejected: MessageSquareX,
   backgroundCheck: ShieldCheck,
   joining: DoorOpen,
   opportunity: Megaphone,
@@ -54,7 +56,12 @@ export const tagClass: Record<MailTag, { tonal: string; dot: string; text: strin
     dot: "bg-tag-offer",
     text: "text-tag-offer",
   },
-  rejection: {
+  applicationRejected: {
+    tonal: "bg-tag-rejection-container text-tag-rejection",
+    dot: "bg-tag-rejection",
+    text: "text-tag-rejection",
+  },
+  interviewRejected: {
     tonal: "bg-tag-rejection-container text-tag-rejection",
     dot: "bg-tag-rejection",
     text: "text-tag-rejection",
