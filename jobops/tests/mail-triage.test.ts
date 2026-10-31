@@ -143,4 +143,16 @@ describe("triage buckets", () => {
       primary: { label: "Save as opening", href: `/jobs/new?fromMail=${record}` },
     });
   });
+
+  it("counts referral, interview process, background check and joining mail as updates", () => {
+    for (const classification of [
+      "REFERRAL",
+      "INTERVIEW_UPDATE",
+      "BACKGROUND_CHECK",
+      "ONBOARDING",
+    ] as const)
+      expect(bucketOf({ sender: "hr@northstar.example", classification, recordId: "r1" })).toBe(
+        "updates",
+      );
+  });
 });

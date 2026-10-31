@@ -555,6 +555,9 @@ describe("lanes per application", () => {
     const tags = Object.fromEntries(lane.dots.map((dot) => [dot.mailId ?? dot.key, dot.tag]));
     expect(tags.m1).toBe("interviewCall");
     expect(tags.m2).toBe("backgroundCheck");
+    expect(lane.dots.find((dot) => dot.mailId === "m2")?.label).toBe(
+      "Background verification email · not added yet",
+    );
     expect(lane.dots.find((dot) => dot.tone === "sent")?.tag ?? null).toBeNull();
   });
 

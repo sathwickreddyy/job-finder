@@ -26,6 +26,10 @@ const updateKinds: MailClassification[] = [
   "OFFER",
   "REJECTION",
   "FOLLOW_UP",
+  "REFERRAL",
+  "INTERVIEW_UPDATE",
+  "BACKGROUND_CHECK",
+  "ONBOARDING",
 ];
 
 export function bucketOf(message: {

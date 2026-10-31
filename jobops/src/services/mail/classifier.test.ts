@@ -23,7 +23,17 @@ describe("deterministic mail classification", () => {
         "Our team will review your profile and get back to you.",
         "APPLICATION_ACKNOWLEDGEMENT",
       ],
-      ["Amazon Interview – CONFIRMATION", "", "INTERVIEW"],
+      // Spec §1: confirmations, reschedules, prep and feedback are the interview process.
+      ["Amazon Interview – CONFIRMATION", "", "INTERVIEW_UPDATE"],
+      ["Your interview has been rescheduled", "", "INTERVIEW_UPDATE"],
+      ["Next round: system design", "", "INTERVIEW_UPDATE"],
+      // An invitation or an assessment still wins over "next round".
+      [
+        "You've moved to the next round",
+        "Please complete the online assessment by Friday.",
+        "ASSESSMENT",
+      ],
+      ["We'd like to invite you for an interview for the next round", "", "INTERVIEW"],
       ["Feedback - Amazon Onsite Interview", "", "INTERVIEW_UPDATE"],
       ["Amazon Interview Preparation Call", "", "INTERVIEW_UPDATE"],
       ["Sathwick, REMINDER to complete your background screen for Amazon", "", "BACKGROUND_CHECK"],

@@ -39,11 +39,13 @@ const rules: { type: MailClassification; confidence: number; patterns: RegExp[] 
       /\b(?:background (?:check|screen|screening|verification)|employment verification)\b/i,
     ],
   },
+  // Spec §1: confirmations, reschedules, prep material and feedback are the interview process.
   {
     type: "INTERVIEW_UPDATE",
     confidence: 0.85,
     patterns: [
-      /\b(?:interview (?:preparation|prep|feedback)|feedback\b[^\n]{0,40}\binterview|next round)\b/i,
+      /\b(?:interview (?:preparation|prep|feedback)|feedback\b[^\n]{0,40}\binterview)\b/i,
+      /\b(?:interview\s*[-–—:]?\s*confirmation|interview[^\n]{0,30}\breschedul(?:e|ed|ing)|reschedul(?:e|ed|ing)[^\n]{0,30}\binterview)\b/i,
     ],
   },
   {
@@ -51,7 +53,7 @@ const rules: { type: MailClassification; confidence: number; patterns: RegExp[] 
     confidence: 0.9,
     patterns: [
       /\b(?:interview (?:availability|invitation|scheduled|with|for)|technical interview|schedule (?:an |your |the )?interview|invite you (?:for|to) (?:an )?interview)\b/i,
-      /\b(?:interview\s*[-–—:]?\s*confirmation|on-?site interview)\b/i,
+      /\bon-?site interview\b/i,
     ],
   },
   {
@@ -60,6 +62,12 @@ const rules: { type: MailClassification; confidence: number; patterns: RegExp[] 
     patterns: [
       /\b(?:coding (?:assessment|challenge|test)|online assessment|complete (?:the |an |our )?assessment|assessment invitation)\b/i,
     ],
+  },
+  // "Next round" alone is a step in the process; an invitation or an assessment wins over it.
+  {
+    type: "INTERVIEW_UPDATE",
+    confidence: 0.8,
+    patterns: [/\bnext round\b/i],
   },
   {
     type: "REFERRAL",

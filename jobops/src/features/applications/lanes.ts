@@ -244,6 +244,10 @@ const mailLabel: Record<string, string> = {
   RECRUITER_OUTREACH: "Recruiter email",
   APPLICATION_ACKNOWLEDGEMENT: "Automatic “we received it”",
   UNKNOWN: "Email",
+  REFERRAL: "Referral email",
+  INTERVIEW_UPDATE: "Interview update",
+  BACKGROUND_CHECK: "Background verification email",
+  ONBOARDING: "Joining email",
 };
 
 /** Single-line text clipped with an ellipsis. */
