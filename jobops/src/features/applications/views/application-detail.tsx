@@ -1,15 +1,16 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { FileText, PencilLine } from "lucide-react";
+import { FileText, PencilLine, Undo2 } from "lucide-react";
 import { ActionForm } from "@/components/action-form";
 import { Button } from "@/components/ui";
 import { linkMailOnly } from "@/features/mail/triage-actions";
+import { undoAutoOutcomeAction } from "@/features/mail/workspace-actions";
 import type { TimelineDay } from "@/features/timeline/entries";
 import type { Handling } from "@/features/timeline/suggest";
 import { CompanyTimeline } from "@/features/timeline/timeline";
 import { cn } from "@/lib/utils";
 import { formatDay, indiaDate, istDaysBetween } from "../dates";
-import type { Journey } from "../journey";
+import { autoOutcomeOf, type Journey } from "../journey";
 import type { Lane } from "../lanes";
 import { laneHref } from "../navigation";
 import {
@@ -17,10 +18,12 @@ import {
   canEditPlannedRecord,
   initialOutcome,
   methodLabel,
+  outcomeMeta,
   recordStateFrom,
+  type OutcomeId,
 } from "../phase";
 import type { ApplicationRecord } from "../read";
-import { notApplying } from "../record-actions";
+import { notApplying, reopenRecord } from "../record-actions";
 import { NextAction } from "./application-list";
 import { FollowUp } from "./follow-up";
 import { JourneyTrack } from "./journey-track";
@@ -110,10 +113,36 @@ export function ApplicationExpanded({
   const available = availableOutcomes(state);
   const ack = mail?.classification === "APPLICATION_ACKNOWLEDGEMENT";
   const next = lane.next;
+  const recorded = autoOutcomeOf(record);
+  const notApplyingClosed =
+    record.phase === "Closed" && record.closedReason === "WITHDREW" && !record.sentAt;
   return (
     <div className="reveal grid gap-6 border-t border-border bg-muted/20 px-4 py-5 md:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] md:px-6">
       <section aria-label="Story" className="flex min-w-0 flex-col gap-5">
-        <JourneyTrack journey={journey} size="large" className="max-w-md" />
+        <div className="flex flex-col gap-2">
+          <JourneyTrack journey={journey} size="large" className="max-w-md" />
+          {recorded && (
+            <ActionForm
+              action={undoAutoOutcomeAction}
+              feedback="inverse"
+              pendingLabel="Undoing"
+              className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground"
+            >
+              <span>
+                Recorded from an email:{" "}
+                {outcomeMeta[recorded.outcome as OutcomeId]?.label ?? recorded.outcome}
+              </span>
+              <input type="hidden" name="id" value={recorded.mailMessageId} />
+              <button
+                type="submit"
+                className="pressable inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium text-link hover:bg-selected"
+              >
+                <Undo2 aria-hidden size={13} />
+                Undo
+              </button>
+            </ActionForm>
+          )}
+        </div>
         <CompanyTimeline
           days={story.days}
           handling={story.handling}
@@ -177,6 +206,15 @@ export function ApplicationExpanded({
             <input type="hidden" name="returnTo" value={here} />
             <Button variant="outline" size="sm" className="rounded-full">
               Not applying
+            </Button>
+          </ActionForm>
+        )}
+        {notApplyingClosed && (
+          <ActionForm action={reopenRecord} feedback="inverse" pendingLabel="Reopening">
+            <input type="hidden" name="id" value={record.id} />
+            <input type="hidden" name="returnTo" value={here} />
+            <Button variant="outline" size="sm" className="rounded-full">
+              Reopen
             </Button>
           </ActionForm>
         )}

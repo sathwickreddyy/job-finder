@@ -1,4 +1,3 @@
-import { readOpenMail } from "@/features/mail/read";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
@@ -36,22 +35,6 @@ export default async function ApplicationPage({
   ]);
   const record = records.find((row) => row.id === id);
   if (!record) notFound();
-  let mail = null;
-  let mailError: string | undefined;
-  if (query.mail !== undefined) {
-    if (!z.uuid().safeParse(query.mail).success)
-      mailError = "The source message link is invalid. Return to Emails to choose a message.";
-    else {
-      try {
-        mail = await readOpenMail(query.mail, record.id);
-      } catch (error) {
-        mailError =
-          error instanceof Error
-            ? error.message
-            : "The source message could not be loaded. Return to Emails.";
-      }
-    }
-  }
   return (
     <div className="flex flex-col gap-4">
       <Link
@@ -70,11 +53,6 @@ export default async function ApplicationPage({
         }))}
         preferences={preferences}
         now={new Date()}
-        requested={query.outcome}
-        mail={mail}
-        mailIntent={query.mail}
-        mailError={mailError}
-        selectionKey={query.mail}
         notice={query.notice?.slice(0, 300)}
       />
     </div>

@@ -277,6 +277,28 @@ describe("CompanyTimeline", () => {
     expect(html).not.toContain("Undo<");
   });
 
+  it("says a copy of an email in another inbox was settled, with Undo", () => {
+    const copy = item("m6", {
+      attention: "handled",
+      handledAt: "2026-10-31T05:00:00.000Z",
+      copyOf: { account: "me@example.com" },
+    });
+    const html = render({
+      openMail: "m6",
+      days: [
+        {
+          key: "2026-10-31",
+          label: "Today",
+          stamp: today,
+          entries: [{ type: "mail", at: copy.receivedAt, item: copy, recorded: null }],
+        },
+      ],
+    });
+    expect(html).toContain("Same email as in me@example.com");
+    expect(html).not.toContain("Marked as just info");
+    expect(html).toContain("Undo");
+  });
+
   it("offers Undo only for just info", () => {
     const handled = item("m3", { attention: "handled", handledAt: "2026-10-31T05:00:00.000Z" });
     const html = render({
