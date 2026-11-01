@@ -29,7 +29,7 @@ function Tile({
   return (
     <article
       className={cn(
-        "group relative flex min-h-0 flex-col overflow-hidden rounded-card border border-border bg-card transition-[border-color] hover:border-primary",
+        "group @container relative flex min-h-0 flex-col overflow-hidden rounded-card border border-border bg-card transition-[border-color] hover:border-primary",
         className,
       )}
     >
@@ -37,24 +37,25 @@ function Tile({
       <div className="flex items-center gap-3 border-t border-border px-4 py-3">
         <TargetIcon target={target} className="size-5 shrink-0" />
         <div className="min-w-0 flex-1">
-          <h3 className="m-0 text-sm font-medium">{target.title}</h3>
+          <h3 className="m-0 truncate text-sm font-medium">{target.title}</h3>
           <p className="m-0 truncate text-xs text-muted-foreground">{target.handle}</p>
         </div>
         <button
           type="button"
           onClick={onOpen}
           aria-label={`Preview ${target.title}`}
-          className="morph inline-flex min-h-9 items-center gap-1.5 border-0 bg-selected px-3.5 text-sm font-medium text-selected-foreground after:absolute after:inset-0 after:content-['']"
+          className="morph inline-flex min-h-9 shrink-0 items-center justify-center gap-1.5 border-0 bg-selected px-3.5 text-sm font-medium text-selected-foreground after:absolute after:inset-0 after:content-[''] @max-xs:min-w-9 @max-xs:px-0"
         >
           <Expand size={14} aria-hidden />
-          Preview
+          {/* Narrow tiles keep the icon only, so the title and handle stay readable. */}
+          <span className="@max-xs:sr-only">Preview</span>
         </button>
         <a
           href={target.url}
           target="_blank"
           rel="noreferrer"
           aria-label={`Open ${target.title} in a new tab`}
-          className="morph relative z-10 grid size-9 place-items-center text-muted-foreground hover:bg-muted hover:text-foreground"
+          className="morph relative z-10 grid size-9 shrink-0 place-items-center text-muted-foreground hover:bg-muted hover:text-foreground"
         >
           <ArrowUpRight size={16} aria-hidden />
         </a>

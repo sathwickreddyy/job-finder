@@ -99,20 +99,19 @@ export function AppShell({
             </button>
           </header>
           <header className="hidden border-b border-border bg-card md:block">
-            <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-5 py-4 sm:px-8">
+            {/* One row at every desktop width: nav labels give way below lg, the
+                product name between lg and xl, so nothing wraps onto a second line. */}
+            <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-5 py-4 sm:px-8">
               <Link
                 href="/"
-                className="flex items-center gap-3 text-lg font-semibold text-foreground hover:no-underline"
+                className="flex shrink-0 items-center gap-3 text-lg font-semibold text-foreground hover:no-underline"
               >
                 {/* Shared vector mark stays crisp in the header and browser tab. */}
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src="/jobops-logo.svg" alt="" width={36} height={36} className="size-9" />
-                My Jobs Workspace
+                <span className="whitespace-nowrap lg:max-xl:sr-only">My Jobs Workspace</span>
               </Link>
-              <nav
-                aria-label="Primary"
-                className="order-3 flex w-full gap-1 overflow-x-auto pb-1 md:order-none md:w-auto md:pb-0"
-              >
+              <nav aria-label="Primary" className="flex min-w-0 gap-1 overflow-x-auto">
                 {navigation.map(({ label, href, icon: Icon, routes }) => {
                   const active =
                     pathname === href || routes.some((route) => pathname.startsWith(route));
@@ -121,23 +120,25 @@ export function AppShell({
                       key={href}
                       href={href}
                       aria-current={active ? "page" : undefined}
+                      title={label}
                       className={cn(
-                        "morph flex min-h-11 shrink-0 items-center gap-2 px-4 text-sm font-medium hover:no-underline",
+                        "morph flex min-h-11 shrink-0 items-center gap-2 whitespace-nowrap text-sm font-medium hover:no-underline max-lg:min-w-11 max-lg:justify-center lg:px-4",
                         active
                           ? "bg-selected text-selected-foreground"
                           : "text-muted-foreground hover:bg-muted hover:text-foreground",
                       )}
                     >
                       <Icon size={16} aria-hidden />
-                      {label}
+                      <span className="max-lg:sr-only">{label}</span>
                     </Link>
                   );
                 })}
               </nav>
-              <div className="flex items-center gap-1">
+              <div className="flex shrink-0 items-center gap-1">
                 <Link
                   href="/mail"
                   aria-label="Emails"
+                  title="Emails"
                   aria-current={emailsActive ? "page" : undefined}
                   className={cn(
                     "morph grid size-10 place-items-center hover:bg-muted",
@@ -149,6 +150,7 @@ export function AppShell({
                 <Link
                   href="/my-profile"
                   aria-label="My sites & profile"
+                  title="My sites & profile"
                   className={cn(
                     "morph grid size-10 place-items-center hover:bg-muted",
                     pathname.startsWith("/my-profile")

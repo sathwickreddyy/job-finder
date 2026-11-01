@@ -58,7 +58,9 @@ function Facts({ record }: { record: ApplicationRecord }) {
           className="inline-flex max-w-full min-w-0 items-center gap-1.5 text-link"
         >
           <FileText aria-hidden size={14} className="shrink-0" />
-          <span className="truncate">{record.resume.filename}</span>
+          <span className="truncate" title={record.resume.filename}>
+            {record.resume.filename}
+          </span>
         </Link>
       ) : (
         "None recorded"

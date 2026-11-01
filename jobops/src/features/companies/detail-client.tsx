@@ -1,7 +1,8 @@
 "use client";
 
-import { useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { useState, type KeyboardEvent, type ReactNode } from "react";
 import { ArrowUpRight } from "lucide-react";
+import { useScrollFade } from "@/lib/use-scroll-fade";
 import { cn } from "@/lib/utils";
 import { familyFill } from "./format";
 import {
@@ -22,9 +23,13 @@ export function DetailTabs({
   const [active, setActive] = useState(
     tabs.some((tab) => tab.id === initial) ? initial : tabs[0]?.id,
   );
-  const list = useRef<HTMLDivElement>(null);
+  const { ref: list, style: fade } = useScrollFade<HTMLDivElement>();
   function select(id: string) {
     setActive(id);
+    // On a phone the tab row scrolls; bring the chosen tab fully into view.
+    list.current
+      ?.querySelector(`#tab-${id}`)
+      ?.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
     // Keep the tab in the URL so it can be bookmarked and survives a reload, without a server round trip.
     const url = new URL(window.location.href);
     url.searchParams.set("tab", id);
@@ -55,7 +60,8 @@ export function DetailTabs({
         role="tablist"
         aria-label="Company sections"
         onKeyDown={onKeyDown}
-        className="flex gap-6 overflow-x-auto border-b border-border"
+        style={fade}
+        className="flex gap-5 overflow-x-auto border-b border-border [scrollbar-width:none] sm:gap-6"
       >
         {tabs.map((tab) => (
           <button
@@ -68,7 +74,7 @@ export function DetailTabs({
             tabIndex={active === tab.id ? 0 : -1}
             onClick={() => select(tab.id)}
             className={cn(
-              "relative shrink-0 pb-3 text-sm font-medium",
+              "relative shrink-0 whitespace-nowrap pb-3 text-sm font-medium",
               active === tab.id ? "text-link" : "text-muted-foreground hover:text-foreground",
             )}
           >
