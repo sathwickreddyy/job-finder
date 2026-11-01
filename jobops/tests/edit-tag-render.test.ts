@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
-import { SnackbarView } from "@/components/snackbar";
+import { SnackbarProvider, SnackbarView } from "@/components/snackbar";
 import type { MailItem } from "@/features/mail/mail-item";
 import { tagLabel, tagsByStage } from "@/features/mail/tags";
 import { ConfirmChange, EditTag, TagChoices } from "@/features/timeline/edit-tag";
@@ -86,14 +86,19 @@ describe("Edit tag", () => {
     expect(html).not.toContain("<dialog");
   });
 
-  it("snackbar is a polite status with its action", () => {
+  it("the snackbar's polite status region is on the page before any snack", () => {
+    // Screen readers announce text added to a live region that already exists.
+    const html = renderToStaticMarkup(createElement(SnackbarProvider, null, "page"));
+    expect(html).toMatch(/<div[^>]*role="status"[^>]*aria-live="polite"[^>]*><\/div>/);
+  });
+
+  it("snackbar shows its message and action", () => {
     const html = renderToStaticMarkup(
       createElement(SnackbarView, {
         message: "Tagged as Application rejected",
         action: { label: "Undo", onClick: () => {} },
       }),
     );
-    expect(html).toContain('role="status"');
     expect(html).toContain("Tagged as Application rejected");
     expect(html).toMatch(/<button[^>]*>Undo<\/button>/);
   });
