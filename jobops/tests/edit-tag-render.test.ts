@@ -86,10 +86,14 @@ describe("Edit tag", () => {
     expect(html).not.toContain("<dialog");
   });
 
-  it("the snackbar's polite status region is on the page before any snack", () => {
+  it("the snackbar's polite live region is on the page before any snack", () => {
     // Screen readers announce text added to a live region that already exists.
     const html = renderToStaticMarkup(createElement(SnackbarProvider, null, "page"));
-    expect(html).toMatch(/<div[^>]*role="status"[^>]*aria-live="polite"[^>]*><\/div>/);
+    expect(html).toMatch(
+      /<section[^>]*aria-label="Notifications"[^>]*aria-live="polite"[^>]*><\/section>/,
+    );
+    // Pages keep their own single status message.
+    expect(html).not.toContain('role="status"');
   });
 
   it("snackbar shows its message and action", () => {

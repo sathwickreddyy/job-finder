@@ -37,9 +37,10 @@ export function SnackbarProvider({ children }: { children: ReactNode }) {
   return (
     <SnackbarContext.Provider value={value}>
       {children}
-      {/* Stays on the page so screen readers announce each snack added inside it. */}
-      <div
-        role="status"
+      {/* Stays on the page so screen readers announce each snack added inside it. It is not a
+          status role, so each page keeps its own single status message. */}
+      <section
+        aria-label="Notifications"
         aria-live="polite"
         className="pointer-events-none fixed inset-x-0 bottom-5 z-[60] flex justify-center px-4"
         onPointerEnter={() => setPaused(true)}
@@ -62,7 +63,7 @@ export function SnackbarProvider({ children }: { children: ReactNode }) {
             }
           />
         )}
-      </div>
+      </section>
     </SnackbarContext.Provider>
   );
 }
