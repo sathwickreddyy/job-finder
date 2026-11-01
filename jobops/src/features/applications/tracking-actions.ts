@@ -1,20 +1,11 @@
 "use server";
-import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { db } from "@/db";
-import {
-  activityLogs,
-  applicationEvents,
-  applications,
-  jobs,
-  mailMessages,
-  resumeVersions,
-} from "@/db/schema";
 import { actionError, formString, type ActionState } from "@/lib/actions";
-import { methodNames, recordIntent, recordMethods, recordSentAt } from "./domain";
-import { canEditPlannedRecord, recordStateFrom } from "./phase";
+import { recordMethods, recordSentAt } from "./domain";
+import { recordApplication } from "./record-service";
 export async function recordAction(_state: ActionState, form: FormData): Promise<ActionState> {
   let destination: string;
   try {
@@ -44,105 +35,20 @@ export async function recordAction(_state: ActionState, form: FormData): Promise
         url: formString(form, "applicationUrl"),
         date: formString(form, "sentDate"),
       });
-    const intent = recordIntent(data.method, data.state === "sent");
     const sentAt = data.state === "sent" ? recordSentAt(data.date) : null;
-    const id = await db.transaction(async (tx) => {
-      // Existing writers share application → job lock order with the outcome service.
-      const [previous] = data.recordId
-        ? await tx
-            .select()
-            .from(applications)
-            .where(eq(applications.id, data.recordId))
-            .for("update")
-        : [];
-      if (
-        data.recordId &&
-        (!previous || previous.jobId !== data.jobId || previous.source !== data.method)
-      )
-        throw new Error("This record does not match the selected opening and method.");
-      const [job] = await tx.select().from(jobs).where(eq(jobs.id, data.jobId)).for("update");
-      if (!job) throw new Error("Choose an existing opening.");
-      if (data.versionId) {
-        const [version] = await tx
-          .select()
-          .from(resumeVersions)
-          .where(eq(resumeVersions.id, data.versionId));
-        if (!version) throw new Error("Choose an existing resume file.");
-      }
-      const values = {
+    const id = await db.transaction((tx) =>
+      recordApplication(tx, {
+        recordId: data.recordId,
         jobId: data.jobId,
-        resumeVersionId: data.versionId,
-        source: data.method,
-        status: intent.status,
-        appliedAt: intent.applied ? sentAt : null,
-        applicationUrl: data.url || null,
+        versionId: data.versionId,
+        method: data.method,
+        state: data.state,
         notes: data.notes,
-      };
-      let recordId: string;
-      if (previous) {
-        const history = await tx
-          .select({
-            eventType: applicationEvents.eventType,
-            occurredAt: applicationEvents.occurredAt,
-          })
-          .from(applicationEvents)
-          .where(eq(applicationEvents.applicationId, previous.id));
-        const linkedMail = await tx
-          .select({
-            classification: mailMessages.classification,
-            receivedAt: mailMessages.receivedAt,
-          })
-          .from(mailMessages)
-          .where(eq(mailMessages.linkedApplicationId, previous.id));
-        const state = recordStateFrom({ ...previous, events: history, linkedMail }, [], []);
-        if (!canEditPlannedRecord(state))
-          throw new Error(
-            "This record has already been sent or closed. Open its record to add an outcome or note.",
-          );
-        await tx
-          .update(applications)
-          .set({
-            ...values,
-            status: ["DRAFT", "PREPARING", "READY_FOR_REVIEW"].includes(previous.status)
-              ? values.status
-              : previous.status,
-            updatedAt: new Date(),
-          })
-          .where(eq(applications.id, previous.id));
-        recordId = previous.id;
-      } else {
-        const [record] = await tx
-          .insert(applications)
-          .values(values)
-          .returning({ id: applications.id });
-        recordId = record.id;
-      }
-      await tx.insert(applicationEvents).values({
-        applicationId: recordId,
-        eventType: intent.eventType,
-        occurredAt: sentAt ?? new Date(),
-        summary: `${methodNames[data.method]} ${data.state === "sent" ? "recorded as sent" : "planned"} for ${job.company} — ${job.title}`,
-        payload: {
-          method: data.method,
-          sentAt: sentAt?.toISOString() ?? null,
-          recipient: data.recipient,
-          resumeVersionId: data.versionId,
-          humanConfirmed: data.state === "sent",
-        },
-      });
-      if (intent.applied)
-        await tx
-          .update(jobs)
-          .set({ status: "APPLIED", updatedAt: new Date() })
-          .where(eq(jobs.id, data.jobId));
-      await tx.insert(activityLogs).values({
-        action: "JOB_ACTION_RECORDED",
-        entityType: "APPLICATION",
-        entityId: recordId,
-        summary: `Recorded ${methodNames[data.method]} for ${job.company}`,
-      });
-      return recordId;
-    });
+        recipient: data.recipient,
+        url: data.url,
+        sentAt,
+      }),
+    );
     revalidatePath("/", "layout");
     destination = `/applications/${id}`;
   } catch (error) {

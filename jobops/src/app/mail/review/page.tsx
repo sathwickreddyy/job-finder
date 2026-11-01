@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
 
 export default function MailReviewPage() {
-  redirect("/applications?emails=1");
+  redirect("/mail");
 }

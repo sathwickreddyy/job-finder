@@ -314,6 +314,39 @@ describe("trusted local-network access", () => {
     }
   });
 
+  it("agent API paths keep the LAN trust rules", () => {
+    localMode();
+    const id = "11111111-1111-4111-8111-111111111111";
+    for (const path of [
+      "/api/v1/mail",
+      "/api/v1/mail/check",
+      `/api/v1/mail/${id}`,
+      `/api/v1/mail/${id}/handle`,
+      "/api/v1/applications",
+      "/api/v1/resumes",
+    ]) {
+      expect(proxy(request("192.168.1.10:3210", path, { method: "POST" })).status).toBe(200);
+      expect(
+        proxy(
+          request("192.168.1.10:3210", path, {
+            method: "POST",
+            headers: { "next-action": "action-id", origin: "http://192.168.1.10:3210" },
+          }),
+        ).status,
+      ).toBe(403);
+      expect(
+        proxy(
+          request("192.168.1.10:3210", path, {
+            method: "POST",
+            headers: { origin: "https://foreign.example" },
+          }),
+        ).status,
+      ).toBe(403);
+    }
+    for (const path of ["/api/v1/mail/not-an-id/handle", "/api/v1/mail/check/extra"])
+      expect(proxy(request("192.168.1.10:3210", path, { method: "POST" })).status).toBe(403);
+  });
+
   it("does not allow server actions to use company API origin exemptions", () => {
     localMode();
     for (const path of [

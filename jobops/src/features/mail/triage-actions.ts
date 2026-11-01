@@ -5,12 +5,8 @@ import { z } from "zod";
 import { db } from "@/db";
 import { safeReturnTo, withNotice } from "@/features/applications/return-to";
 import { actionError, formString, type ActionState } from "@/lib/actions";
-import {
-  dismissMessages,
-  linkMailToRecord,
-  restoreDismissal,
-  unlinkMailFromRecord,
-} from "./handling-service";
+import { unlinkMailWithUndo } from "./auto-apply";
+import { dismissMessages, linkMailToRecord } from "./handling-service";
 
 function refresh(recordId?: string) {
   for (const path of [
@@ -21,8 +17,7 @@ function refresh(recordId?: string) {
   ])
     revalidatePath(path);
 }
-const emailsNotice = (notice: string) =>
-  `/applications?emails=1&notice=${encodeURIComponent(notice)}`;
+const emailsNotice = (notice: string) => `/mail?notice=${encodeURIComponent(notice)}`;
 
 export async function dismissMail(_state: ActionState, form: FormData): Promise<ActionState> {
   let destination: string;
@@ -38,24 +33,6 @@ export async function dismissMail(_state: ActionState, form: FormData): Promise<
       : "These messages have already been handled.";
     const back = safeReturnTo(formString(form, "returnTo"));
     destination = back ? withNotice(back, notice) : emailsNotice(notice);
-  } catch (error) {
-    return actionError(error);
-  }
-  redirect(destination);
-}
-
-export async function undoDismiss(_state: ActionState, form: FormData): Promise<ActionState> {
-  let destination: string;
-  try {
-    const id = z.uuid().parse(formString(form, "mailId"));
-    const token = z.uuid().parse(formString(form, "dismissal"));
-    const count = await db.transaction((tx) => restoreDismissal(tx, id, token));
-    refresh();
-    destination = emailsNotice(
-      count
-        ? `Restored ${count} ${count === 1 ? "message" : "messages"}.`
-        : "This dismissal has already been handled.",
-    );
   } catch (error) {
     return actionError(error);
   }
@@ -92,7 +69,7 @@ export async function unlinkMail(_state: ActionState, form: FormData): Promise<A
     const mailId = z.uuid().parse(formString(form, "mailId"));
     const recordId = z.uuid().parse(formString(form, "recordId"));
     const unlinked = await db.transaction((tx) =>
-      unlinkMailFromRecord(tx, mailId, recordId, new Date()),
+      unlinkMailWithUndo(tx, mailId, recordId, new Date()),
     );
     refresh(recordId);
     destination = `/applications/${recordId}?notice=${encodeURIComponent(unlinked ? "Mail unlinked and returned to Emails. Recorded outcomes and history were kept." : "Mail already unlinked.")}`;

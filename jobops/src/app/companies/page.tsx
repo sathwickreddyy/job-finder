@@ -1,10 +1,16 @@
+import Link from "next/link";
 import { Button, PageHeader } from "@/components/ui";
+import { normalizeCompany } from "@/features/applications/lanes";
+import { PreviousJobForm } from "@/features/companies/previous-job-form";
+import { PreviousBadge } from "@/features/companies/status-pill";
+import { readCompanyIndex } from "@/features/timeline/read";
 import { companyCities } from "@/features/companies/domain";
 import { companyViews, type CompanyView } from "@/features/companies/format";
 import { readCompanies } from "@/features/companies/read";
 import {
   companySummaries,
   sharedPayScale,
+  shortlistViews,
   type CompanySummary,
 } from "@/features/companies/summary";
 import {
@@ -24,12 +30,22 @@ export default async function CompaniesPage({
 }: {
   searchParams: Promise<{ q?: string; view?: string; city?: string }>;
 }) {
-  const [data, query] = await Promise.all([readCompanies(), searchParams]);
+  const [data, query, index] = await Promise.all([
+    readCompanies(),
+    searchParams,
+    readCompanyIndex({}),
+  ]);
   const view: CompanyView = companyViews.some((row) => row.id === query.view)
     ? (query.view as CompanyView)
     : "compare";
   const search = query.q?.trim().toLowerCase() ?? "";
-  const all = companySummaries(data);
+  // The same derived status as Mail; previous employers that don't qualify are listed apart.
+  const { shortlist: all, previous } = shortlistViews(
+    companySummaries(data).map((row) => ({
+      ...row,
+      status: index.statuses[normalizeCompany(row.name)],
+    })),
+  );
   // One pay scale for every filter, so bars stay comparable as the list narrows.
   const scaleMax = sharedPayScale(all);
   const byId = new Map(data.companies.map((company) => [company.id, company]));
@@ -164,6 +180,41 @@ export default async function CompaniesPage({
           {query.q ? ` match “${query.q}”` : ""}. Try another city or search.
         </p>
       )}
+      <section aria-labelledby="previous-employers" className="mt-12">
+        <details className="group">
+          <summary className="flex cursor-pointer list-none items-center gap-2 text-lg font-semibold tracking-tight [&::-webkit-details-marker]:hidden">
+            <span id="previous-employers">Previous employers</span>
+            <span className="text-sm font-normal text-muted-foreground">{previous.length}</span>
+          </summary>
+          <div className="mt-4 space-y-5">
+            {previous.length ? (
+              <ul className="m-0 grid list-none gap-2 p-0 sm:grid-cols-2 lg:grid-cols-3">
+                {previous.map((row) => (
+                  <li key={row.id}>
+                    <Link
+                      href={`/companies/${row.id}`}
+                      className="flex flex-wrap items-center gap-2 rounded-2xl border border-border bg-card p-3 text-foreground hover:border-primary hover:no-underline"
+                    >
+                      <span className="font-medium">{row.name}</span>
+                      {row.status?.previous && (
+                        <PreviousBadge joined={row.status.previous.joined} />
+                      )}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="m-0 text-sm text-muted-foreground">
+                Former employers you add appear here, outside the shortlist.
+              </p>
+            )}
+            <div className="rounded-card border border-border bg-card p-5">
+              <h3 className="m-0 mb-3 text-base font-semibold">Add a previous employer</h3>
+              <PreviousJobForm />
+            </div>
+          </div>
+        </details>
+      </section>
       <p className="mt-12 text-xs text-muted-foreground">
         Research includes its source and observation dates. Community reports reflect their authors’
         experiences. Pay ranges use INR reports only; stock stays in the currency it was granted in.

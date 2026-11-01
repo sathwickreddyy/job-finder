@@ -50,6 +50,9 @@ describe("triage buckets", () => {
     expect(
       bucketOf({ sender: "hr@linkedin.com", classification: "RECRUITER_OUTREACH", recordId: null }),
     ).toBe("roles");
+    expect(
+      bucketOf({ sender: "hr@oracle.com", classification: "INTERVIEW_REJECTION", recordId: null }),
+    ).toBe("updates");
   });
 
   it("maps each classification to its intended outcome, leaving acknowledgements outcome-free", () => {
@@ -62,6 +65,11 @@ describe("triage buckets", () => {
       RECRUITER_OUTREACH: "heard",
       APPLICATION_ACKNOWLEDGEMENT: null,
       UNKNOWN: null,
+      REFERRAL: "referred",
+      INTERVIEW_UPDATE: "heard",
+      BACKGROUND_CHECK: null,
+      ONBOARDING: null,
+      INTERVIEW_REJECTION: "rejected",
     });
   });
 
@@ -138,5 +146,17 @@ describe("triage buckets", () => {
       receivedAt,
       primary: { label: "Save as opening", href: `/jobs/new?fromMail=${record}` },
     });
+  });
+
+  it("counts referral, interview process, background check and joining mail as updates", () => {
+    for (const classification of [
+      "REFERRAL",
+      "INTERVIEW_UPDATE",
+      "BACKGROUND_CHECK",
+      "ONBOARDING",
+    ] as const)
+      expect(bucketOf({ sender: "hr@northstar.example", classification, recordId: "r1" })).toBe(
+        "updates",
+      );
   });
 });

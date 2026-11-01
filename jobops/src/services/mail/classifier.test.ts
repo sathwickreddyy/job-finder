@@ -15,6 +15,48 @@ describe("deterministic mail classification", () => {
     expect(classifyMail({ subject: "Special offer: 50% off" }).relevant).toBe(false);
     expect(classifyMail({ subject: "Update your mobile application" }).relevant).toBe(false);
   });
+  it("recognises the job mail that used to be dropped", () => {
+    for (const [subject, bodyText, type] of [
+      ["Thank you for your application to Oracle", "", "APPLICATION_ACKNOWLEDGEMENT"],
+      [
+        "Thank you for your interest in Northstar",
+        "Our team will review your profile and get back to you.",
+        "APPLICATION_ACKNOWLEDGEMENT",
+      ],
+      // Spec §1: confirmations, reschedules, prep and feedback are the interview process.
+      ["Amazon Interview – CONFIRMATION", "", "INTERVIEW_UPDATE"],
+      ["Your interview has been rescheduled", "", "INTERVIEW_UPDATE"],
+      ["Next round: system design", "", "INTERVIEW_UPDATE"],
+      // An invitation or an assessment still wins over "next round".
+      [
+        "You've moved to the next round",
+        "Please complete the online assessment by Friday.",
+        "ASSESSMENT",
+      ],
+      ["We'd like to invite you for an interview for the next round", "", "INTERVIEW"],
+      ["Feedback - Amazon Onsite Interview", "", "INTERVIEW_UPDATE"],
+      ["Amazon Interview Preparation Call", "", "INTERVIEW_UPDATE"],
+      ["Sathwick, REMINDER to complete your background screen for Amazon", "", "BACKGROUND_CHECK"],
+      [
+        "URGENT Request for Information – Your AMAZON INDIA Background Verification",
+        "",
+        "BACKGROUND_CHECK",
+      ],
+      ["Your joining details for Mon 4 April", "", "ONBOARDING"],
+      ["Date of joining and pre-joining formalities", "", "ONBOARDING"],
+      ["I've referred you for Backend Engineer II", "", "REFERRAL"],
+      ["Referral submitted", "", "REFERRAL"],
+    ])
+      expect(classifyMail({ subject, bodyText }).type, subject).toBe(type);
+  });
+  it("treats a background-check vendor sender as a background check", () => {
+    const result = classifyMail({ subject: "Action needed", sender: "noreply@fadv.com" });
+    expect(result.type).toBe("BACKGROUND_CHECK");
+    expect(result.confidence).toBe(0.9);
+    expect(classifyMail({ subject: "Action needed", sender: "a@mail.hireright.com" }).type).toBe(
+      "BACKGROUND_CHECK",
+    );
+  });
   it("requires review for conflicting event text", () => {
     const result = classifyMail({
       subject: "Interview invitation",

@@ -11,13 +11,21 @@ import {
   disconnectConnection,
   saveConnection,
 } from "../../src/services/mail/providers/connections";
-import { refreshConnection, MailRefreshError } from "../../src/features/mail/refresh-service";
-import type { MailConnection } from "../../src/services/mail/providers/types";
+import { checkConnection, checkKey } from "../../src/features/mail/check-service";
+import type { MailContext } from "../../src/features/mail/context";
+import type { MailConnection, ScannedMessage } from "../../src/services/mail/providers/types";
 let pool: Pool;
 let connection: MailConnection;
 let ownedIds: string[];
-const originalList = gmail.listRecruitingMail;
+const originalScan = gmail.scanMail;
+const originalFolders = gmail.folders;
 const originalRefresh = gmail.refreshTokens;
+const context: MailContext = {
+  baselineAt: "2026-09-01T00:00:00Z",
+  companies: [],
+  applications: [],
+  outbound: [],
+};
 let previousKey: string | undefined;
 let triggerName: string | undefined;
 let triggerTable = "settings";
@@ -31,17 +39,19 @@ async function guard() {
 async function current() {
   return (await db.select().from(mailConnections).where(eq(mailConnections.id, connection.id)))[0];
 }
-async function cursor() {
-  return (
-    await pool.query("select value from settings where key=$1", [`mailCursor:${connection.id}`])
-  ).rows[0]?.value;
+async function checkpoint() {
+  return (await pool.query("select value from settings where key=$1", [checkKey(connection.id)]))
+    .rows[0]?.value;
 }
-function message(suffix: string) {
+// Kept without company context: an explicit update about the user's own application.
+function message(suffix: string): ScannedMessage {
   return {
-    externalId: `${connection.id}:${suffix}`,
-    sender: "recruiter@example.invalid",
-    subject: "Interview invitation",
+    externalId: suffix,
+    sender: "careers@example.invalid",
+    subject: "We received your application",
+    bodyText: "Thank you for applying to the Software Engineer role.",
     receivedAt: "2026-10-01T10:00:00Z",
+    folders: ["Inbox"],
   };
 }
 function barrier() {
@@ -70,6 +80,7 @@ test.beforeEach(async () => {
   pool = new Pool({ connectionString: process.env.DATABASE_URL });
   await guard();
   triggerTable = "settings";
+  gmail.folders = async () => [];
   previousKey = process.env.MAIL_TOKEN_ENCRYPTION_KEY;
   process.env.MAIL_TOKEN_ENCRYPTION_KEY = Buffer.alloc(32, 8).toString("base64");
   const id = randomUUID();
@@ -88,7 +99,8 @@ test.beforeEach(async () => {
     .returning();
 });
 test.afterEach(async () => {
-  gmail.listRecruitingMail = originalList;
+  gmail.scanMail = originalScan;
+  gmail.folders = originalFolders;
   gmail.refreshTokens = originalRefresh;
   await guard();
   if (triggerName) {
@@ -96,6 +108,7 @@ test.afterEach(async () => {
     await pool.query(`DROP FUNCTION IF EXISTS "${triggerName}"()`);
     triggerName = undefined;
   }
+  await pool.query("DELETE FROM mail_tracking WHERE account_email=$1", [connection.email]);
   const messages = await pool.query("SELECT id FROM mail_messages WHERE account_email=$1", [
     connection.email,
   ]);
@@ -108,101 +121,52 @@ test.afterEach(async () => {
   await pool.query("DELETE FROM activity_logs WHERE id=ANY($1::uuid[])", [
     logs.rows.map((row) => row.id),
   ]);
-  await pool.query("DELETE FROM settings WHERE key=ANY($1::text[])", [
-    ownedIds.map((id) => `mailCursor:${id}`),
-  ]);
+  for (const id of ownedIds)
+    await pool.query("DELETE FROM settings WHERE key LIKE $1", [`%${id}%`]);
   await pool.query("DELETE FROM mail_connections WHERE id=ANY($1::uuid[])", [ownedIds]);
   await closeDatabase();
   await pool.end();
   if (previousKey === undefined) delete process.env.MAIL_TOKEN_ENCRYPTION_KEY;
   else process.env.MAIL_TOKEN_ENCRYPTION_KEY = previousKey;
 });
-test("commits each page and reports real partial arrivals; retry resumes without advancing past failure", async () => {
-  const seen: (string | undefined)[] = [];
-  gmail.listRecruitingMail = async (_row, next) => {
-    seen.push(next?.pageToken);
-    if (next?.pageToken === "second") {
-      expect(
-        (
-          await pool.query(
-            "select count(*)::int as count from mail_messages where account_email=$1",
-            [connection.email],
-          )
-        ).rows[0].count,
-      ).toBe(1);
-      expect((await cursor()).pageToken).toBe("second");
-      throw new Error("Gmail page two failed.");
-    }
-    return { messages: [message("one")], nextCursor: { pageToken: "second", query: "frozen" } };
-  };
-  const failure = await refreshConnection(connection).catch((error) => error);
-  expect(failure).toBeInstanceOf(MailRefreshError);
-  expect(failure.result).toEqual({ imported: 1, duplicates: 0, more: true });
-  expect(failure.statusSaved).toBe(true);
-  const partial = await current();
-  expect(partial.lastSyncedAt).toEqual(connection.lastSyncedAt);
-  expect(partial.lastRefreshedCount).toBe(1);
-  expect(partial.lastError).toContain("page two");
-  const start = (await cursor()).startedAt;
-  gmail.listRecruitingMail = async (_row, next) => {
-    expect(next?.pageToken).toBe("second");
-    return { messages: [message("two")] };
-  };
-  expect(await refreshConnection(connection)).toEqual({ imported: 1, duplicates: 0, more: false });
-  expect(await cursor()).toBeUndefined();
-  expect((await current()).lastSyncedAt?.toISOString()).toBe(start);
-  expect((await current()).lastError).toBeNull();
-  expect(seen).toEqual([undefined, "second"]);
-});
-test("a failed cursor checkpoint rolls back the same page's actual import/events/logs", async () => {
+test("a failed checkpoint rolls back the same page's import, ledger and events", async () => {
   triggerName = `task15_${randomUUID().replaceAll("-", "")}`;
   await guard();
   await pool.query(
-    `CREATE FUNCTION "${triggerName}"() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.key = 'mailCursor:${connection.id}' THEN RAISE EXCEPTION 'checkpoint rejected'; END IF; RETURN NEW; END $$`,
+    `CREATE FUNCTION "${triggerName}"() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.key = '${checkKey(connection.id)}' THEN RAISE EXCEPTION 'checkpoint rejected'; END IF; RETURN NEW; END $$`,
   );
   await pool.query(
     `CREATE TRIGGER "${triggerName}" BEFORE INSERT OR UPDATE ON settings FOR EACH ROW EXECUTE FUNCTION "${triggerName}"()`,
   );
-  gmail.listRecruitingMail = async () => ({
-    messages: [message("rollback")],
-    nextCursor: { pageToken: "next" },
+  gmail.scanMail = async () => ({ messages: [message("rollback")], next: "next" });
+  expect(await checkConnection(connection, context)).toMatchObject({
+    status: "failed",
+    newAttention: 0,
   });
-  const failure = await refreshConnection(connection).catch((error) => error);
-  expect(failure.result.imported).toBe(0);
-  expect(
-    (await pool.query("select id from mail_messages where account_email=$1", [connection.email]))
-      .rows,
-  ).toEqual([]);
-  expect(
-    (
-      await pool.query("select id from activity_logs where metadata->>'accountEmail'=$1", [
-        connection.email,
-      ])
-    ).rows,
-  ).toEqual([]);
-  expect(await cursor()).toBeUndefined();
+  for (const table of ["mail_messages", "mail_tracking"])
+    expect(
+      (await pool.query(`select id from ${table} where account_email=$1`, [connection.email])).rows,
+    ).toEqual([]);
+  expect(await checkpoint()).toBeUndefined();
   expect((await current()).lastSyncedAt).toEqual(connection.lastSyncedAt);
 });
-test("bounds to four pages and serializes concurrent refreshes across database sessions", async () => {
+test("serializes concurrent checks of one inbox across database sessions", async () => {
   const entered = barrier(),
     release = barrier();
   let calls = 0;
   const seen: (string | undefined)[] = [];
-  gmail.listRecruitingMail = async (_row, next) => {
+  gmail.scanMail = async (_row, request) => {
     calls++;
-    seen.push(next?.pageToken);
+    seen.push(request.next);
     if (calls === 1) {
       entered.resolve();
       await release.promise;
     }
-    return {
-      messages: [message(String(calls))],
-      nextCursor: { pageToken: String(calls), query: "frozen" },
-    };
+    return { messages: [message(String(calls))], next: String(calls) };
   };
-  const first = refreshConnection(connection);
+  const first = checkConnection(connection, context);
   await entered.promise;
-  const second = refreshConnection(connection);
+  const second = checkConnection(connection, context);
   try {
     await lockWait();
     expect(calls).toBe(1);
@@ -210,21 +174,23 @@ test("bounds to four pages and serializes concurrent refreshes across database s
     release.resolve();
   }
   const result = await Promise.all([first, second]);
-  expect(result.map((row) => row.imported)).toEqual([4, 4]);
-  expect(calls).toBe(8);
-  expect(seen).toEqual([undefined, "1", "2", "3", "4", "5", "6", "7"]);
-  expect((await cursor()).pageToken).toBe("8");
+  expect(result.map((row) => [row.status, row.newAttention])).toEqual([
+    ["more", 1],
+    ["more", 1],
+  ]);
+  expect(seen).toEqual([undefined, "1"]);
+  expect((await checkpoint()).next).toBe("2");
   expect((await current()).lastSyncedAt).toEqual(connection.lastSyncedAt);
 });
-test("releases lock on provider failure and a queued disconnect cannot resurrect cursor or credentials", async () => {
+test("releases the lock on provider failure and a queued disconnect leaves no progress or credentials", async () => {
   const entered = barrier(),
     release = barrier();
-  gmail.listRecruitingMail = async () => {
+  gmail.scanMail = async () => {
     entered.resolve();
     await release.promise;
     throw new Error("Gmail authorization expired. Reconnect Gmail.");
   };
-  const refresh = refreshConnection(connection).catch((error) => error);
+  const check = checkConnection(connection, context);
   await entered.promise;
   const disconnect = disconnectConnection(connection.id);
   try {
@@ -232,11 +198,14 @@ test("releases lock on provider failure and a queued disconnect cannot resurrect
   } finally {
     release.resolve();
   }
-  expect(await refresh).toBeInstanceOf(MailRefreshError);
+  expect(await check).toMatchObject({ status: "failed" });
   await disconnect;
   expect(await current()).toBeUndefined();
-  expect(await cursor()).toBeUndefined();
-  await expect(refreshConnection(connection)).rejects.toThrow("disconnected");
+  expect(await checkpoint()).toBeUndefined();
+  expect(await checkConnection(connection, context)).toMatchObject({
+    status: "failed",
+    error: expect.stringContaining("disconnected"),
+  });
   await expect(accessTokenFor(connection)).rejects.toThrow("disconnected");
 });
 test("refresh token rotation is serialized, persists both tokens, and omission retains refresh token and identity", async () => {
@@ -295,7 +264,7 @@ test("refresh token rotation is serialized, persists both tokens, and omission r
   expect(decryptToken((await current()).encryptedRefreshToken!)).toBe("rotated");
 });
 
-test("partial arrivals survive a secondary failure while persisting error status", async () => {
+test("committed pages survive a secondary failure while persisting error status", async () => {
   triggerName = `task15_${randomUUID().replaceAll("-", "")}`;
   triggerTable = "mail_connections";
   await guard();
@@ -305,17 +274,21 @@ test("partial arrivals survive a secondary failure while persisting error status
   await pool.query(
     `CREATE TRIGGER "${triggerName}" BEFORE UPDATE ON mail_connections FOR EACH ROW EXECUTE FUNCTION "${triggerName}"()`,
   );
-  gmail.listRecruitingMail = async (_row, next) => {
-    if (next) throw new Error("Gmail authorization expired. Reconnect Gmail.");
-    return { messages: [message("partial-status")], nextCursor: { pageToken: "retry" } };
+  gmail.scanMail = async (_row, request) => {
+    if (request.next) throw new Error("Gmail authorization expired. Reconnect Gmail.");
+    return { messages: [message("partial-status")], next: "retry" };
   };
-  const failure = await refreshConnection(connection).catch((error) => error);
-  expect(failure).toBeInstanceOf(MailRefreshError);
-  expect(failure.result).toEqual({ imported: 1, duplicates: 0, more: true });
-  expect(failure.statusSaved).toBe(false);
+  expect(await checkConnection(connection, context)).toMatchObject({
+    status: "more",
+    newAttention: 1,
+  });
+  expect(await checkConnection(connection, context)).toMatchObject({ status: "failed" });
   expect((await current()).lastRefreshedCount).toBe(1);
-  expect((await cursor()).pageToken).toBe("retry");
-  // Release is still guaranteed after both provider and status persistence errors.
-  gmail.listRecruitingMail = async () => ({ messages: [] });
-  expect(await refreshConnection(connection)).toEqual({ imported: 0, duplicates: 0, more: false });
+  expect((await checkpoint()).next).toBe("retry");
+  // The lock is still released after both provider and status persistence errors.
+  gmail.scanMail = async () => ({ messages: [] });
+  expect(await checkConnection(connection, context)).toMatchObject({
+    status: "done",
+    newAttention: 0,
+  });
 });

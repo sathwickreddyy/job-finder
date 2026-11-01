@@ -6,6 +6,22 @@ import { db } from "@/db";
 import { companyRecords, companyLocations, resumes, settings } from "@/db/schema";
 import { actionError, formString, type ActionState } from "@/lib/actions";
 import { companyResumeKey, companyResumeSchema } from "./domain";
+import { addPreviousJob, type previousJobInput } from "./previous-job";
+import type { z } from "zod";
+
+/** Add previous job / Add a previous employer. */
+export async function addPreviousJobAction(
+  input: z.input<typeof previousJobInput>,
+): Promise<ActionState & { linked?: number }> {
+  try {
+    const { linked } = await addPreviousJob(input);
+    for (const path of ["/companies", "/mail", "/applications", "/"]) revalidatePath(path);
+    revalidatePath("/companies/[slug]", "page");
+    return { linked };
+  } catch (error) {
+    return actionError(error);
+  }
+}
 
 export async function saveCompanyResume(_state: ActionState, form: FormData): Promise<ActionState> {
   try {

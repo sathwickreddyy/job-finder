@@ -1,37 +1,46 @@
 import { eq } from "drizzle-orm";
-import { z } from "zod";
 import type { db } from "@/db";
-import { applications, type mailEvents, type mailMessages } from "@/db/schema";
+import {
+  applications,
+  companyRecords,
+  jobs,
+  type mailEvents,
+  type mailMessages,
+} from "@/db/schema";
+import { ApiError } from "@/features/agent-api/http";
+import { normalizeCompany } from "@/features/applications/lanes";
+import { companyKeyFor } from "./context";
 import type { MailTx } from "./handling-service";
-import { bucketOf } from "./triage";
 
-/** Read current stored evidence; a chosen target must never manufacture a source match. */
+/**
+ * Any email may be linked or used as an outcome source, except an acknowledgement as an
+ * outcome, or an email already placed at a different company than the record.
+ */
 export async function requireRecordMail(
   executor: typeof db | MailTx,
   message: typeof mailMessages.$inferSelect,
-  events: (typeof mailEvents.$inferSelect)[],
+  _events: (typeof mailEvents.$inferSelect)[],
   recordId: string,
   mode: "link" | "outcome",
 ) {
-  const suggestion = events.find(
-    (event) => typeof event.details.suggestedApplicationId === "string",
-  )?.details.suggestedApplicationId;
-  const [matched] =
-    typeof suggestion === "string" && z.uuid().safeParse(suggestion).success
-      ? await executor
-          .select({ id: applications.id })
-          .from(applications)
-          .where(eq(applications.id, suggestion))
-      : [];
-  const bucket = bucketOf({ ...message, recordId: matched?.id ?? null });
-  if (bucket === "updates") return;
-  if (message.classification === "APPLICATION_ACKNOWLEDGEMENT" && matched?.id === recordId) {
-    if (mode === "link") return;
+  if (mode === "outcome" && message.classification === "APPLICATION_ACKNOWLEDGEMENT")
     throw new Error("Link this acknowledgement without recording an outcome.");
-  }
-  throw new Error(
-    bucket === "roles"
-      ? "This source message belongs in New roles for you. Save it as an opening from Emails."
-      : "This source message belongs in Probably noise. Only Updates or a matched acknowledgement can be linked to a record.",
-  );
+  if (!message.companyKey) return;
+  const [record] = await executor
+    .select({ company: jobs.company })
+    .from(applications)
+    .innerJoin(jobs, eq(jobs.id, applications.jobId))
+    .where(eq(applications.id, recordId));
+  const companies = await executor
+    .select({ name: companyRecords.name, aliases: companyRecords.aliases })
+    .from(companyRecords)
+    .where(eq(companyRecords.status, "ACTIVE"));
+  if (record && companyKeyFor(record.company, companies) !== message.companyKey)
+    throw new ApiError(
+      `This email is placed at ${
+        companies.find((company) => normalizeCompany(company.name) === message.companyKey)?.name ??
+        message.companyKey
+      }. Move it before recording this outcome.`,
+      409,
+    );
 }

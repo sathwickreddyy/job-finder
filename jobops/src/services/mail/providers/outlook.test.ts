@@ -2,9 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { outlook, OUTLOOK_SCOPES, readOnlyScopes } from "./outlook";
 import { providerFor, providerBySlug } from "./index";
 import type { MailConnection } from "./types";
+import { outlookSearchQuery, type SearchRequest } from "./search-query";
 
 const origin = "http://127.0.0.1:3210";
-const endpoint = "https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messages";
 const connection = { lastSyncedAt: new Date("2026-10-02T00:00:00Z") } as MailConnection;
 const message = (patch: Record<string, unknown> = {}) => ({
   id: "AAMk-MovedID",
@@ -162,163 +162,62 @@ describe("Outlook read-only OAuth", () => {
   });
 });
 
-describe("Outlook recruiting mail", () => {
-  beforeEach(() => vi.spyOn(outlook, "accessToken").mockResolvedValue("access"));
-  it("reads top50 selected inbox fields since last sync with ordered filter and text/immutable preference", async () => {
-    const request = vi.fn().mockResolvedValue(Response.json({ value: [] }));
-    vi.stubGlobal("fetch", request);
-    expect(await outlook.listRecruitingMail(connection)).toEqual({
-      messages: [],
-      nextCursor: undefined,
-    });
-    const [url, options] = request.mock.calls[0];
-    const parsed = new URL(url);
-    expect(parsed.origin + parsed.pathname).toBe(endpoint);
-    expect(Object.fromEntries(parsed.searchParams)).toMatchObject({
-      $top: "50",
-      $filter: "receivedDateTime ge 2026-10-01T00:00:00.000Z",
-      $orderby: "receivedDateTime desc",
-    });
-    expect(parsed.searchParams.get("$select")?.split(",")).toEqual(
-      expect.arrayContaining([
-        "id",
-        "internetMessageId",
-        "conversationId",
-        "subject",
-        "bodyPreview",
-        "body",
-        "from",
-        "toRecipients",
-        "receivedDateTime",
-      ]),
-    );
-    expect(new Headers(options.headers).get("Prefer")).toBe(
-      'outlook.body-content-type="text", IdType="ImmutableId"',
-    );
-    expect(options).toMatchObject({ cache: "no-store", redirect: "error" });
-  });
-  it("uses 30 days for initial sync", async () => {
-    vi.spyOn(Date, "now").mockReturnValue(Date.parse("2026-10-03T00:00:00Z"));
-    const request = vi.fn().mockResolvedValue(Response.json({ value: [] }));
-    vi.stubGlobal("fetch", request);
-    await outlook.listRecruitingMail({ ...connection, lastSyncedAt: null });
-    expect(new URL(request.mock.calls[0][0]).searchParams.get("$filter")).toBe(
-      "receivedDateTime ge 2026-09-03T00:00:00.000Z",
-    );
-  });
-  it("uses message ID primarily, case-sensitive immutable fallback, maps text, and filters non-recruiting mail", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue(
-        Response.json({
-          value: [
-            message(),
-            message({ internetMessageId: null, id: "CaseSensitiveID" }),
-            message({
-              subject: "Dinner plans",
-              body: { content: "See you tonight" },
-              bodyPreview: "Dinner",
-            }),
-          ],
-        }),
-      ),
-    );
-    const { messages } = await outlook.listRecruitingMail(connection);
-    expect(messages).toHaveLength(2);
-    expect(messages[0]).toMatchObject({
-      externalId: "<abc@mail.example>",
-      threadId: "conv-1",
-      sender: "talent@example.invalid",
-      senderName: "Talent Team",
-      recipient: "person@outlook.in",
-      subject: "Interview invitation for SDE-2",
-      receivedAt: "2026-10-03T03:30:00.000Z",
-      bodyText: "We would like to schedule your interview with our team.",
-    });
-    expect(messages[1].externalId).toBe("CaseSensitiveID");
-  });
-  it.each([
-    endpoint,
-    "https://graph.microsoft.com/v1.0/me/mailfolders/inbox/messages",
-    "https://graph.microsoft.com/v1.0/me/mailFolders('inbox')/messages",
-    "https://graph.microsoft.com/v1.0/me/mailfolders('inbox')/messages",
-  ])(
-    "reuses full opaque paging URLs from %s and repeats both preferences",
-    async (resource) => {
-      const next = `${resource}?$skiptoken=a%2Bb%2Fc%3D&$top=50`;
-      const request = vi
-        .fn()
-        .mockResolvedValueOnce(Response.json({ value: [], "@odata.nextLink": next }))
-        .mockResolvedValueOnce(Response.json({ value: [message()] }));
-      vi.stubGlobal("fetch", request);
-      const page = await outlook.listRecruitingMail(connection);
-      expect(page.nextCursor).toEqual({ next });
-      expect((await outlook.listRecruitingMail(connection, page.nextCursor)).messages).toHaveLength(
-        1,
-      );
-      expect(request.mock.calls[1][0]).toBe(next);
-      expect(new Headers(request.mock.calls[1][1].headers).get("Prefer")).toBe(
-        'outlook.body-content-type="text", IdType="ImmutableId"',
-      );
-    },
-  );
-  it.each([
-    "https://evil.invalid/v1.0/me/mailFolders/inbox/messages",
-    "http://graph.microsoft.com/v1.0/me/mailFolders/inbox/messages",
-    "https://graph.microsoft.com.evil.invalid/v1.0/me/mailFolders/inbox/messages",
-    "https://graph.microsoft.com:444/v1.0/me/mailFolders/inbox/messages",
-    "https://user:password@graph.microsoft.com/v1.0/me/mailFolders/inbox/messages",
-    `${endpoint}#fragment`,
-    `${endpoint}#`,
-    "https://graph.microsoft.com/v1.0/me/messages",
-    "https://graph.microsoft.com/v1.0/me/mailFolders('sentitems')/messages",
-    "https://graph.microsoft.com/v1.0/me/mailFolders('inbox')/messages/extra",
-    "https://graph.microsoft.com/oauth2/v2.0/token",
-    "https://login.microsoftonline.com/consumers/oauth2/v2.0/token",
-    "https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messages/extra",
-    "/v1.0/me/mailFolders/inbox/messages",
-  ])("rejects unsafe paging destination %s before sending credentials", async (next) => {
-    const request = vi
-      .fn()
-      .mockResolvedValue(Response.json({ value: [], "@odata.nextLink": next }));
-    vi.stubGlobal("fetch", request);
-    await expect(outlook.listRecruitingMail(connection, { next })).rejects.toThrow("paging URL");
-    expect(request).not.toHaveBeenCalled();
-    await expect(outlook.listRecruitingMail(connection)).rejects.toThrow("paging URL");
-    expect(request).toHaveBeenCalledTimes(1);
-  });
-  it.each([
-    [401, "Reconnect Outlook"],
-    [429, "rate limit"],
-    [500, "temporarily unavailable"],
-  ])("returns actionable sanitized errors for HTTP %s", async (status, text) => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue(Response.json({ error: "secret server response" }, { status })),
-    );
-    await expect(outlook.listRecruitingMail(connection)).rejects.toThrow(text);
-  });
-});
-
 it("keeps a mail with many To recipients within the import display limit", async () => {
   const addresses = Array.from({ length: 45 }, (_, i) => `candidate${i}@example.invalid`);
   vi.spyOn(outlook, "accessToken").mockResolvedValue("access");
   vi.stubGlobal(
     "fetch",
-    vi
-      .fn()
-      .mockResolvedValue(
-        Response.json({
-          value: [
-            message({ toRecipients: addresses.map((address) => ({ emailAddress: { address } })) }),
-          ],
-        }),
-      ),
+    vi.fn().mockResolvedValue(
+      Response.json({
+        value: [
+          message({ toRecipients: addresses.map((address) => ({ emailAddress: { address } })) }),
+        ],
+      }),
+    ),
   );
-  const page = await outlook.listRecruitingMail(connection);
+  const page = await outlook.scanMail(connection, { until: "2026-10-30T00:00:00Z" }, []);
   expect(page.messages).toHaveLength(1);
   expect(page.messages[0]).toMatchObject({
-    externalId: "<abc@mail.example>",
+    externalId: "AAMk-MovedID",
     recipient: addresses.join(", ").slice(0, 999) + "…",
   });
+});
+
+const search: SearchRequest = {
+  since: "2026-10-01T00:00:00Z",
+  until: "2026-10-31T00:00:00Z",
+  identity: { names: ["Northstar"], keywords: [], senders: [], domains: ["example.invalid"] },
+};
+it("searchMail sends the built query and enforces the exact window", async () => {
+  vi.spyOn(outlook, "accessToken").mockResolvedValue("access");
+  const request = vi.fn().mockResolvedValue(
+    Response.json({
+      value: [
+        message({ id: "inside", parentFolderId: "junk" }),
+        message({ id: "draft", parentFolderId: "drafts", isDraft: true }),
+        message({ id: "early", receivedDateTime: "2026-09-30T20:00:00Z", parentFolderId: "junk" }),
+      ],
+    }),
+  );
+  vi.stubGlobal("fetch", request);
+  const folders = [
+    { id: "junk", name: "Junk Email" },
+    { id: "drafts", name: "Drafts", contextOnly: true },
+  ];
+  const page = await outlook.searchMail(connection, search, folders);
+  const url = new URL(request.mock.calls[0][0]);
+  expect(url.pathname).toBe("/v1.0/me/messages");
+  expect(url.searchParams.get("$search")).toBe(outlookSearchQuery(search));
+  expect(url.searchParams.get("$top")).toBe("25");
+  expect(page.query).toBe(outlookSearchQuery(search));
+  expect(page.messages.map((row) => row.externalId)).toEqual(["inside"]);
+  expect(page.messages[0].folders).toEqual(["Junk Email"]);
+});
+it("Outlook fetchMessage returns null on 404", async () => {
+  vi.spyOn(outlook, "accessToken").mockResolvedValue("access");
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockResolvedValue(Response.json({ error: { message: "missing" } }, { status: 404 })),
+  );
+  expect(await outlook.fetchMessage(connection, "gone", [])).toBeNull();
 });

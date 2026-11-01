@@ -1,51 +1,99 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
-const mocks = vi.hoisted(() => ({ search: vi.fn() }));
-vi.mock("@/features/mail/search-service", () => ({
-  searchMail: mocks.search,
-  MailSearchError: class extends Error {
-    status = 400;
-  },
+import { expect, it, vi } from "vitest";
+import type { MailContext } from "@/features/mail/context";
+
+vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
+const context: MailContext = {
+  baselineAt: "2026-10-01T00:00:00Z",
+  applications: [],
+  outbound: [],
+  companies: [
+    {
+      id: "level ai",
+      name: "Level AI",
+      slug: "level-ai",
+      baselineAt: "2026-10-01T00:00:00Z",
+      ruleSource: "test",
+      rule: {
+        company: "Level AI",
+        aliases: [],
+        domains: [],
+        senders: [],
+        keywords: [],
+        excludedTerms: [],
+      },
+    },
+  ],
+};
+vi.mock("@/features/mail/context", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/features/mail/context")>()),
+  loadMailContext: async () => context,
 }));
-import { GET, POST } from "@/app/api/v1/mail/search/route";
-afterEach(() => vi.clearAllMocks());
-const request = (body: string, headers: Record<string, string> = { "content-type": "application/json" }) =>
-  new Request("http://localhost/api/v1/mail/search", { method: "POST", headers, body });
-describe("mail search API", () => {
-  it("publishes a discoverable contract and example N-day search", async () => {
-    const response = GET();
-    expect(response.headers.get("cache-control")).toBe("private, no-store");
-    expect((await response.json()).examples).toContainEqual({ lastDays: 3 });
+const readCompanySearch = vi.fn();
+const companySearchStep = vi.fn();
+vi.mock("@/features/mail/company-search", () => ({
+  readCompanySearch: (...args: unknown[]) => readCompanySearch(...args),
+  companySearchStep: (...args: unknown[]) => companySearchStep(...args),
+}));
+const includeMail = vi.fn();
+vi.mock("@/features/mail/include", () => ({
+  includeMail: (...args: unknown[]) => includeMail(...args),
+}));
+import { PUT } from "@/app/api/v1/mail/company/[key]/rule/route";
+import { GET, POST } from "@/app/api/v1/mail/company/[key]/search/route";
+import { POST as include } from "@/app/api/v1/mail/[id]/include/route";
+
+const json = (method: string, body: unknown) =>
+  new Request("http://localhost/api", {
+    method,
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
   });
-  it("forwards explicit search criteria and returns structured per-account progress", async () => {
-    mocks.search.mockResolvedValue({
-      complete: false,
-      accounts: [{ account: "me@example.com", fetched: 25 }],
-      nextCursor: "opaque",
-    });
-    const response = await POST(request('{"lastDays":7,"keywords":["Amazon"]}'));
-    expect(mocks.search).toHaveBeenCalledWith({ lastDays: 7, keywords: ["Amazon"] });
-    expect((await response.json()).nextCursor).toBe("opaque");
-  });
-  it("rejects wrong media types, malformed bodies, server-action headers and oversized inputs", async () => {
-    expect((await POST(request("{}", { "content-type": "text/plain" }))).status).toBe(415);
-    expect((await POST(request("invalid"))).status).toBe(400);
-    expect(
-      (
-        await POST(
-          request("{}", { "content-type": "application/json", "next-action": "x" } as Record<
-            string,
-            string
-          >),
-        )
-      ).status,
-    ).toBe(403);
-    expect((await POST(request(" ".repeat(65537)))).status).toBe(413);
-    expect(mocks.search).not.toHaveBeenCalled();
-  });
-  it("does not leak unexpected database/provider errors", async () => {
-    mocks.search.mockRejectedValue(new Error("secret SQL/token"));
-    const response = await POST(request("{}"));
-    expect(response.status).toBe(500);
-    expect(await response.text()).not.toContain("secret");
-  });
+const key = (value: string) => ({ params: Promise.resolve({ key: value }) });
+
+it("PUT rule refuses a generic keyword with 400", async () => {
+  const response = await PUT(
+    json("PUT", {
+      aliases: [],
+      domains: [],
+      senders: [],
+      keywords: ["Interview"],
+      excludedTerms: [],
+    }),
+    key("level%20ai"),
+  );
+  expect(response.status).toBe(400);
+  expect((await response.json()).error).toBe(
+    '"Interview" appears in every company\'s mail, so it can\'t identify Level AI. Try a phrase like "Level AI Talent".',
+  );
+  expect((await PUT(json("PUT", { aliases: [] }), key("nobody"))).status).toBe(404);
+});
+
+it("GET search returns queries for each inbox", async () => {
+  readCompanySearch.mockResolvedValue({ queries: { "me@gmail.com": "-in:sent …" } });
+  const response = await GET(new Request("http://localhost/api"), key("level%20ai"));
+  expect(response.status).toBe(200);
+  expect(readCompanySearch).toHaveBeenCalledWith("level ai");
+  expect((await response.json()).queries).toEqual({ "me@gmail.com": "-in:sent …" });
+});
+
+it("POST search starts with options and continues with an empty body", async () => {
+  companySearchStep.mockResolvedValue({ more: false, run: {}, lanes: [] });
+  expect((await POST(json("POST", { lastDays: 365, restart: true }), key("level ai"))).status).toBe(
+    200,
+  );
+  expect(companySearchStep).toHaveBeenLastCalledWith("level ai", { lastDays: 365, restart: true });
+  expect(
+    (await POST(new Request("http://localhost/api", { method: "POST" }), key("level ai"))).status,
+  ).toBe(200);
+  expect(companySearchStep).toHaveBeenLastCalledWith("level ai", {});
+  expect((await POST(json("POST", { since: "yesterday" }), key("level ai"))).status).toBe(400);
+});
+
+it("POST include passes the company and refuses a missing one", async () => {
+  includeMail.mockResolvedValue({ addedSender: null });
+  const id = "6f1c3c2a-6a8a-4a57-9d1e-2b0a3f7c8d90";
+  const params = { params: Promise.resolve({ id }) };
+  expect((await include(json("POST", { company: "level ai" }), params)).status).toBe(200);
+  expect(includeMail).toHaveBeenCalledWith(id, "level ai");
+  expect((await include(json("POST", {}), params)).status).toBe(400);
 });

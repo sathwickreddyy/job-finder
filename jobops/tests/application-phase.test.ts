@@ -80,11 +80,18 @@ describe("available outcomes", () => {
       "heard",
       "oa",
       "scheduled",
+      "offer",
       "followup",
       "rejected",
       "ghosted",
       "withdrew",
     ]));
+  it("offers Got an offer from Applied", () =>
+    expect(availableOutcomes(state())).toContain("offer"));
+  it("keeps offer out while a round is booked", () =>
+    expect(
+      availableOutcomes(state({ status: "TECHNICAL_INTERVIEW", rounds: [booked] })),
+    ).not.toContain("offer"));
   it("only settles or moves a booked round", () =>
     expect(availableOutcomes(state({ status: "TECHNICAL_INTERVIEW", rounds: [booked] }))).toEqual([
       "passed",
@@ -378,6 +385,18 @@ it("uses linked real inbound mail but ignores automatic acknowledgements", () =>
     sent: false,
     replied: false,
   });
+});
+
+it("counts linked mail as a reply only once it is handled", () => {
+  const app = { source: "COLD_EMAIL", status: "APPLIED" as const, appliedAt: NOW };
+  const placed = { classification: "FOLLOW_UP", receivedAt: NOW, attentionState: "OPEN" };
+  const waiting = recordStateFrom({ ...app, linkedMail: [placed] }, [], []);
+  expect(waiting.replied).toBe(false);
+  expect(availableOutcomes(waiting)).toContain("replied");
+  expect(
+    recordStateFrom({ ...app, linkedMail: [{ ...placed, attentionState: "DONE" }] }, [], [])
+      .replied,
+  ).toBe(true);
 });
 
 it("restarts outreach awaiting reply after a follow-up later than inbound evidence", () => {

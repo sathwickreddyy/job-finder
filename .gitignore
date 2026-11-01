@@ -42,3 +42,6 @@ coverage/
 
 # Local visual-companion sessions contain access keys and interaction history
 .superpowers/
+
+# Private database backups and rehearsal counts
+/backups/

@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { eq, inArray, sql } from "drizzle-orm";
 import { expect, test } from "@playwright/test";
+import { hydrated } from "./helpers/hydration";
 import { closeDatabase, db } from "../../src/db";
 import {
   activityLogs,
@@ -18,7 +19,6 @@ import { applyOutcome } from "../../src/features/applications/outcome-service";
 import {
   dismissMessages,
   linkMailToRecord,
-  restoreDismissal,
   unlinkMailFromRecord,
 } from "../../src/features/mail/handling-service";
 import { readMailTriage } from "../../src/features/mail/read";
@@ -316,7 +316,7 @@ test("linked inbound drives outreach state and unlink preserves later outcomes",
   );
 });
 
-test("legacy DONE stays handled; dismiss skips linked mail and undo cannot resurrect it", async () => {
+test("legacy DONE stays handled and dismiss skips linked mail", async () => {
   const app = await record();
   const legacy = await message({ attentionState: "DONE" });
   const linked = await message();
@@ -333,24 +333,13 @@ test("legacy DONE stays handled; dismiss skips linked mail and undo cannot resur
   expect(triage.messages.some((row) => [legacy.id, linked.id, open.id].includes(row.id))).toBe(
     false,
   );
-  const dismissed = (await state(app.id, open.id)).mailEvents[0];
-  const token = String(dismissed.details.triageDismissal);
-  await guard();
-  expect(await db.transaction((tx) => restoreDismissal(tx, open.id, token))).toBe(1);
-  await guard();
-  await db.transaction((tx) => linkMailToRecord(tx, open.id, app.id, new Date()));
-  await guard();
-  await expect(db.transaction((tx) => restoreDismissal(tx, open.id, token))).rejects.toThrow(
-    /no longer/,
-  );
-  expect((await state(app.id, open.id)).mail.linkedApplicationId).toBe(app.id);
   await guard();
   await expect(
     db.transaction((tx) => linkMailToRecord(tx, legacy.id, app.id, new Date())),
   ).rejects.toThrow(/handled/);
 });
 
-test("bulk dismiss covers more than 200 messages and undo restores that operation only", async () => {
+test("bulk dismiss covers more than 200 messages and leaves other buckets open", async () => {
   const mailIds: string[] = Array.from({ length: 205 }, () => randomUUID());
   ids.mail.push(...mailIds);
   await guard();
@@ -383,42 +372,9 @@ test("bulk dismiss covers more than 200 messages and undo restores that operatio
       expect(dismissed.every((row) => row.attentionState === "DONE")).toBe(true);
       const [untouched] = await tx.select().from(mailMessages).where(eq(mailMessages.id, role.id));
       expect(untouched.attentionState).toBe("OPEN");
-      const [event] = await tx
-        .select()
-        .from(mailEvents)
-        .where(eq(mailEvents.mailMessageId, mailIds[0]));
-      expect(
-        await restoreDismissal(tx, mailIds[0], String(event.details.triageDismissal)),
-      ).toBeGreaterThanOrEqual(205);
-      const restored = await tx
-        .select()
-        .from(mailMessages)
-        .where(inArray(mailMessages.id, mailIds));
-      expect(restored.every((row) => row.attentionState === "OPEN")).toBe(true);
       throw new Error("rollback whole-bucket test");
     }),
   ).rejects.toThrow("rollback whole-bucket test");
-});
-
-test("Emails buckets dismiss with durable confirmation and Undo at 390px", async ({ page }) => {
-  const app = await record();
-  const ack = await message(
-    { classification: "APPLICATION_ACKNOWLEDGEMENT", subject: `Acknowledged ${randomUUID()}` },
-    app.id,
-  );
-  await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto("/applications?emails=1");
-  const card = page
-    .getByRole("listitem")
-    .filter({ has: page.getByRole("link", { name: ack.subject, exact: true }) });
-  await expect(card.getByRole("button", { name: "Link", exact: true })).toBeVisible();
-  await card.getByRole("button", { name: "Dismiss", exact: true }).click();
-  await expect(page.getByRole("status").filter({ hasText: "Dismissed 1 message." })).toBeVisible();
-  await expect(page.getByRole("link", { name: ack.subject, exact: true })).toHaveCount(0);
-  await page.getByRole("button", { name: "Undo last dismiss" }).click();
-  await expect(page.getByRole("status").filter({ hasText: "Restored 1 message." })).toBeVisible();
-  await expect(page.getByRole("link", { name: ack.subject, exact: true })).toBeVisible();
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 
 test("mail outcome keeps success and focus after resolution; unlink reopens mail", async ({
@@ -426,27 +382,32 @@ test("mail outcome keeps success and focus after resolution; unlink reopens mail
 }) => {
   const app = await record("REFERRAL");
   const mail = await message({ classification: "FOLLOW_UP" }, app.id);
+  const row = `/applications\\?open=${app.id}`;
+  // An old record link opens the row in place with the form ready.
   await page.goto(`/applications/${app.id}?mail=${mail.id}&outcome=heard#what-happened`);
+  await expect(page).toHaveURL(new RegExp(`${row}&mail=${mail.id}&outcome=heard`));
   await expect(page.locator('#what-happened input[name="outcome"]')).toHaveValue("replied");
+  await hydrated(page.getByRole("button", { name: "Save", exact: true }));
   await page.getByRole("button", { name: "Save", exact: true }).click();
   // Assert after the successful operation's actual cleanup navigation, not transient feedback.
-  await expect(page).toHaveURL(new RegExp(`/applications/${app.id}$`));
+  await expect(page).toHaveURL(new RegExp(`${row}$`));
   await expect(page.locator('#what-happened input[name="mailId"]')).toHaveCount(0);
   await expect(page.getByRole("status").filter({ hasText: "Saved: Replied." })).toBeVisible();
   await expect(page.getByRole("region", { name: "Progress", exact: true })).toBeFocused();
-  await expect(page.getByText(`Linking mail: ${mail.subject}`, { exact: true })).toHaveCount(0);
+  await expect(page.getByText(`From this email: ${mail.subject}`, { exact: true })).toHaveCount(0);
   await page.goBack();
-  await expect(page).toHaveURL(
-    new RegExp(`/applications/${app.id}\\?mail=${mail.id}&outcome=heard#what-happened$`),
-  );
+  await expect(page).toHaveURL(new RegExp(`${row}&mail=${mail.id}&outcome=heard`));
   await expect(
     page.getByRole("alert").filter({ hasText: "source message has already been handled" }),
   ).toBeVisible();
   await expect(page.getByRole("status").filter({ hasText: "Saved: Replied." })).toHaveCount(0);
   await expect(page.locator('#what-happened input[name="outcome"]')).toHaveCount(0);
   await page.goForward();
-  await expect(page).toHaveURL(new RegExp(`/applications/${app.id}$`));
+  await expect(page).toHaveURL(new RegExp(`${row}$`));
   await expect(page.getByRole("status").filter({ hasText: "Saved: Replied." })).toHaveCount(0);
+  // Unlinking stays on the record's own page.
+  await page.goto(`/applications/${app.id}`);
+  await hydrated(page.getByRole("button", { name: "Unlink mail" }));
   await page.getByRole("button", { name: "Unlink mail" }).click();
   await expect(
     page.getByRole("status").filter({ hasText: "Recorded outcomes and history were kept." }),
@@ -454,39 +415,41 @@ test("mail outcome keeps success and focus after resolution; unlink reopens mail
   expect((await state(app.id, mail.id)).mail.attentionState).toBe("OPEN");
 });
 
-for (const source of [
-  { classification: "INTERVIEW" as const, sender: "jobs@naukri.com" },
-  { classification: "ASSESSMENT" as const, sender: "alerts@instahyre.com" },
-  { classification: "UNKNOWN" as const },
-  { classification: "RECRUITER_OUTREACH" as const },
-]) {
-  test(`actual ${source.classification} ${source.sender ?? "unmatched"} cannot become record progress`, async ({
-    page,
-  }) => {
-    const app = await record();
-    const mail = await message(source);
-    const before = await state(app.id, mail.id);
-    await guard();
-    await expect(
-      db.transaction((tx) => linkMailToRecord(tx, mail.id, app.id, new Date())),
-    ).rejects.toThrow(/Updates|New roles|noise/);
-    expect(await state(app.id, mail.id)).toEqual(before);
-    await guard();
-    await expect(
-      db.transaction((tx) => applyOutcome(tx, outcome(app.id, mail.id), new Date())),
-    ).rejects.toThrow(/Updates|New roles|noise/);
-    expect(await state(app.id, mail.id)).toEqual(before);
-    await page.goto(`/applications/${app.id}?mail=${mail.id}&outcome=scheduled#what-happened`);
-    expect(await page.locator('#what-happened input[name="outcome"]').count()).toBe(0);
-    await expect(
-      page.getByRole("alert").filter({ hasText: /Updates|New roles|noise/ }),
-    ).toBeVisible();
-    await expect(
-      page.getByRole("link", { name: "Record an outcome manually", exact: true }),
-    ).toHaveAttribute("href", `/applications/${app.id}#what-happened`);
-    expect(await state(app.id, mail.id)).toEqual(before);
+test("mail placed at another company cannot become record progress", async ({ page }) => {
+  const app = await record();
+  const mail = await message({ companyKey: "another fixture company" });
+  const before = await state(app.id, mail.id);
+  await guard();
+  await expect(
+    db.transaction((tx) => linkMailToRecord(tx, mail.id, app.id, new Date())),
+  ).rejects.toThrow(/placed at another fixture company/);
+  expect(await state(app.id, mail.id)).toEqual(before);
+  await guard();
+  await expect(
+    db.transaction((tx) => applyOutcome(tx, outcome(app.id, mail.id), new Date())),
+  ).rejects.toThrow(/placed at another fixture company/);
+  expect(await state(app.id, mail.id)).toEqual(before);
+  await page.goto(`/applications/${app.id}?mail=${mail.id}&outcome=scheduled#what-happened`);
+  expect(await page.locator('#what-happened input[name="outcome"]').count()).toBe(0);
+  await expect(page.getByRole("alert").filter({ hasText: /placed at/ })).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "Record an outcome manually", exact: true }),
+  ).toHaveAttribute("href", `/applications/${app.id}#what-happened`);
+  expect(await state(app.id, mail.id)).toEqual(before);
+});
+
+test("unplaced mail from a job portal can link to a record", async () => {
+  const app = await record();
+  const mail = await message({ classification: "UNKNOWN", sender: "jobs@naukri.com" });
+  await guard();
+  expect(await db.transaction((tx) => linkMailToRecord(tx, mail.id, app.id, new Date()))).toBe(
+    true,
+  );
+  expect((await state(app.id, mail.id)).mail).toMatchObject({
+    linkedApplicationId: app.id,
+    attentionState: "DONE",
   });
-}
+});
 
 for (const kind of ["malformed", "missing", "dismissed", "linked elsewhere"] as const) {
   test(`explicit ${kind} mail URL cannot silently record a manual outcome`, async ({ page }) => {
@@ -524,8 +487,9 @@ test("mail handled while its outcome form is open keeps source and rejects all w
 }) => {
   const app = await record();
   const mail = await message({ classification: "FOLLOW_UP" });
-  await page.goto(`/applications/${app.id}?mail=${mail.id}&outcome=heard#what-happened`);
+  await page.goto(`/applications?open=${app.id}&mail=${mail.id}&outcome=heard`);
   await expect(page.locator('#what-happened input[name="mailId"]')).toHaveValue(mail.id);
+  await hydrated(page.getByRole("button", { name: "Save", exact: true }));
   await guard();
   await db.transaction((tx) => dismissMessages(tx, { ids: [mail.id] }, new Date()));
   const before = await state(app.id, mail.id);
@@ -533,33 +497,6 @@ test("mail handled while its outcome form is open keeps source and rejects all w
   await expect(page.getByRole("alert").filter({ hasText: /already been handled/ })).toBeVisible();
   await expect(page.locator('#what-happened input[name="mailId"]')).toHaveValue(mail.id);
   expect(await state(app.id, mail.id)).toEqual(before);
-});
-
-test("Undo isolates independent operations and rejects an old token after restore and re-dismiss", async () => {
-  const app = await record();
-  const first = await message({ classification: "UNKNOWN" });
-  const second = await message({ classification: "UNKNOWN" });
-  await guard();
-  await db.transaction((tx) => dismissMessages(tx, { ids: [first.id] }, new Date()));
-  const oldToken = String((await state(app.id, first.id)).mailEvents[0].details.triageDismissal);
-  await guard();
-  await db.transaction((tx) => dismissMessages(tx, { ids: [second.id] }, new Date()));
-  const independent = await state(app.id, second.id);
-  expect(independent.mailEvents[0].details.triageDismissal).not.toBe(oldToken);
-  await guard();
-  expect(await db.transaction((tx) => restoreDismissal(tx, first.id, oldToken))).toBe(1);
-  expect((await state(app.id, first.id)).mail.attentionState).toBe("OPEN");
-  expect(await state(app.id, second.id)).toEqual(independent);
-  await guard();
-  await db.transaction((tx) => dismissMessages(tx, { ids: [first.id] }, new Date()));
-  const redismissed = await state(app.id, first.id);
-  expect(redismissed.mailEvents[0].details.triageDismissal).not.toBe(oldToken);
-  await guard();
-  await expect(db.transaction((tx) => restoreDismissal(tx, first.id, oldToken))).rejects.toThrow(
-    /no longer/,
-  );
-  expect(await state(app.id, first.id)).toEqual(redismissed);
-  expect(await state(app.id, second.id)).toEqual(independent);
 });
 
 for (const status of ["PREPARING", "CLOSED", "APPLIED"] as const) {
@@ -603,41 +540,37 @@ for (const status of ["PREPARING", "CLOSED", "APPLIED"] as const) {
   });
 }
 
-test("only the current matched acknowledgement record may link, and acknowledgements never record outcomes", async () => {
+test("acknowledgements link without recording an outcome", async () => {
   const app = await record();
-  const other = await record();
   const ack = await message({ classification: "APPLICATION_ACKNOWLEDGEMENT" }, app.id);
-  const before = await state(other.id, ack.id);
-  await guard();
-  await expect(
-    db.transaction((tx) => linkMailToRecord(tx, ack.id, other.id, new Date())),
-  ).rejects.toThrow(/noise|matched acknowledgement/);
-  expect(await state(other.id, ack.id)).toEqual(before);
-  const matchedBefore = await state(app.id, ack.id);
+  const before = await state(app.id, ack.id);
   await guard();
   await expect(
     db.transaction((tx) => applyOutcome(tx, outcome(app.id, ack.id), new Date())),
   ).rejects.toThrow(/without recording an outcome/);
-  expect(await state(app.id, ack.id)).toEqual(matchedBefore);
+  expect(await state(app.id, ack.id)).toEqual(before);
+  await guard();
+  expect(await db.transaction((tx) => linkMailToRecord(tx, ack.id, app.id, new Date()))).toBe(true);
 });
 
 test("manual query outcome keeps confirmation and focus after cleanup navigation", async ({
   page,
 }) => {
   const app = await record();
+  const row = `/applications\\?open=${app.id}`;
   await page.goto(`/applications/${app.id}?outcome=followup#what-happened`);
+  await expect(page).toHaveURL(new RegExp(`${row}&outcome=followup`));
   await expect(page.locator('#what-happened input[name="outcome"]')).toHaveValue("followup");
+  await hydrated(page.getByRole("button", { name: "Save", exact: true }));
   await page.getByRole("button", { name: "Save", exact: true }).click();
-  await expect(page).toHaveURL(new RegExp(`/applications/${app.id}$`));
+  await expect(page).toHaveURL(new RegExp(`${row}$`));
   await expect(page.locator('#what-happened input[name="outcome"]')).toHaveCount(0);
   await expect(
     page.getByRole("status").filter({ hasText: "Saved: Sent a follow-up." }),
   ).toBeVisible();
   await expect(page.getByRole("button", { name: "Sent a follow-up", exact: true })).toBeFocused();
   await page.goBack();
-  await expect(page).toHaveURL(
-    new RegExp(`/applications/${app.id}\\?outcome=followup#what-happened$`),
-  );
+  await expect(page).toHaveURL(new RegExp(`${row}&outcome=followup`));
   await expect(page.locator('#what-happened input[name="outcome"]')).toHaveValue("followup");
   await expect(
     page.getByRole("status").filter({ hasText: "Saved: Sent a follow-up." }),

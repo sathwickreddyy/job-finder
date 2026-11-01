@@ -43,6 +43,7 @@ export default async function Outreach({
         .select({
           classification: mailMessages.classification,
           receivedAt: mailMessages.receivedAt,
+          attentionState: mailMessages.attentionState,
         })
         .from(mailMessages)
         .where(eq(mailMessages.linkedApplicationId, existing.id))

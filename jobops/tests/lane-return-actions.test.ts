@@ -3,6 +3,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   transaction: vi.fn(),
   markRecordSent: vi.fn(),
+  closeUnsentRecord: vi.fn(),
   linkMailToRecord: vi.fn(),
   dismissMessages: vi.fn(),
   revalidate: vi.fn(),
@@ -13,17 +14,17 @@ vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidate }));
 vi.mock("next/navigation", () => ({ redirect: mocks.redirect }));
 vi.mock("@/features/applications/outcome-service", () => ({
   markRecordSent: mocks.markRecordSent,
+  closeUnsentRecord: mocks.closeUnsentRecord,
   updateRecordDetails: vi.fn(),
   updateRecordRound: vi.fn(),
 }));
 vi.mock("@/features/mail/handling-service", () => ({
   linkMailToRecord: mocks.linkMailToRecord,
   dismissMessages: mocks.dismissMessages,
-  restoreDismissal: vi.fn(),
   unlinkMailFromRecord: vi.fn(),
 }));
 
-import { recordAsSent } from "@/features/applications/record-actions";
+import { notApplying, recordAsSent } from "@/features/applications/record-actions";
 import { dismissMail, linkMailOnly } from "@/features/mail/triage-actions";
 
 const recordId = "00000000-0000-4000-8000-000000000001";
@@ -70,10 +71,17 @@ it("dismisses from a lane and returns there", async () => {
   );
 });
 
-it("returns to the Emails drawer when dismissing without a lane", async () => {
+it("returns to Mail when dismissing without a lane", async () => {
   mocks.dismissMessages.mockResolvedValue(1);
   await dismissMail({}, form({ mailId }));
-  expect(mocks.redirect).toHaveBeenCalledWith(
-    "/applications?emails=1&notice=Dismissed%201%20message.",
-  );
+  expect(mocks.redirect).toHaveBeenCalledWith("/mail?notice=Dismissed%201%20message.");
+});
+
+it("closes an unsent record as Not applying and returns to its row", async () => {
+  expect(await notApplying({}, form({ id: recordId, returnTo: lane }))).toEqual({
+    success: "Closed as not applying.",
+    redirect: lane,
+  });
+  expect(mocks.closeUnsentRecord).toHaveBeenCalledWith({}, { id: recordId }, expect.any(Date));
+  expect(mocks.revalidate.mock.calls.map(([path]) => path)).toContain("/applications");
 });

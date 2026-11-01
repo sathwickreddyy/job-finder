@@ -6,3 +6,4 @@ backups/
 playwright-report/
 test-results/
 coverage/
+drizzle/meta/

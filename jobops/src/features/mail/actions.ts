@@ -5,7 +5,6 @@ import { z } from "zod";
 import { actionError, formString, type ActionState } from "@/lib/actions";
 import { disconnectConnection } from "@/services/mail/providers/connections";
 import { importMailRecords, mailImportSchema } from "./import";
-import { checkWorkspaceMail } from "./workspace-actions";
 
 export async function importMail(_previous: ActionState, form: FormData): Promise<ActionState> {
   try {
@@ -14,18 +13,14 @@ export async function importMail(_previous: ActionState, form: FormData): Promis
       throw new Error("Import exceeds 2 MB. Split messages into smaller batches.");
     const records = mailImportSchema.parse(JSON.parse(raw));
     const result = await importMailRecords(records, "IMPORT");
-    revalidatePath("/applications");
-    revalidatePath("/");
+    for (const path of ["/mail", "/applications", "/"]) revalidatePath(path);
     return {
       success: `${result.imported} messages imported; ${result.duplicates} duplicates skipped. Open a message to link it to an existing record.`,
-      redirect: "/applications?emails=1",
+      redirect: "/mail",
     };
   } catch (error) {
     return actionError(error);
   }
-}
-export async function refreshAllInboxes(_previous: ActionState): Promise<ActionState> {
-  return checkWorkspaceMail(_previous, new FormData());
 }
 export async function disconnectInbox(
   _previous: ActionState,

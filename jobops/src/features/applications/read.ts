@@ -19,7 +19,13 @@ import type { QueueRecord } from "./queue";
 
 type EventRow = typeof applicationEvents.$inferSelect;
 type RoundRow = typeof applicationRounds.$inferSelect;
-type LinkedMail = { id: string; subject: string; classification: string; receivedAt: Date };
+type LinkedMail = {
+  id: string;
+  subject: string;
+  classification: string;
+  receivedAt: Date;
+  attentionState: string;
+};
 
 export type ApplicationRecord = Omit<QueueRecord, "events" | "rounds" | "linkedMail"> & {
   events: EventRow[];
@@ -28,6 +34,7 @@ export type ApplicationRecord = Omit<QueueRecord, "events" | "rounds" | "linkedM
   jobId: string;
   companyKey: string;
   companyName: string;
+  companyHref?: string | null;
   city: string;
   jobUrl: string;
   applicationUrl: string | null;
@@ -38,6 +45,9 @@ export type ApplicationRecord = Omit<QueueRecord, "events" | "rounds" | "linkedM
   closedReason: CloseReason | null;
   phase: Phase;
   typicalRounds: number | null;
+  /** The sourced posting date; `postedAtKind` says whether it is the original or a repost. */
+  postedAt: Date | null;
+  postedAtKind: string | null;
   linkedIds: string[];
   latest: { summary: string; at: Date } | null;
 };
@@ -85,12 +95,18 @@ export async function readApplications() {
         subject: mailMessages.subject,
         classification: mailMessages.classification,
         receivedAt: mailMessages.receivedAt,
+        attentionState: mailMessages.attentionState,
       })
       .from(mailMessages)
       .where(isNotNull(mailMessages.linkedApplicationId)),
     db.select().from(queueSnoozes).where(gt(queueSnoozes.until, new Date())),
     db
-      .select({ id: companyRecords.id, name: companyRecords.name, aliases: companyRecords.aliases })
+      .select({
+        id: companyRecords.id,
+        name: companyRecords.name,
+        aliases: companyRecords.aliases,
+        slug: companyRecords.slug,
+      })
       .from(companyRecords)
       .where(eq(companyRecords.status, "ACTIVE")),
     db.select().from(companyFacts).where(eq(companyFacts.category, "INTERVIEW")),
@@ -103,6 +119,9 @@ export async function readApplications() {
   );
   const linked = linkedRecordIds(rows.map(({ app }) => ({ id: app.id, jobId: app.jobId })));
   const resolve = companyResolver(companies);
+  const companyLinks = new Map(
+    companies.map((company) => [normalizeCompany(company.name), `/companies/${company.slug}`]),
+  );
   const records: ApplicationRecord[] = rows.map(({ app, job, version }) => {
     const own = events.filter((event) => event.applicationId === app.id);
     const sent = own.find((event) => event.eventType === "OUTREACH_SENT");
@@ -113,11 +132,12 @@ export async function readApplications() {
     const ownRounds = rounds.filter((round) => round.applicationId === app.id);
     const linkedMail = mail
       .filter((message) => message.applicationId === app.id)
-      .map(({ id, subject, classification, receivedAt }) => ({
+      .map(({ id, subject, classification, receivedAt, attentionState }) => ({
         id,
         subject,
         classification,
         receivedAt,
+        attentionState,
       }));
     const state = recordStateFrom(
       { ...app, linkedMail, events: own },
@@ -129,6 +149,7 @@ export async function readApplications() {
       jobId: job.id,
       company: job.company,
       ...resolve(job.company),
+      companyHref: companyLinks.get(resolve(job.company).companyKey) ?? null,
       role: job.title,
       city: job.location,
       jobUrl: job.canonicalUrl,
@@ -149,6 +170,8 @@ export async function readApplications() {
       closedReason: app.closedReason,
       phase: phaseOf(state),
       typicalRounds: typical(job.company),
+      postedAt: job.postedAt,
+      postedAtKind: job.postedAtKind,
       linkedIds: linked(app),
       latest: own[0] ? { summary: own[0].summary, at: own[0].occurredAt } : null,
     };

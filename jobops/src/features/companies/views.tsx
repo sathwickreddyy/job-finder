@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { StatusPill } from "./status-pill";
 import {
   companyViews,
   payExtras,
@@ -105,6 +106,7 @@ export function CompanyGridCard({
             <p className="mt-0.5 truncate text-sm text-muted-foreground">
               {company.focus || company.cities.join(", ")}
             </p>
+            {company.status && <StatusPill status={company.status} className="mt-2" />}
           </div>
           <StageChip stage={company.stage} />
         </div>
@@ -271,6 +273,9 @@ export function CompareTable({
                     <span className="block text-xs text-muted-foreground">
                       {company.cities.join(", ")}
                     </span>
+                    {company.status && (
+                      <StatusPill status={company.status} className="mt-1 h-5 px-2" />
+                    )}
                   </td>
                   <td>
                     {metrics.fixed ? (
@@ -367,7 +372,12 @@ export function PipelineBoard({
                     href={`${basePath}/${company.id}${linkQuery}`}
                     className="block rounded-2xl border border-border bg-card p-3 text-foreground hover:border-primary hover:no-underline"
                   >
-                    <p className="text-sm font-medium">{company.name}</p>
+                    <p className="flex items-center gap-2 text-sm font-medium">
+                      {company.name}
+                      {company.status && (
+                        <StatusPill status={company.status} className="h-5 px-2" />
+                      )}
+                    </p>
                     <p className="mt-0.5 text-xs tabular-nums text-muted-foreground">
                       {payRange(company.metrics.fixed) ??
                         (company.metrics.payReports ? "Pay needs review" : "Pay not reported")}

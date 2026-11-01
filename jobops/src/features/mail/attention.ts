@@ -9,7 +9,8 @@ export function mailAttention(
   message: AttentionMessage,
 ): { reason: string; priority: number } | null {
   if (message.attentionState === "DONE") return null;
-  if (message.classification === "REJECTION") return null;
+  if (message.classification === "REJECTION" || message.classification === "INTERVIEW_REJECTION")
+    return null;
   const text = `${message.subject}\n${message.snippet}\n${message.bodyText ?? ""}`;
   if (
     /\b(deadline|due by|expires? (?:on|in)|respond by|within \d+ hours|by tomorrow)\b/i.test(text)

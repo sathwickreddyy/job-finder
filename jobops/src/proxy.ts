@@ -33,17 +33,21 @@ export function proxy(request: NextRequest) {
   const taskApi = /^\/api\/v1\/tasks\/[0-9a-f-]+(?:\/(?:updates|proposals|resume))?$/.test(
     request.nextUrl.pathname,
   );
-  const companyApi = /^\/api\/v1\/companies(?:\/[^/]+)?\/?$/.test(request.nextUrl.pathname);
-  if ((taskApi || companyApi) && request.headers.has("next-action"))
+  // Local agent routes: companies, mail, application records and resume files.
+  const agentApi =
+    /^\/api\/v1\/(?:companies(?:\/[^/]+)?|mail(?:\/check|\/dropped|\/company\/[^/]+\/(?:search|rule)|\/[0-9a-f-]{36}(?:\/handle|\/include)?)?|applications|resumes)\/?$/.test(
+      request.nextUrl.pathname,
+    );
+  if ((taskApi || agentApi) && request.headers.has("next-action"))
     return NextResponse.json(
       { error: "Server actions are not available on this API." },
       { status: 403 },
     );
   if (
     (!["GET", "HEAD", "OPTIONS"].includes(request.method) ||
-      (companyApi && request.headers.has("origin"))) &&
+      (agentApi && request.headers.has("origin"))) &&
     !safeOrigin(request.headers.get("origin"), trustedLocalNetwork ? host.origin : appUrl.origin) &&
-    !((taskApi || (companyApi && trustedLocalNetwork)) && !request.headers.has("origin"))
+    !((taskApi || (agentApi && trustedLocalNetwork)) && !request.headers.has("origin"))
   )
     return new NextResponse("Request origin is not allowed. Reload JobOps and retry.", {
       status: 403,
@@ -60,9 +64,9 @@ export function proxy(request: NextRequest) {
     return new NextResponse("JOBOPS_ACCESS_TOKEN must contain at least 32 characters.", {
       status: 503,
     });
-  // Retired task routes retain their credential checks; local company routes are LAN-trusted.
+  // Retired task routes retain their credential checks; local agent routes are LAN-trusted.
   if (taskApi) return NextResponse.next();
-  if (companyApi && trustedLocalNetwork) return NextResponse.next();
+  if (agentApi && trustedLocalNetwork) return NextResponse.next();
   if (
     token &&
     request.nextUrl.pathname !== "/unlock" &&

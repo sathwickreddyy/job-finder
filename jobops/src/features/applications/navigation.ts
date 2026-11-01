@@ -19,7 +19,7 @@ export type LanesView = {
   notice: string | undefined;
 };
 
-/** `?open=<recordId>` expands a lane; `?emails=1` (or the old `?tab=emails`) opens the drawer. */
+/** `?open=<recordId>` expands a lane; `?emails=1` and the old `?tab=emails` redirect to /mail. */
 export function resolveLanesView(params: {
   open?: string;
   mail?: string;

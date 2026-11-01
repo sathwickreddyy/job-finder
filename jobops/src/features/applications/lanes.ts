@@ -5,8 +5,6 @@ import {
   formatDay,
   formatTime,
   formatWeekday,
-  formatWhen,
-  indiaDate,
   istDayStart,
   istDaysBetween,
 } from "./dates";
@@ -62,11 +60,11 @@ export type LaneSource = Pick<
   | "closedReason"
   | "phase"
   | "typicalRounds"
+  | "postedAt"
 >;
-export type StatusTone = "preparing" | "applied" | "quiet" | "interviewing" | "offer" | "closed";
+export type StatusTone =
+  "preparing" | "applied" | "quiet" | "interviewing" | "offer" | "rejected" | "closed";
 export type LaneStatus = { tone: StatusTone; label: string };
-
-const dayWord = (days: number) => (days <= 0 ? "today" : days === 1 ? "yesterday" : `${days} days`);
 
 function closedStatus(record: LaneSource): LaneStatus {
   switch (record.closedReason) {
@@ -77,14 +75,14 @@ function closedStatus(record: LaneSource): LaneStatus {
     case "NO_REPLY":
       return { tone: "closed", label: "Closed, no reply" };
     case "WITHDREW":
-      return { tone: "closed", label: "Withdrew" };
+      return { tone: "closed", label: record.sentAt ? "Withdrew" : "Not applying" };
   }
   if (record.closedReason === "REJECTED" || record.status === "REJECTED") {
     const settled = record.rounds
       .filter((round) => round.outcome === "PASSED" || round.outcome === "FAILED")
       .at(-1);
     return {
-      tone: "closed",
+      tone: "rejected",
       label: settled ? `Rejected after ${roundKindLabel[settled.kind]}` : "Rejected",
     };
   }
@@ -93,7 +91,7 @@ function closedStatus(record: LaneSource): LaneStatus {
 
 /** One record's status in plain words, derived from recorded facts only. */
 export function recordStatus(record: LaneSource, now: Date): LaneStatus {
-  if (record.phase === "Preparing") return { tone: "preparing", label: "Not sent yet" };
+  if (record.phase === "Preparing") return { tone: "preparing", label: "Not sent" };
   if (record.phase === "Closed") return closedStatus(record);
   if (record.phase === "Decision")
     return {
@@ -103,6 +101,9 @@ export function recordStatus(record: LaneSource, now: Date): LaneStatus {
         : "Offer received",
     };
   if (record.phase === "Interviewing") {
+    const unsettled = record.rounds.filter((round) => round.outcome === "SCHEDULED");
+    if (unsettled.length === 1 && unsettled[0].kind === "ONLINE_ASSESSMENT")
+      return { tone: "interviewing", label: "Online assessment" };
     const rounds = record.rounds.filter((round) => round.outcome !== "CANCELLED").length;
     if (!rounds) return { tone: "interviewing", label: "Interviewing" };
     const of =
@@ -117,17 +118,16 @@ export function recordStatus(record: LaneSource, now: Date): LaneStatus {
   )
     return { tone: "applied", label: `${method} · replied` };
   const clock = silenceClock(record, now);
-  if (!clock) return { tone: "applied", label: outreach ? method : "Applied" };
+  const sent = record.status === "ACKNOWLEDGED" ? "Acknowledged" : "Applied";
+  if (!clock) return { tone: "applied", label: outreach ? method : sent };
   if (clock.days >= clock.threshold)
     return {
       tone: "quiet",
-      label: outreach ? `${method} · ${clock.days} days quiet` : `Quiet for ${clock.days} days`,
+      label: outreach ? `${method} · ${clock.days} days quiet` : `Quiet ${clock.days} days`,
     };
   return {
     tone: "applied",
-    label: outreach
-      ? `${method} · ${clock.days} of ${clock.threshold} days`
-      : `Applied · ${dayWord(clock.days)}`,
+    label: outreach ? `${method} · ${clock.days} of ${clock.threshold} days` : sent,
   };
 }
 
@@ -171,21 +171,9 @@ export function laneStatus(records: LaneSource[], now: Date, pendingMail = false
   return { tone: status.tone, label: `${status.label}${mail}${more}` };
 }
 
-/* ---------- Dots (spec §2.3) ---------- */
+/* ---------- Tones and matched mail (spec §2.3) ---------- */
 
 export type DotTone = "sent" | "mail" | "good" | "bad" | "note" | "upcoming" | "pending";
-export type LaneDot = {
-  key: string;
-  at: Date;
-  tone: DotTone;
-  label: string;
-  detail: string;
-  recordId: string;
-  role: string | null;
-  via: string | null;
-  mailId: string | null;
-  outcome: OutcomeId | null;
-};
 export type PendingMail = {
   id: string;
   recordId: string;
@@ -208,41 +196,6 @@ const replyEvents = new Set([
   "INTERVIEW_SCHEDULED",
   "ROUND_RESCHEDULED",
 ]);
-const eventLabel: Record<string, string> = {
-  APPLICATION_CREATED: "Saved the opening",
-  APPLICATION_SENT: "Applied",
-  APPLICATION_SUBMITTED: "Applied",
-  OUTREACH_SENT: "Reached out",
-  FOLLOW_UP_SENT: "Sent a follow-up",
-  REPLY_RECEIVED: "Heard back",
-  ASSESSMENT_RECEIVED: "Got an OA",
-  INTERVIEW_REQUESTED: "Interview requested",
-  INTERVIEW_SCHEDULED: "Round scheduled",
-  ROUND_PASSED: "Cleared the round",
-  ROUND_FAILED: "Didn't clear the round",
-  ROUND_RESCHEDULED: "Round rescheduled",
-  OFFER_RECEIVED: "Got an offer",
-  OFFER_ACCEPTED: "Accepted the offer",
-  OFFER_DECLINED: "Declined the offer",
-  REJECTION_RECEIVED: "Rejected",
-  CLOSED_NO_REPLY: "Closed, no reply",
-  WITHDRAWN: "Withdrew",
-  REFERRAL_SUBMITTED: "Referral submitted",
-  REFERRAL_DECLINED: "Referral declined",
-  MANUAL_NOTE: "Note",
-  MAIL_UNLINKED: "Email unlinked",
-};
-const mailLabel: Record<string, string> = {
-  INTERVIEW: "Interview email",
-  ASSESSMENT: "Assessment invite",
-  OFFER: "Offer email",
-  REJECTION: "Rejection email",
-  FOLLOW_UP: "Recruiter reply",
-  RECRUITER_OUTREACH: "Recruiter email",
-  APPLICATION_ACKNOWLEDGEMENT: "Automatic “we received it”",
-  UNKNOWN: "Email",
-};
-
 /** Single-line text clipped with an ellipsis. */
 export function clip(text: string, max: number) {
   const flat = text.replace(/\s+/g, " ").trim();
@@ -276,103 +229,6 @@ export function pendingMailFrom(messages: TriageInput[]): PendingMail[] {
   );
 }
 
-export function laneDots(records: LaneSource[], pending: PendingMail[], now: Date): LaneDot[] {
-  const severalJobs = new Set(records.map((record) => record.jobId)).size > 1;
-  const dots: LaneDot[] = [];
-  for (const record of records) {
-    const base = {
-      recordId: record.id,
-      role: severalJobs ? record.role : null,
-      via: isOutreach(record.source) ? (methodLabel[record.source] ?? null) : null,
-      mailId: null,
-      outcome: null,
-    };
-    const referenced = new Set(
-      record.events
-        .map((event) => event.payload.mailMessageId)
-        .filter((value): value is string => typeof value === "string"),
-    );
-    for (const event of record.events) {
-      const mailId =
-        typeof event.payload.mailMessageId === "string" ? event.payload.mailMessageId : null;
-      const summary = clip(event.summary, 80);
-      const label = eventLabel[event.eventType] ?? summary;
-      dots.push({
-        ...base,
-        key: `event:${event.id}`,
-        at: event.occurredAt,
-        tone: eventTone(event.eventType, mailId !== null),
-        label,
-        detail: label === summary ? "" : clip(event.summary, 160),
-        mailId,
-      });
-    }
-    for (const mail of record.linkedMail) {
-      if (referenced.has(mail.id)) continue;
-      dots.push({
-        ...base,
-        key: `mail:${mail.id}`,
-        at: mail.receivedAt,
-        tone: "mail",
-        label: mailLabel[mail.classification] ?? "Email",
-        detail: clip(mail.subject, 160),
-        mailId: mail.id,
-      });
-    }
-    if (!record.events.length && record.sentAt)
-      dots.push({
-        ...base,
-        key: `sent:${record.id}`,
-        at: record.sentAt,
-        tone: "sent",
-        label: isOutreach(record.source) ? "Reached out" : "Applied",
-        detail: "",
-      });
-    for (const round of record.rounds) {
-      if (round.outcome !== "SCHEDULED" || !round.scheduledAt) continue;
-      dots.push({
-        ...base,
-        key: `round:${round.id}`,
-        at: round.scheduledAt,
-        tone: "upcoming",
-        label:
-          round.kind === "ONLINE_ASSESSMENT"
-            ? "OA closes"
-            : `Round ${round.position} · ${roundKindLabel[round.kind]}`,
-        detail: round.name,
-      });
-    }
-    if (record.nextActionAt && record.phase !== "Closed" && record.nextActionAt > now)
-      dots.push({
-        ...base,
-        key: `followup:${record.id}`,
-        at: record.nextActionAt,
-        tone: "upcoming",
-        label: record.nextActionNote ? clip(record.nextActionNote, 80) : "Follow up",
-        detail: "Your follow-up date",
-      });
-  }
-  for (const mail of pending) {
-    const record = records.find((item) => item.id === mail.recordId);
-    if (!record) continue;
-    dots.push({
-      key: `pending:${mail.id}`,
-      at: mail.receivedAt,
-      tone: "pending",
-      label: `${mailLabel[mail.classification] ?? "Email"} · not added yet`,
-      detail: clip(mail.subject, 160),
-      recordId: record.id,
-      role: severalJobs ? record.role : null,
-      via: null,
-      mailId: mail.id,
-      outcome: mail.outcome,
-    });
-  }
-  return dots
-    .filter((dot) => Number.isFinite(dot.at.getTime()))
-    .sort((a, b) => a.at.getTime() - b.at.getTime());
-}
-
 /* ---------- Next step (spec §2.4) ---------- */
 
 export type LaneNext = {
@@ -400,23 +256,55 @@ export type Lane = {
   leadId: string;
   roles: LaneRole[];
   status: LaneStatus;
-  dots: LaneDot[];
   next: LaneNext | null;
   group: LaneGroup;
   lastActivity: number;
 };
 
-function whenText(item: QueueItem, now: Date) {
+/** "Tue 3 Nov" in India time. */
+const dayName = (value: Date) => formatWeekday(value).replace(",", "");
+
+/** "Overdue since 9 Oct", "Today, 3:00 pm", "By Tue 3 Nov" or "Tue 3 Nov, 3:00 pm" (spec §3). */
+function whenText(item: QueueItem) {
   if (item.reason === "mail") return "New email";
   const timed = item.reason === "round" || item.reason === "deadline";
-  if (item.due === "overdue") {
-    const days = Math.max(1, istDaysBetween(item.dueAt, now));
-    return `${days} ${days === 1 ? "day" : "days"} late`;
-  }
+  if (item.due === "overdue") return `Overdue since ${formatDay(item.dueAt)}`;
   if (item.due === "today") return timed ? `Today, ${formatTime(item.dueAt)}` : "Today";
-  return timed
-    ? `${formatWeekday(item.dueAt)}, ${formatTime(item.dueAt)}`
-    : formatWeekday(item.dueAt);
+  return timed ? `${dayName(item.dueAt)}, ${formatTime(item.dueAt)}` : `By ${dayName(item.dueAt)}`;
+}
+
+/** Apply only to openings published within the last 14 India calendar days, inclusive. */
+const FRESH_DAYS = 14;
+
+/** An unsent record's next step follows the freshness policy (spec §4). */
+function preparingNext(record: LaneSource, now: Date, href: string): LaneNext {
+  const base = { recordId: record.id, due: null, href };
+  if (!record.postedAt)
+    return {
+      ...base,
+      at: null,
+      when: "Posting date unknown",
+      text: "Check the posting date",
+      action: "Open",
+    };
+  const age = istDaysBetween(record.postedAt, now);
+  if (age <= FRESH_DAYS) {
+    const deadline = addDays(istDayStart(record.postedAt), FRESH_DAYS);
+    return {
+      ...base,
+      at: deadline,
+      when: "Not sent",
+      text: `Apply by ${dayName(deadline)}`,
+      action: "Record application",
+    };
+  }
+  return {
+    ...base,
+    at: null,
+    when: "Not sent",
+    text: `Posting is ${age} days old`,
+    action: "Not applying",
+  };
 }
 
 /** Matched mail first (linking it usually settles the rest), else the first queue item, else a fallback. */
@@ -444,7 +332,7 @@ export function recordNext(
   const item = items.find((entry) => entry.recordId === record.id);
   const href = laneHref(record.id);
   if (item) {
-    const base = { recordId: record.id, due: item.due, at: item.dueAt, when: whenText(item, now) };
+    const base = { recordId: record.id, due: item.due, at: item.dueAt, when: whenText(item) };
     if (item.reason === "silence")
       return {
         ...base,
@@ -456,16 +344,7 @@ export function recordNext(
     return { ...base, text: item.title, action: settle ? "Record result" : "Open", href };
   }
   if (record.phase === "Closed") return null;
-  if (record.phase === "Preparing")
-    return {
-      recordId: record.id,
-      due: null,
-      at: null,
-      when: "Not sent",
-      text: "Finish and send it",
-      action: "Open",
-      href,
-    };
+  if (record.phase === "Preparing") return preparingNext(record, now, href);
   const clock = silenceClock(record, now);
   if (!clock) return null;
   const at = addDays(istDayStart(clock.since), clock.threshold);
@@ -473,7 +352,7 @@ export function recordNext(
     recordId: record.id,
     due: null,
     at,
-    when: formatWeekday(at),
+    when: `By ${dayName(at)}`,
     text: "Follow up if it stays quiet",
     action: "Open",
     href,
@@ -485,17 +364,24 @@ const nextRank = (next: LaneNext | null) => (!next ? 4 : next.due ? dueRank[next
 const nextTime = (next: LaneNext | null) => next?.at?.getTime() ?? Number.MAX_SAFE_INTEGER;
 const groupRank: Record<LaneGroup, number> = { needs: 0, active: 1, closed: 2 };
 
-/** One lane per company key, sorted needs → active → closed (spec §2.5). */
+/**
+ * One lane per company key (or per application with `by: "application"`), sorted needs →
+ * active → closed (spec §2.5). Previous jobs are history and never get a lane.
+ */
 export function buildLanes(input: {
   records: LaneSource[];
   items: QueueItem[];
   pending: PendingMail[];
   now: Date;
+  by?: "company" | "application";
 }): Lane[] {
   const { now } = input;
   const byKey = new Map<string, LaneSource[]>();
-  for (const record of input.records)
-    byKey.set(record.companyKey, [...(byKey.get(record.companyKey) ?? []), record]);
+  for (const record of input.records) {
+    if (record.source === "PREVIOUS_JOB") continue;
+    const key = input.by === "application" ? record.id : record.companyKey;
+    byKey.set(key, [...(byKey.get(key) ?? []), record]);
+  }
   const lanes: Lane[] = [];
   for (const [key, records] of byKey) {
     const lead = leadOf(records);
@@ -540,14 +426,15 @@ export function buildLanes(input: {
       leadId: lead.id,
       roles,
       status: laneStatus(records, now, pending.length > 0),
-      dots: laneDots(records, pending, now),
       next,
       group:
         pending.length > 0
           ? "needs"
           : closed
             ? "closed"
-            : next?.due === "overdue" || next?.due === "today"
+            : next?.due === "overdue" ||
+                next?.due === "today" ||
+                records.some((record) => record.phase === "Preparing")
               ? "needs"
               : "active",
       lastActivity: Math.max(0, ...records.map(activityOf)),
@@ -561,178 +448,4 @@ export function buildLanes(input: {
         : nextRank(a.next) - nextRank(b.next) || nextTime(a.next) - nextTime(b.next)) ||
       b.lastActivity - a.lastActivity,
   );
-}
-
-/* ---------- Calendar (spec §2.6) ---------- */
-
-const DAY = 86_400_000;
-const IST_OFFSET = 19_800_000;
-export type LaneWindow = { start: number; end: number; ticks: number[] };
-
-/** Two days before the oldest open dot to the end of the 7th IST day after today; 2–12 weeks wide. */
-export function laneWindow(lanes: Lane[], now: Date): LaneWindow {
-  const today = istDayStart(now).getTime();
-  const end = today + 8 * DAY;
-  const times = lanes
-    .filter((lane) => lane.group !== "closed")
-    .flatMap((lane) => lane.dots.map((dot) => dot.at.getTime()));
-  const first = istDayStart(new Date(Math.min(today, ...times))).getTime() - 2 * DAY;
-  const start = Math.max(end - 84 * DAY, Math.min(end - 14 * DAY, first));
-  const step = (end - start) / DAY <= 21 ? 3 : 7;
-  const ticks: number[] = [];
-  let tick = start + DAY;
-  if (step === 7) while (new Date(tick + IST_OFFSET).getUTCDay() !== 1) tick += DAY;
-  for (; tick < end; tick += step * DAY) ticks.push(tick);
-  return { start, end, ticks };
-}
-
-export const positionOf = (window: LaneWindow, at: number) =>
-  Math.min(100, Math.max(0, ((at - window.start) / (window.end - window.start)) * 100));
-
-export type DotStack = {
-  pct: number;
-  earlier: boolean;
-  later: boolean;
-  dots: LaneDot[];
-  lead: LaneDot;
-};
-const dotWeight: Record<DotTone, number> = {
-  pending: 6,
-  upcoming: 5,
-  bad: 4,
-  good: 3,
-  mail: 2,
-  sent: 1,
-  note: 0,
-};
-
-/** Nearby dots stack; out-of-window history and bookings get separate Earlier/Later stacks. */
-export function stackDots(dots: LaneDot[], window: LaneWindow, gap = 4.5): DotStack[] {
-  const stacks: Omit<DotStack, "lead">[] = [];
-  for (const dot of dots) {
-    const time = dot.at.getTime();
-    const earlier = time < window.start;
-    const later = time >= window.end;
-    const pct = positionOf(window, time);
-    const last = stacks.at(-1);
-    if (
-      last &&
-      last.earlier === earlier &&
-      last.later === later &&
-      (earlier || later || pct - last.pct < gap)
-    )
-      last.dots.push(dot);
-    else stacks.push({ pct, earlier, later, dots: [dot] });
-  }
-  return stacks.map((stack) => ({
-    ...stack,
-    lead: stack.dots.reduce((best, dot) =>
-      dotWeight[dot.tone] > dotWeight[best.tone] ? dot : best,
-    ),
-  }));
-}
-
-/** "Today", "Today, 4:00 pm" for later today, else "3 Oct". */
-export function dayLabel(at: Date, now: Date) {
-  if (indiaDate(at) === indiaDate(now)) return at > now ? `Today, ${formatTime(at)}` : "Today";
-  return indiaDate(at).slice(0, 4) === indiaDate(now).slice(0, 4)
-    ? formatDay(at)
-    : `${formatDay(at)} ${indiaDate(at).slice(0, 4)}`;
-}
-
-export type StackView = {
-  key: string;
-  pct: number;
-  tone: DotTone;
-  count: number;
-  label: string;
-  lines: string[];
-  edge: "earlier" | "later" | null;
-  entries: {
-    key: string;
-    tone: DotTone;
-    label: string;
-    when: string;
-    detail: string;
-    scope: string;
-  }[];
-};
-export type LaneView = {
-  key: string;
-  company: string;
-  leadId: string;
-  status: LaneStatus;
-  group: LaneGroup;
-  next: LaneNext | null;
-  stacks: StackView[];
-  line: { from: number; to: number } | null;
-  dashed: { from: number; to: number } | null;
-};
-export type ChartView = {
-  lanes: LaneView[];
-  today: number;
-  ticks: { pct: number; label: string | null }[];
-};
-
-function dotLine(dot: LaneDot, now: Date) {
-  const scope = [dot.role, dot.via].filter(Boolean).join(" · ");
-  return `${scope ? `${scope} · ` : ""}${dot.label}, ${dayLabel(dot.at, now)}${dot.detail ? ` (${dot.detail})` : ""}`;
-}
-
-/** Plain, serializable chart data for the client component. */
-export function laneViews(lanes: Lane[], window: LaneWindow, now: Date): ChartView {
-  const today = positionOf(window, now.getTime());
-  return {
-    today,
-    ticks: window.ticks.map((tick) => {
-      const pct = positionOf(window, tick);
-      return { pct, label: Math.abs(pct - today) > 5 ? formatDay(new Date(tick)) : null };
-    }),
-    lanes: lanes.map((lane) => {
-      const past = lane.dots.filter((dot) => dot.at <= now);
-      const future = lane.dots.filter((dot) => dot.at > now);
-      const first = lane.dots[0];
-      return {
-        key: lane.key,
-        company: lane.company,
-        leadId: lane.leadId,
-        status: lane.status,
-        group: lane.group,
-        next: lane.next,
-        stacks: stackDots(lane.dots, window).map((stack) => {
-          const lines = stack.dots.map((dot) => dotLine(dot, now));
-          return {
-            key: stack.dots[0].key,
-            pct: stack.pct,
-            tone: stack.lead.tone,
-            count: stack.dots.length,
-            lines,
-            edge: stack.earlier ? "earlier" : stack.later ? "later" : null,
-            entries: stack.dots.map((dot) => ({
-              key: dot.key,
-              tone: dot.tone,
-              label: dot.label,
-              when:
-                indiaDate(dot.at).slice(0, 4) === indiaDate(now).slice(0, 4)
-                  ? formatWhen(dot.at, now)
-                  : `${formatDay(dot.at)} ${indiaDate(dot.at).slice(0, 4)}, ${formatTime(dot.at)}`,
-              detail: dot.detail,
-              scope: [dot.role, dot.via].filter(Boolean).join(" · "),
-            })),
-            label: `${stack.earlier ? "Earlier: " : stack.later ? "Later: " : ""}${lines.join("; ")}`,
-          };
-        }),
-        line:
-          first && past.length
-            ? {
-                from: positionOf(window, first.at.getTime()),
-                to: lane.group === "closed" ? positionOf(window, past.at(-1)!.at.getTime()) : today,
-              }
-            : null,
-        dashed: future.length
-          ? { from: today, to: positionOf(window, future.at(-1)!.at.getTime()) }
-          : null,
-      };
-    }),
-  };
 }

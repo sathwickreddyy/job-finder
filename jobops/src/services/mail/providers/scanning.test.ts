@@ -3,6 +3,7 @@ import { gmail } from "./gmail";
 import { outlook, safeScanLink } from "./outlook";
 import { plainText, currentMessageText } from "./plain-text";
 import type { MailConnection } from "./types";
+import { pacing } from "./usage";
 const connection = { email: "me@example.com" } as MailConnection;
 beforeEach(() => {
   vi.spyOn(gmail, "accessToken").mockResolvedValue("test-access");
@@ -30,21 +31,26 @@ describe("all-folder provider scans", () => {
   it("reports Gmail quota errors without exposing provider response text", async () => {
     vi.stubGlobal(
       "fetch",
-      vi
-        .fn()
-        .mockResolvedValue(
-          Response.json(
-            {
-              error: {
-                message: "sensitive provider detail",
-                errors: [{ reason: "userRateLimitExceeded" }],
-              },
+      vi.fn().mockResolvedValue(
+        Response.json(
+          {
+            error: {
+              message: "sensitive provider detail",
+              errors: [{ reason: "userRateLimitExceeded" }],
             },
-            { status: 403 },
-          ),
+          },
+          { status: 403 },
         ),
+      ),
     );
-    await expect(gmail.scanMail(connection, window, [])).rejects.toThrow("rate limit");
+    // Rate limits are retried first; the waits are skipped here.
+    vi.spyOn(pacing, "sleep").mockResolvedValue(undefined);
+    const error = await gmail.scanMail(connection, window, []).then(
+      () => new Error("no error"),
+      (caught: Error) => caught,
+    );
+    expect(error.message).toContain("rate limit");
+    expect(error.message).not.toContain("sensitive provider detail");
   });
   it("Gmail includes spam/trash, excludes sent/drafts and retains custom labels", async () => {
     const next = "opaque-page-token";

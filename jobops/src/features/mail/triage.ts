@@ -25,7 +25,12 @@ const updateKinds: MailClassification[] = [
   "ASSESSMENT",
   "OFFER",
   "REJECTION",
+  "INTERVIEW_REJECTION",
   "FOLLOW_UP",
+  "REFERRAL",
+  "INTERVIEW_UPDATE",
+  "BACKGROUND_CHECK",
+  "ONBOARDING",
 ];
 
 export function bucketOf(message: {
@@ -46,10 +51,15 @@ export const suggestedOutcome: Record<MailClassification, OutcomeId | null> = {
   INTERVIEW: "scheduled",
   OFFER: "offer",
   REJECTION: "rejected",
+  INTERVIEW_REJECTION: "rejected",
   FOLLOW_UP: "heard",
   RECRUITER_OUTREACH: "heard",
   APPLICATION_ACKNOWLEDGEMENT: null,
   UNKNOWN: null,
+  REFERRAL: "referred",
+  INTERVIEW_UPDATE: "heard",
+  BACKGROUND_CHECK: null,
+  ONBOARDING: null,
 };
 
 export function linkHref(

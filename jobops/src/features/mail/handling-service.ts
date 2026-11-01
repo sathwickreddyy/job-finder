@@ -9,7 +9,7 @@ import {
   mailEvents,
   mailMessages,
 } from "@/db/schema";
-import { mailCanUndoDismiss, mailIsOpen } from "./state";
+import { mailIsOpen } from "./state";
 import { bucketOf } from "./triage";
 import { requireRecordMail } from "./source-policy";
 
@@ -35,7 +35,7 @@ export async function lockMail(tx: MailTx, mailId: string) {
 
 export async function requireOpenMail(tx: MailTx, mailId: string) {
   const state = await lockMail(tx, mailId);
-  if (!mailIsOpen(state.message, state.events))
+  if (!mailIsOpen(state.message))
     throw new Error(
       state.message.linkedApplicationId
         ? "This message is already linked. Unlink it from its record before linking elsewhere."
@@ -81,7 +81,14 @@ async function lockRecord(tx: MailTx, id: string) {
   return app;
 }
 
-export async function linkMailToRecord(tx: MailTx, mailId: string, recordId: string, now: Date) {
+/** `auto` marks the link event as made by the mail rule (`auto-apply.ts`), not by hand. */
+export async function linkMailToRecord(
+  tx: MailTx,
+  mailId: string,
+  recordId: string,
+  now: Date,
+  options: { auto?: true } = {},
+) {
   const app = await lockRecord(tx, recordId);
   const current = await lockMail(tx, mailId);
   if (
@@ -106,7 +113,7 @@ export async function linkMailToRecord(tx: MailTx, mailId: string, recordId: str
     eventType: ack ? "ACKNOWLEDGEMENT_RECEIVED" : "MAIL_LINKED",
     occurredAt: message.receivedAt,
     summary: `${ack ? "Application acknowledged" : "Mail linked"}: ${message.subject}`,
-    payload: { mailMessageId: mailId },
+    payload: { mailMessageId: mailId, ...(options.auto ? { auto: true } : {}) },
   });
   await tx.insert(activityLogs).values({
     action: "MAIL_LINKED",
@@ -125,12 +132,9 @@ export async function unlinkMailFromRecord(
 ) {
   await lockRecord(tx, recordId);
   const { message, events } = await lockMail(tx, mailId);
-  if (!message.linkedApplicationId && mailIsOpen(message, events)) return false;
-  if (
-    message.linkedApplicationId !== recordId ||
-    !events.length ||
-    events.some((event) => event.status !== "REVIEWED" || event.linkedApplicationId !== recordId)
-  )
+  if (!message.linkedApplicationId && mailIsOpen(message)) return false;
+  // Mail placed on /mail or through the API is linked without reviewing its events.
+  if (message.linkedApplicationId !== recordId)
     throw new Error("This message is no longer linked to this record. Refresh the page.");
   await tx
     .update(mailMessages)
@@ -176,7 +180,7 @@ export async function dismissMessages(
   let count = 0;
   for (const id of ids) {
     const { message, events } = await lockMail(tx, id);
-    if (!mailIsOpen(message, events)) continue;
+    if (!mailIsOpen(message)) continue;
     if (input.noise && bucketOf({ ...message, recordId: null }) !== "noise") continue;
     await tx
       .update(mailMessages)
@@ -192,48 +196,6 @@ export async function dismissMessages(
       entityType: "MAIL",
       entityId: id,
       summary: "Dismissed recruiting message",
-    });
-    count++;
-  }
-  return count;
-}
-
-/** A bulk dismissal is one undo operation. Recheck every member to avoid stale resurrection. */
-export async function restoreDismissal(tx: MailTx, mailId: string, expectedDismissal: string) {
-  // Read the token without locks, then lock the entire batch in the same sorted order as dismissal.
-  const rows = await tx.select().from(mailEvents).where(eq(mailEvents.mailMessageId, mailId));
-  const batch = rows[0]?.details.triageDismissal;
-  if (typeof batch !== "string" || batch !== expectedDismissal)
-    throw new Error("This dismissal can no longer be undone.");
-  const candidates = await tx.select().from(mailEvents).where(eq(mailEvents.status, "DISMISSED"));
-  const ids = [
-    ...new Set(
-      candidates
-        .filter((event) => event.details.triageDismissal === batch)
-        .map((event) => event.mailMessageId),
-    ),
-  ].sort();
-  let count = 0;
-  for (const id of ids) {
-    const { message, events } = await lockMail(tx, id);
-    if (!mailCanUndoDismiss(message, events, batch)) continue;
-    await tx
-      .update(mailMessages)
-      .set({ attentionState: "OPEN", processedAt: null })
-      .where(eq(mailMessages.id, id));
-    for (const event of events) {
-      const details = { ...event.details };
-      delete details.triageDismissal;
-      await tx
-        .update(mailEvents)
-        .set({ status: "NEEDS_REVIEW", details })
-        .where(eq(mailEvents.id, event.id));
-    }
-    await tx.insert(activityLogs).values({
-      action: "MAIL_DISMISS_UNDONE",
-      entityType: "MAIL",
-      entityId: id,
-      summary: "Restored dismissed message",
     });
     count++;
   }

@@ -19,7 +19,6 @@ const pageLabels: Record<string, string> = {
   import: "Import",
   today: "Today",
   profiles: "Profiles",
-  gallery: "Gallery",
 };
 
 export function labelForPath(pathname: string) {

@@ -5,6 +5,7 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useSyncExternalStore, type ReactNode } from "react";
 import {
   BriefcaseBusiness,
+  ChartNoAxesCombined,
   Building2,
   FileText,
   Home,
@@ -16,6 +17,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { LoadingProvider } from "@/components/loading/overlay";
+import { SnackbarProvider } from "@/components/snackbar";
 
 const navigation = [
   { label: "Home", href: "/", icon: Home, routes: [] },
@@ -44,7 +46,13 @@ function snapshot() {
     return document.documentElement.dataset.theme === "light";
   }
 }
-export function AppShell({ children }: { children: ReactNode }) {
+export function AppShell({
+  children,
+  attentionCount = 0,
+}: {
+  children: ReactNode;
+  attentionCount?: number;
+}) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const emailsActive =
@@ -65,97 +73,161 @@ export function AppShell({ children }: { children: ReactNode }) {
     }
     window.dispatchEvent(new Event("jobops-theme"));
   }
-  if (pathname.startsWith("/gallery/simple") || pathname.startsWith("/gallery/companies"))
-    return <main id="main">{children}</main>;
   return (
     <LoadingProvider>
-      <div className="min-h-dvh bg-background text-foreground">
-        <a className="skip-link" href="#main">
-          Skip to content
-        </a>
-        <header className="border-b border-border bg-card">
-          <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-5 py-4 sm:px-8">
+      <SnackbarProvider>
+        <div className="min-h-dvh bg-background text-foreground">
+          <a className="skip-link" href="#main">
+            Skip to content
+          </a>
+          <header className="sticky top-0 z-30 flex items-center justify-between border-b border-border bg-card px-4 pt-[env(safe-area-inset-top)] md:hidden">
             <Link
               href="/"
-              className="flex items-center gap-3 text-lg font-semibold text-foreground hover:no-underline"
+              className="flex min-h-16 items-center gap-2 text-sm font-semibold text-foreground hover:no-underline"
             >
-              {/* Shared vector mark stays crisp in the header and browser tab. */}
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/jobops-logo.svg" alt="" width={36} height={36} className="size-9" />
-              My Jobs Workspace
+              <img src="/jobops-logo.svg" width={28} height={28} alt="" />
+              JobOps
             </Link>
-            <nav
-              aria-label="Primary"
-              className="order-3 flex w-full gap-1 overflow-x-auto pb-1 md:order-none md:w-auto md:pb-0"
+            <button
+              type="button"
+              onClick={toggleTheme}
+              aria-label={light ? "Use dark theme" : "Use light theme"}
+              className="grid size-11 place-items-center rounded-full text-muted-foreground hover:bg-muted"
             >
-              {navigation.map(({ label, href, icon: Icon, routes }) => {
-                const active =
-                  pathname === href || routes.some((route) => pathname.startsWith(route));
-                return (
-                  <Link
-                    key={href}
-                    href={href}
-                    aria-current={active ? "page" : undefined}
+              {light ? <Moon size={18} aria-hidden /> : <Sun size={18} aria-hidden />}
+            </button>
+          </header>
+          <header className="hidden border-b border-border bg-card md:block">
+            <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-5 py-4 sm:px-8">
+              <Link
+                href="/"
+                className="flex items-center gap-3 text-lg font-semibold text-foreground hover:no-underline"
+              >
+                {/* Shared vector mark stays crisp in the header and browser tab. */}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/jobops-logo.svg" alt="" width={36} height={36} className="size-9" />
+                My Jobs Workspace
+              </Link>
+              <nav
+                aria-label="Primary"
+                className="order-3 flex w-full gap-1 overflow-x-auto pb-1 md:order-none md:w-auto md:pb-0"
+              >
+                {navigation.map(({ label, href, icon: Icon, routes }) => {
+                  const active =
+                    pathname === href || routes.some((route) => pathname.startsWith(route));
+                  return (
+                    <Link
+                      key={href}
+                      href={href}
+                      aria-current={active ? "page" : undefined}
+                      className={cn(
+                        "morph flex min-h-11 shrink-0 items-center gap-2 px-4 text-sm font-medium hover:no-underline",
+                        active
+                          ? "bg-selected text-selected-foreground"
+                          : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                      )}
+                    >
+                      <Icon size={16} aria-hidden />
+                      {label}
+                    </Link>
+                  );
+                })}
+              </nav>
+              <div className="flex items-center gap-1">
+                <Link
+                  href="/mail"
+                  aria-label="Emails"
+                  aria-current={emailsActive ? "page" : undefined}
+                  className={cn(
+                    "morph grid size-10 place-items-center hover:bg-muted",
+                    emailsActive ? "bg-selected text-selected-foreground" : "text-muted-foreground",
+                  )}
+                >
+                  <Inbox size={18} aria-hidden />
+                </Link>
+                <Link
+                  href="/my-profile"
+                  aria-label="My sites & profile"
+                  className={cn(
+                    "morph grid size-10 place-items-center hover:bg-muted",
+                    pathname.startsWith("/my-profile")
+                      ? "bg-selected text-selected-foreground"
+                      : "text-muted-foreground",
+                  )}
+                >
+                  <UserRound size={18} aria-hidden />
+                </Link>
+                <button
+                  type="button"
+                  onClick={toggleTheme}
+                  className="morph grid size-10 place-items-center text-muted-foreground hover:bg-muted"
+                  aria-label={light ? "Use dark theme" : "Use light theme"}
+                >
+                  {light ? <Moon size={18} aria-hidden /> : <Sun size={18} aria-hidden />}
+                </button>
+              </div>
+            </div>
+          </header>
+          <main
+            id="main"
+            className={cn(
+              "mx-auto w-full min-w-0 px-4 pt-6 pb-[calc(7rem+env(safe-area-inset-bottom))] md:py-10",
+              pathname === "/mail" ? "max-w-[1600px] md:px-6" : "max-w-6xl md:px-8",
+            )}
+          >
+            {children}
+          </main>
+          <nav
+            aria-label="Mobile navigation"
+            className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card px-2 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] md:hidden"
+          >
+            <div className="mx-auto grid max-w-lg grid-cols-3">
+              {[
+                {
+                  label: "Overview",
+                  href: "/",
+                  icon: ChartNoAxesCombined,
+                  active: pathname === "/",
+                },
+                { label: "Mail", href: "/mail", icon: Inbox, active: emailsActive },
+                {
+                  label: "Applications",
+                  href: "/applications",
+                  icon: BriefcaseBusiness,
+                  active: pathname.startsWith("/applications") && !emailsActive,
+                },
+              ].map(({ label, href, icon: Icon, active }) => (
+                <Link
+                  key={href}
+                  href={href}
+                  aria-current={active ? "page" : undefined}
+                  className={cn(
+                    "flex min-h-12 flex-col items-center justify-center gap-1 text-[11px] font-medium hover:no-underline",
+                    active ? "text-foreground" : "text-muted-foreground",
+                  )}
+                >
+                  <span
                     className={cn(
-                      "morph flex min-h-11 shrink-0 items-center gap-2 px-4 text-sm font-medium hover:no-underline",
-                      active
-                        ? "bg-selected text-selected-foreground"
-                        : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                      "relative flex h-7 w-16 items-center justify-center rounded-full",
+                      active && "bg-selected text-selected-foreground",
                     )}
                   >
-                    <Icon size={16} aria-hidden />
-                    {label}
-                  </Link>
-                );
-              })}
-            </nav>
-            <div className="flex items-center gap-1">
-              <Link
-                href="/mail"
-                aria-label="Emails"
-                aria-current={emailsActive ? "page" : undefined}
-                className={cn(
-                  "morph grid size-10 place-items-center hover:bg-muted",
-                  emailsActive ? "bg-selected text-selected-foreground" : "text-muted-foreground",
-                )}
-              >
-                <Inbox size={18} aria-hidden />
-              </Link>
-              <Link
-                href="/my-profile"
-                aria-label="My sites & profile"
-                className={cn(
-                  "morph grid size-10 place-items-center hover:bg-muted",
-                  pathname.startsWith("/my-profile")
-                    ? "bg-selected text-selected-foreground"
-                    : "text-muted-foreground",
-                )}
-              >
-                <UserRound size={18} aria-hidden />
-              </Link>
-              <button
-                type="button"
-                onClick={toggleTheme}
-                className="morph grid size-10 place-items-center text-muted-foreground hover:bg-muted"
-                aria-label={light ? "Use dark theme" : "Use light theme"}
-              >
-                {light ? <Moon size={18} aria-hidden /> : <Sun size={18} aria-hidden />}
-              </button>
+                    <Icon size={20} aria-hidden />
+                    {href === "/mail" && attentionCount > 0 && (
+                      <span className="absolute top-0 right-0 min-w-4 rounded-full bg-review px-1 text-[9px] text-review-foreground">
+                        <span className="sr-only">Needs attention: </span>
+                        {attentionCount}
+                      </span>
+                    )}
+                  </span>
+                  {label}
+                </Link>
+              ))}
             </div>
-          </div>
-        </header>
-        <main
-          id="main"
-          className={cn(
-            "mx-auto w-full min-w-0",
-            pathname === "/gallery/mail" || pathname === "/mail"
-              ? "max-w-[1600px] px-4 py-5 sm:px-6"
-              : "max-w-6xl px-5 py-8 sm:px-8 sm:py-10",
-          )}
-        >
-          {children}
-        </main>
-      </div>
+          </nav>
+        </div>
+      </SnackbarProvider>
     </LoadingProvider>
   );
 }

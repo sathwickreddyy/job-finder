@@ -50,6 +50,20 @@ describe("silence clock", () => {
     });
     expect(legacy.sentAt).toBeNull();
   });
+  it("keeps the outreach clock running while linked mail still needs attention", () => {
+    const placed = record({
+      source: "COLD_EMAIL",
+      sentAt: at("2026-09-20T12:00:00"),
+      linkedMail: [
+        {
+          classification: "FOLLOW_UP",
+          receivedAt: at("2026-09-27T09:00:00"),
+          attentionState: "OPEN",
+        },
+      ],
+    });
+    expect(silenceClock(placed, NOW)).toMatchObject({ since: at("2026-09-20T12:00:00") });
+  });
   it("uses non-ack linked mail as inbound evidence and outreach resumes only after a later nudge", () => {
     const replied = record({
       source: "COLD_EMAIL",

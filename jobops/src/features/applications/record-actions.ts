@@ -6,7 +6,13 @@ import { db } from "@/db";
 import { applications } from "@/db/schema";
 import { actionError, formString, type ActionState } from "@/lib/actions";
 import { istDateTime } from "./dates";
-import { markRecordSent, updateRecordDetails, updateRecordRound } from "./outcome-service";
+import {
+  closeUnsentRecord,
+  markRecordSent,
+  reopenUnsentRecord,
+  updateRecordDetails,
+  updateRecordRound,
+} from "./outcome-service";
 import { safeReturnTo } from "./return-to";
 
 const httpUrl = z.union([
@@ -113,6 +119,35 @@ export async function recordAsSent(_state: ActionState, form: FormData): Promise
     return {
       success: "Recorded as sent.",
       redirect: safeReturnTo(formString(form, "returnTo")) ?? `/applications/${data.id}`,
+    };
+  } catch (error) {
+    return actionError(error);
+  }
+}
+
+export async function notApplying(_state: ActionState, form: FormData): Promise<ActionState> {
+  try {
+    const data = z.object({ id: z.uuid() }).parse({ id: formString(form, "id") });
+    await db.transaction((tx) => closeUnsentRecord(tx, data, new Date()));
+    refresh(data.id);
+    return {
+      success: "Closed as not applying.",
+      redirect: safeReturnTo(formString(form, "returnTo")) ?? `/applications?open=${data.id}`,
+    };
+  } catch (error) {
+    return actionError(error);
+  }
+}
+
+/** Undo for Not applying: the record is saved and unsent again. */
+export async function reopenRecord(_state: ActionState, form: FormData): Promise<ActionState> {
+  try {
+    const data = z.object({ id: z.uuid() }).parse({ id: formString(form, "id") });
+    await db.transaction((tx) => reopenUnsentRecord(tx, data, new Date()));
+    refresh(data.id);
+    return {
+      success: "Reopened. It is back in Needs you.",
+      redirect: safeReturnTo(formString(form, "returnTo")) ?? `/applications?open=${data.id}`,
     };
   } catch (error) {
     return actionError(error);

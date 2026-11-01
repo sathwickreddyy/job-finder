@@ -361,6 +361,7 @@ test("linked inbound evidence validates outreach chips consistently with history
     classification: "RECRUITER_OUTREACH",
     receivedAt: now,
     linkedApplicationId: app.id,
+    attentionState: "DONE",
   });
   const before = await snapshot(app.id);
   await expect(
@@ -569,6 +570,7 @@ for (const scenario of ["legacy applied", "linked inbound", "advanced", "closed"
         classification: "RECRUITER_OUTREACH",
         receivedAt: new Date(),
         linkedApplicationId: app.id,
+        attentionState: "DONE",
       });
     const before = await snapshot(app.id);
     for (const recordState of ["planned", "sent"]) {

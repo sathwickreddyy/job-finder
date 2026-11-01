@@ -45,7 +45,7 @@ export async function readOpeningMail(mailId: string) {
     db.select().from(mailEvents).where(eq(mailEvents.mailMessageId, mailId)),
   ]);
   if (!message) throw new Error("This source message no longer exists.");
-  if (!mailIsOpen(message, events))
+  if (!mailIsOpen(message))
     throw new Error(
       "This source message has already been handled. Return to Emails to see its current state.",
     );

@@ -1,142 +1,102 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
-import {
-  companyMailMatches,
-  mailConnections,
-  mailTracking,
-  mailMessages,
-  mailEvents,
-  settings,
-  applicationEvents,
-  activityLogs,
-} from "@/db/schema";
+import { outcomeDetail, type OutcomeId } from "@/features/applications/phase";
 import { actionError, formString, type ActionState } from "@/lib/actions";
-import { loadMailContext, ruleKey, ruleSchema } from "./context";
-import {
-  scanConnection,
-  ScanFailure,
-  scanKey,
-  scanRuleRevision,
-  retainDisposition,
-  type ScanScope,
-} from "./scan-service";
-import { reconcileLegacyMail } from "./workspace-read";
-import { matchMail } from "./matching";
-import { companyRevision } from "./company-search-policy";
+import type { RoundKind } from "@/lib/round-kinds";
+import { undoAutoOutcome } from "./auto-apply";
+import type { MailEffect } from "./auto-apply-rule";
+import { checkMailStep, type CheckResult } from "./check-service";
+import { companySearchStep, type SearchLane, type SearchRun } from "./company-search";
+import { listDropped } from "./dropped";
+import { handleMail, updateMail, updateMailKind } from "./handle-service";
+import { includeMail } from "./include";
+import type { IngestItem } from "./ingest";
+import type { MailItem } from "./mail-item";
+import { storeCompanyRule } from "./rule-store";
+import { tagLabel, type MailClassification } from "./tags";
 
 function invalidate() {
-  for (const path of ["/mail", "/applications", "/companies", "/settings", "/mail/search", "/"])
+  for (const path of ["/mail", "/applications", "/companies", "/settings", "/"])
     revalidatePath(path);
+  // Company pages show the same timeline and handle mail in place.
+  revalidatePath("/companies/[slug]", "page");
 }
-const scopeSchema = z.object({
-  company: z.string().max(300).optional(),
-  application: z.uuid().optional(),
-  account: z.email().optional(),
-});
-export async function checkWorkspaceMail(
-  _previous: ActionState,
-  form: FormData,
-): Promise<ActionState> {
+/**
+ * One Fetch new mail step across all accounts; the page loops while `mailCheck.more`.
+ * `lastDays` starts a new window on the first step only.
+ */
+export async function checkMail(
+  lastDays?: number,
+): Promise<ActionState & { mailCheck?: CheckResult }> {
   try {
-    const mode = z
-      .enum(["latest", "history"])
-      .parse(formString(form, "mode") || "latest");
-    const scope: ScanScope = scopeSchema.parse(
-      Object.fromEntries(
-        ["company", "application", "account"].flatMap((key) =>
-          formString(form, key) ? [[key, formString(form, key)]] : [],
-        ),
-      ),
-    );
-    const context = await loadMailContext();
-    if (
-      scope.company &&
-      !context.companies.some((company) => company.id === scope.company)
-    )
-      throw new Error("Choose an existing company.");
-    if (
-      scope.application &&
-      !context.applications.some((app) => app.id === scope.application)
-    )
-      throw new Error("Choose an existing application.");
-    await reconcileLegacyMail(context);
-    const connections = await db
-      .select()
-      .from(mailConnections)
-      .where(
-        scope.account ? eq(mailConnections.email, scope.account) : undefined,
-      );
-    if (!connections.length)
-      throw new Error("Connect an inbox before checking mail.");
-    const saved = await db
-      .select()
-      .from(settings)
-      .where(
-        inArray(
-          settings.key,
-          connections.map((connection) => scanKey(connection.id, mode, scope)),
-        ),
-      );
-    const revision = scanRuleRevision(context);
-    const stateOf = (id: string) =>
-      saved.find(
-        (row) =>
-          row.key === scanKey(id, mode, scope) &&
-          row.value.rulesRevision === revision,
-      )?.value;
-    const continuing = connections.some(
-      (connection) => stateOf(connection.id)?.complete === false,
-    );
-    const active = continuing
-      ? connections.filter(
-          (connection) => stateOf(connection.id)?.complete !== true,
-        )
-      : connections;
-    const results = await Promise.allSettled(
-      active.map((connection) =>
-        scanConnection(connection, mode, scope, context),
-      ),
-    );
-    const done = results.flatMap((result) =>
-      result.status === "fulfilled" ? [result.value] : [],
-    );
-    const failures = results.flatMap((result, index) =>
-      result.status === "rejected"
-        ? [`${active[index].email}: ${actionError(result.reason).error}`]
-        : [],
-    );
-    const committed = results.flatMap((result) =>
-      result.status === "fulfilled"
-        ? [result.value]
-        : result.reason instanceof ScanFailure
-          ? [result.reason.result]
-          : [],
-    );
-    const arrived = committed.reduce((sum, result) => sum + result.arrived, 0);
-    const historical = committed.reduce(
-      (sum, result) => sum + result.historical,
-      0,
-    );
-    const more = committed.some((result) => result.more);
-    const matches = `${historical} older ${historical === 1 ? "match" : "matches"}`;
-    const summary = `${done.length + connections.length - active.length} of ${connections.length} accounts checked. ${mode === "history" ? `${matches} saved to History` : `${arrived} new ${arrived === 1 ? "update" : "updates"}; ${matches} kept in History`}.${more ? " More mail remains; continue the check to resume saved pages." : ""}${failures.length ? ` Needs attention: ${failures.join(" ")}` : ""}`;
+    const mailCheck = await checkMailStep({ lastDays });
     invalidate();
-    return {
-      ...(done.length ? { success: summary } : { error: summary }),
-      mailRefresh: { arrived, completedAt: new Date().toISOString() },
-      mailScan: {
-        more,
-        scanned: committed.reduce((sum, row) => sum + row.scanned, 0),
-        historical,
-        failed: failures.length > 0,
-      },
-    };
+    return { mailCheck };
   } catch (error) {
+    return actionError(error);
+  }
+}
+
+/** One company search step; the panel loops while `search.more`, sending options only first. */
+export async function searchCompanyMail(
+  key: string,
+  options: { lastDays?: number; accounts?: string[]; restart?: boolean } = {},
+): Promise<ActionState & { search?: { more: boolean; run: SearchRun; lanes: SearchLane[] } }> {
+  try {
+    const search = await companySearchStep(key, options);
     invalidate();
+    return { search };
+  } catch (error) {
+    return actionError(error);
+  }
+}
+
+/** Save a company's rule from the panel; a refused keyword comes back as `error`. */
+export async function saveCompanyRule(key: string, rule: unknown): Promise<ActionState> {
+  try {
+    await storeCompanyRule(key, rule);
+    invalidate();
+    return { success: "Saved. Fetches and searches use it from now on." };
+  } catch (error) {
+    return actionError(error);
+  }
+}
+
+/** Dropped mail decided since a fetch or search started, with the reason for each. */
+export async function droppedMail(
+  since: string,
+  company?: string,
+): Promise<ActionState & { items?: IngestItem[] }> {
+  try {
+    if (!Number.isFinite(Date.parse(since))) throw new Error("Choose when the fetch started.");
+    return { items: await listDropped({ since, company }) };
+  } catch (error) {
+    return actionError(error);
+  }
+}
+
+/** Include this on a dropped email, for one company. */
+export async function includeDroppedMail(
+  trackingId: string,
+  company: string,
+): Promise<
+  ActionState & {
+    included?: {
+      item: MailItem;
+      addedSender: string | null;
+      skippedShared: string | null;
+      suggestedKeyword: string | null;
+    };
+  }
+> {
+  try {
+    const included = await includeMail(trackingId, company);
+    invalidate();
+    return { included };
+  } catch (error) {
     return actionError(error);
   }
 }
@@ -146,205 +106,158 @@ export async function saveWorkspaceRule(
   form: FormData,
 ): Promise<ActionState> {
   try {
-    const key = formString(form, "company");
-    const context = await loadMailContext();
-    const company = context.companies.find((row) => row.id === key);
-    if (!company) throw new Error("Choose an existing company.");
-    const rule = ruleSchema.parse(
+    const { placed, company } = await storeCompanyRule(
+      formString(form, "company"),
       Object.fromEntries(
-        ["aliases", "domains", "senders", "subjectTerms", "excludedTerms"].map(
-          (field) => [
-            field,
-            formString(form, field)
-              .split(",")
-              .map((entry) => entry.trim())
-              .filter(Boolean),
-          ],
-        ),
+        ["aliases", "domains", "senders", "keywords", "excludedTerms"].map((field) => [
+          field,
+          formString(form, field)
+            .split(",")
+            .map((entry) => entry.trim())
+            .filter(Boolean),
+        ]),
       ),
     );
-    await db
-      .insert(settings)
-      .values({
-        key: ruleKey(key),
-        value: { rule, revisedAt: new Date().toISOString() },
-      })
-      .onConflictDoUpdate({
-        target: settings.key,
-        set: {
-          value: { rule, revisedAt: new Date().toISOString() },
-          updatedAt: new Date(),
-        },
-      });
-    const updated = await loadMailContext();
-    const savedCompany = updated.companies.find((item) => item.id === key)!;
-    const scoped = { ...updated, companies: [savedCompany] };
-    // Re-evaluate retained content without deleting anything or promoting history.
-    const rows = await db
-      .select({ tracking: mailTracking, message: mailMessages })
-      .from(mailTracking)
-      .innerJoin(mailMessages, eq(mailTracking.messageId, mailMessages.id));
-    for (const { tracking, message } of rows) {
-      if (message.linkedApplicationId) continue;
-      const decision = matchMail(
-        {
-          ...message,
-          externalId: tracking.providerMessageId,
-          threadId: message.threadId ?? undefined,
-          folders: tracking.folders,
-          bodyText: message.bodyText ?? "",
-          receivedAt: message.receivedAt.toISOString(),
-        },
-        scoped,
-        { historical: true, seen: true, threadApplications: tracking.threadId ? tracking.applicationIds : [] },
-      );
-      if (
-        !tracking.companyKeys.includes(key) &&
-        !decision.companyKeys.includes(key)
-      )
-        continue;
-      await db.update(companyMailMatches).set({
-        kept: decision.disposition !== "excluded" && decision.companyKeys.includes(key),
-        reason: decision.reason, evidence: decision.evidence,
-        ruleRevision: companyRevision(savedCompany, updated), updatedAt: new Date(),
-      }).where(and(eq(companyMailMatches.companyKey, key), eq(companyMailMatches.trackingId, tracking.id)));
-      const otherKeys = tracking.companyKeys.filter((company) => company !== key);
-      const keep = decision.disposition !== "excluded" && decision.companyKeys.includes(key);
-      await db.update(mailTracking).set({
-        companyKeys: [...new Set([...otherKeys, ...(keep ? [key] : [])])],
-        applicationIds: [...new Set([...tracking.applicationIds.filter((id) => !updated.applications.some((app) => app.id === id && app.company === key)), ...(keep ? decision.applicationIds : [])])],
-        disposition: otherKeys.length && tracking.disposition !== "excluded" ? tracking.disposition : retainDisposition(tracking, decision),
-        reason: otherKeys.length ? tracking.reason : decision.reason,
-        evidence: otherKeys.length ? tracking.evidence : decision.evidence,
-        updatedAt: new Date(),
-      }).where(eq(mailTracking.id, tracking.id));
+    invalidate();
+    return {
+      success: `Company pattern saved.${placed ? ` ${placed} unplaced ${placed === 1 ? "email" : "emails"} now ${placed === 1 ? "belongs" : "belong"} to ${company}.` : ""} New mail uses this pattern from the next check.`,
+    };
+  } catch (error) {
+    return actionError(error);
+  }
+}
+
+/**
+ * Just info (`justInfo=1`) or an outcome (`outcome`, optional `applicationId`) from the Mail
+ * page. Outcomes that need a round or deadline send `day`, `time` and `kind` in India time.
+ */
+export async function handleMailAction(
+  _previous: ActionState,
+  form: FormData,
+): Promise<ActionState> {
+  try {
+    const id = formString(form, "id");
+    if (formString(form, "justInfo") === "1") {
+      await handleMail(id, { justInfo: true });
+      invalidate();
+      return { success: "Marked as just info." };
     }
+    const optional = (name: string) => formString(form, name) || undefined;
+    const happenedOn = optional("happenedOn");
+    const { id: outcome, detail } = outcomeDetail(
+      {
+        outcome: formString(form, "outcome") as OutcomeId,
+        kind: optional("kind") as RoundKind | undefined,
+        day: optional("day"),
+        time: optional("time"),
+        name: formString(form, "name"),
+        note: formString(form, "note"),
+        happenedOn,
+      },
+      new Date(),
+    );
+    await handleMail(id, {
+      outcome,
+      ...(optional("applicationId") ? { applicationId: optional("applicationId") } : {}),
+      details: {
+        ...(detail.kind ? { kind: detail.kind } : {}),
+        ...(detail.at ? { at: detail.at.toISOString() } : {}),
+        ...(detail.name ? { name: detail.name } : {}),
+        ...(detail.note ? { note: detail.note } : {}),
+        // Without a chosen day the outcome is dated by the email, not by this click.
+        ...(happenedOn ? { happenedAt: detail.happenedAt.toISOString() } : {}),
+      },
+    });
     invalidate();
-    return {
-      success:
-        "Company pattern saved. Tracked mail will not become new again. Run a mail check or history scan to use this pattern.",
-    };
+    return { success: "Outcome recorded from this email." };
   } catch (error) {
     return actionError(error);
   }
 }
 
-export async function reviewWorkspaceMail(
+/** Undo Just info: the email needs attention again. */
+export async function reopenMailAction(
   _previous: ActionState,
   form: FormData,
 ): Promise<ActionState> {
   try {
-    const id = z.uuid().parse(formString(form, "id"));
-    await db.transaction(async (tx) => {
-      const [tracking] = await tx
-        .select()
-        .from(mailTracking)
-        .where(eq(mailTracking.id, id))
-        .for("update");
-      if (!tracking) throw new Error("This message no longer exists.");
-      if (tracking.disposition === "excluded") return;
-      await tx
-        .update(mailTracking)
-        .set({ disposition: "history", updatedAt: new Date() })
-        .where(eq(mailTracking.id, id));
-      if (tracking.messageId) {
-        await tx
-          .update(mailMessages)
-          .set({ attentionState: "DONE", processedAt: new Date() })
-          .where(eq(mailMessages.id, tracking.messageId));
-        await tx
-          .update(mailEvents)
-          .set({ status: "REVIEWED" })
-          .where(eq(mailEvents.mailMessageId, tracking.messageId));
-      }
-      await tx.insert(activityLogs).values({
-        action: "MAIL_REVIEWED",
-        entityType: "MAIL",
-        entityId: tracking.messageId,
-        summary: "Reviewed mail and retained it in history",
-      });
-    });
+    await updateMail(formString(form, "id"), { attention: "open" });
     invalidate();
-    return {
-      success: "Reviewed and kept in History. It will not appear as new again.",
-    };
+    return { success: "Back in Needs you." };
   } catch (error) {
     return actionError(error);
   }
 }
 
-export async function associateWorkspaceMail(
+/** Undo an outcome the mail rule recorded from this email; the email stays as information. */
+export async function undoAutoOutcomeAction(
   _previous: ActionState,
   form: FormData,
 ): Promise<ActionState> {
   try {
     const id = z.uuid().parse(formString(form, "id"));
-    const applicationId = z.uuid().parse(formString(form, "application"));
-    const context = await loadMailContext();
-    const app = context.applications.find((row) => row.id === applicationId);
-    if (!app) throw new Error("Choose an existing application.");
-    await db.transaction(async (tx) => {
-      const [tracking] = await tx
-        .select()
-        .from(mailTracking)
-        .where(eq(mailTracking.id, id))
-        .for("update");
-      if (
-        !tracking?.messageId ||
-        tracking.disposition === "excluded" ||
-        (tracking.companyKeys.length > 0 &&
-          !tracking.companyKeys.includes(app.company))
-      )
-        throw new Error(
-          "Only a matched company message can be linked to this application.",
-        );
-      const [message] = await tx
-        .select()
-        .from(mailMessages)
-        .where(eq(mailMessages.id, tracking.messageId))
-        .for("update");
-      if (
-        message.linkedApplicationId &&
-        message.linkedApplicationId !== applicationId
-      )
-        throw new Error(
-          "This message is already linked to another application. Unlink it from that record first.",
-        );
-      await tx
-        .update(mailTracking)
-        .set({
-          applicationIds: [applicationId],
-          companyKeys: [app.company],
-          disposition: "history",
-          updatedAt: new Date(),
-        })
-        .where(eq(mailTracking.id, id));
-      if (message.linkedApplicationId === applicationId) return;
-      await tx
-        .update(mailMessages)
-        .set({
-          linkedApplicationId: applicationId,
-          attentionState: "DONE",
-          processedAt: new Date(),
-        })
-        .where(eq(mailMessages.id, message.id));
-      await tx
-        .update(mailEvents)
-        .set({ linkedApplicationId: applicationId, status: "REVIEWED" })
-        .where(eq(mailEvents.mailMessageId, message.id));
-      await tx.insert(applicationEvents).values({
-        applicationId,
-        eventType: "MAIL_LINKED",
-        occurredAt: message.receivedAt,
-        summary: `Mail linked: ${message.subject}`,
-        payload: { mailMessageId: message.id },
-      });
-    });
+    await db.transaction((tx) => undoAutoOutcome(tx, id, new Date()));
     invalidate();
-    revalidatePath(`/applications/${applicationId}`);
+    return { success: "Undone. The email stays on the application as information." };
+  } catch (error) {
+    return actionError(error);
+  }
+}
+
+/** What the mail rule changed, as a sentence for the snackbar; empty when nothing changed. */
+function ruleNote(effect: MailEffect | null, undone: boolean) {
+  if (effect?.kind === "acknowledge") return "Marked acknowledged.";
+  if (effect?.kind === "outcome")
+    return effect.outcome === "offer" ? "Recorded an offer." : "Marked rejected.";
+  return undone ? "The outcome it recorded was undone." : "";
+}
+
+export type RetagState = ActionState & { previous?: MailClassification };
+
+/**
+ * Edit tag: correct a wrong tag. Attention and placement stay as they were, unless the mail rule
+ * reads the new tag differently (it undoes its own earlier outcome first); the message says so.
+ */
+export async function retagMail(id: string, tag: string): Promise<RetagState> {
+  try {
+    const { item, previous, effect, undone } = await updateMailKind(id, { tag });
+    invalidate();
+    const note = ruleNote(effect, undone);
+    return { success: `Tagged as ${tagLabel[item.tag]}${note ? `. ${note}` : ""}`, previous };
+  } catch (error) {
+    return actionError(error);
+  }
+}
+
+/** Undo for Edit tag: put back the exact kind the email had, not just its tag. */
+export async function restoreMailKind(id: string, classification: string): Promise<ActionState> {
+  try {
+    const { effect, undone } = await updateMailKind(id, { classification });
+    invalidate();
+    const note = ruleNote(effect, undone);
+    return { success: `Tag restored.${note ? ` ${note}` : ""}` };
+  } catch (error) {
+    return actionError(error);
+  }
+}
+
+/** Place an email at an application or company; an empty value clears it. */
+export async function placeMailAction(
+  _previous: ActionState,
+  form: FormData,
+): Promise<ActionState> {
+  try {
+    const id = formString(form, "id");
+    const change = form.has("application")
+      ? { application: formString(form, "application") || null }
+      : { company: formString(form, "company") || null };
+    const { effect } = await updateMailKind(id, change);
+    invalidate();
+    const note = ruleNote(effect, false);
     return {
-      success:
-        "Message linked to the application and kept in History. Application outcomes are unchanged.",
+      success: note
+        ? `Email placed and ${note.charAt(0).toLowerCase()}${note.slice(1)}`
+        : "Email placed. It still needs your attention until you handle it.",
     };
   } catch (error) {
     return actionError(error);

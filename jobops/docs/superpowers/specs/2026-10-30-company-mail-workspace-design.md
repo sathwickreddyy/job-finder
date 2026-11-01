@@ -1,5 +1,7 @@
 # Company mail workspace — approved 2026-10-30
 
+> Partly superseded on 2026-10-30 by `2026-10-30-shared-mail-foundation-design.md`: Latest/History/Excluded, the separate history-recovery operation and provider search are retired in favour of one on-demand check, colour tags and a single attention flag.
+
 The current broad classifier imports networking and promotional mail; Outlook only searches Inbox and Gmail's initial query covers 30 days. This design replaces that experience with application and outbound-outreach updates, folder coverage and a separate historical recovery workflow. No LLM calls, scheduled polling, automatic sending or inferred application outcomes.
 
 ## Visual direction — revised after rejection on 2026-10-30
@@ -77,7 +79,6 @@ Real folder enumeration for all three accounts, nested/localized folder fixtures
 `/mail` uses the approved layout with server-side scope/search pagination. Company and application pages link directly into that workspace; the old Emails drawer URL redirects there. Saved filters live in settings; `mail_tracking` holds account-scoped immutable identities, minimal metadata for exclusions and associations to retained matched messages. Migration 0010 keeps original mail IDs and references and establishes the monitoring baseline. Latest and historical scans checkpoint independently, with one page per account per server request (25 Gmail messages, 50 Outlook messages), and up to four short requests per user action. A history action after a completed scan intentionally rescans; persistent ledger identities keep all previously seen items out of new arrivals. Gmail uses mailbox-wide search with Spam/Trash included; Outlook’s mailbox-wide messages endpoint includes nested folders, with recursive hidden-folder inventory for provenance and sent/draft exclusions.
 
 Latest scans include a one-day overlap and start with the rollout baseline; history scans have no lower date bound. The scan’s upper boundary is fixed until all pages complete. Source mail is never modified. Old or ignored mail re-evaluated under a new pattern can become historical matches but never fresh arrivals. Exact header/subject identity matching for LinkedIn remains conservative; ambiguous or unsupported notification formats are excluded rather than treated as replies.
-
 
 ## Verification — 2026-10-30
 

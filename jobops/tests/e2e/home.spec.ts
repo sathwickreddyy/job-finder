@@ -3,6 +3,7 @@ import { and, desc, eq } from "drizzle-orm";
 import { db, closeDatabase } from "../../src/db";
 import { profiles, resumes, resumeVersions } from "../../src/db/schema";
 import { stubExternalSites } from "./helpers/external-sites";
+import { hydrated } from "./helpers/hydration";
 
 test.beforeEach(async ({ page }) => {
   expect(new URL(process.env.DATABASE_URL!).pathname).toBe("/jobops_e2e");
@@ -32,7 +33,7 @@ function heldResponse() {
 }
 
 async function expectBlocked(page: Page) {
-  await expect(page.locator("[inert]")).toContainText("JobOps");
+  await expect(page.locator("[inert]")).toContainText("My Jobs Workspace");
   await expect(popup(page).getByRole("progressbar")).not.toHaveAttribute("aria-valuenow");
 }
 
@@ -285,7 +286,7 @@ test("home has no phone overflow in either theme", async ({ page }) => {
     }, theme);
     await page.reload();
     await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
-    await expect(page.getByRole("heading", { name: "Your profiles", exact: true })).toBeVisible();
+    await expect(page.getByTestId("mobile-overview")).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
       true,
     );
@@ -294,7 +295,10 @@ test("home has no phone overflow in either theme", async ({ page }) => {
 
 test("hash-only Back navigation does not start a loading popup", async ({ page }) => {
   await page.goto("/my-profile");
-  await page.getByRole("button", { name: "Use light theme", exact: true }).click();
+  // The theme toggle only has a click handler once React hydrates it.
+  const lightTheme = page.getByRole("button", { name: "Use light theme", exact: true });
+  await hydrated(lightTheme);
+  await lightTheme.click();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
   await page.clock.install();
   await page.evaluate(() => history.pushState(null, "", "#add-link"));
@@ -304,7 +308,7 @@ test("hash-only Back navigation does not start a loading popup", async ({ page }
   await expect(page.locator("[inert]")).toHaveCount(0);
 });
 
-test("long preview header keeps Close preview inside the dialog on a phone", async ({ page }) => {
+test("long preview header keeps Close preview inside the dialog on a tablet", async ({ page }) => {
   const name = `Portfolio with a long project title ${Date.now()}`;
   const [profile] = await db
     .insert(profiles)
@@ -315,7 +319,7 @@ test("long preview header keeps Close preview inside the dialog on a phone", asy
     })
     .returning();
   try {
-    await page.setViewportSize({ width: 390, height: 844 });
+    await page.setViewportSize({ width: 768, height: 1024 });
     await page.goto("/");
     await tile(page, name)
       .getByRole("button", { name: `Preview ${name}`, exact: true })
@@ -335,7 +339,7 @@ test("long preview header keeps Close preview inside the dialog on a phone", asy
   }
 });
 
-test("capture approved home and gallery compositions in both themes", async ({ page }) => {
+test("capture home and mobile overview compositions in both themes", async ({ page }) => {
   for (const theme of ["light", "dark"] as const) {
     await page.goto("/");
     await page.evaluate((nextTheme) => localStorage.setItem("jobops-theme", nextTheme), theme);
@@ -346,19 +350,16 @@ test("capture approved home and gallery compositions in both themes", async ({ p
       ["mobile", 390, 844],
     ] as const) {
       await page.setViewportSize({ width, height });
-      await page.getByRole("region", { name: "Your profiles" }).scrollIntoViewIfNeeded();
+      if (name === "desktop") {
+        await page.getByRole("region", { name: "Your profiles" }).scrollIntoViewIfNeeded();
+      } else {
+        await expect(page.getByTestId("mobile-overview")).toBeVisible();
+      }
       await page.screenshot({
         path: test.info().outputPath(`home-${name}-${theme}.png`),
         fullPage: true,
         animations: "disabled",
       });
     }
-    await page.setViewportSize({ width: 1440, height: 1000 });
-    await page.goto("/gallery/home");
-    await page.screenshot({
-      path: test.info().outputPath(`home-gallery-${theme}.png`),
-      fullPage: true,
-      animations: "disabled",
-    });
   }
 });

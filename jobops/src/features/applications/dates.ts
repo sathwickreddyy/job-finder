@@ -42,13 +42,14 @@ const weekday = new Intl.DateTimeFormat("en-IN", {
 });
 /** "11:05", for time inputs. */
 export const istClock = (value: Date) => clock.format(value);
-export const formatDay = (value: Date) => day.format(value);
-export const formatTime = (value: Date) => time.format(value);
-export const formatDayTime = (value: Date) => `${day.format(value)}, ${time.format(value)}`;
-export const formatWeekday = (value: Date) => weekday.format(value);
-/** "Today, 9:12 am" for the current IST day, else "20 Sept, 4:19 pm". */
+export const formatDay = (value: Date) => day.format(value).replace(/\bSept\b/g, "Sep");
+// WebKit capitalizes day periods while Node uses lowercase. Keep SSR and hydration identical.
+export const formatTime = (value: Date) => time.format(value).toLowerCase();
+export const formatDayTime = (value: Date) => `${formatDay(value)}, ${formatTime(value)}`;
+export const formatWeekday = (value: Date) => weekday.format(value).replace(/\bSept\b/g, "Sep");
+/** "Today, 9:12 am" for the current IST day, else "20 Sep, 4:19 pm". */
 export const formatWhen = (value: Date, now: Date) =>
-  indiaDate(value) === indiaDate(now) ? `Today, ${time.format(value)}` : formatDayTime(value);
+  indiaDate(value) === indiaDate(now) ? `Today, ${formatTime(value)}` : formatDayTime(value);
 
 /** Relative refresh time with Asia/Kolkata day boundaries. */
 export function relativeTime(value: Date, now: Date) {

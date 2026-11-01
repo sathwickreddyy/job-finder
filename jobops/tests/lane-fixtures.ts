@@ -26,6 +26,7 @@ export const record = (patch: Partial<LaneSource> = {}): LaneSource => ({
   closedReason: null,
   phase: "Applied",
   typicalRounds: null,
+  postedAt: null,
   ...patch,
 });
 
