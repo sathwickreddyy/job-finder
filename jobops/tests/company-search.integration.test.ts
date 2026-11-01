@@ -225,7 +225,7 @@ describe.skipIf(!dbTests)("company inbox search", () => {
 
   it("an inbox that failed is searched from its own coverage next time", async () => {
     const a = await connection();
-    const b = await connection();
+    await connection(); // a second inbox, whose search succeeds
     vi.spyOn(outlook, "folders").mockResolvedValue([]);
     const search = vi.spyOn(outlook, "searchMail").mockImplementation(async (row, request) => {
       if (row.id === a.id) throw new Error("Sign-in expired");
