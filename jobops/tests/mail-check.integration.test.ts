@@ -162,10 +162,13 @@ describe.skipIf(!dbTests)("on-demand mail check", () => {
     vi.spyOn(outlook, "folders").mockResolvedValue([]);
     vi.spyOn(outlook, "scanMail").mockResolvedValue({ messages: [mail("same-provider-id")] });
     expect((await checkConnection(first, context)).newAttention).toBe(1);
-    expect((await checkConnection(second, context)).newAttention).toBe(1);
+    // The second inbox keeps its own copy, settled as a copy of the first.
+    expect((await checkConnection(second, context)).newAttention).toBe(0);
     const [a] = await ledger(first.email);
     const [b] = await ledger(second.email);
     expect(a.messageId).not.toBe(b.messageId);
+    const [copy] = await messages(second.email);
+    expect(copy.attentionState).toBe("DONE");
   });
 
   it("never imports excluded or context-only mail, even after a rule change", async () => {
