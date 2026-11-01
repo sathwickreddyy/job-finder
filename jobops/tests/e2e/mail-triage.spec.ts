@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { eq, inArray, sql } from "drizzle-orm";
 import { expect, test } from "@playwright/test";
+import { hydrated } from "./helpers/hydration";
 import { closeDatabase, db } from "../../src/db";
 import {
   activityLogs,
@@ -381,27 +382,32 @@ test("mail outcome keeps success and focus after resolution; unlink reopens mail
 }) => {
   const app = await record("REFERRAL");
   const mail = await message({ classification: "FOLLOW_UP" }, app.id);
+  const row = `/applications\\?open=${app.id}`;
+  // An old record link opens the row in place with the form ready.
   await page.goto(`/applications/${app.id}?mail=${mail.id}&outcome=heard#what-happened`);
+  await expect(page).toHaveURL(new RegExp(`${row}&mail=${mail.id}&outcome=heard`));
   await expect(page.locator('#what-happened input[name="outcome"]')).toHaveValue("replied");
+  await hydrated(page.getByRole("button", { name: "Save", exact: true }));
   await page.getByRole("button", { name: "Save", exact: true }).click();
   // Assert after the successful operation's actual cleanup navigation, not transient feedback.
-  await expect(page).toHaveURL(new RegExp(`/applications/${app.id}$`));
+  await expect(page).toHaveURL(new RegExp(`${row}$`));
   await expect(page.locator('#what-happened input[name="mailId"]')).toHaveCount(0);
   await expect(page.getByRole("status").filter({ hasText: "Saved: Replied." })).toBeVisible();
   await expect(page.getByRole("region", { name: "Progress", exact: true })).toBeFocused();
-  await expect(page.getByText(`Linking mail: ${mail.subject}`, { exact: true })).toHaveCount(0);
+  await expect(page.getByText(`From this email: ${mail.subject}`, { exact: true })).toHaveCount(0);
   await page.goBack();
-  await expect(page).toHaveURL(
-    new RegExp(`/applications/${app.id}\\?mail=${mail.id}&outcome=heard#what-happened$`),
-  );
+  await expect(page).toHaveURL(new RegExp(`${row}&mail=${mail.id}&outcome=heard`));
   await expect(
     page.getByRole("alert").filter({ hasText: "source message has already been handled" }),
   ).toBeVisible();
   await expect(page.getByRole("status").filter({ hasText: "Saved: Replied." })).toHaveCount(0);
   await expect(page.locator('#what-happened input[name="outcome"]')).toHaveCount(0);
   await page.goForward();
-  await expect(page).toHaveURL(new RegExp(`/applications/${app.id}$`));
+  await expect(page).toHaveURL(new RegExp(`${row}$`));
   await expect(page.getByRole("status").filter({ hasText: "Saved: Replied." })).toHaveCount(0);
+  // Unlinking stays on the record's own page.
+  await page.goto(`/applications/${app.id}`);
+  await hydrated(page.getByRole("button", { name: "Unlink mail" }));
   await page.getByRole("button", { name: "Unlink mail" }).click();
   await expect(
     page.getByRole("status").filter({ hasText: "Recorded outcomes and history were kept." }),
@@ -481,8 +487,9 @@ test("mail handled while its outcome form is open keeps source and rejects all w
 }) => {
   const app = await record();
   const mail = await message({ classification: "FOLLOW_UP" });
-  await page.goto(`/applications/${app.id}?mail=${mail.id}&outcome=heard#what-happened`);
+  await page.goto(`/applications?open=${app.id}&mail=${mail.id}&outcome=heard`);
   await expect(page.locator('#what-happened input[name="mailId"]')).toHaveValue(mail.id);
+  await hydrated(page.getByRole("button", { name: "Save", exact: true }));
   await guard();
   await db.transaction((tx) => dismissMessages(tx, { ids: [mail.id] }, new Date()));
   const before = await state(app.id, mail.id);
@@ -550,19 +557,20 @@ test("manual query outcome keeps confirmation and focus after cleanup navigation
   page,
 }) => {
   const app = await record();
+  const row = `/applications\\?open=${app.id}`;
   await page.goto(`/applications/${app.id}?outcome=followup#what-happened`);
+  await expect(page).toHaveURL(new RegExp(`${row}&outcome=followup`));
   await expect(page.locator('#what-happened input[name="outcome"]')).toHaveValue("followup");
+  await hydrated(page.getByRole("button", { name: "Save", exact: true }));
   await page.getByRole("button", { name: "Save", exact: true }).click();
-  await expect(page).toHaveURL(new RegExp(`/applications/${app.id}$`));
+  await expect(page).toHaveURL(new RegExp(`${row}$`));
   await expect(page.locator('#what-happened input[name="outcome"]')).toHaveCount(0);
   await expect(
     page.getByRole("status").filter({ hasText: "Saved: Sent a follow-up." }),
   ).toBeVisible();
   await expect(page.getByRole("button", { name: "Sent a follow-up", exact: true })).toBeFocused();
   await page.goBack();
-  await expect(page).toHaveURL(
-    new RegExp(`/applications/${app.id}\\?outcome=followup#what-happened$`),
-  );
+  await expect(page).toHaveURL(new RegExp(`${row}&outcome=followup`));
   await expect(page.locator('#what-happened input[name="outcome"]')).toHaveValue("followup");
   await expect(
     page.getByRole("status").filter({ hasText: "Saved: Sent a follow-up." }),

@@ -7,7 +7,8 @@ import { at, event, record, uid } from "./lane-fixtures";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }) }));
 vi.mock("@/features/applications/record-actions", () => ({ notApplying: vi.fn() }));
-const { ApplicationList } = await import("@/features/applications/views/application-list");
+const { ApplicationList, pinOpenRow } =
+  await import("@/features/applications/views/application-list");
 
 const NOW = at("2026-10-31T10:30:00");
 function render(records: LaneSource[], openId: string | null = null) {
@@ -90,5 +91,25 @@ describe("ApplicationList", () => {
     const html = render(Array.from({ length: 6 }, northwind));
     expect(html).toMatch(/<details[^>]*>\s*<summary/);
     expect(html).not.toMatch(/<details[^>]*open/);
+  });
+});
+
+describe("pinOpenRow", () => {
+  it("keeps the open row in the group it opened in until it closes", () => {
+    const quiet = waiting();
+    const lanes = buildLanes({
+      records: [quiet, northwind()],
+      items: [],
+      pending: [],
+      now: NOW,
+      by: "application",
+    });
+    expect(lanes.find((lane) => lane.leadId === quiet.id)?.group).toBe("active");
+    const pinned = pinOpenRow(lanes, { id: quiet.id, group: "needs" });
+    expect(pinned.find((lane) => lane.leadId === quiet.id)?.group).toBe("needs");
+    expect(pinned.filter((lane) => lane.leadId !== quiet.id)).toEqual(
+      lanes.filter((lane) => lane.leadId !== quiet.id),
+    );
+    expect(pinOpenRow(lanes, null)).toBe(lanes);
   });
 });

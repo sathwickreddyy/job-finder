@@ -1,5 +1,7 @@
+"use client";
+
 import Link from "next/link";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { ChevronDown } from "lucide-react";
 import { ActionForm } from "@/components/action-form";
 import { StatusPill } from "@/features/companies/status-pill";
@@ -149,6 +151,17 @@ function Row({
   );
 }
 
+type Pin = { id: string; group: LaneGroup };
+
+/**
+ * The open row stays in the group it opened in, so recording from it never moves it out from
+ * under the reader (or remounts its forms mid-save); it takes its new group once it closes.
+ */
+export function pinOpenRow(lanes: Lane[], pin: Pin | null): Lane[] {
+  if (!pin) return lanes;
+  return lanes.map((lane) => (lane.leadId === pin.id ? { ...lane, group: pin.group } : lane));
+}
+
 /**
  * Applications as journeys (spec §4), one row per application in Needs you, Waiting on them
  * and Closed. The open row (`?open=<id>`) expands in place beneath itself (spec §5).
@@ -164,10 +177,17 @@ export function ApplicationList({
   openId: string | null;
   detail: ReactNode;
 }) {
+  const pinFor = (id: string | null): Pin | null => {
+    const group = id ? lanes.find((lane) => lane.leadId === id)?.group : undefined;
+    return id && group ? { id, group } : null;
+  };
+  const [pin, setPin] = useState(() => pinFor(openId));
+  if ((pin?.id ?? null) !== openId) setPin(pinFor(openId));
+  const placed = pinOpenRow(lanes, pin?.id === openId ? pin : null);
   return (
     <div className="flex flex-col gap-8">
       {groups.map((group) => {
-        const rows = lanes.filter((lane) => lane.group === group.id);
+        const rows = placed.filter((lane) => lane.group === group.id);
         if (!rows.length) return null;
         const heading = (
           <span className="flex items-baseline gap-2 text-sm font-semibold">

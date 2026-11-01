@@ -225,7 +225,9 @@ test("add a previous employer from Companies", async ({ page }) => {
   expect(created.kind).toBe("PREVIOUS_EMPLOYER");
 });
 
-test("applications shows one lane per application with tag icons", async ({ page }) => {
+test("applications shows one row per application, with the email on its own row", async ({
+  page,
+}) => {
   const name = unique("Lanes Co");
   const first = await seedRecord({
     company: name,
@@ -234,18 +236,22 @@ test("applications shows one lane per application with tag icons", async ({ page
     title: "Backend II",
   });
   await seedRecord({ company: name, source: "DIRECT", sentDaysAgo: 5, title: "Platform Engineer" });
+  const subject = unique("Assessment");
   await seedMail({
-    subject: unique("Assessment"),
+    subject,
     classification: "ASSESSMENT",
     companyKey: keyOf(name),
     recordId: first.applicationId,
   });
   await page.goto("/applications");
-  const lanes = page.getByRole("group", { name });
-  await expect(lanes).toHaveCount(2);
-  await expect(lanes.filter({ hasText: "Backend II" })).toHaveCount(1);
-  await expect(lanes.filter({ hasText: "Platform Engineer" })).toHaveCount(1);
-  await expect(lanes.locator(".bg-tag-interview-call-container").first()).toBeVisible();
+  const rows = page.getByRole("group", { name });
+  await expect(rows).toHaveCount(2);
+  const backend = rows.filter({ hasText: "Backend II" });
+  await expect(backend).toHaveCount(1);
+  await expect(rows.filter({ hasText: "Platform Engineer" })).toHaveCount(1);
+  await expect(backend).toContainText(subject);
+  await expect(backend.getByRole("link", { name: /^Link it/ })).toBeVisible();
+  await expect(rows.filter({ hasText: "Platform Engineer" })).not.toContainText(subject);
 });
 
 test("375 px has no horizontal scroll on /mail, a company page and /applications", async ({
