@@ -88,12 +88,14 @@ export function FetchMail({
   lastFetched,
   companies = [],
   className,
+  compact = false,
 }: {
   inboxes: { account: string; provider: ProviderId }[];
   lastFetched: string | null;
   /** For Include this on dropped mail that matched no company. */
   companies?: { key: string; name: string }[];
   className?: string;
+  compact?: boolean;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -107,6 +109,7 @@ export function FetchMail({
   } | null>(null);
   const [summary, setSummary] = useState<FetchSummary | null>(null);
   const [open, setOpen] = useState(false);
+  const [options, setOptions] = useState(false);
   const [stopping, setStopping] = useState(false);
   const stop = useRef(false);
   function fetchMail() {
@@ -227,7 +230,7 @@ export function FetchMail({
           disabled={pending || !connected}
           onClick={fetchMail}
           title={connected ? undefined : "Connect an inbox first"}
-          className="morph pressable inline-flex h-10 items-center gap-2 bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary-hover disabled:opacity-60"
+          className="morph pressable inline-flex min-h-11 items-center gap-2 bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary-hover disabled:opacity-60"
         >
           {pending ? (
             <Loader2 aria-hidden size={15} className="animate-spin motion-reduce:animate-none" />
@@ -236,10 +239,23 @@ export function FetchMail({
           )}
           {pending ? "Fetching…" : "Fetch new mail"}
         </button>
+        {compact && (
+          <button
+            type="button"
+            onClick={() => setOptions(!options)}
+            aria-expanded={options}
+            className="min-h-11 rounded-full px-4 text-sm font-medium text-muted-foreground hover:bg-muted"
+          >
+            Mail options
+          </button>
+        )}
         <div
           role="radiogroup"
           aria-label="Time frame"
-          className="inline-flex items-center gap-1 rounded-full bg-muted p-1 text-sm"
+          className={cn(
+            "inline-flex items-center gap-1 rounded-full bg-muted p-1 text-sm",
+            compact && !options && "hidden",
+          )}
         >
           {(
             [
@@ -264,7 +280,7 @@ export function FetchMail({
           ))}
         </div>
       </div>
-      {frame === "days" && (
+      {frame === "days" && (!compact || options) && (
         <div className="mt-3">
           <DaysField
             days={range.days}
@@ -273,7 +289,12 @@ export function FetchMail({
           />
         </div>
       )}
-      <p className="m-0 mt-2 text-xs text-muted-foreground">
+      <p
+        className={cn(
+          "m-0 mt-2 text-xs text-muted-foreground",
+          compact && !options && connected && "hidden",
+        )}
+      >
         {coverageText(inboxes, {
           days: frame === "days" ? range.days : undefined,
           lastFetched,

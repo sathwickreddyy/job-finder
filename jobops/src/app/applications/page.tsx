@@ -78,20 +78,23 @@ export default async function Applications({
     ));
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader
-        title="Applications"
-        description="How far each application got, and the one thing to do next."
-        actions={
-          <>
-            <Button variant="outline" asChild>
-              <Link href="/mail">Mail</Link>
-            </Button>
-            <Button asChild>
-              <Link href="/applications/new">Record an application</Link>
-            </Button>
-          </>
-        }
-      />
+      <h1 className="m-0 text-[28px] font-semibold tracking-tight md:hidden">Applications</h1>
+      <div className="hidden md:block">
+        <PageHeader
+          title="Applications"
+          description="How far each application got, and the one thing to do next."
+          actions={
+            <>
+              <Button variant="outline" asChild>
+                <Link href="/mail">Mail</Link>
+              </Button>
+              <Button asChild>
+                <Link href="/applications/new">Record an application</Link>
+              </Button>
+            </>
+          }
+        />
+      </div>
       {view.notice && !view.emails && (
         <p
           role="status"
@@ -138,7 +141,7 @@ export default async function Applications({
         />
       )}
       {previous.length > 0 && (
-        <details className="group rounded-3xl bg-card p-4 ring-1 ring-border">
+        <details className="group hidden rounded-3xl bg-card p-4 ring-1 ring-border md:block">
           <summary className="cursor-pointer text-sm font-semibold">
             Previous jobs ({previous.length})
           </summary>
