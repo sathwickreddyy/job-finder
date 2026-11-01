@@ -160,7 +160,7 @@ describe.skipIf(!dbTests)("one-time mail catch-up", () => {
     await history(key, "REJECTION", "2026-10-07T14:00:00+05:30");
     await catchUpMailSync(NOW);
     const before = (await eventsOf(app.id)).length;
-    expect(await catchUpMailSync(NOW)).toEqual({ skipped: true, applied: 0, asked: 0 });
+    expect(await catchUpMailSync(NOW)).toEqual({ skipped: true, applied: 0, asked: 0, failed: 0 });
     expect(await eventsOf(app.id)).toHaveLength(before);
     const [marker] = await db.select().from(settings).where(eq(settings.key, CATCH_UP_KEY));
     expect(marker.value).toMatchObject({ version: 1 });
