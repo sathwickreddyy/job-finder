@@ -1,5 +1,6 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { AppShell } from "@/components/app-shell";
+import { readAttentionCount } from "@/features/mobile/read";
 import "./globals.css";
 export const metadata: Metadata = {
   title: { default: "My Jobs Workspace", template: "%s · My Jobs Workspace" },
@@ -9,7 +10,9 @@ export const metadata: Metadata = {
   icons: { icon: { url: "/jobops-logo.svg", type: "image/svg+xml" } },
 };
 export const dynamic = "force-dynamic";
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export const viewport: Viewport = { width: "device-width", initialScale: 1, viewportFit: "cover" };
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const attentionCount = await readAttentionCount();
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
@@ -21,7 +24,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
       </head>
       <body>
-        <AppShell>{children}</AppShell>
+        <AppShell attentionCount={attentionCount}>{children}</AppShell>
       </body>
     </html>
   );

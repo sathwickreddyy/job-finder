@@ -175,10 +175,12 @@ export function HandlingBar({
   item,
   handling,
   placeOptions,
+  infoLabel = "Just info",
 }: {
   item: MailItem;
   handling: Handling;
   placeOptions?: PlaceOptions;
+  infoLabel?: string;
 }) {
   const { state, pending, submit } = useSubmit(handleMailAction);
   const [chosen, setChosen] = useState(handling.chosen);
@@ -251,7 +253,7 @@ export function HandlingBar({
               value="1"
               className="morph pressable inline-flex h-11 items-center gap-2 bg-primary px-5 text-sm font-medium text-primary-foreground hover:bg-primary-hover"
             >
-              Just info
+              {infoLabel}
             </button>
           )}
           {others.length > 0 && (
@@ -276,7 +278,7 @@ export function HandlingBar({
               value="1"
               className={cn(quiet, "font-normal text-muted-foreground")}
             >
-              Just info
+              {infoLabel}
             </button>
           )}
         </div>
