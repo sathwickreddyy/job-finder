@@ -58,8 +58,12 @@ describe("Edit tag", () => {
   it("step 2 spells out the change", () => {
     const html = confirm({ next: "referral" });
     expect(html).toContain("Change this email&#x27;s tag?");
-    expect(html).toContain("It moves from Application to Referral in the feed, filters and counts.");
-    expect(html).toContain("It stays where it is: same company, same application, still needs you.");
+    expect(html).toContain(
+      "It moves from Application to Referral in the feed, filters and counts.",
+    );
+    expect(html).toContain(
+      "It stays where it is: same company, same application, still needs you.",
+    );
     expect(html).toContain("You can change it again later.");
     expect(html).toContain("Back");
     expect(html).toContain("Yes, change tag");
