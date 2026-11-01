@@ -844,6 +844,31 @@ describe.skipIf(!dbTests)("auto-applying mail", () => {
     const loose = await fetched(third.connection);
     expect(await details(loose.id)).toEqual([expect.objectContaining({ copyOf: original.id })]);
   });
+
+  it("two inboxes fetched at the same time settle one copy, never two outcomes", async () => {
+    const found = await fixture("FOLLOW_UP");
+    const copy = () =>
+      scanned(found, {
+        internetMessageId: `<${prefix}-race@fixture.invalid>`,
+        receivedAt: "2026-10-28T05:00:00Z",
+      });
+    const [a, b] = await Promise.all([
+      fetchPage(found, [copy()], null),
+      fetchPage(found, [copy()], null),
+    ]);
+    const rejections = await db
+      .select()
+      .from(applicationEvents)
+      .where(
+        sql`${applicationEvents.applicationId} = ${found.app.id} AND ${applicationEvents.eventType} = 'REJECTION_RECEIVED'`,
+      );
+    expect(rejections).toHaveLength(1);
+    const stored = [await fetched(a.connection), await fetched(b.connection)];
+    const marks = await Promise.all(stored.map((row) => details(row.id)));
+    expect(marks.filter((rows) => rows.some((row) => row.copyOf))).toHaveLength(1);
+    expect(stored.every((row) => row.attentionState === "DONE")).toBe(true);
+    expect(a.first.counts.newAttention + b.first.counts.newAttention).toBe(0);
+  });
 });
 
 /** Resolves once another connection is waiting on a row lock. */

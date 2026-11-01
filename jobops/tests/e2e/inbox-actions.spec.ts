@@ -235,7 +235,8 @@ test("concurrent Check mail actions use the shared lock and import each message 
     release.resolve();
   }
   const results = await Promise.all([first, second]);
-  expect(results.map((row) => row.mailCheck?.newAttention)).toEqual([3, 0]);
+  // The three inboxes hold one email: the first needs you, the other two are its copies.
+  expect(results.map((row) => row.mailCheck?.newAttention)).toEqual([1, 0]);
   expect(
     (
       await pool.query(

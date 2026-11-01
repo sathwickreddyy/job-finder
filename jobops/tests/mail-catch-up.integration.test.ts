@@ -62,6 +62,7 @@ async function history(
   classification: NonNullable<typeof mailMessages.$inferInsert.classification>,
   receivedAt: string,
   details: Record<string, unknown> = {},
+  patch: Partial<typeof mailMessages.$inferInsert> = {},
 ) {
   counter++;
   const [row] = await db
@@ -77,6 +78,7 @@ async function history(
       companyKey: key,
       attentionState: "DONE",
       processedAt: new Date("2026-10-31T10:00:00Z"),
+      ...patch,
     })
     .returning();
   await db
@@ -84,7 +86,7 @@ async function history(
     .values({ mailMessageId: row.id, type: classification, confidence: 0.9, details });
   await db.insert(mailTracking).values({
     provider: "GMAIL",
-    accountEmail: account,
+    accountEmail: row.accountEmail ?? account,
     providerMessageId: `${prefix}-${counter}`,
     messageId: row.id,
     sender: row.sender,
@@ -172,5 +174,25 @@ describe.skipIf(!dbTests)("one-time mail catch-up", () => {
           .where(eq(applicationEvents.applicationId, app.id))
       )[0].count,
     ).toBe(before);
+  });
+
+  it("applies one of two copies of the same email from two inboxes", async () => {
+    const { app, key } = await company();
+    const same = { subject: `Same ${prefix}`, receivedAt: new Date("2026-10-07T14:00:00+05:30") };
+    await history(key, "REJECTION", "2026-10-07T14:00:00+05:30", {}, same);
+    await history(
+      key,
+      "REJECTION",
+      "2026-10-07T14:00:00+05:30",
+      {},
+      {
+        ...same,
+        accountEmail: `${prefix}-other@fixture.invalid`,
+      },
+    );
+    await catchUpMailSync(NOW);
+    expect((await record(app.id)).status).toBe("REJECTED");
+    const events = await eventsOf(app.id);
+    expect(events.filter((event) => event.eventType === "REJECTION_RECEIVED")).toHaveLength(1);
   });
 });
