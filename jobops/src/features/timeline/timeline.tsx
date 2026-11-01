@@ -143,11 +143,17 @@ function MailRow({
           className="grid min-w-0 gap-x-4 gap-y-1 text-left after:absolute after:inset-0 after:rounded-[inherit] after:content-[''] focus-visible:outline-none focus-visible:after:outline-2 focus-visible:after:-outline-offset-2 focus-visible:after:outline-primary @xl:col-span-2 @xl:grid-cols-subgrid @4xl:col-span-3"
         >
           <span className="sr-only">{`${tagLabel[item.tag]}, `}</span>
+          {/* On one line the name wins the space; the address gives way first. */}
           <span className="flex min-w-0 items-baseline gap-2 @xl:grid @xl:gap-0">
-            <span className={cn("truncate text-sm", needs ? "font-semibold" : "font-medium")}>
+            <span
+              className={cn(
+                "max-w-full shrink-0 truncate text-sm @xl:shrink",
+                needs ? "font-semibold" : "font-medium",
+              )}
+            >
               {showCompany ? (item.company?.name ?? "Needs a home") : name}
             </span>
-            <span className="truncate text-xs text-muted-foreground">
+            <span className="min-w-0 truncate text-xs text-muted-foreground">
               {showCompany ? name : item.sender}
             </span>
           </span>

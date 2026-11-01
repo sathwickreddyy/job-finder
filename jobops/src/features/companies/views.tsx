@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { ChevronRight } from "lucide-react";
+import { fadeMask, useScrollFade } from "@/lib/use-scroll-fade";
 import { cn } from "@/lib/utils";
 import { StatusPill } from "./status-pill";
 import {
@@ -102,7 +103,7 @@ export function CompanyGridCard({
         <div className="flex items-start gap-3">
           <Monogram name={company.name} />
           <div className="min-w-0 flex-1">
-            <h3 className="text-lg font-semibold tracking-tight">{company.name}</h3>
+            <h3 className="text-lg font-semibold tracking-tight break-words">{company.name}</h3>
             <p className="mt-0.5 truncate text-sm text-muted-foreground">
               {company.focus || company.cities.join(", ")}
             </p>
@@ -113,15 +114,18 @@ export function CompanyGridCard({
 
         <dl className="mt-5 grid grid-cols-2 gap-3 [&>*]:min-w-0">
           <div className="rounded-2xl bg-background p-3">
-            <dt className="text-xs text-muted-foreground">Fixed pay</dt>
-            <dd className="mt-1 text-xl font-semibold tabular-nums">
+            <dt className="text-xs text-muted-foreground">Fixed pay{fixed ? ", LPA" : ""}</dt>
+            {/* The unit sits in the label so a range like ₹43–67.5 stays on one line. */}
+            <dd
+              className={cn(
+                "mt-1 font-semibold whitespace-nowrap tabular-nums",
+                fixed?.includes("–") ? "text-lg" : "text-xl",
+              )}
+            >
               {fixed ? (
-                <>
-                  {fixed.replace(" LPA", "")}
-                  <span className="ml-1 text-xs font-normal text-muted-foreground">LPA</span>
-                </>
+                fixed.replace(" LPA", "")
               ) : (
-                <span className="text-base font-normal text-muted-foreground">
+                <span className="text-base font-normal whitespace-normal text-muted-foreground">
                   {metrics.payReports ? "Needs review" : "Not reported"}
                 </span>
               )}
@@ -159,11 +163,11 @@ export function CompanyGridCard({
 
         <div className="mt-auto pt-5">
           <div className="flex items-center justify-between gap-3 border-t border-border pt-4 text-xs text-muted-foreground">
-            <span>
+            <span className="min-w-0">
               {metrics.payReports} pay ·{" "}
               {reports(metrics.interviewReports).replace("report", "interview report")}
             </span>
-            <span className="flex items-center gap-1 text-sm font-medium text-link">
+            <span className="flex shrink-0 items-center gap-1 text-sm font-medium whitespace-nowrap text-link">
               View company
               <ChevronRight size={16} aria-hidden />
             </span>
@@ -196,6 +200,8 @@ export function CompareTable({
   linkQuery?: string;
 }) {
   const [key, setKey] = useState<SortKey>("pay");
+  // Fade only the far edge: the sticky company column must stay readable while scrolled.
+  const { ref: scroller, edges } = useScrollFade<HTMLDivElement>();
   const sorted = useMemo(
     () =>
       [...companies].sort((a, b) => {
@@ -233,11 +239,15 @@ export function CompareTable({
           </button>
         ))}
       </div>
-      <div className="overflow-x-auto rounded-card border border-border bg-card shadow-surface">
+      <div
+        ref={scroller}
+        style={fadeMask(false, edges.end)}
+        className="overflow-x-auto rounded-card border border-border bg-card shadow-surface"
+      >
         <table className="min-w-[720px] md:min-w-[980px]">
           <thead>
             <tr className="border-b border-border [&>th]:px-4 [&>th]:py-3 [&>th]:align-bottom">
-              <th>Company</th>
+              <th className="sticky left-0 z-10 bg-card max-md:w-36">Company</th>
               <th className="md:w-[30%]">
                 Fixed pay, LPA
                 {/* The range bar needs width to read; phones get the plain range instead. */}
@@ -261,9 +271,14 @@ export function CompareTable({
               return (
                 <tr
                   key={company.id}
-                  className="border-t border-border first:border-t-0 hover:bg-background [&>td]:px-4 [&>td]:py-3"
+                  className="group border-t border-border first:border-t-0 hover:bg-background [&>td]:px-4 [&>td]:py-3"
                 >
-                  <td>
+                  <td
+                    className={cn(
+                      "sticky left-0 z-10 bg-card group-hover:bg-background max-md:max-w-36",
+                      edges.start && "shadow-[1px_0_0_var(--color-border)]",
+                    )}
+                  >
                     <Link
                       href={`${basePath}/${company.id}${linkQuery}`}
                       className="font-medium text-foreground"
@@ -302,7 +317,7 @@ export function CompareTable({
                   <td>
                     <MixBar metrics={metrics} labels={false} />
                   </td>
-                  <td className="text-sm tabular-nums">
+                  <td className="whitespace-nowrap text-sm tabular-nums">
                     {grant ? stockLabel(grant) : <span className="text-muted-foreground">—</span>}
                   </td>
                   <td>
@@ -372,8 +387,8 @@ export function PipelineBoard({
                     href={`${basePath}/${company.id}${linkQuery}`}
                     className="block rounded-2xl border border-border bg-card p-3 text-foreground hover:border-primary hover:no-underline"
                   >
-                    <p className="flex items-center gap-2 text-sm font-medium">
-                      {company.name}
+                    <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-medium">
+                      <span className="min-w-0 break-words">{company.name}</span>
                       {company.status && (
                         <StatusPill status={company.status} className="h-5 px-2" />
                       )}

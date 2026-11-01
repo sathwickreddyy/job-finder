@@ -152,7 +152,9 @@ export function ApplicationDetail({
             >
               <a href={`/api/resumes/${record.resume.id}/file?download=1`}>
                 <FileText size={14} aria-hidden />
-                <span className="truncate">{record.resume.filename}</span>
+                <span className="truncate" title={record.resume.filename}>
+                  {record.resume.filename}
+                </span>
               </a>
             </Button>
           )}

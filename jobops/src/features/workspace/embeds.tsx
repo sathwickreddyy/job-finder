@@ -270,7 +270,7 @@ export function GitHubPreview({
           <p className={cn("truncate font-semibold", compact ? "text-base" : "text-xl")}>
             {target.handle}
           </p>
-          <p className="text-sm text-muted-foreground">github.com/{target.handle}</p>
+          <p className="truncate text-sm text-muted-foreground">github.com/{target.handle}</p>
         </div>
       </div>
       <figure className="min-w-0">
