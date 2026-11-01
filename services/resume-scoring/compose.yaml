@@ -1,0 +1,20 @@
+name: resume-scoring
+services:
+  resume-scoring:
+    build:
+      context: .
+      target: runtime
+    init: true
+    ports:
+      - "127.0.0.1:3212:8000"
+    environment:
+      SCORING_API_KEY: ${SCORING_API_KEY:-}
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 768m
+    cpus: 2
+    pids_limit: 64
+    restart: unless-stopped

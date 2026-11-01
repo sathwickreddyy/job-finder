@@ -1,0 +1,26 @@
+[project]
+name = "jobops-resume-scoring"
+version = "0.1.0"
+description = "Independent, evidence-linked resume and job-description scoring API"
+requires-python = ">=3.13,<3.14"
+dependencies = [
+  "fastapi>=0.115,<1",
+  "uvicorn>=0.34,<1",
+  "pydantic>=2.10,<3",
+  "pdfplumber>=0.11.6,<0.12",
+  "python-multipart>=0.0.20,<1",
+  "anyio>=4.8,<5",
+]
+
+[dependency-groups]
+dev = ["pytest>=8,<10", "httpx>=0.28,<1", "reportlab>=4,<5", "ruff>=0.11,<1"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py313"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]

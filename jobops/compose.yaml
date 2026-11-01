@@ -1,4 +1,6 @@
 name: jobops
+include:
+  - path: ../services/resume-scoring/compose.yaml
 services:
   app:
     build: .
