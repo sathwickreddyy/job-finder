@@ -2,13 +2,13 @@
 import { useEffect } from "react";
 import Link from "next/link";
 import { Check, ChevronDown, ChevronRight } from "lucide-react";
-import { formatDayTime } from "@/features/applications/dates";
 import { inboxLabels, previewLine } from "@/features/mail/row-text";
 import { TagPill } from "@/features/mail/tag-pill";
 import { EditTag } from "@/features/timeline/edit-tag";
 import { HandledLine, HandlingBar, type PlaceOptions } from "@/features/timeline/handling";
 import { mailHref, type MailQuery } from "@/features/timeline/query";
 import type { AttentionMail } from "./read";
+import { mailTimestamp } from "./mail-date";
 
 export function AttentionFeed({
   data,
@@ -56,7 +56,7 @@ export function AttentionFeed({
                       {item.company?.name ?? (item.senderName || item.sender)}
                     </span>
                     <span className="shrink-0 text-[10px] text-muted-foreground">
-                      {formatDayTime(new Date(item.receivedAt))}
+                      {mailTimestamp(item.receivedAt)}
                     </span>
                   </span>
                   <span className="flex items-start gap-2">
