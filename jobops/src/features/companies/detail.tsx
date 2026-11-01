@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ArrowUpRight, ChevronDown } from "lucide-react";
 import { normalizeCompany } from "@/features/applications/lanes";
+import { laneHref } from "@/features/applications/navigation";
 import { methodLabel } from "@/features/applications/phase";
 import { displayDate, type DisplayPreferences } from "@/features/candidate/preferences";
 import type { CompanyTimelinePanel } from "@/features/timeline/company-panel";
@@ -89,13 +90,19 @@ const dueTone = {
 export function DetailHeader({
   company,
   summary,
+  data,
   next,
   status,
-}: Pick<DetailProps, "company" | "summary"> & {
+}: Pick<DetailProps, "company" | "summary" | "data"> & {
   next?: CompanyTimelinePanel["next"];
   status?: CompanyTimelinePanel["status"];
 }) {
-  const action = nextAction(summary);
+  const records = companyActivity(company, "", data.records, data.openings).records;
+  const suggested = nextAction(summary);
+  const action =
+    suggested.label === "View applications" && records.length
+      ? { label: "View application", href: laneHref(records[0].id) }
+      : suggested;
   const modes = [...new Set(company.locations?.flatMap((row) => row.workModes) ?? [])];
   return (
     <header className="space-y-5">
@@ -138,6 +145,14 @@ export function DetailHeader({
           >
             {action.label}
           </Link>
+          {records.length > 0 && suggested.label !== "View applications" && (
+            <Link
+              href={laneHref(records[0].id)}
+              className="flex min-h-10 items-center rounded-full border border-input px-5 text-sm font-medium hover:bg-muted hover:no-underline"
+            >
+              View application
+            </Link>
+          )}
           <Link
             href={mailHref({ company: normalizeCompany(company.name) })}
             className="flex min-h-10 items-center rounded-full border border-input px-5 text-sm font-medium hover:bg-muted hover:no-underline"
@@ -627,11 +642,11 @@ export function TimelineAside({
     >
       {/* On a phone: roles across the top, pay and the loop side by side, then the resume. */}
       <div id="applications" className="col-span-2 space-y-2 lg:col-span-1">
-        <h2 className={asideHeading}>Your roles</h2>
+        <h2 className={asideHeading}>Your applications</h2>
         <ul className="m-0 list-none space-y-3 p-0">
           {activity.records.map((row) => (
             <li key={row.id} className="text-sm">
-              <Link href={`/applications/${row.id}`} className="font-medium text-link">
+              <Link href={laneHref(row.id)} className="font-medium text-link">
                 {row.title}
               </Link>
               <span className="block text-xs text-muted-foreground">

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { FileText, PencilLine, Undo2 } from "lucide-react";
+import { Building2, FileText, PencilLine, Undo2 } from "lucide-react";
 import { ActionForm } from "@/components/action-form";
 import { Button } from "@/components/ui";
 import { linkMailOnly } from "@/features/mail/triage-actions";
@@ -120,6 +120,14 @@ export function ApplicationExpanded({
     <div className="reveal grid gap-6 border-t border-border bg-muted/20 px-4 py-5 md:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] md:px-6">
       <section aria-label="Story" className="flex min-w-0 flex-col gap-5">
         <div className="flex flex-col gap-2">
+          {record.companyHref && (
+            <Button variant="outline" size="sm" className="self-start rounded-full" asChild>
+              <Link href={record.companyHref}>
+                <Building2 aria-hidden size={14} />
+                Company page
+              </Link>
+            </Button>
+          )}
           <JourneyTrack journey={journey} size="large" className="max-w-md" />
           {recorded && (
             <ActionForm

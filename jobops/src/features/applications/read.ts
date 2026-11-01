@@ -34,6 +34,7 @@ export type ApplicationRecord = Omit<QueueRecord, "events" | "rounds" | "linkedM
   jobId: string;
   companyKey: string;
   companyName: string;
+  companyHref?: string | null;
   city: string;
   jobUrl: string;
   applicationUrl: string | null;
@@ -100,7 +101,12 @@ export async function readApplications() {
       .where(isNotNull(mailMessages.linkedApplicationId)),
     db.select().from(queueSnoozes).where(gt(queueSnoozes.until, new Date())),
     db
-      .select({ id: companyRecords.id, name: companyRecords.name, aliases: companyRecords.aliases })
+      .select({
+        id: companyRecords.id,
+        name: companyRecords.name,
+        aliases: companyRecords.aliases,
+        slug: companyRecords.slug,
+      })
       .from(companyRecords)
       .where(eq(companyRecords.status, "ACTIVE")),
     db.select().from(companyFacts).where(eq(companyFacts.category, "INTERVIEW")),
@@ -113,6 +119,9 @@ export async function readApplications() {
   );
   const linked = linkedRecordIds(rows.map(({ app }) => ({ id: app.id, jobId: app.jobId })));
   const resolve = companyResolver(companies);
+  const companyLinks = new Map(
+    companies.map((company) => [normalizeCompany(company.name), `/companies/${company.slug}`]),
+  );
   const records: ApplicationRecord[] = rows.map(({ app, job, version }) => {
     const own = events.filter((event) => event.applicationId === app.id);
     const sent = own.find((event) => event.eventType === "OUTREACH_SENT");
@@ -140,6 +149,7 @@ export async function readApplications() {
       jobId: job.id,
       company: job.company,
       ...resolve(job.company),
+      companyHref: companyLinks.get(resolve(job.company).companyKey) ?? null,
       role: job.title,
       city: job.location,
       jobUrl: job.canonicalUrl,

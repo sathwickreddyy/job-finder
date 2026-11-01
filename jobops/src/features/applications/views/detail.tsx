@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ExternalLink, FileText, Link2, NotebookPen } from "lucide-react";
+import { Building2, ExternalLink, FileText, Link2, NotebookPen } from "lucide-react";
 import { unlinkMail } from "@/features/mail/triage-actions";
 import { ActionForm } from "@/components/action-form";
 import { Button, Field } from "@/components/ui";
@@ -121,6 +121,14 @@ export function ApplicationDetail({
           </div>
         </div>
         <div className="flex min-w-0 max-w-full flex-wrap gap-2">
+          {record.companyHref && (
+            <Button variant="outline" size="sm" className="h-9 rounded-full px-4" asChild>
+              <Link href={record.companyHref}>
+                <Building2 size={14} aria-hidden />
+                Company page
+              </Link>
+            </Button>
+          )}
           <Button variant="outline" size="sm" className="h-9 rounded-full px-4" asChild>
             <a href={record.jobUrl} target="_blank" rel="noreferrer">
               <ExternalLink size={14} aria-hidden />
