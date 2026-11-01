@@ -63,8 +63,13 @@ const messages = (email: string) =>
 const current = async (id: string) =>
   (await db.select().from(mailConnections).where(eq(mailConnections.id, id)))[0];
 
+/** Node warnings seen while this file runs; pg warns once if one connection runs two queries. */
+const warnings: string[] = [];
+const recordWarning = (warning: Error) => warnings.push(warning.message);
+
 describe.skipIf(!dbTests)("on-demand mail check", () => {
   beforeAll(async () => {
+    process.on("warning", recordWarning);
     await assertE2eDatabase();
     if ((await db.select({ id: mailConnections.id }).from(mailConnections)).length)
       throw new Error("Check fixtures need jobops_e2e without other inbox connections.");
@@ -81,7 +86,10 @@ describe.skipIf(!dbTests)("on-demand mail check", () => {
     await db.delete(mailMessages).where(like(mailMessages.accountEmail, `${prefix}%`));
     await db.delete(mailConnections).where(like(mailConnections.email, `${prefix}%`));
   });
-  afterAll(closeDatabase);
+  afterAll(async () => {
+    process.off("warning", recordWarning);
+    await closeDatabase();
+  });
 
   it("imports Junk and Deleted Items mail as open records", async () => {
     const own = await connection();
@@ -437,5 +445,14 @@ describe.skipIf(!dbTests)("on-demand mail check", () => {
       status: 409,
       message: "Connect an inbox before checking mail.",
     });
+  });
+
+  it("never runs two queries at once on one connection", async () => {
+    const own = await connection();
+    vi.spyOn(outlook, "folders").mockResolvedValue([]);
+    vi.spyOn(outlook, "scanMail").mockResolvedValue({ messages: [mail("one-at-a-time")] });
+    await checkConnection(own, context);
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(warnings.filter((text) => text.includes("already executing a query"))).toEqual([]);
   });
 });

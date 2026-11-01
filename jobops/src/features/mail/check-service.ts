@@ -114,13 +114,15 @@ export async function checkConnection(
     return await withConnectionLock(connection.id, async (database, current) => {
       try {
         const provider = providerFor(current.provider);
-        const [[saved], [released]] = await Promise.all([
-          database
-            .select()
-            .from(settings)
-            .where(eq(settings.key, checkKey(current.id))),
-          database.select().from(settings).where(eq(settings.key, "mailCheckReleasedAt")),
-        ]);
+        // One query at a time: the lock holds a single connection.
+        const [saved] = await database
+          .select()
+          .from(settings)
+          .where(eq(settings.key, checkKey(current.id)));
+        const [released] = await database
+          .select()
+          .from(settings)
+          .where(eq(settings.key, "mailCheckReleasedAt"));
         const releasedAt =
           typeof released?.value.at === "string" && Number.isFinite(Date.parse(released.value.at))
             ? new Date(released.value.at).toISOString()
