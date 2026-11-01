@@ -5,7 +5,7 @@ import type { MailConnection, ProviderId, ScannedMessage } from "@/services/mail
 import type { MailContext } from "./context";
 import type { MailTx } from "./handling-service";
 import { previousJobFor } from "@/features/companies/previous-job";
-import { autoApplySafely } from "./auto-apply";
+import { autoApplySafely, lockMailRule } from "./auto-apply";
 import { importMailRecords, mailImportSchema } from "./import";
 import { matchMail, type Match } from "./matching";
 import { sortRejection } from "./rejection-sort";
@@ -295,6 +295,7 @@ export async function ingestPage(
   // Oldest first, as the mail arrived: providers list newest first, and an acknowledgement
   // must reach its application before the rejection that followed it.
   fresh.sort((a, b) => a.receivedAt - b.receivedAt || a.messageId.localeCompare(b.messageId));
+  if (fresh.length) await lockMailRule(tx);
   for (const { messageId, handled } of fresh) {
     // Clear outcomes update their application; asking mail stays open, even from history.
     const effect = await autoApplySafely(tx, messageId, context, new Date());

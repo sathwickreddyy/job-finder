@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { closeDatabase } from "../../src/db";
 import { stubExternalSites } from "./helpers/external-sites";
+import { hydrated } from "./helpers/hydration";
 import { cleanupRecords, istDay, seedRecord } from "./helpers/records";
 import {
   captureSavedJob,
@@ -309,6 +310,7 @@ test("an assessment email asks on its row and records with a date", async ({ pag
     "aria-expanded",
     "true",
   );
+  await hydrated(page.getByRole("button", { name: "Save", exact: true }));
   await page.getByLabel("Complete by (India time)").fill(istDay(4));
   await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`/applications\\?open=${applicationId}$`));

@@ -43,6 +43,15 @@ async function lockRecord(tx: MailTx, id: string) {
   return app;
 }
 
+/**
+ * Makes concurrent fetches, searches and Include this run the mail rule one at a time, until
+ * each commits: the same email fetched into two inboxes at once is then read as one email and
+ * a copy. Take it before any application lock.
+ */
+export async function lockMailRule(tx: MailTx) {
+  await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended('jobops:mail-rule', 0))`);
+}
+
 /** Several applications in id order, so two writers never wait on each other in a circle. */
 export async function lockRecords(tx: MailTx, ids: Iterable<string>) {
   for (const id of [...new Set(ids)].sort()) await lockRecord(tx, id);
@@ -324,7 +333,7 @@ export async function ruleInputs(
     companyKey: message.companyKey,
     namedApplicationIds: [...new Set(named)],
     blocked,
-    copyOf: await earlierCopy(tx, message, tracked),
+    copyOf: await storedCopy(tx, message, tracked),
     undoneOutcomes: events.flatMap((event) =>
       Array.isArray(event.details.undoneOutcomes) ? (event.details.undoneOutcomes as string[]) : [],
     ),
@@ -405,10 +414,12 @@ export async function ruleInputs(
 }
 
 /**
- * The same email stored earlier from another inbox: the same Message-ID, or the same sender and
- * subject within five minutes. The earlier copy decides; this one follows it.
+ * The same email already stored from another inbox: the same Message-ID, or the same sender and
+ * subject within five minutes. That copy decides and this one follows it; a copy never follows
+ * another copy, so of any set exactly one is read. `lockMailRule` makes concurrent fetches take
+ * turns, so the second inbox always sees the first.
  */
-async function earlierCopy(
+async function storedCopy(
   tx: MailTx,
   message: typeof mailMessages.$inferSelect,
   tracked: { internetMessageId: string | null }[],
@@ -423,7 +434,7 @@ async function earlierCopy(
       and(
         ne(mailMessages.id, message.id),
         sql`${mailMessages.accountEmail} IS DISTINCT FROM ${message.accountEmail}`,
-        sql`(${mailMessages.createdAt}, ${mailMessages.id}) < (${message.createdAt}, ${message.id}::uuid)`,
+        sql`NOT EXISTS (SELECT 1 FROM mail_events ce WHERE ce.mail_message_id = "mail_messages"."id" AND ce.details ? 'copyOf')`,
         notExcluded,
         or(
           ...(internetIds.length

@@ -1,7 +1,7 @@
 import { and, asc, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { activityLogs, mailMessages, settings } from "@/db/schema";
-import { autoApplyMail } from "./auto-apply";
+import { autoApplyMail, lockMailRule } from "./auto-apply";
 import { loadMailContext } from "./context";
 import { notExcluded } from "./mail-list";
 
@@ -39,6 +39,7 @@ export async function catchUpMailSync(
       .from(settings)
       .where(eq(settings.key, CATCH_UP_KEY))
       .for("update");
+    await lockMailRule(tx);
     const value = marker.value as Record<string, unknown>;
     const done = Number(value.version ?? 0) >= CATCH_UP_VERSION;
     const pending = done ? retriesOf(value) : [];
