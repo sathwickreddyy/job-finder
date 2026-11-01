@@ -24,7 +24,7 @@ const { ApplicationExpanded } = await import("@/features/applications/views/appl
 
 const NOW = at("2026-11-01T10:30:00");
 const mailId = "00000000-0000-4000-8000-00000000abcd";
-function render(source: LaneSource) {
+function render(source: LaneSource, resume: ApplicationRecord["resume"] = null) {
   const [lane] = buildLanes({
     records: [source],
     items: [],
@@ -37,8 +37,8 @@ function render(source: LaneSource) {
     notes: "",
     applicationUrl: null,
     appliedAt: source.sentAt,
-    resumeVersionId: null,
-    resume: null,
+    resumeVersionId: resume?.id ?? null,
+    resume,
     jobUrl: "https://example.com/job",
     postedAtKind: null,
     linkedIds: [],
@@ -108,5 +108,14 @@ describe("ApplicationExpanded", () => {
     );
     expect(closed).toMatch(/<button[^>]*>Reopen<\/button>/);
     expect(render(rejectedByMail())).not.toMatch(/>Reopen</);
+  });
+
+  it("caps a long résumé file name to the facts column so it truncates", () => {
+    const html = render(record({}), {
+      id: "r1",
+      filename: "Sathwick_Reddy_Yalla_Backend_Platform_Resume_2026_v3.pdf",
+    });
+    const link = html.match(/<a [^>]*href="\/resumes\?file=r1"[^>]*>/)?.[0];
+    expect(link).toMatch(/class="[^"]*\bmax-w-full\b/);
   });
 });

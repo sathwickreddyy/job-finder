@@ -55,7 +55,7 @@ function Facts({ record }: { record: ApplicationRecord }) {
       record.resume ? (
         <Link
           href={`/resumes?file=${record.resume.id}`}
-          className="inline-flex min-w-0 items-center gap-1.5 text-link"
+          className="inline-flex max-w-full min-w-0 items-center gap-1.5 text-link"
         >
           <FileText aria-hidden size={14} className="shrink-0" />
           <span className="truncate">{record.resume.filename}</span>
