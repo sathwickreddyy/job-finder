@@ -50,11 +50,15 @@ export function JourneyTrack({
             className={cn("relative min-w-0", step.state === "faded" && "opacity-35")}
           >
             {index > 0 && (
+              // Runs from the previous circle's edge to this one's with a 4px gap, so it never
+              // paints over either circle (half of a 24px or 28px circle, plus the gap).
               <span
                 aria-hidden
                 className={cn(
-                  "absolute right-1/2 left-[-50%] h-0.5 rounded-full",
-                  large ? "top-[13px]" : "top-[11px]",
+                  "absolute h-0.5 rounded-full",
+                  large
+                    ? "top-[13px] right-[calc(50%+18px)] left-[calc(-50%+18px)]"
+                    : "top-[11px] right-[calc(50%+16px)] left-[calc(-50%+16px)]",
                   filled ? fill[step.tone] : "bg-border",
                 )}
               />

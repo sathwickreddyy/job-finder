@@ -80,7 +80,6 @@ Real folder enumeration for all three accounts, nested/localized folder fixtures
 
 Latest scans include a one-day overlap and start with the rollout baseline; history scans have no lower date bound. The scan’s upper boundary is fixed until all pages complete. Source mail is never modified. Old or ignored mail re-evaluated under a new pattern can become historical matches but never fresh arrivals. Exact header/subject identity matching for LinkedIn remains conservative; ambiguous or unsupported notification formats are excluded rather than treated as replies.
 
-
 ## Verification — 2026-10-30
 
 The production Docker build, TypeScript and ESLint pass. The unit suite passes 540 tests. Six guarded integration checks pass against the separately marked `jobops_e2e` database: immutable identity across folder moves, reviewed-history persistence, independent account identity, pending unassigned updates across rescans, page rollback/resume and cumulative/company/application pagination (including preserved manual links). Live latest checks completed across all three connected accounts. Existing message IDs and links remain intact; a private pre-migration backup is ignored by Git.

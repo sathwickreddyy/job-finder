@@ -7,7 +7,9 @@ describe("previewLine", () => {
       "Your round is confirmed for Tue.",
     );
     expect(previewLine("Dear Ex Amazonian,\nWe're hiring SDE-IIs.")).toBe("We're hiring SDE-IIs.");
-    expect(previewLine("Hello,\nGood morning team!\nPlease share slots.")).toBe("Please share slots.");
+    expect(previewLine("Hello,\nGood morning team!\nPlease share slots.")).toBe(
+      "Please share slots.",
+    );
   });
 
   it("drops invisible preheader padding that left a stray ellipsis", () => {

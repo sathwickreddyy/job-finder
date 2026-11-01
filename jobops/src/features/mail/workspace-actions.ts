@@ -232,9 +232,10 @@ export async function retagMail(id: string, tag: string): Promise<RetagState> {
 /** Undo for Edit tag: put back the exact kind the email had, not just its tag. */
 export async function restoreMailKind(id: string, classification: string): Promise<ActionState> {
   try {
-    await updateMail(id, { classification });
+    const { effect, undone } = await updateMailKind(id, { classification });
     invalidate();
-    return { success: "Tag restored." };
+    const note = ruleNote(effect, undone);
+    return { success: `Tag restored.${note ? ` ${note}` : ""}` };
   } catch (error) {
     return actionError(error);
   }

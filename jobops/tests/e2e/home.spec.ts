@@ -3,6 +3,7 @@ import { and, desc, eq } from "drizzle-orm";
 import { db, closeDatabase } from "../../src/db";
 import { profiles, resumes, resumeVersions } from "../../src/db/schema";
 import { stubExternalSites } from "./helpers/external-sites";
+import { hydrated } from "./helpers/hydration";
 
 test.beforeEach(async ({ page }) => {
   expect(new URL(process.env.DATABASE_URL!).pathname).toBe("/jobops_e2e");
@@ -294,7 +295,10 @@ test("home has no phone overflow in either theme", async ({ page }) => {
 
 test("hash-only Back navigation does not start a loading popup", async ({ page }) => {
   await page.goto("/my-profile");
-  await page.getByRole("button", { name: "Use light theme", exact: true }).click();
+  // The theme toggle only has a click handler once React hydrates it.
+  const lightTheme = page.getByRole("button", { name: "Use light theme", exact: true });
+  await hydrated(lightTheme);
+  await lightTheme.click();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
   await page.clock.install();
   await page.evaluate(() => history.pushState(null, "", "#add-link"));

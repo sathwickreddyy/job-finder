@@ -37,7 +37,11 @@ export function SnackbarProvider({ children }: { children: ReactNode }) {
   return (
     <SnackbarContext.Provider value={value}>
       {children}
-      <div
+      {/* Stays on the page so screen readers announce each snack added inside it. It is not a
+          status role, so each page keeps its own single status message. */}
+      <section
+        aria-label="Notifications"
+        aria-live="polite"
         className="pointer-events-none fixed inset-x-0 bottom-5 z-[60] flex justify-center px-4"
         onPointerEnter={() => setPaused(true)}
         onPointerLeave={() => setPaused(false)}
@@ -59,7 +63,7 @@ export function SnackbarProvider({ children }: { children: ReactNode }) {
             }
           />
         )}
-      </div>
+      </section>
     </SnackbarContext.Provider>
   );
 }
@@ -70,10 +74,7 @@ export function useSnackbar() {
 
 export function SnackbarView({ message, action }: Snack) {
   return (
-    <div
-      role="status"
-      className="reveal pointer-events-auto flex max-w-full items-center gap-3 rounded-2xl bg-foreground py-2 pr-2 pl-4 text-sm text-background shadow-surface"
-    >
+    <div className="reveal pointer-events-auto flex max-w-full items-center gap-3 rounded-2xl bg-foreground py-2 pr-2 pl-4 text-sm text-background shadow-surface">
       <CircleCheck aria-hidden size={18} className="shrink-0" />
       <span className="min-w-0 py-1.5">{message}</span>
       {action && (

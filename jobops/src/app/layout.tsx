@@ -4,7 +4,8 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: { default: "My Jobs Workspace", template: "%s · My Jobs Workspace" },
   applicationName: "My Jobs Workspace",
-  description: "Your personal job search workspace for openings, applications, resumes and recruiting mail.",
+  description:
+    "Your personal job search workspace for openings, applications, resumes and recruiting mail.",
   icons: { icon: { url: "/jobops-logo.svg", type: "image/svg+xml" } },
 };
 export const dynamic = "force-dynamic";
