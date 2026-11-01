@@ -128,7 +128,7 @@ export function ApplicationExpanded({
               </Link>
             </Button>
           )}
-          <JourneyTrack journey={journey} size="large" className="max-w-md" />
+          <JourneyTrack journey={journey} size="large" className="hidden max-w-md md:grid" />
           {recorded && (
             <ActionForm
               action={undoAutoOutcomeAction}

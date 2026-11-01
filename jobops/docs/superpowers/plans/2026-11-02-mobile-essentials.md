@@ -32,9 +32,9 @@
 
 **Interfaces:** `mobileAnalytics(records, now)` produces real totals and 7/28-day series; `readAttentionMail(query)` produces mail entries, handling suggestions, count and next cursor. Existing actions own all writes.
 
-- [ ] Add failing analytics tests for IST midnight, inclusive ranges, unknown dates, outreach and previous employment.
-- [ ] Implement the read model and responsive shell/overview; preserve desktop home content.
-- [ ] Verify unit tests, typecheck and lint. Commit the usable overview/navigation unit.
+- [x] Add failing analytics tests for IST midnight, inclusive ranges, unknown dates, outreach and previous employment.
+- [x] Implement the read model and responsive shell/overview; preserve desktop home content.
+- [x] Verify unit tests, typecheck and lint. Commit the usable overview/navigation unit.
 
 ### Task 2: Mobile mail and application journeys
 
@@ -42,22 +42,27 @@
 
 **Interfaces:** Existing `MailItem`, `Handling`, `Journey` and `Lane` remain authoritative; `/mail?mail=...` and `/applications?open=...` retain exact records and actions.
 
-- [ ] Verify attention-only paging and excluded-mail behavior against the marked test DB.
-- [ ] Render compact mail with actual handling, tags, refresh and Undo after a save.
-- [ ] Render one flat mobile application list with circle journeys, correct rejection stops and in-place details; retain desktop grouping.
-- [ ] Verify focused regression tests and browser behavior in Docker. Commit this workflow unit.
+- [x] Verify attention-only paging and excluded-mail behavior against the marked test DB.
+- [x] Render compact mail with actual handling, tags, refresh and Undo after a save.
+- [x] Render one flat mobile application list with circle journeys, correct rejection stops and in-place details; retain desktop grouping.
+- [x] Verify focused regression tests and browser behavior in Docker. Commit this workflow unit.
 
 ### Task 3: Remove galleries and finish
 
 **Files:** remove `src/app/gallery` and demo-only feature trees; update live links, stale styles, README, browser tests and project-local instructions. Keep shared resume components and prompt exports used by production/tests.
 
-- [ ] Trace gallery imports before deleting; ensure no production dependency is deleted.
-- [ ] Run unit tests, lint, typecheck, build and scoped DB integration tests.
-- [ ] Review with a fresh agent; fix material findings.
-- [ ] Check iPhone widths and desktop, both themes, real-data read-only smoke checks and retired gallery URLs. Commit cleanup and report.
+- [x] Trace gallery imports before deleting; ensure no production dependency is deleted.
+- [x] Run unit tests, lint, typecheck, build and scoped DB integration tests.
+- [x] Review with a fresh agent; fix material findings.
+- [x] Check iPhone widths and desktop, both themes, real-data read-only smoke checks and retired gallery URLs. Commit cleanup and report.
 
 ## Execution ledger
 
 - Baseline: 84 test files / 727 tests passed; 19 files / 166 DB tests skipped as designed.
 - Gallery committed as `f6ce07d` before implementation. Existing root AGENTS.md and local config changes remain outside this work.
 - Ruling: approved design plus “lets implement” is the review gate; continue without another approval prompt.
+- Task 1 complete: `9f2432d`; Task 2 complete: `3560414`; gallery removal: `c74c554`.
+- Independent review found historical mail omitted the year; fixed with an IST-year regression case. WebKit testing exposed uppercase AM/PM output differing from Node; normalized shared day periods. Fix and browser coverage committed as `7974b8b`.
+- Verification: 732 unit tests passed; 27 scoped integration tests passed on marked `jobops_e2e`; Chromium and WebKit action tests passed, including Undo, attention badges and expansion. Read-only real-data checks passed on all three pages at 320/375/390/430px, both themes, with zero browser errors and zero production writes.
+- Ruling: remove the duplicate journey from the expanded row on phones; the approved circle journey already stays visible in the row. Desktop keeps the expanded journey.
+- Final checks passed on the published Docker image. Historical September mail now has a year and consistent `Sep` spelling across Node and Safari; the full unit suite passes and both browser regressions pass. Temporary test containers were stopped after testing.
