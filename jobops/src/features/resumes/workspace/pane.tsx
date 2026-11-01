@@ -1,8 +1,8 @@
 import type { ReactNode } from "react";
 import { BriefcaseBusiness, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { UsageRecord } from "../file-ui";
-import { submittedCount, type GalleryFile } from "../view-types";
+import { CompactUsageList } from "../file-ui";
+import { orderedUses, submittedCount, type GalleryFile } from "../view-types";
 
 export function FileHeader({ file, actions }: { file: GalleryFile; actions?: ReactNode }) {
   return (
@@ -51,11 +51,7 @@ export function UsedFor({ file, className }: { file: GalleryFile; className?: st
         </span>
       </h3>
       {file.uses.length ? (
-        <div className="-mx-3 mt-2 space-y-1">
-          {file.uses.map((record) => (
-            <UsageRecord key={record.id} record={record} />
-          ))}
-        </div>
+        <CompactUsageList key={file.id} uses={orderedUses(file)} />
       ) : (
         <div className="mt-3 rounded-2xl border border-dashed border-border p-4">
           <BriefcaseBusiness

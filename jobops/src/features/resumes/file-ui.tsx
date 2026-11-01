@@ -1,8 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef } from "react";
-import { ArrowUpRight, BriefcaseBusiness, Check, Download, FileText, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import {
+  ArrowUpRight,
+  BriefcaseBusiness,
+  Check,
+  ChevronDown,
+  Download,
+  FileText,
+  Search,
+  X,
+} from "lucide-react";
 import { Button } from "@/components/ui";
 import { cn } from "@/lib/utils";
 import { submittedCount, type GalleryFile, type ResumeUse } from "./view-types";
@@ -92,6 +101,116 @@ export function UsageRecord({
         />
       </div>
     </Link>
+  );
+}
+
+function CompactUsageRow({ record }: { record: ResumeUse }) {
+  const detail = [record.role, record.date].filter(Boolean).join(" · ");
+  return (
+    <li>
+      <Link
+        href={`/applications/${record.id}`}
+        title={`${record.company}: ${record.role} (${record.outcome})`}
+        className="group flex items-center gap-2.5 rounded-xl px-3 py-2 text-foreground hover:bg-muted/50 hover:no-underline"
+      >
+        <span
+          className="grid size-7 shrink-0 place-items-center rounded-lg bg-secondary text-xs font-semibold text-secondary-foreground"
+          aria-hidden
+        >
+          {record.company.slice(0, 1)}
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="flex min-w-0 items-center gap-2">
+            <span className="truncate text-[13px] font-semibold">{record.company}</span>
+            <span
+              className={cn(
+                "shrink-0 rounded-full px-2 py-px text-[10px] font-medium",
+                record.submitted || record.outcome === "Sent"
+                  ? "bg-selected text-selected-foreground"
+                  : "bg-muted text-muted-foreground",
+              )}
+            >
+              {record.outcome}
+            </span>
+          </span>
+          <span className="mt-0.5 block truncate text-xs text-muted-foreground">{detail}</span>
+        </span>
+        <ArrowUpRight
+          size={14}
+          className="shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100"
+          aria-hidden
+        />
+      </Link>
+    </li>
+  );
+}
+
+/**
+ * One line per record, sent applications first. Long histories collapse behind
+ * "Show all" and gain a filter, so a busy file never pushes the page down.
+ */
+export function CompactUsageList({ uses, initial = 4 }: { uses: ResumeUse[]; initial?: number }) {
+  const [expanded, setExpanded] = useState(false);
+  const [query, setQuery] = useState("");
+  const filterable = expanded && uses.length > 8;
+  const needle = query.trim().toLowerCase();
+  const matching =
+    filterable && needle
+      ? uses.filter((record) => `${record.company} ${record.role}`.toLowerCase().includes(needle))
+      : uses;
+  const shown = expanded ? matching : uses.slice(0, initial);
+  const hidden = uses.length - initial;
+  return (
+    <div className="-mx-3 mt-2">
+      {filterable && (
+        <div className="relative mx-3 mb-2">
+          <Search
+            size={13}
+            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+            aria-hidden
+          />
+          <input
+            type="search"
+            aria-label="Filter companies"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Filter companies or roles"
+            className="!h-8 !rounded-full !border-border !bg-card !pl-8 !text-xs"
+          />
+        </div>
+      )}
+      <ul
+        className={cn(
+          "m-0 list-none space-y-0.5 p-0",
+          expanded && "max-h-[420px] overflow-y-auto overscroll-contain",
+        )}
+      >
+        {shown.map((record) => (
+          <CompactUsageRow key={record.id} record={record} />
+        ))}
+      </ul>
+      {filterable && needle && !matching.length && (
+        <p className="m-0 px-3 py-2 text-xs text-muted-foreground">No matching records.</p>
+      )}
+      {hidden > 0 && (
+        <button
+          type="button"
+          aria-expanded={expanded}
+          onClick={() => {
+            setExpanded(!expanded);
+            setQuery("");
+          }}
+          className="mx-3 mt-1 inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium text-link hover:bg-muted/60"
+        >
+          <ChevronDown
+            size={14}
+            className={cn("transition-transform", expanded && "rotate-180")}
+            aria-hidden
+          />
+          {expanded ? "Show fewer" : `Show all ${uses.length}`}
+        </button>
+      )}
+    </div>
   );
 }
 

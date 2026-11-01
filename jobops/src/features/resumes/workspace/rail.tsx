@@ -4,7 +4,13 @@ import Link from "next/link";
 import { useState, type ReactNode } from "react";
 import { Search } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { submittedCount, type GalleryFamily, type GalleryFile } from "../view-types";
+import {
+  shortList,
+  submittedCount,
+  usedCompanies,
+  type GalleryFamily,
+  type GalleryFile,
+} from "../view-types";
 
 export type RailVariant = "grouped" | "lineage" | "sent";
 
@@ -25,10 +31,10 @@ function matches(file: GalleryFile, query: string) {
 }
 
 function Companies({ file, size = "sm" }: { file: GalleryFile; size?: "sm" | "md" }) {
-  const companies = [...new Set(file.uses.map((record) => record.company))];
+  const companies = usedCompanies(file);
   if (!companies.length) return null;
   return (
-    <span className="flex -space-x-1.5" aria-label={`Used for ${companies.join(", ")}`}>
+    <span className="flex shrink-0 -space-x-1.5" aria-hidden>
       {companies.slice(0, 3).map((company) => (
         <span
           key={company}
@@ -42,7 +48,12 @@ function Companies({ file, size = "sm" }: { file: GalleryFile; size?: "sm" | "md
         </span>
       ))}
       {companies.length > 3 && (
-        <span className="grid size-6 place-items-center rounded-lg border-2 border-card bg-muted text-[10px]">
+        <span
+          className={cn(
+            "grid place-items-center rounded-lg border-2 border-card bg-muted tabular-nums",
+            size === "md" ? "size-8 text-xs" : "size-6 text-[10px]",
+          )}
+        >
           +{companies.length - 3}
         </span>
       )}
@@ -148,7 +159,7 @@ function LineageRows({ files, ...row }: RowsProps) {
       {files.map((file, index) => {
         const selected = row.selectedId === file.id;
         const root = index === files.length - 1;
-        const companies = [...new Set(file.uses.map((use) => use.company))].join(", ");
+        const companies = usedCompanies(file);
         return (
           <li key={file.id} className="relative pl-8">
             <span
@@ -172,10 +183,18 @@ function LineageRows({ files, ...row }: RowsProps) {
                 {file.isDefault && <DefaultMark />}
               </span>
               {file.uses.length > 0 && (
-                <span className="mt-2 flex min-w-0 flex-col items-start gap-1.5 text-[11px]">
+                <span
+                  className="mt-2 flex min-w-0 items-center gap-2 text-[11px]"
+                  title={companies.join(", ")}
+                >
                   <Companies file={file} />
-                  <span className="line-clamp-2 w-full break-words opacity-80" title={companies}>
-                    {submittedCount(file) ? `Sent to ${companies}` : "Preparing"}
+                  <span className="min-w-0 truncate opacity-80" aria-hidden>
+                    {submittedCount(file)
+                      ? `Sent to ${shortList(companies, companies.length > 3 ? 1 : 2)}`
+                      : "Preparing"}
+                  </span>
+                  <span className="sr-only">
+                    {submittedCount(file) ? `Sent to ${companies.join(", ")}` : "Preparing"}
                   </span>
                 </span>
               )}
@@ -198,7 +217,7 @@ function SentRows({ files, ...row }: RowsProps) {
           {...rowLink(row, file)}
           className="flex gap-3"
         >
-          <span className="w-8 shrink-0 pt-0.5">
+          <span className="shrink-0 pt-0.5">
             {file.uses.length ? (
               <Companies file={file} size="md" />
             ) : (
@@ -209,10 +228,11 @@ function SentRows({ files, ...row }: RowsProps) {
             )}
           </span>
           <span className="min-w-0 flex-1">
-            <span className="block text-[12px] font-medium opacity-80">
-              {file.uses.length
-                ? [...new Set(file.uses.map((use) => use.company))].join(", ")
-                : "Not sent yet"}
+            <span
+              className="block truncate text-[12px] font-medium opacity-80"
+              title={usedCompanies(file).join(", ")}
+            >
+              {file.uses.length ? shortList(usedCompanies(file)) : "Not sent yet"}
             </span>
             <span className="mt-0.5 line-clamp-2 text-[13px] font-semibold leading-snug">
               {file.label}
