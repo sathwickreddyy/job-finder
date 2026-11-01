@@ -374,7 +374,11 @@ function ManualLine({ item, recorded }: { item: MailItem; recorded: string | nul
       >
         <Check aria-hidden size={15} className="shrink-0 text-tag-offer" />
         <span className="min-w-0 break-words">
-          {outcome ? `Recorded: ${outcome}` : "Marked as just info"}
+          {outcome
+            ? `Recorded: ${outcome}`
+            : item.copyOf
+              ? `Same email as in ${item.copyOf.account}`
+              : "Marked as just info"}
         </span>
         {!outcome && (
           <>
