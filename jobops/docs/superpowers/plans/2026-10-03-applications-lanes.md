@@ -34,22 +34,22 @@
 
 ## File map
 
-| Path | Status | Responsibility |
-| --- | --- | --- |
-| `src/features/applications/lanes.ts` | new | Pure lane model: company keys, status, dots, next step, groups, window, stacks, chart views |
-| `src/features/applications/return-to.ts` | new | `safeReturnTo`, `withNotice` for post-action destinations |
-| `src/features/applications/navigation.ts` | rewrite | `laneHref`, `resolveLanesView` (old tab code removed in Task 8) |
-| `src/features/applications/read.ts` | modify | Adds `companyKey`, `companyName` to `ApplicationRecord` |
-| `src/features/applications/dates.ts` | modify | Adds `formatWhen` |
-| `src/features/applications/views/lane-marks.tsx` | new | `StatusPill`, `DotIcon`, `dueStyle` |
-| `src/features/applications/views/timeline.tsx` | new | Vertical timeline list shared by lanes and the record page |
-| `src/features/applications/views/lanes.tsx` | new | Client calendar chart |
-| `src/features/applications/views/lane-detail.tsx` | new | Server-rendered expanded lane |
-| `src/features/applications/views/emails-drawer.tsx` | new | Client `<dialog>` drawer shell and header button |
-| `src/features/applications/views/mail-sections.tsx` | new (Task 10) | Drawer contents |
-| `src/app/applications/page.tsx` | rewrite | Lanes page |
-| `src/features/applications/views/{next,records,tabs,emails}.tsx` | delete | Old tabs |
-| `tests/lane-fixtures.ts` | new | Shared unit-test builders |
+| Path                                                             | Status        | Responsibility                                                                              |
+| ---------------------------------------------------------------- | ------------- | ------------------------------------------------------------------------------------------- |
+| `src/features/applications/lanes.ts`                             | new           | Pure lane model: company keys, status, dots, next step, groups, window, stacks, chart views |
+| `src/features/applications/return-to.ts`                         | new           | `safeReturnTo`, `withNotice` for post-action destinations                                   |
+| `src/features/applications/navigation.ts`                        | rewrite       | `laneHref`, `resolveLanesView` (old tab code removed in Task 8)                             |
+| `src/features/applications/read.ts`                              | modify        | Adds `companyKey`, `companyName` to `ApplicationRecord`                                     |
+| `src/features/applications/dates.ts`                             | modify        | Adds `formatWhen`                                                                           |
+| `src/features/applications/views/lane-marks.tsx`                 | new           | `StatusPill`, `DotIcon`, `dueStyle`                                                         |
+| `src/features/applications/views/timeline.tsx`                   | new           | Vertical timeline list shared by lanes and the record page                                  |
+| `src/features/applications/views/lanes.tsx`                      | new           | Client calendar chart                                                                       |
+| `src/features/applications/views/lane-detail.tsx`                | new           | Server-rendered expanded lane                                                               |
+| `src/features/applications/views/emails-drawer.tsx`              | new           | Client `<dialog>` drawer shell and header button                                            |
+| `src/features/applications/views/mail-sections.tsx`              | new (Task 10) | Drawer contents                                                                             |
+| `src/app/applications/page.tsx`                                  | rewrite       | Lanes page                                                                                  |
+| `src/features/applications/views/{next,records,tabs,emails}.tsx` | delete        | Old tabs                                                                                    |
+| `tests/lane-fixtures.ts`                                         | new           | Shared unit-test builders                                                                   |
 
 ---
 
@@ -58,6 +58,7 @@
 ### Task 1: Company keys and lane status
 
 **Files:**
+
 - Create: `src/features/applications/lanes.ts`
 - Create: `tests/lane-fixtures.ts`
 - Create: `tests/application-lanes.test.ts`
@@ -65,6 +66,7 @@
 - Modify: `tests/application-records-view.test.ts` (fixture only; the file is deleted in Task 8)
 
 **Interfaces:**
+
 - Consumes: `silenceClock(record, now)` from `queue.ts`; `recordStateFrom`, `isOutreach`, `methodLabel`, `Phase` from `phase.ts`; `formatDay` from `dates.ts`; `roundKindLabel` from `features/companies/metrics`.
 - Produces:
   - `normalizeCompany(value: string): string`
@@ -166,7 +168,10 @@ describe("company keys", () => {
   it("normalizes case and spacing and maps listed aliases onto the company record", () => {
     const resolve = companyResolver([{ name: "Microsoft", aliases: ["Microsoft India", "MSFT"] }]);
     expect(normalizeCompany("  Level   AI ")).toBe("level ai");
-    expect(resolve("microsoft india")).toEqual({ companyKey: "microsoft", companyName: "Microsoft" });
+    expect(resolve("microsoft india")).toEqual({
+      companyKey: "microsoft",
+      companyName: "Microsoft",
+    });
     expect(resolve(" MSFT")).toEqual({ companyKey: "microsoft", companyName: "Microsoft" });
     expect(resolve("Level  AI ")).toEqual({ companyKey: "level ai", companyName: "Level AI" });
   });
@@ -174,10 +179,25 @@ describe("company keys", () => {
 
 describe("record status", () => {
   it.each<[string, LaneSource, string, string]>([
-    ["preparing", record({ phase: "Preparing", status: "PREPARING", sentAt: null }), "preparing", "Not sent yet"],
+    [
+      "preparing",
+      record({ phase: "Preparing", status: "PREPARING", sentAt: null }),
+      "preparing",
+      "Not sent yet",
+    ],
     ["sent today", record({ sentAt: at("2026-10-03T09:00:00") }), "applied", "Applied · today"],
-    ["sent yesterday", record({ sentAt: at("2026-10-02T18:30:00") }), "applied", "Applied · yesterday"],
-    ["below threshold", record({ sentAt: at("2026-09-29T10:00:00") }), "applied", "Applied · 4 days"],
+    [
+      "sent yesterday",
+      record({ sentAt: at("2026-10-02T18:30:00") }),
+      "applied",
+      "Applied · yesterday",
+    ],
+    [
+      "below threshold",
+      record({ sentAt: at("2026-09-29T10:00:00") }),
+      "applied",
+      "Applied · 4 days",
+    ],
     ["quiet direct", record({ sentAt: at("2026-09-20T12:00:00") }), "quiet", "Quiet for 13 days"],
     [
       "outreach below threshold",
@@ -197,7 +217,12 @@ describe("record status", () => {
       "offer",
       "Offer · decide by 8 Oct",
     ],
-    ["offer without a date", record({ phase: "Decision", status: "OFFER" }), "offer", "Offer received"],
+    [
+      "offer without a date",
+      record({ phase: "Decision", status: "OFFER" }),
+      "offer",
+      "Offer received",
+    ],
   ])("%s", (_name, input, tone, label) => {
     expect(recordStatus(input, NOW)).toEqual({ tone, label });
   });
@@ -281,7 +306,11 @@ describe("record status", () => {
 
 describe("lead and lane status", () => {
   it("leads with the furthest-along open record and counts other open roles, not outreach for the same role", () => {
-    const applied = record({ jobId: "job-a", role: "SDE II, Fabric", sentAt: at("2026-10-01T10:00:00") });
+    const applied = record({
+      jobId: "job-a",
+      role: "SDE II, Fabric",
+      sentAt: at("2026-10-01T10:00:00"),
+    });
     const interviewing = record({
       jobId: "job-b",
       role: "SDE II, Storage",
@@ -294,18 +323,36 @@ describe("lead and lane status", () => {
       source: "REFERRAL",
       sentAt: at("2026-10-01T10:00:00"),
     });
-    const rejected = record({ jobId: "job-c", phase: "Closed", status: "REJECTED", closedReason: "REJECTED" });
+    const rejected = record({
+      jobId: "job-c",
+      phase: "Closed",
+      status: "REJECTED",
+      closedReason: "REJECTED",
+    });
     const records = [applied, rejected, interviewing, referral];
     expect(leadOf(records).id).toBe(interviewing.id);
-    expect(laneStatus(records, NOW)).toEqual({ tone: "interviewing", label: "Interviewing · +1 role" });
+    expect(laneStatus(records, NOW)).toEqual({
+      tone: "interviewing",
+      label: "Interviewing · +1 role",
+    });
   });
 
   it("marks new email only while the lead is Applied, and leads closed lanes with the latest record", () => {
     expect(laneStatus([record({ sentAt: at("2026-10-02T18:30:00") })], NOW, true).label).toBe(
       "Applied · yesterday · new email",
     );
-    const older = record({ phase: "Closed", status: "CLOSED", closedReason: "NO_REPLY", sentAt: at("2026-09-01T10:00:00") });
-    const newer = record({ phase: "Closed", status: "REJECTED", closedReason: "REJECTED", sentAt: at("2026-09-20T10:00:00") });
+    const older = record({
+      phase: "Closed",
+      status: "CLOSED",
+      closedReason: "NO_REPLY",
+      sentAt: at("2026-09-01T10:00:00"),
+    });
+    const newer = record({
+      phase: "Closed",
+      status: "REJECTED",
+      closedReason: "REJECTED",
+      sentAt: at("2026-09-20T10:00:00"),
+    });
     expect(leadOf([older, newer]).id).toBe(newer.id);
     expect(laneStatus([older, newer], NOW, true)).toEqual({ tone: "closed", label: "Rejected" });
   });
@@ -370,8 +417,7 @@ export type LaneSource = Pick<
 export type StatusTone = "preparing" | "applied" | "quiet" | "interviewing" | "offer" | "closed";
 export type LaneStatus = { tone: StatusTone; label: string };
 
-const dayWord = (days: number) =>
-  days <= 0 ? "today" : days === 1 ? "yesterday" : `${days} days`;
+const dayWord = (days: number) => (days <= 0 ? "today" : days === 1 ? "yesterday" : `${days} days`);
 
 function closedStatus(record: LaneSource): LaneStatus {
   switch (record.closedReason) {
@@ -416,7 +462,10 @@ export function recordStatus(record: LaneSource, now: Date): LaneStatus {
   }
   const outreach = isOutreach(record.source);
   const method = methodLabel[record.source] ?? "Outreach";
-  if (outreach && recordStateFrom({ ...record, appliedAt: record.sentAt }, record.rounds, []).replied)
+  if (
+    outreach &&
+    recordStateFrom({ ...record, appliedAt: record.sentAt }, record.rounds, []).replied
+  )
     return { tone: "applied", label: `${method} · replied` };
   const clock = silenceClock(record, now);
   if (!clock) return { tone: "applied", label: outreach ? method : "Applied" };
@@ -480,11 +529,11 @@ export function laneStatus(records: LaneSource[], now: Date, pendingMail = false
   3. In `export type ApplicationRecord = …`, add after `jobId: string;`:
 
 ```ts
-  companyKey: string;
-  companyName: string;
+companyKey: string;
+companyName: string;
 ```
 
-  4. In `readApplications`, after `const linked = linkedRecordIds(…);` add `const resolve = companyResolver(companies);`, and in the returned record object add `...resolve(job.company),` right after `company: job.company,`.
+4. In `readApplications`, after `const linked = linkedRecordIds(…);` add `const resolve = companyResolver(companies);`, and in the returned record object add `...resolve(job.company),` right after `company: job.company,`.
 
 - [ ] **Step 6: Keep the old view fixture compiling.** In `tests/application-records-view.test.ts`, inside the `record` builder add after `company: "Oracle",`:
 
@@ -518,12 +567,14 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ### Task 2: Lane dots, next steps and grouping
 
 **Files:**
+
 - Modify: `src/features/applications/lanes.ts`
 - Modify: `src/features/applications/navigation.ts` (add `laneHref`)
 - Modify: `tests/lane-fixtures.ts`
 - Modify: `tests/application-lanes.test.ts`
 
 **Interfaces:**
+
 - Consumes: Task 1 exports; `buildQueue`, `silenceClock`, `QueueItem`, `Due` from `queue.ts`; `suggestedOutcome`, `TriageInput` from `features/mail/triage`; `historyTone`, `OutcomeId` from `phase.ts`.
 - Produces:
   - `laneHref(recordId: string, extra?: { mail?: string | null; outcome?: string | null }): string` in `navigation.ts`
@@ -589,11 +640,25 @@ describe("lane dots", () => {
         event(id, "MANUAL_NOTE", at("2026-09-27T10:00:00"), { summary: "Asked about the team" }),
       ],
       linkedMail: [
-        { id: mailId, subject: "HackerRank invite", classification: "ASSESSMENT", receivedAt: at("2026-09-26T09:59:00") },
-        { id: ackId, subject: "We received it", classification: "APPLICATION_ACKNOWLEDGEMENT", receivedAt: at("2026-09-24T09:05:00") },
+        {
+          id: mailId,
+          subject: "HackerRank invite",
+          classification: "ASSESSMENT",
+          receivedAt: at("2026-09-26T09:59:00"),
+        },
+        {
+          id: ackId,
+          subject: "We received it",
+          classification: "APPLICATION_ACKNOWLEDGEMENT",
+          receivedAt: at("2026-09-24T09:05:00"),
+        },
       ],
       rounds: [
-        round(id, { kind: "ONLINE_ASSESSMENT", scheduledAt: at("2026-10-07T23:59:00"), name: "HackerRank" }),
+        round(id, {
+          kind: "ONLINE_ASSESSMENT",
+          scheduledAt: at("2026-10-07T23:59:00"),
+          name: "HackerRank",
+        }),
       ],
     });
     const dots = laneDots(
@@ -627,14 +692,20 @@ describe("lane dots", () => {
   });
 
   it("tags roles when a company has several openings, tags outreach by method, and falls back to the sent date", () => {
-    const direct = record({ jobId: "job-a", role: "SDE II, Fabric", sentAt: at("2026-10-01T10:00:00") });
+    const direct = record({
+      jobId: "job-a",
+      role: "SDE II, Fabric",
+      sentAt: at("2026-10-01T10:00:00"),
+    });
     const referral = record({
       jobId: "job-b",
       role: "SDE II, Storage",
       source: "REFERRAL",
       sentAt: at("2026-09-30T10:00:00"),
     });
-    expect(laneDots([direct, referral], [], NOW).map((dot) => [dot.label, dot.role, dot.via])).toEqual([
+    expect(
+      laneDots([direct, referral], [], NOW).map((dot) => [dot.label, dot.role, dot.via]),
+    ).toEqual([
       ["Reached out", "SDE II, Storage", "Referral ask"],
       ["Applied", "SDE II, Fabric", null],
     ]);
@@ -645,7 +716,13 @@ describe("pending mail", () => {
   it("keeps matched updates and acknowledgements with their suggested outcome", () => {
     const base = { subject: "s", sender: "a@example.invalid", senderName: "", receivedAt: NOW };
     const pending = pendingMailFrom([
-      { ...base, id: "1", classification: "ASSESSMENT", bucket: "updates", record: { id: "r1", company: "X" } },
+      {
+        ...base,
+        id: "1",
+        classification: "ASSESSMENT",
+        bucket: "updates",
+        record: { id: "r1", company: "X" },
+      },
       {
         ...base,
         id: "2",
@@ -665,7 +742,12 @@ describe("pending mail", () => {
 
 describe("next steps and groups", () => {
   it("turns quiet records, booked rounds and matched mail into lane actions, mail first", () => {
-    const quiet = record({ company: "Flipkart", companyKey: "flipkart", companyName: "Flipkart", sentAt: at("2026-09-20T12:00:00") });
+    const quiet = record({
+      company: "Flipkart",
+      companyKey: "flipkart",
+      companyName: "Flipkart",
+      sentAt: at("2026-09-20T12:00:00"),
+    });
     const id = uid();
     const booked = record({
       id,
@@ -676,7 +758,12 @@ describe("next steps and groups", () => {
       status: "TECHNICAL_INTERVIEW",
       rounds: [round(id, { scheduledAt: at("2026-10-03T16:00:00"), position: 2 })],
     });
-    const invited = record({ company: "Zscaler", companyKey: "zscaler", companyName: "Zscaler", sentAt: at("2026-09-24T09:00:00") });
+    const invited = record({
+      company: "Zscaler",
+      companyKey: "zscaler",
+      companyName: "Zscaler",
+      sentAt: at("2026-09-24T09:00:00"),
+    });
     const mail = {
       id: uid(),
       recordId: invited.id,
@@ -688,7 +775,15 @@ describe("next steps and groups", () => {
     const lanes = lanesFor(
       [quiet, booked, invited],
       [mail],
-      [{ id: mail.id, title: mail.subject, detail: "", receivedAt: mail.receivedAt, primary: { label: "Link", href: "/" } }],
+      [
+        {
+          id: mail.id,
+          title: mail.subject,
+          detail: "",
+          receivedAt: mail.receivedAt,
+          primary: { label: "Link", href: "/" },
+        },
+      ],
     );
     const next = Object.fromEntries(lanes.map((lane) => [lane.company, lane.next]));
     expect(next.Flipkart).toMatchObject({
@@ -697,7 +792,12 @@ describe("next steps and groups", () => {
       action: "I followed up",
       href: `/applications?open=${quiet.id}&outcome=followup`,
     });
-    expect(next.Razorpay).toMatchObject({ due: "today", when: "Today, 4:00 pm", action: "Open", href: `/applications?open=${id}` });
+    expect(next.Razorpay).toMatchObject({
+      due: "today",
+      when: "Today, 4:00 pm",
+      action: "Open",
+      href: `/applications?open=${id}`,
+    });
     expect(next.Zscaler).toMatchObject({
       due: "today",
       when: "New email",
@@ -713,8 +813,20 @@ describe("next steps and groups", () => {
 
   it("falls back to the quiet-clock date or the send step, and closed lanes have nothing next", () => {
     const fresh = record({ sentAt: at("2026-10-02T18:30:00") });
-    const draft = record({ companyKey: "quizizz", companyName: "Quizizz", phase: "Preparing", status: "PREPARING", sentAt: null });
-    const closed = record({ companyKey: "nutanix", companyName: "Nutanix", phase: "Closed", status: "REJECTED", closedReason: "REJECTED" });
+    const draft = record({
+      companyKey: "quizizz",
+      companyName: "Quizizz",
+      phase: "Preparing",
+      status: "PREPARING",
+      sentAt: null,
+    });
+    const closed = record({
+      companyKey: "nutanix",
+      companyName: "Nutanix",
+      phase: "Closed",
+      status: "REJECTED",
+      closedReason: "REJECTED",
+    });
     const lanes = lanesFor([closed, fresh, draft]);
     const byCompany = Object.fromEntries(lanes.map((lane) => [lane.company, lane]));
     expect(byCompany.Oracle.next).toMatchObject({
@@ -723,7 +835,11 @@ describe("next steps and groups", () => {
       text: "Follow up if it stays quiet",
       action: "Open",
     });
-    expect(byCompany.Quizizz.next).toMatchObject({ due: null, when: "Not sent", text: "Finish and send it" });
+    expect(byCompany.Quizizz.next).toMatchObject({
+      due: null,
+      when: "Not sent",
+      text: "Finish and send it",
+    });
     expect(byCompany.Nutanix.next).toBeNull();
     expect(lanes.map((lane) => [lane.company, lane.group])).toEqual([
       ["Oracle", "active"],
@@ -1058,7 +1174,9 @@ function whenText(item: QueueItem, now: Date) {
     return `${days} ${days === 1 ? "day" : "days"} late`;
   }
   if (item.due === "today") return timed ? `Today, ${formatTime(item.dueAt)}` : "Today";
-  return timed ? `${formatWeekday(item.dueAt)}, ${formatTime(item.dueAt)}` : formatWeekday(item.dueAt);
+  return timed
+    ? `${formatWeekday(item.dueAt)}, ${formatTime(item.dueAt)}`
+    : formatWeekday(item.dueAt);
 }
 
 /** Matched mail first (linking it usually settles the rest), else the first queue item, else a fallback. */
@@ -1070,8 +1188,9 @@ export function recordNext(
 ): LaneNext | null {
   const mine = pending.filter((mail) => mail.recordId === record.id);
   const item =
-    items.find((entry) => entry.reason === "mail" && mine.some((mail) => entry.key === `mail:${mail.id}`)) ??
-    items.find((entry) => entry.recordId === record.id);
+    items.find(
+      (entry) => entry.reason === "mail" && mine.some((mail) => entry.key === `mail:${mail.id}`),
+    ) ?? items.find((entry) => entry.recordId === record.id);
   const href = laneHref(record.id);
   if (item) {
     const base = { recordId: record.id, due: item.due, at: item.dueAt, when: whenText(item, now) };
@@ -1096,7 +1215,15 @@ export function recordNext(
   }
   if (record.phase === "Closed") return null;
   if (record.phase === "Preparing")
-    return { recordId: record.id, due: null, at: null, when: "Not sent", text: "Finish and send it", action: "Open", href };
+    return {
+      recordId: record.id,
+      due: null,
+      at: null,
+      when: "Not sent",
+      text: "Finish and send it",
+      action: "Open",
+      href,
+    };
   const clock = silenceClock(record, now);
   if (!clock) return null;
   const at = addDays(istDayStart(clock.since), clock.threshold);
@@ -1131,8 +1258,12 @@ export function buildLanes(input: {
   for (const [key, records] of byKey) {
     const lead = leadOf(records);
     const latest = [...records].sort((a, b) => activityOf(b) - activityOf(a))[0];
-    const pending = input.pending.filter((mail) => records.some((record) => record.id === mail.recordId));
-    const openJobs = new Set(records.filter((record) => record.phase !== "Closed").map((record) => record.jobId));
+    const pending = input.pending.filter((mail) =>
+      records.some((record) => record.id === mail.recordId),
+    );
+    const openJobs = new Set(
+      records.filter((record) => record.phase !== "Closed").map((record) => record.jobId),
+    );
     const roles: LaneRole[] = records
       .map((record) => ({
         recordId: record.id,
@@ -1152,7 +1283,11 @@ export function buildLanes(input: {
       roles
         .flatMap((role) =>
           role.next
-            ? [openJobs.size > 1 ? { ...role.next, text: `${role.role}: ${role.next.text}` } : role.next]
+            ? [
+                openJobs.size > 1
+                  ? { ...role.next, text: `${role.role}: ${role.next.text}` }
+                  : role.next,
+              ]
             : [],
         )
         .sort((a, b) => nextRank(a) - nextRank(b) || nextTime(a) - nextTime(b))[0] ?? null;
@@ -1165,14 +1300,20 @@ export function buildLanes(input: {
       status: laneStatus(records, now, pending.length > 0),
       dots: laneDots(records, pending, now),
       next,
-      group: closed ? "closed" : next?.due === "overdue" || next?.due === "today" ? "needs" : "active",
+      group: closed
+        ? "closed"
+        : next?.due === "overdue" || next?.due === "today"
+          ? "needs"
+          : "active",
       lastActivity: Math.max(0, ...records.map(activityOf)),
     });
   }
   return lanes.sort(
     (a, b) =>
       groupRank[a.group] - groupRank[b.group] ||
-      (a.group === "closed" ? 0 : nextRank(a.next) - nextRank(b.next) || nextTime(a.next) - nextTime(b.next)) ||
+      (a.group === "closed"
+        ? 0
+        : nextRank(a.next) - nextRank(b.next) || nextTime(a.next) - nextTime(b.next)) ||
       b.lastActivity - a.lastActivity,
   );
 }
@@ -1198,10 +1339,12 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ### Task 3: Calendar window, stacked dots and chart views
 
 **Files:**
+
 - Modify: `src/features/applications/lanes.ts`
 - Create: `tests/application-lane-window.test.ts`
 
 **Interfaces:**
+
 - Consumes: `Lane`, `LaneDot`, `DotTone`, `LaneStatus`, `LaneNext`, `LaneGroup` (Task 2); `indiaDate`, `formatDay`, `formatTime`, `istDayStart` from `dates.ts`.
 - Produces:
   - `type LaneWindow = { start: number; end: number; ticks: number[] }`
@@ -1234,7 +1377,11 @@ describe("lane window", () => {
   });
 
   it("clamps months-old open history to twelve weeks with one Earlier stack, ignoring closed lanes", () => {
-    const ancient = record({ companyKey: "a", companyName: "A", sentAt: at("2026-05-01T10:00:00") });
+    const ancient = record({
+      companyKey: "a",
+      companyName: "A",
+      sentAt: at("2026-05-01T10:00:00"),
+    });
     const closedOld = record({
       companyKey: "b",
       companyName: "B",
@@ -1255,12 +1402,14 @@ describe("lane window", () => {
   it("ticks every three days up to three weeks and on Mondays beyond", () => {
     const short = laneWindow(lanesFor([record({ sentAt: at("2026-10-02T18:30:00") })]), NOW);
     expect(short.ticks.map((tick) => new Date(tick))).toEqual(
-      ["2026-09-28", "2026-10-01", "2026-10-04", "2026-10-07", "2026-10-10"].map((day) => at(`${day}T00:00:00`)),
+      ["2026-09-28", "2026-10-01", "2026-10-04", "2026-10-07", "2026-10-10"].map((day) =>
+        at(`${day}T00:00:00`),
+      ),
     );
     const long = laneWindow(lanesFor([record({ sentAt: at("2026-08-28T10:00:00") })]), NOW);
     expect(long.ticks.map((tick) => new Date(tick))).toEqual(
-      ["2026-08-31", "2026-09-07", "2026-09-14", "2026-09-21", "2026-09-28", "2026-10-05"].map((day) =>
-        at(`${day}T00:00:00`),
+      ["2026-08-31", "2026-09-07", "2026-09-14", "2026-09-21", "2026-09-28", "2026-10-05"].map(
+        (day) => at(`${day}T00:00:00`),
       ),
     );
   });
@@ -1272,9 +1421,16 @@ describe("stacked dots and chart views", () => {
     const source = record({
       id,
       sentAt: at("2026-09-20T12:00:00"),
-      events: [event(id, "APPLICATION_SUBMITTED", at("2026-09-20T12:00:00"), { summary: "Applied" })],
+      events: [
+        event(id, "APPLICATION_SUBMITTED", at("2026-09-20T12:00:00"), { summary: "Applied" }),
+      ],
       linkedMail: [
-        { id: uid(), subject: "We got it", classification: "APPLICATION_ACKNOWLEDGEMENT", receivedAt: at("2026-09-20T12:05:00") },
+        {
+          id: uid(),
+          subject: "We got it",
+          classification: "APPLICATION_ACKNOWLEDGEMENT",
+          receivedAt: at("2026-09-20T12:05:00"),
+        },
       ],
     });
     const lanes = lanesFor([source]);
@@ -1301,7 +1457,13 @@ describe("stacked dots and chart views", () => {
       sentAt: at("2026-09-28T10:00:00"),
       rounds: [round(id, { kind: "LLD", scheduledAt: at("2026-10-06T11:00:00"), position: 3 })],
     });
-    const empty = record({ companyKey: "quizizz", companyName: "Quizizz", phase: "Preparing", status: "PREPARING", sentAt: null });
+    const empty = record({
+      companyKey: "quizizz",
+      companyName: "Quizizz",
+      phase: "Preparing",
+      status: "PREPARING",
+      sentAt: null,
+    });
     const lanes = lanesFor([booked, empty]);
     const view = laneViews(lanes, laneWindow(lanes, NOW), NOW);
     const uber = view.lanes.find((lane) => lane.company === "Uber")!;
@@ -1314,7 +1476,9 @@ describe("stacked dots and chart views", () => {
     });
     expect(view.ticks.some((tick) => tick.label === null)).toBe(true);
     expect(
-      view.ticks.filter((tick) => tick.label === null).every((tick) => Math.abs(tick.pct - view.today) <= 5),
+      view.ticks
+        .filter((tick) => tick.label === null)
+        .every((tick) => Math.abs(tick.pct - view.today) <= 5),
     ).toBe(true);
     expect(JSON.stringify(view)).not.toContain("NaN");
   });
@@ -1393,7 +1557,9 @@ export function stackDots(dots: LaneDot[], window: LaneWindow, gap = 4.5): DotSt
   }
   return stacks.map((stack) => ({
     ...stack,
-    lead: stack.dots.reduce((best, dot) => (dotWeight[dot.tone] > dotWeight[best.tone] ? dot : best)),
+    lead: stack.dots.reduce((best, dot) =>
+      dotWeight[dot.tone] > dotWeight[best.tone] ? dot : best,
+    ),
   }));
 }
 
@@ -1500,6 +1666,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ### Task 4: Return to the lane after in-place actions
 
 **Files:**
+
 - Create: `src/features/applications/return-to.ts`
 - Modify: `src/features/applications/outcomes.ts`
 - Modify: `src/features/applications/record-actions.ts` (`recordAsSent`)
@@ -1510,6 +1677,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - Modify: `tests/application-outcome-actions.test.ts`
 
 **Interfaces:**
+
 - Produces:
   - `safeReturnTo(value: string | null | undefined): string | null`: only `/applications` or `/applications/…` paths; keeps the query.
   - `withNotice(path: string, notice: string): string`
@@ -1599,10 +1767,16 @@ afterEach(() => vi.resetAllMocks());
 
 it("returns to the lane after recording a record as sent, and to the record otherwise", async () => {
   expect(
-    await recordAsSent({}, form({ id: recordId, sentDate: "2026-10-02", humanConfirmed: "on", returnTo: lane })),
+    await recordAsSent(
+      {},
+      form({ id: recordId, sentDate: "2026-10-02", humanConfirmed: "on", returnTo: lane }),
+    ),
   ).toEqual({ success: "Recorded as sent.", redirect: lane });
   expect(
-    await recordAsSent({}, form({ id: recordId, sentDate: "", humanConfirmed: "on", returnTo: "//evil.example" })),
+    await recordAsSent(
+      {},
+      form({ id: recordId, sentDate: "", humanConfirmed: "on", returnTo: "//evil.example" }),
+    ),
   ).toEqual({ success: "Recorded as sent.", redirect: `/applications/${recordId}` });
 });
 
@@ -1662,27 +1836,27 @@ export function withNotice(path: string, notice: string) {
 ```
 
 - [ ] **Step 4: Use it in the actions.**
-  - `src/features/applications/outcomes.ts`: add `import { safeReturnTo } from "./return-to";` and replace `redirect: \`/applications/${applicationId}\`,` with `redirect: safeReturnTo(formString(form, "returnTo")) ?? \`/applications/${applicationId}\`,`.
+  - `src/features/applications/outcomes.ts`: add `import { safeReturnTo } from "./return-to";` and replace `redirect: \`/applications/${applicationId}\`,`with`redirect: safeReturnTo(formString(form, "returnTo")) ?? \`/applications/${applicationId}\`,`.
   - `src/features/applications/record-actions.ts`: add `import { safeReturnTo } from "./return-to";` and in `recordAsSent` replace `return { success: "Recorded as sent.", redirect: \`/applications/${data.id}\` };` with:
 
 ```ts
-    return {
-      success: "Recorded as sent.",
-      redirect: safeReturnTo(formString(form, "returnTo")) ?? `/applications/${data.id}`,
-    };
+return {
+  success: "Recorded as sent.",
+  redirect: safeReturnTo(formString(form, "returnTo")) ?? `/applications/${data.id}`,
+};
 ```
 
-  - `src/features/mail/triage-actions.ts`: add `import { safeReturnTo, withNotice } from "@/features/applications/return-to";` and in `linkMailOnly` replace the `destination = formString(form, "returnTo") === "record" ? … : emailsNotice(notice);` statement with:
+- `src/features/mail/triage-actions.ts`: add `import { safeReturnTo, withNotice } from "@/features/applications/return-to";` and in `linkMailOnly` replace the `destination = formString(form, "returnTo") === "record" ? … : emailsNotice(notice);` statement with:
 
 ```ts
-    const returnTo = formString(form, "returnTo");
-    const back = safeReturnTo(returnTo);
-    destination =
-      returnTo === "record"
-        ? `/applications/${recordId}?notice=${encodeURIComponent(notice)}`
-        : back
-          ? withNotice(back, notice)
-          : emailsNotice(notice);
+const returnTo = formString(form, "returnTo");
+const back = safeReturnTo(returnTo);
+destination =
+  returnTo === "record"
+    ? `/applications/${recordId}?notice=${encodeURIComponent(notice)}`
+    : back
+      ? withNotice(back, notice)
+      : emailsNotice(notice);
 ```
 
 - [ ] **Step 5: Pass it from the controls.** In `src/features/applications/views/outcome-chips.tsx`:
@@ -1709,12 +1883,14 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ### Task 5: Lane marks and the shared timeline
 
 **Files:**
+
 - Modify: `src/features/applications/dates.ts` (add `formatWhen`)
 - Create: `src/features/applications/views/lane-marks.tsx`
 - Create: `src/features/applications/views/timeline.tsx`
 - Create: `tests/application-timeline.test.ts`
 
 **Interfaces:**
+
 - Consumes: `DotTone`, `LaneStatus`, `StatusTone` (lanes.ts); `Due` (queue.ts).
 - Produces:
   - `formatWhen(value: Date, now: Date): string`: "Today, 9:12 am" or "20 Sept, 4:19 pm".
@@ -1746,7 +1922,14 @@ it("lists newest first with a Today divider between booked and past entries", ()
     createElement(Timeline, {
       now: NOW,
       entries: [
-        { key: "a", at: new Date("2026-09-20T12:00:00+05:30"), tone: "sent", label: "Applied", detail: "", tags: [] },
+        {
+          key: "a",
+          at: new Date("2026-09-20T12:00:00+05:30"),
+          tone: "sent",
+          label: "Applied",
+          detail: "",
+          tags: [],
+        },
         {
           key: "b",
           at: new Date("2026-10-06T11:00:00+05:30"),
@@ -1767,8 +1950,12 @@ it("lists newest first with a Today divider between booked and past entries", ()
       ],
     }),
   );
-  const order = ["Round 3 · LLD", "Today<", "Round confirmed", "Applied"].map((text) => html.indexOf(text));
-  expect(order.every((index, position) => index > -1 && (position === 0 || index > order[position - 1]))).toBe(true);
+  const order = ["Round 3 · LLD", "Today<", "Round confirmed", "Applied"].map((text) =>
+    html.indexOf(text),
+  );
+  expect(
+    order.every((index, position) => index > -1 && (position === 0 || index > order[position - 1])),
+  ).toBe(true);
   expect(html).toContain('href="/mail/x"');
   expect(html).toContain("SDE II");
   expect(html).toContain("Low-level design");
@@ -1904,7 +2091,8 @@ export function Timeline({ entries, now }: { entries: TimelineEntry[]; now: Date
     <ol className="relative m-0 flex list-none flex-col gap-3 p-0 before:absolute before:top-3 before:bottom-3 before:left-3 before:w-0.5 before:-translate-x-1/2 before:bg-border">
       {ordered.map((entry, index) => {
         const upcoming = entry.at > now;
-        const divider = upcoming && ordered[index + 1] !== undefined && ordered[index + 1].at <= now;
+        const divider =
+          upcoming && ordered[index + 1] !== undefined && ordered[index + 1].at <= now;
         return (
           <li key={entry.key} className="relative">
             <div className="flex gap-3">
@@ -1971,10 +2159,12 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ### Task 6: The lanes chart
 
 **Files:**
+
 - Create: `src/features/applications/views/lanes.tsx`
 - Create: `tests/application-lanes-chart.test.ts`
 
 **Interfaces:**
+
 - Consumes: `ChartView`, `LaneView` (Task 3); `laneHref` (Task 2); `StatusPill`, `DotIcon`, `dueStyle` (Task 5); `CompanyMark` from `views/marks.tsx`.
 - Produces: `LanesChart(props: ChartView & { openKey: string | null; detail: ReactNode })` (client). Accessible structure for later tests:
   - each lane is `role="group"` named by its company
@@ -2005,23 +2195,44 @@ function chart() {
     sentAt: at("2026-09-20T12:00:00"),
     events: [event(id, "APPLICATION_SUBMITTED", at("2026-09-20T12:00:00"), { summary: "Applied" })],
     linkedMail: [
-      { id: uid(), subject: "We got it", classification: "APPLICATION_ACKNOWLEDGEMENT", receivedAt: at("2026-09-20T12:05:00") },
+      {
+        id: uid(),
+        subject: "We got it",
+        classification: "APPLICATION_ACKNOWLEDGEMENT",
+        receivedAt: at("2026-09-20T12:05:00"),
+      },
     ],
   });
-  const draft = record({ companyKey: "quizizz", companyName: "Quizizz", phase: "Preparing", status: "PREPARING", sentAt: null });
-  const closed = record({ companyKey: "nutanix", companyName: "Nutanix", phase: "Closed", status: "REJECTED", closedReason: "REJECTED" });
+  const draft = record({
+    companyKey: "quizizz",
+    companyName: "Quizizz",
+    phase: "Preparing",
+    status: "PREPARING",
+    sentAt: null,
+  });
+  const closed = record({
+    companyKey: "nutanix",
+    companyName: "Nutanix",
+    phase: "Closed",
+    status: "REJECTED",
+    closedReason: "REJECTED",
+  });
   const lanes = lanesFor([quiet, draft, closed]);
   return { quiet, closed, lanes, view: laneViews(lanes, laneWindow(lanes, NOW), NOW) };
 }
 
 it("draws each open company as a labelled lane with status, dots, Today and its next step", () => {
   const { quiet, view } = chart();
-  const html = renderToStaticMarkup(createElement(LanesChart, { ...view, openKey: null, detail: null }));
+  const html = renderToStaticMarkup(
+    createElement(LanesChart, { ...view, openKey: null, detail: null }),
+  );
   expect(html).toContain('role="group" aria-label="Flipkart"');
   expect(html).toContain("Quiet for 13 days");
   expect(html).toContain(">Today<");
   expect(html).toContain(`href="/applications?open=${quiet.id}&amp;outcome=followup"`);
-  expect(html).toContain('aria-label="Applied, 20 Sept; Automatic “we received it”, 20 Sept (We got it)"');
+  expect(html).toContain(
+    'aria-label="Applied, 20 Sept; Automatic “we received it”, 20 Sept (We got it)"',
+  );
   expect(html).toContain('data-testid="lanes-chart"');
   expect(html).toContain("Closed · 1");
   expect(html).not.toContain('aria-label="Nutanix"');
@@ -2032,7 +2243,11 @@ it("shows a closed lane when it is the open one, with its detail underneath", ()
   const { lanes, view } = chart();
   const nutanix = lanes.find((lane) => lane.company === "Nutanix")!;
   const html = renderToStaticMarkup(
-    createElement(LanesChart, { ...view, openKey: nutanix.key, detail: createElement("p", null, "DETAIL") }),
+    createElement(LanesChart, {
+      ...view,
+      openKey: nutanix.key,
+      detail: createElement("p", null, "DETAIL"),
+    }),
   );
   expect(html).toContain('aria-label="Nutanix"');
   expect(html).toContain("DETAIL");
@@ -2295,6 +2510,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ### Task 7: The lanes page, expanded lane and Emails drawer
 
 **Files:**
+
 - Modify: `src/features/applications/navigation.ts` (add `resolveLanesView`)
 - Create: `src/features/applications/views/lane-detail.tsx`
 - Create: `src/features/applications/views/emails-drawer.tsx`
@@ -2303,6 +2519,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - Create: `tests/application-lanes-view.test.ts`
 
 **Interfaces:**
+
 - Consumes: everything above; `readApplications`, `readMailTriage`, `readOpenMail`, `queueMailFrom`, `buildQueue`, `InboxStatus`, `EmailsView`, `OutcomeChips`, `PreparingControl`, `FollowUp`, `linkMailOnly`.
 - Produces:
   - `type LanesView = { open: string | null; mail: string | null; outcome: string | undefined; emails: boolean; notice: string | undefined }`
@@ -2453,7 +2670,12 @@ export function LaneDetail({
       <div className="flex min-w-0 flex-col gap-4">
         <div className="flex flex-wrap items-start justify-between gap-2">
           <p className="m-0 min-w-0 text-sm text-muted-foreground [overflow-wrap:anywhere]">
-            {[record.role, record.city, methodLabel[record.source] ?? "Applied directly", record.contact]
+            {[
+              record.role,
+              record.city,
+              methodLabel[record.source] ?? "Applied directly",
+              record.contact,
+            ]
               .filter(Boolean)
               .join(" · ")}
           </p>
@@ -2724,7 +2946,9 @@ export default async function Applications({
   const lanes = buildLanes({ records, items, pending: pendingMailFrom(triage.messages), now });
   const chart = laneViews(lanes, laneWindow(lanes, now), now);
   const openRecord = view.open ? records.find((record) => record.id === view.open) : undefined;
-  const openLane = openRecord ? lanes.find((lane) => lane.key === openRecord.companyKey) : undefined;
+  const openLane = openRecord
+    ? lanes.find((lane) => lane.key === openRecord.companyKey)
+    : undefined;
   let mail = null;
   let mailError: string | undefined;
   if (openRecord && view.mail !== null) {
@@ -2838,7 +3062,10 @@ Expected: exit 0. The old `next.tsx`, `records.tsx` and `tabs.tsx` files still c
 import { chromium } from "@playwright/test";
 const out = process.argv[2];
 const browser = await chromium.launch();
-for (const [width, tag] of [[1440, "desktop"], [390, "phone"]]) {
+for (const [width, tag] of [
+  [1440, "desktop"],
+  [390, "phone"],
+]) {
   const page = await (await browser.newContext({ viewport: { width, height: 900 } })).newPage();
   const errors = [];
   page.on("pageerror", (error) => errors.push(error.message));
@@ -2853,12 +3080,19 @@ for (const [width, tag] of [[1440, "desktop"], [390, "phone"]]) {
   await page.goto("http://127.0.0.1:3210/applications?emails=1", { waitUntil: "load" });
   await page.waitForTimeout(800);
   await page.screenshot({ path: `${out}/drawer-${tag}.png` });
-  console.log(tag, "errors:", errors, "overflow:", await page.evaluate(() => document.documentElement.scrollWidth > innerWidth));
+  console.log(
+    tag,
+    "errors:",
+    errors,
+    "overflow:",
+    await page.evaluate(() => document.documentElement.scrollWidth > innerWidth),
+  );
 }
 await browser.close();
 ```
 
 Copy it into `jobops/.lanes-shot.mjs` (so `@playwright/test` resolves), run `node .lanes-shot.mjs <scratchpad>`, then delete `.lanes-shot.mjs`. Check the PNGs:
+
 - lanes show Level AI and Oracle with "Applied · today"-style statuses, a Today line and a Next column
 - the open lane shows History, the chips and the follow-up control
 - the drawer opens from the right
@@ -2880,6 +3114,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ### Task 8: Remove the old tabs and snooze, and point links at lanes
 
 **Files:**
+
 - Delete: `src/features/applications/views/next.tsx`, `src/features/applications/views/records.tsx`, `src/features/applications/views/tabs.tsx`
 - Delete: `tests/application-next.test.ts`, `tests/application-records-view.test.ts`, `tests/application-navigation.test.ts`
 - Create: `tests/application-marks.test.ts`
@@ -2889,6 +3124,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - Modify: `src/components/app-shell.tsx`
 
 **Interfaces:**
+
 - Produces: `navigation.ts` exports only `laneHref`, `LanesView`, `resolveLanesView`. `record-actions.ts` no longer exports `snoozeQueueItem` / `unsnoozeQueueItem`.
 
 - [ ] **Step 1: Keep the round-ladder test.** Create `tests/application-marks.test.ts`:
@@ -2969,8 +3205,8 @@ sed -i '' 's#href="/applications?tab=emails"#href="/applications?emails=1"#' src
 Then in `src/components/app-shell.tsx` change the `emailsActive` condition `(pathname === "/applications" && searchParams.get("tab") === "emails")` to:
 
 ```ts
-    (pathname === "/applications" &&
-      (searchParams.get("emails") === "1" || searchParams.get("tab") === "emails"))
+pathname === "/applications" &&
+  (searchParams.get("emails") === "1" || searchParams.get("tab") === "emails");
 ```
 
 - [ ] **Step 6: Check nothing points at removed code**
@@ -2998,12 +3234,14 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ### Task 9: Lanes in browser tests
 
 **Files:**
+
 - Modify: `tests/e2e/helpers/records.ts`
 - Create: `tests/e2e/application-lanes.spec.ts`
 - Delete: `tests/e2e/application-next.spec.ts`, `tests/e2e/application-records.spec.ts`
 - Modify: `tests/e2e/applications.spec.ts`, `tests/e2e/simple-records.spec.ts`, `tests/e2e/action-home.spec.ts`
 
 **Interfaces:**
+
 - Consumes: the accessible structure from Tasks 6 and 7.
 - Produces: `seedRecord` accepts `title?: string`.
 
@@ -3054,7 +3292,9 @@ test("opening a lane records an OA without leaving the page", async ({ page }) =
   const company = `OA Lane ${Date.now()}`;
   const { applicationId } = await seedRecord({ company, source: "DIRECT", sentDaysAgo: 2 });
   await page.goto("/applications");
-  await lane(page, company).getByRole("link", { name: new RegExp(`^${company}`) }).click();
+  await lane(page, company)
+    .getByRole("link", { name: new RegExp(`^${company}`) })
+    .click();
   await expect(page).toHaveURL(new RegExp(`/applications\\?open=${applicationId}$`));
   const detail = page.getByRole("region", { name: `${company} timeline` });
   await detail.getByRole("button", { name: "Got an OA", exact: true }).click();
@@ -3066,13 +3306,27 @@ test("opening a lane records an OA without leaving the page", async ({ page }) =
   await expect(lane(page, company).getByRole("button", { name: /OA closes/ })).toBeVisible();
 });
 
-test("two roles at one company share a lane and the role switcher scopes outcomes", async ({ page }) => {
+test("two roles at one company share a lane and the role switcher scopes outcomes", async ({
+  page,
+}) => {
   const company = `Two Roles ${Date.now()}`;
-  const first = await seedRecord({ company, title: "Backend Engineer", source: "DIRECT", sentDaysAgo: 1 });
-  const second = await seedRecord({ company, title: "Platform Engineer", source: "DIRECT", sentDaysAgo: 3 });
+  const first = await seedRecord({
+    company,
+    title: "Backend Engineer",
+    source: "DIRECT",
+    sentDaysAgo: 1,
+  });
+  const second = await seedRecord({
+    company,
+    title: "Platform Engineer",
+    source: "DIRECT",
+    sentDaysAgo: 3,
+  });
   await page.goto("/applications");
   await expect(lane(page, company)).toHaveCount(1);
-  await expect(lane(page, company).getByTestId("lane-status")).toHaveText("Applied · yesterday · +1 role");
+  await expect(lane(page, company).getByTestId("lane-status")).toHaveText(
+    "Applied · yesterday · +1 role",
+  );
   await page.goto(`/applications?open=${first.applicationId}`);
   const roles = page.getByRole("navigation", { name: "Roles" });
   await roles.getByRole("link", { name: /Platform Engineer/ }).click();
@@ -3090,9 +3344,15 @@ test("a matched assessment email waits on its lane until Link it adds the OA", a
   const { applicationId } = await seedRecord({ company, source: "DIRECT", sentDaysAgo: 2 });
   const mailId = await seedMail({ subject, classification: "ASSESSMENT", recordId: applicationId });
   await page.goto("/applications");
-  await expect(lane(page, company).getByTestId("lane-status")).toHaveText("Applied · 2 days · new email");
-  await expect(lane(page, company).getByRole("button", { name: /Assessment invite · not added yet/ })).toBeVisible();
-  await lane(page, company).getByRole("link", { name: /^Link it/ }).click();
+  await expect(lane(page, company).getByTestId("lane-status")).toHaveText(
+    "Applied · 2 days · new email",
+  );
+  await expect(
+    lane(page, company).getByRole("button", { name: /Assessment invite · not added yet/ }),
+  ).toBeVisible();
+  await lane(page, company)
+    .getByRole("link", { name: /^Link it/ })
+    .click();
   await expect(page).toHaveURL(new RegExp(`open=${applicationId}&mail=${mailId}&outcome=oa$`));
   const detail = page.getByRole("region", { name: `${company} timeline` });
   await expect(detail.getByRole("button", { name: "Got an OA", exact: true })).toHaveAttribute(
@@ -3127,7 +3387,9 @@ test("old and stale links still land somewhere useful, and phones scroll the cha
   await page.goto("/applications");
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
   expect(
-    await page.getByTestId("lanes-chart").evaluate((element) => element.scrollWidth > element.clientWidth),
+    await page
+      .getByTestId("lanes-chart")
+      .evaluate((element) => element.scrollWidth > element.clientWidth),
   ).toBe(true);
 });
 ```
@@ -3168,7 +3430,7 @@ test("a quiet referral asks for a follow-up on its lane and recording one restar
 });
 ```
 
-  - Replace the whole test `"a follow-up date appears today and snoozing hides it until undone"` with:
+- Replace the whole test `"a follow-up date appears today and snoozing hides it until undone"` with:
 
 ```ts
 test("a follow-up date for today puts the company under Needs you", async ({ page }) => {
@@ -3188,46 +3450,46 @@ test("a follow-up date for today puts the company under Needs you", async ({ pag
 });
 ```
 
-  - In `"a record staged by the old dropdown still offers the right next steps"` replace the last three lines (from `await page.goto(\`/applications?tab=records…`) with:
+- In `"a record staged by the old dropdown still offers the right next steps"` replace the last three lines (from `await page.goto(\`/applications?tab=records…`) with:
 
 ```ts
-  await page.goto("/applications");
-  await expect(
-    page.getByRole("group", { name: company, exact: true }).getByTestId("lane-status"),
-  ).toHaveText("Interviewing");
+await page.goto("/applications");
+await expect(
+  page.getByRole("group", { name: company, exact: true }).getByTestId("lane-status"),
+).toHaveText("Interviewing");
 ```
 
 - [ ] **Step 5: Update `tests/e2e/simple-records.spec.ts`.** Replace
 
 ```ts
-  await page.goto(`/applications?tab=records&filter=all&q=${encodeURIComponent(company)}`);
-  await expect(page.getByText("Applied directly", { exact: true })).toHaveCount(0);
-  await expect(page.getByText(/Referral ask/).first()).toBeVisible();
+await page.goto(`/applications?tab=records&filter=all&q=${encodeURIComponent(company)}`);
+await expect(page.getByText("Applied directly", { exact: true })).toHaveCount(0);
+await expect(page.getByText(/Referral ask/).first()).toBeVisible();
 ```
 
 with
 
 ```ts
-  await page.goto("/applications");
-  await expect(
-    page.getByRole("group", { name: company, exact: true }).getByTestId("lane-status"),
-  ).toHaveText(/^Referral ask/);
+await page.goto("/applications");
+await expect(
+  page.getByRole("group", { name: company, exact: true }).getByTestId("lane-status"),
+).toHaveText(/^Referral ask/);
 ```
 
 and replace
 
 ```ts
-  await page.goto(`/applications?tab=records&filter=interviewing&q=${encodeURIComponent(company)}`);
-  await expect(page.getByRole("link", { name: company, exact: true })).toHaveCount(1);
+await page.goto(`/applications?tab=records&filter=interviewing&q=${encodeURIComponent(company)}`);
+await expect(page.getByRole("link", { name: company, exact: true })).toHaveCount(1);
 ```
 
 with
 
 ```ts
-  await page.goto("/applications");
-  const lane = page.getByRole("group", { name: company, exact: true });
-  await expect(lane).toHaveCount(1);
-  await expect(lane.getByTestId("lane-status")).toHaveText("Interviewing · round 1");
+await page.goto("/applications");
+const lane = page.getByRole("group", { name: company, exact: true });
+await expect(lane).toHaveCount(1);
+await expect(lane.getByTestId("lane-status")).toHaveText("Interviewing · round 1");
 ```
 
 - [ ] **Step 6: Update `tests/e2e/action-home.spec.ts`** for the new links (the `/inbox` redirect and Emails regions change in phase 2):
@@ -3260,6 +3522,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ### Task 10: Drawer contents
 
 **Files:**
+
 - Create: `src/features/applications/views/mail-sections.tsx`
 - Modify: `src/features/applications/views/inboxes.tsx`
 - Modify: `src/app/applications/page.tsx`
@@ -3268,6 +3531,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - Modify: `tests/inbox-status.test.ts`
 
 **Interfaces:**
+
 - Consumes: `TriageData`, `TriageMessage` (`features/mail/read`); `dismissMail`, `linkMailOnly`, `undoDismiss`; `RecordPicker`; `accountTone`.
 - Produces: `EmailsPanel({ data, records, inboxes, notice, accountIndex })` (server). It renders four sections:
   - `"Inboxes"`
@@ -3312,9 +3576,22 @@ it("lists only mail that is not on a lane, with one action per kind", () => {
     createElement(EmailsPanel, {
       data: {
         messages: [
-          message({ subject: "Matched OA", classification: "ASSESSMENT", bucket: "updates", record: { id: "r1", company: "Zscaler", role: "SDE" } }),
-          message({ subject: "Unmatched interview", classification: "INTERVIEW", bucket: "updates" }),
-          message({ subject: "InMobi pitch", classification: "RECRUITER_OUTREACH", bucket: "roles" }),
+          message({
+            subject: "Matched OA",
+            classification: "ASSESSMENT",
+            bucket: "updates",
+            record: { id: "r1", company: "Zscaler", role: "SDE" },
+          }),
+          message({
+            subject: "Unmatched interview",
+            classification: "INTERVIEW",
+            bucket: "updates",
+          }),
+          message({
+            subject: "InMobi pitch",
+            classification: "RECRUITER_OUTREACH",
+            bucket: "roles",
+          }),
           message({ subject: "12 new jobs", sender: "jobalerts@naukri.com" }),
           message({ subject: "We received it", classification: "APPLICATION_ACKNOWLEDGEMENT" }),
         ],
@@ -3349,7 +3626,9 @@ it("explains an unconfigured provider in plain words and keeps the variables in 
   const html = renderToStaticMarkup(
     createElement(InboxStatus, {
       connections: [],
-      configs: [{ slug: "gmail", label: "Gmail", configured: false, missing: ["GOOGLE_CLIENT_ID"] }],
+      configs: [
+        { slug: "gmail", label: "Gmail", configured: false, missing: ["GOOGLE_CLIENT_ID"] },
+      ],
       now: new Date(),
       count: 0,
     }),
@@ -3414,7 +3693,9 @@ export function EmailsPanel({
   notice?: string;
   accountIndex: Record<string, number>;
 }) {
-  const unmatched = data.messages.filter((message) => message.bucket === "updates" && !message.record);
+  const unmatched = data.messages.filter(
+    (message) => message.bucket === "updates" && !message.record,
+  );
   const roles = data.messages.filter((message) => message.bucket === "roles");
   const noise = data.messages.filter((message) => message.bucket === "noise");
   const card = (message: TriageMessage) => (
@@ -3463,7 +3744,12 @@ export function EmailsPanel({
       <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
         <span>{data.handled} handled</span>
         {data.lastDismissedId && (
-          <ActionForm feedback="inverse" action={undoDismiss} className="contents" pendingLabel="Restoring">
+          <ActionForm
+            feedback="inverse"
+            action={undoDismiss}
+            className="contents"
+            pendingLabel="Restoring"
+          >
             <input type="hidden" name="mailId" value={data.lastDismissedId} />
             <input type="hidden" name="dismissal" value={data.lastDismissalToken ?? ""} />
             <button className="border-0 bg-transparent p-0 text-link hover:underline">
@@ -3495,7 +3781,8 @@ function MailSection({
   return (
     <section aria-labelledby={`mail-${id}`} className="flex flex-col gap-2">
       <h3 id={`mail-${id}`} className="m-0 text-sm font-semibold">
-        {title} <span className="font-normal text-muted-foreground tabular-nums">· {rows.length}</span>
+        {title}{" "}
+        <span className="font-normal text-muted-foreground tabular-nums">· {rows.length}</span>
       </h3>
       <p className="m-0 text-xs text-muted-foreground">{note}</p>
       <ul className="m-0 flex list-none flex-col gap-2 p-0">
@@ -3522,13 +3809,18 @@ function MailCard({
         <p className="m-0 mb-1 flex min-w-0 items-start gap-1.5 text-xs text-muted-foreground">
           <span
             aria-hidden
-            className={cn("mt-1 size-2 shrink-0 rounded-full", accountTone(accountIndex[message.accountEmail] ?? 3))}
+            className={cn(
+              "mt-1 size-2 shrink-0 rounded-full",
+              accountTone(accountIndex[message.accountEmail] ?? 3),
+            )}
           />
           <span className="min-w-0 [overflow-wrap:anywhere]">{message.accountEmail}</span>
         </p>
       )}
       <p className="m-0 flex items-start justify-between gap-2 text-xs text-muted-foreground">
-        <span className="min-w-0 [overflow-wrap:anywhere]">{message.senderName || message.sender}</span>
+        <span className="min-w-0 [overflow-wrap:anywhere]">
+          {message.senderName || message.sender}
+        </span>
         <span className="shrink-0 tabular-nums">{formatDay(message.receivedAt)}</span>
       </p>
       <Link
@@ -3539,7 +3831,11 @@ function MailCard({
       </Link>
       <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
         {message.bucket === "updates" && (
-          <RecordPicker mailId={message.id} outcome={suggestedOutcome[message.classification]} records={records} />
+          <RecordPicker
+            mailId={message.id}
+            outcome={suggestedOutcome[message.classification]}
+            records={records}
+          />
         )}
         {message.bucket === "roles" && (
           <Button size="sm" className="h-8 rounded-full px-3" asChild>
@@ -3550,7 +3846,12 @@ function MailCard({
           </Button>
         )}
         {message.classification === "APPLICATION_ACKNOWLEDGEMENT" && message.record && (
-          <ActionForm feedback="inverse" action={linkMailOnly} className="contents" pendingLabel="Linking">
+          <ActionForm
+            feedback="inverse"
+            action={linkMailOnly}
+            className="contents"
+            pendingLabel="Linking"
+          >
             <input type="hidden" name="mailId" value={message.id} />
             <input type="hidden" name="recordId" value={message.record.id} />
             <Button size="sm" variant="outline" className="h-8 rounded-full px-3">
@@ -3558,7 +3859,12 @@ function MailCard({
             </Button>
           </ActionForm>
         )}
-        <ActionForm feedback="inverse" action={dismissMail} className="contents" pendingLabel="Dismissing">
+        <ActionForm
+          feedback="inverse"
+          action={dismissMail}
+          className="contents"
+          pendingLabel="Dismissing"
+        >
           <input type="hidden" name="mailId" value={message.id} />
           <Button size="sm" variant="ghost" className="h-8 rounded-full px-3">
             Dismiss
@@ -3575,28 +3881,21 @@ function MailCard({
   - replace the `<EmailsView … />` element with:
 
 ```tsx
-              <EmailsPanel
-                data={triage}
-                records={records.map((record) => ({
-                  id: record.id,
-                  label: `${record.companyName} · ${record.role}`,
-                }))}
-                inboxes={
-                  <InboxStatus
-                    connections={connections}
-                    configs={configs}
-                    now={now}
-                    count={decisions}
-                  />
-                }
-                accountIndex={Object.fromEntries(
-                  connections.map((connection, index) => [connection.email, index]),
-                )}
-                notice={view.emails ? view.notice : undefined}
-              />
+<EmailsPanel
+  data={triage}
+  records={records.map((record) => ({
+    id: record.id,
+    label: `${record.companyName} · ${record.role}`,
+  }))}
+  inboxes={<InboxStatus connections={connections} configs={configs} now={now} count={decisions} />}
+  accountIndex={Object.fromEntries(
+    connections.map((connection, index) => [connection.email, index]),
+  )}
+  notice={view.emails ? view.notice : undefined}
+/>
 ```
 
-  - then `git rm src/features/applications/views/emails.tsx`.
+- then `git rm src/features/applications/views/emails.tsx`.
 
 - [ ] **Step 6: Run the tests, typecheck and lint**
 
@@ -3622,6 +3921,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ### Task 11: Link elsewhere or dismiss matched mail from its lane
 
 **Files:**
+
 - Modify: `src/features/applications/views/lane-detail.tsx`
 - Modify: `src/features/applications/views/record-picker.tsx`
 - Modify: `src/features/mail/triage.ts` (`linkHref`)
@@ -3630,6 +3930,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - Modify: `tests/mail-triage.test.ts`, `tests/lane-return-actions.test.ts`
 
 **Interfaces:**
+
 - Consumes: `laneHref`, `safeReturnTo`, `withNotice`.
 - Produces:
   - `linkHref(message, recordId)` returns `laneHref(recordId, { mail, outcome })`.
@@ -3640,15 +3941,15 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - [ ] **Step 1: Write the failing tests.** In `tests/mail-triage.test.ts` change the three `linkHref` expectations to:
 
 ```ts
-    expect(linkHref({ id, classification: "ASSESSMENT" }, record)).toBe(
-      `/applications?open=${record}&mail=${id}&outcome=oa`,
-    );
-    expect(linkHref({ id, classification: "UNKNOWN" }, record)).toBe(
-      `/applications?open=${record}&mail=${id}`,
-    );
-    expect(linkHref({ id, classification: "APPLICATION_ACKNOWLEDGEMENT" }, record)).toBe(
-      `/applications?open=${record}&mail=${id}`,
-    );
+expect(linkHref({ id, classification: "ASSESSMENT" }, record)).toBe(
+  `/applications?open=${record}&mail=${id}&outcome=oa`,
+);
+expect(linkHref({ id, classification: "UNKNOWN" }, record)).toBe(
+  `/applications?open=${record}&mail=${id}`,
+);
+expect(linkHref({ id, classification: "APPLICATION_ACKNOWLEDGEMENT" }, record)).toBe(
+  `/applications?open=${record}&mail=${id}`,
+);
 ```
 
 In `tests/lane-return-actions.test.ts` change the triage import to `import { dismissMail, linkMailOnly } from "@/features/mail/triage-actions";` and append:
@@ -3674,11 +3975,11 @@ Expected: FAIL on the new URLs.
   - `src/features/mail/triage-actions.ts`: in `dismissMail` change `destination = emailsNotice(…)` to:
 
 ```ts
-    const notice = count
-      ? `Dismissed ${count} ${count === 1 ? "message" : "messages"}.`
-      : "These messages have already been handled.";
-    const back = safeReturnTo(formString(form, "returnTo"));
-    destination = back ? withNotice(back, notice) : emailsNotice(notice);
+const notice = count
+  ? `Dismissed ${count} ${count === 1 ? "message" : "messages"}.`
+  : "These messages have already been handled.";
+const back = safeReturnTo(formString(form, "returnTo"));
+destination = back ? withNotice(back, notice) : emailsNotice(notice);
 ```
 
 - [ ] **Step 4: Actions on pending entries.** In `lane-detail.tsx`:
@@ -3719,7 +4020,7 @@ Expected: FAIL on the new URLs.
                 ) : undefined,
 ```
 
-  - In `src/app/applications/page.tsx`, compute `const recordOptions = records.map((record) => ({ id: record.id, label: \`${record.companyName} · ${record.role}\` }));` once, use it for `EmailsPanel records={recordOptions}`, and pass `records={recordOptions}` to `<LaneDetail>`.
+- In `src/app/applications/page.tsx`, compute `const recordOptions = records.map((record) => ({ id: record.id, label: \`${record.companyName} · ${record.role}\` }));`once, use it for`EmailsPanel records={recordOptions}`, and pass `records={recordOptions}`to`<LaneDetail>`.
 
 - [ ] **Step 5: Run the tests, typecheck and lint**
 
@@ -3741,6 +4042,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ### Task 12: Point every Emails link at the drawer
 
 **Files:**
+
 - Modify (mechanical):
   - `src/app/inbox/page.tsx`
   - `src/app/mail/page.tsx`
@@ -3758,6 +4060,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - Modify: `tests/lane-return-actions.test.ts`
 
 **Interfaces:**
+
 - Produces: no `?tab=emails` remains in `src`; every Emails destination is `/applications?emails=1` (with `&notice=` where one exists).
 
 - [ ] **Step 1: Write the failing test.** Append to `tests/lane-return-actions.test.ts`:
@@ -3766,7 +4069,9 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 it("returns to the Emails drawer when dismissing without a lane", async () => {
   mocks.dismissMessages.mockResolvedValue(1);
   await dismissMail({}, form({ mailId }));
-  expect(mocks.redirect).toHaveBeenCalledWith("/applications?emails=1&notice=Dismissed%201%20message.");
+  expect(mocks.redirect).toHaveBeenCalledWith(
+    "/applications?emails=1&notice=Dismissed%201%20message.",
+  );
 });
 ```
 
@@ -3806,6 +4111,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ### Task 13: Mail on lanes and the drawer in browser tests
 
 **Files:**
+
 - Modify:
   - `tests/e2e/applications.spec.ts` (Emails tests, about lines 325–410)
   - `tests/e2e/action-home.spec.ts`
@@ -3816,19 +4122,20 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - Modify: `tests/e2e/application-lanes.spec.ts`
 
 **Interfaces:**
+
 - Consumes: the region and button names from Tasks 10 and 11.
 
 Name changes to apply throughout:
 
-| Old | New |
-| --- | --- |
-| `/applications?tab=emails` (goto and `toHaveURL`) | `/applications?emails=1` |
+| Old                                                 | New                                                                                                 |
+| --------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `/applications?tab=emails` (goto and `toHaveURL`)   | `/applications?emails=1`                                                                            |
 | region `/Updates on your records/` (unmatched mail) | region `"Replies we couldn't match"` (`getByRole("region", { name: "Replies we couldn't match" })`) |
-| region `/New roles for you/` | region `/^New roles/` |
-| region `/Probably noise/` | region `/^Job alerts and auto-replies/` |
-| button `/Dismiss all \d+/` | button `"Clear all"` |
-| `searchParams.get("tab")` is `"emails"` | `searchParams.get("emails")` is `"1"` |
-| matched update linked from the Emails tab | lane `Link it` (see Step 2) |
+| region `/New roles for you/`                        | region `/^New roles/`                                                                               |
+| region `/Probably noise/`                           | region `/^Job alerts and auto-replies/`                                                             |
+| button `/Dismiss all \d+/`                          | button `"Clear all"`                                                                                |
+| `searchParams.get("tab")` is `"emails"`             | `searchParams.get("emails")` is `"1"`                                                               |
+| matched update linked from the Emails tab           | lane `Link it` (see Step 2)                                                                         |
 
 `<section aria-labelledby>` with a heading is exposed as a region named by the heading text, which includes the `· N` count. Use a regex anchored at the start (`/^Replies we couldn't match/`).
 
@@ -3843,11 +4150,11 @@ In `tests/e2e/mail-reader.spec.ts`, also replace `expect(destination.searchParam
 - [ ] **Step 2: Matched mail starts from the lane.** In `tests/e2e/applications.spec.ts`, the test that seeds a record named `Mail Link Co ${Date.now()}` (held in `company`) and a matched mail opens Emails, then clicks **Link and update** inside the "Updates on your records" region. Replace that `goto` and the whole click chain (from `page.getByRole("region", { name: /Updates on your records/ })` through `.click()`) with:
 
 ```ts
-  await page.goto("/applications");
-  await page
-    .getByRole("group", { name: company, exact: true })
-    .getByRole("link", { name: /^Link it/ })
-    .click();
+await page.goto("/applications");
+await page
+  .getByRole("group", { name: company, exact: true })
+  .getByRole("link", { name: /^Link it/ })
+  .click();
 ```
 
 Keep the rest of that test: `Linking mail: ${subject}` is still shown in the lane detail. If it later navigates to the record page for History, keep that navigation as is.
@@ -3868,20 +4175,32 @@ The `Dismissed N messages` status text is unchanged.
 (use `"Outlook isn't set up on this computer yet."` for the Outlook button) and add:
 
 ```ts
-  await page.getByText("Setup details").first().click();
-  await expect(page.getByText(/Set GOOGLE_CLIENT_ID, .* in \.env, then restart the app\./)).toBeVisible();
+await page.getByText("Setup details").first().click();
+await expect(
+  page.getByText(/Set GOOGLE_CLIENT_ID, .* in \.env, then restart the app\./),
+).toBeVisible();
 ```
 
 - [ ] **Step 5: Add drawer and lane coverage** to `tests/e2e/application-lanes.spec.ts`:
 
 ```ts
-test("the Emails drawer links an unmatched reply into its lane and clears alerts", async ({ page }) => {
+test("the Emails drawer links an unmatched reply into its lane and clears alerts", async ({
+  page,
+}) => {
   const company = `Drawer Lane ${Date.now()}`;
   const subject = `${company} interview`;
   const { applicationId } = await seedRecord({ company, source: "DIRECT", sentDaysAgo: 3 });
   await seedMail({ subject, classification: "INTERVIEW" });
-  await seedMail({ subject: `${company} alert one`, sender: "jobalerts@naukri.com", classification: "UNKNOWN" });
-  await seedMail({ subject: `${company} alert two`, sender: "jobalerts@naukri.com", classification: "UNKNOWN" });
+  await seedMail({
+    subject: `${company} alert one`,
+    sender: "jobalerts@naukri.com",
+    classification: "UNKNOWN",
+  });
+  await seedMail({
+    subject: `${company} alert two`,
+    sender: "jobalerts@naukri.com",
+    classification: "UNKNOWN",
+  });
   await page.goto("/applications");
   await page.getByRole("button", { name: /^Emails/ }).click();
   const drawer = page.getByRole("dialog", { name: "Emails" });
@@ -3896,7 +4215,9 @@ test("the Emails drawer links an unmatched reply into its lane and clears alerts
     .getByRole("region", { name: /^Job alerts and auto-replies/ })
     .getByRole("button", { name: "Clear all", exact: true })
     .click();
-  await expect(page.getByRole("status").filter({ hasText: /Dismissed \d+ messages/ })).toBeVisible();
+  await expect(
+    page.getByRole("status").filter({ hasText: /Dismissed \d+ messages/ }),
+  ).toBeVisible();
   await expect(drawer.getByText(`${company} alert one`)).toHaveCount(0);
 });
 
@@ -3905,12 +4226,16 @@ test("a wrongly matched email can be dismissed from its lane", async ({ page }) 
   const { applicationId } = await seedRecord({ company, source: "DIRECT", sentDaysAgo: 2 });
   await seedMail({ subject: `${company} offer`, classification: "OFFER", recordId: applicationId });
   await page.goto(`/applications?open=${applicationId}`);
-  const history = page.getByRole("region", { name: `${company} timeline` }).getByRole("region", { name: "History" });
+  const history = page
+    .getByRole("region", { name: `${company} timeline` })
+    .getByRole("region", { name: "History" });
   await history.getByRole("button", { name: "Dismiss", exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`open=${applicationId}&notice=`));
   await expect(page.getByRole("status").filter({ hasText: "Dismissed 1 message." })).toBeVisible();
   await expect(
-    page.getByRole("group", { name: company, exact: true }).getByRole("button", { name: /not added yet/ }),
+    page
+      .getByRole("group", { name: company, exact: true })
+      .getByRole("button", { name: /not added yet/ }),
   ).toHaveCount(0);
 });
 ```
@@ -3937,12 +4262,14 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ### Task 14: Record history on the shared timeline, readable dates, collapsed notes
 
 **Files:**
+
 - Modify: `src/features/applications/views/detail.tsx`
 - Create: `src/features/applications/views/notes-text.tsx`
 - Create: `tests/application-notes-text.test.ts`
 - Modify: `tests/e2e/applications.spec.ts`
 
 **Interfaces:**
+
 - Consumes: `Timeline` (Task 5), `eventTone`, `clip` (Task 2).
 - Produces: `NotesText({ text }: { text: string })` (client); the record page keeps its `History` region, the `phase-label` test id and the "Add to history" form.
 
@@ -3961,7 +4288,9 @@ it("clamps long notes to four lines behind Show all", () => {
 });
 
 it("shows short notes in full and says when there are none", () => {
-  expect(renderToStaticMarkup(createElement(NotesText, { text: "Short note" }))).not.toContain("Show all");
+  expect(renderToStaticMarkup(createElement(NotesText, { text: "Short note" }))).not.toContain(
+    "Show all",
+  );
   expect(renderToStaticMarkup(createElement(NotesText, { text: "" }))).toContain("No notes yet.");
 });
 ```
@@ -4013,48 +4342,48 @@ export function NotesText({ text }: { text: string }) {
   - Replace the `const history = [...]` block with:
 
 ```tsx
-  const linkedMailIds = new Set(
-    record.events
-      .map((event) => event.payload.mailMessageId)
-      .filter((value): value is string => typeof value === "string"),
-  );
-  const history = [
-    ...record.events.map((event) => ({
-      key: event.id,
-      at: event.occurredAt,
-      tone: eventTone(event.eventType, typeof event.payload.mailMessageId === "string") as DotTone,
-      label: event.summary,
+const linkedMailIds = new Set(
+  record.events
+    .map((event) => event.payload.mailMessageId)
+    .filter((value): value is string => typeof value === "string"),
+);
+const history = [
+  ...record.events.map((event) => ({
+    key: event.id,
+    at: event.occurredAt,
+    tone: eventTone(event.eventType, typeof event.payload.mailMessageId === "string") as DotTone,
+    label: event.summary,
+    detail: "",
+    tags: [] as string[],
+  })),
+  ...record.linkedMail
+    .filter((mail) => !linkedMailIds.has(mail.id))
+    .map((mail) => ({
+      key: mail.id,
+      at: mail.receivedAt,
+      tone: "mail" as DotTone,
+      label: clip(mail.subject, 200),
       detail: "",
       tags: [] as string[],
+      href: `/mail/${mail.id}`,
     })),
-    ...record.linkedMail
-      .filter((mail) => !linkedMailIds.has(mail.id))
-      .map((mail) => ({
-        key: mail.id,
-        at: mail.receivedAt,
-        tone: "mail" as DotTone,
-        label: clip(mail.subject, 200),
+  ...linked
+    .filter((other) => isOutreach(other.source))
+    .flatMap((other) =>
+      other.events.map((event) => ({
+        key: event.id,
+        at: event.occurredAt,
+        tone: eventTone(event.eventType, false),
+        label: event.summary,
         detail: "",
-        tags: [] as string[],
-        href: `/mail/${mail.id}`,
+        tags: [methodLabel[other.source] ?? "Linked record"],
       })),
-    ...linked
-      .filter((other) => isOutreach(other.source))
-      .flatMap((other) =>
-        other.events.map((event) => ({
-          key: event.id,
-          at: event.occurredAt,
-          tone: eventTone(event.eventType, false),
-          label: event.summary,
-          detail: "",
-          tags: [methodLabel[other.source] ?? "Linked record"],
-        })),
-      ),
-  ];
+    ),
+];
 ```
 
-  - In the History section, replace the whole `<ol className="m-0 list-none space-y-4 p-0">…</ol>` with `<Timeline entries={history} now={now} />`.
-  - In the Notes section, replace `<p className="m-0 text-sm whitespace-pre-wrap text-muted-foreground [overflow-wrap:anywhere]">{record.notes || "No notes yet."}</p>` with `<NotesText text={record.notes} />`.
+- In the History section, replace the whole `<ol className="m-0 list-none space-y-4 p-0">…</ol>` with `<Timeline entries={history} now={now} />`.
+- In the Notes section, replace `<p className="m-0 text-sm whitespace-pre-wrap text-muted-foreground [overflow-wrap:anywhere]">{record.notes || "No notes yet."}</p>` with `<NotesText text={record.notes} />`.
 
 - [ ] **Step 5: Add a browser check.** Append to `tests/e2e/applications.spec.ts`:
 
@@ -4103,20 +4432,20 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 ## Spec coverage
 
-| Spec | Task |
-| --- | --- |
-| §1 page, params, legacy links, empty state | 7, 8, 12 |
-| §2.1 grouping by company and aliases | 1 |
-| §2.2 lead and status labels | 1 |
-| §2.3 dots | 2 |
-| §2.4 next column and actions | 2, 6 |
-| §2.5 order and groups, closed toggle | 2, 6 |
-| §2.6 window, ticks, stacks, readout, phone | 3, 6, 9 |
-| §2.7 expanded lane, role switcher, chips, follow-up | 4, 7 |
-| §3 mail on lanes: Link it / Add to timeline / Link elsewhere / Dismiss | 2, 7, 11 |
-| §4 Emails drawer | 7, 10 |
-| §5 record page | 14 |
-| §6 routes and links | 8, 12 |
-| §7 code layout and removals | 7, 8, 10 |
-| §8 errors and edge cases | 3, 7, 9 |
-| §9 testing | every task; browser in 9, 13, 14 |
+| Spec                                                                   | Task                             |
+| ---------------------------------------------------------------------- | -------------------------------- |
+| §1 page, params, legacy links, empty state                             | 7, 8, 12                         |
+| §2.1 grouping by company and aliases                                   | 1                                |
+| §2.2 lead and status labels                                            | 1                                |
+| §2.3 dots                                                              | 2                                |
+| §2.4 next column and actions                                           | 2, 6                             |
+| §2.5 order and groups, closed toggle                                   | 2, 6                             |
+| §2.6 window, ticks, stacks, readout, phone                             | 3, 6, 9                          |
+| §2.7 expanded lane, role switcher, chips, follow-up                    | 4, 7                             |
+| §3 mail on lanes: Link it / Add to timeline / Link elsewhere / Dismiss | 2, 7, 11                         |
+| §4 Emails drawer                                                       | 7, 10                            |
+| §5 record page                                                         | 14                               |
+| §6 routes and links                                                    | 8, 12                            |
+| §7 code layout and removals                                            | 7, 8, 10                         |
+| §8 errors and edge cases                                               | 3, 7, 9                          |
+| §9 testing                                                             | every task; browser in 9, 13, 14 |

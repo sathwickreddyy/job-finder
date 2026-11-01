@@ -776,10 +776,7 @@ export const mailTracking = pgTable(
     uniqueIndex("mail_tracking_identity_idx").on(t.provider, t.accountEmail, t.providerMessageId),
     index("mail_tracking_message_idx").on(t.messageId),
     index("mail_tracking_received_idx").on(t.receivedAt),
-    check(
-      "mail_tracking_disposition_check",
-      sql`${t.disposition} IN ('kept','excluded')`,
-    ),
+    check("mail_tracking_disposition_check", sql`${t.disposition} IN ('kept','excluded')`),
   ],
 );
 

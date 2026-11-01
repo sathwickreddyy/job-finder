@@ -37,7 +37,7 @@ export function SnackbarProvider({ children }: { children: ReactNode }) {
   return (
     <SnackbarContext.Provider value={value}>
       {children}
-      {/* The region stays on the page: screen readers announce snacks added to a live region that already exists. */}
+      {/* Stays on the page so screen readers announce each snack added inside it. */}
       <div
         role="status"
         aria-live="polite"
@@ -73,9 +73,7 @@ export function useSnackbar() {
 
 export function SnackbarView({ message, action }: Snack) {
   return (
-    <div
-      className="reveal pointer-events-auto flex max-w-full items-center gap-3 rounded-2xl bg-foreground py-2 pr-2 pl-4 text-sm text-background shadow-surface"
-    >
+    <div className="reveal pointer-events-auto flex max-w-full items-center gap-3 rounded-2xl bg-foreground py-2 pr-2 pl-4 text-sm text-background shadow-surface">
       <CircleCheck aria-hidden size={18} className="shrink-0" />
       <span className="min-w-0 py-1.5">{message}</span>
       {action && (

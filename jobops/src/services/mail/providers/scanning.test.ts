@@ -30,19 +30,17 @@ describe("all-folder provider scans", () => {
   it("reports Gmail quota errors without exposing provider response text", async () => {
     vi.stubGlobal(
       "fetch",
-      vi
-        .fn()
-        .mockResolvedValue(
-          Response.json(
-            {
-              error: {
-                message: "sensitive provider detail",
-                errors: [{ reason: "userRateLimitExceeded" }],
-              },
+      vi.fn().mockResolvedValue(
+        Response.json(
+          {
+            error: {
+              message: "sensitive provider detail",
+              errors: [{ reason: "userRateLimitExceeded" }],
             },
-            { status: 403 },
-          ),
+          },
+          { status: 403 },
         ),
+      ),
     );
     await expect(gmail.scanMail(connection, window, [])).rejects.toThrow("rate limit");
   });

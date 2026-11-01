@@ -1,6 +1,5 @@
 // Zero-width characters, soft hyphens and similar marks that marketing mail pads its first line with.
-const invisible =
-  /[­͏؜ᅟᅠ឴឵᠎​-‏‪-‮⁠-⁯﻿]/g;
+const invisible = /[­͏؜ᅟᅠ឴឵᠎​-‏‪-‮⁠-⁯﻿]/g;
 const greeting =
   /^(hi|hello|hey|dear|greetings|good (morning|afternoon|evening))\b[^.!?]{0,40}[,!:]?$/i;
 

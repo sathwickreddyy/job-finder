@@ -4,16 +4,16 @@ Status: approved 2026-10-31, with the gallery picks below.
 
 ## Picks from the live gallery (`/gallery/mail-search`, 2026-10-31)
 
-| Section                      | Pick | What it means                                                                                                    |
-| ---------------------------- | ---- | ---------------------------------------------------------------------------------------------------------------- |
-| Tag colours                  | B    | Colour by stage: five families (before applying, applied, interviewing, offer and joining, rejected) plus grey Other; icon and words name the kind. |
-| Job-mail feed                | B    | Two lines with a preview: company and sender on top, tag pill and subject below, then the first line of the email. |
-| What needs you soon          | A    | A "Coming up" strip of cards above the feed, sorted by due date, deadline as the headline; scrolls sideways on a phone. |
-| Company status               | A    | A tonal status pill with one line of detail; previous employers get their own badge.                             |
-| Company search panel         | C    | Rules as rows (addresses, domains, names and keywords, never include, inboxes, time frame), each showing how many emails it kept last search, plus the last search summary. |
-| Watching a search run        | B    | One lane per inbox, side by side (stacked on a phone), each with its state, counts, exact search and its own results streaming in. |
-| Fetch new mail               | A    | The button with "Since last fetch / Last N days" beside it, always visible, the coverage sentence under it, then per-inbox progress. |
-| Applications                 | C    | One lane per application on a four-week calendar with a Today line: emails placed by date as tag icons, applied dot, and dashed rings for what's due; pressing an email shows it below. Previous jobs in a collapsed list under the lanes. |
+| Section               | Pick | What it means                                                                                                                                                                                                                              |
+| --------------------- | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Tag colours           | B    | Colour by stage: five families (before applying, applied, interviewing, offer and joining, rejected) plus grey Other; icon and words name the kind.                                                                                        |
+| Job-mail feed         | B    | Two lines with a preview: company and sender on top, tag pill and subject below, then the first line of the email.                                                                                                                         |
+| What needs you soon   | A    | A "Coming up" strip of cards above the feed, sorted by due date, deadline as the headline; scrolls sideways on a phone.                                                                                                                    |
+| Company status        | A    | A tonal status pill with one line of detail; previous employers get their own badge.                                                                                                                                                       |
+| Company search panel  | C    | Rules as rows (addresses, domains, names and keywords, never include, inboxes, time frame), each showing how many emails it kept last search, plus the last search summary.                                                                |
+| Watching a search run | B    | One lane per inbox, side by side (stacked on a phone), each with its state, counts, exact search and its own results streaming in.                                                                                                         |
+| Fetch new mail        | A    | The button with "Since last fetch / Last N days" beside it, always visible, the coverage sentence under it, then per-inbox progress.                                                                                                       |
+| Applications          | C    | One lane per application on a four-week calendar with a Today line: emails placed by date as tag icons, applied dot, and dashed rings for what's due; pressing an email shows it below. Previous jobs in a collapsed list under the lanes. |
 
 The gallery stays at `/gallery/mail-search` as the record of these picks. The colour-by-stage pairs move from the gallery into `globals.css` as `--tag-*` tokens.
 Revises `2026-10-30-shared-mail-foundation-design.md` (§2 fetch window, §4 removal of company and provider search) and `2026-10-31-company-timeline-design.md` (§4 tags, §5 Mail view). Replaces the direction of piece 3 ("Applications lane previews").
@@ -65,18 +65,18 @@ Three separate causes, all confirmed:
 
 Tags stay derived from `mail_messages.classification` (`tags.ts`); there is still no tag column.
 
-| Tag                         | Classifications                             | Meaning                                                                |
-| --------------------------- | ------------------------------------------- | ---------------------------------------------------------------------- |
-| **Application**             | `APPLICATION_ACKNOWLEDGEMENT`, `FOLLOW_UP`  | Received, submitted, status updates about an application               |
-| **Referral**                | `REFERRAL` (new)                            | Referral submitted, received or requested by someone the user contacted |
-| **Interview call**          | `INTERVIEW`, `ASSESSMENT`                   | An invitation or scheduling for a round, including an OA               |
-| **Interview process**       | `INTERVIEW_UPDATE` (new)                    | Confirmations, reschedules, prep material, feedback, next steps        |
-| **Offer**                   | `OFFER`                                     | Offer letters and offer discussions                                    |
-| **Rejection**               | `REJECTION`                                 | Not selected, not moving forward                                       |
-| **Background verification** | `BACKGROUND_CHECK` (new)                    | BGV requests and reminders (First Advantage, HireRight, AuthBridge…)   |
-| **Joining**                 | `ONBOARDING` (new)                          | Joining date, onboarding, pre-joining formalities, first-day details   |
-| **Opportunity**             | `RECRUITER_OUTREACH`                        | A recruiter reaching out about a role (my call; see Decisions)         |
-| **Other**                   | `UNKNOWN`                                   | Job mail kept for a company that the sorter could not categorise       |
+| Tag                         | Classifications                            | Meaning                                                                 |
+| --------------------------- | ------------------------------------------ | ----------------------------------------------------------------------- |
+| **Application**             | `APPLICATION_ACKNOWLEDGEMENT`, `FOLLOW_UP` | Received, submitted, status updates about an application                |
+| **Referral**                | `REFERRAL` (new)                           | Referral submitted, received or requested by someone the user contacted |
+| **Interview call**          | `INTERVIEW`, `ASSESSMENT`                  | An invitation or scheduling for a round, including an OA                |
+| **Interview process**       | `INTERVIEW_UPDATE` (new)                   | Confirmations, reschedules, prep material, feedback, next steps         |
+| **Offer**                   | `OFFER`                                    | Offer letters and offer discussions                                     |
+| **Rejection**               | `REJECTION`                                | Not selected, not moving forward                                        |
+| **Background verification** | `BACKGROUND_CHECK` (new)                   | BGV requests and reminders (First Advantage, HireRight, AuthBridge…)    |
+| **Joining**                 | `ONBOARDING` (new)                         | Joining date, onboarding, pre-joining formalities, first-day details    |
+| **Opportunity**             | `RECRUITER_OUTREACH`                       | A recruiter reaching out about a role (my call; see Decisions)          |
+| **Other**                   | `UNKNOWN`                                  | Job mail kept for a company that the sorter could not categorise        |
 
 - Add the four classifications to `mailClassifications` and the Postgres enum (`ALTER TYPE … ADD VALUE`).
 - Each tag gets a Material tonal pair (`--tag-<id>` and `--tag-<id>-container`) in `globals.css`, light and dark. Exact colours are picked in the gallery; avoid cyan, brown, beige and green-tinted surfaces per the colour preference.
