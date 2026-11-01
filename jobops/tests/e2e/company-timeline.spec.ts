@@ -138,6 +138,7 @@ test("search narrows rail and timeline", async ({ page }) => {
 
 const pencil = (page: Page, subject: string) =>
   page.locator("li", { has: mailRow(page, subject) }).getByRole("button", { name: "Edit tag" });
+const notifications = (page: Page) => page.getByRole("region", { name: "Notifications" });
 
 test("Edit tag: pick, confirm, Undo", async ({ page }) => {
   const { company, subject } = await companyWithMail("INTERVIEW");
@@ -148,17 +149,26 @@ test("Edit tag: pick, confirm, Undo", async ({ page }) => {
   const dialog = page.getByRole("dialog");
   await dialog.getByRole("button", { name: /Application rejected/ }).click();
   await expect(dialog.getByRole("heading", { name: "Change this email's tag?" })).toBeVisible();
+  await expect(dialog).toContainText(
+    `If it's about your one live application at ${company}, that application is marked rejected and this email is handled.`,
+  );
   await dialog.getByRole("button", { name: "Yes, change tag" }).click();
   await expect(dialog).toBeHidden();
   await expect(mailRow(page, subject)).toContainText("Application rejected");
-  // Retagging is not handling: the email still needs you.
-  await expect(mailRow(page, subject)).toContainText("needs you");
-  const snack = page.getByRole("status").filter({ hasText: "Tagged as Application rejected" });
-  await expect(snack).toBeVisible();
-  await snack.getByRole("button", { name: "Undo" }).click();
+  // The mail rule records the rejection on the company's one live application.
+  await expect(mailRow(page, subject)).not.toContainText("needs you");
+  await expect(notifications(page)).toContainText(
+    "Tagged as Application rejected. Marked rejected.",
+  );
+  await notifications(page).getByRole("button", { name: "Undo" }).click();
+  await expect(notifications(page)).toContainText(
+    "Tag restored. The outcome it recorded was undone.",
+  );
   await expect(mailRow(page, subject)).toContainText("Interview call");
+  await expect(mailRow(page, subject)).toContainText("needs you");
   await page.reload();
   await expect(mailRow(page, subject)).toContainText("Interview call");
+  await expect(mailRow(page, subject)).toContainText("needs you");
 });
 
 test("keyboard: tab to the pencil, Escape cancels", async ({ page }) => {
@@ -185,11 +195,8 @@ test("Undo works after the row leaves a tag filter", async ({ page }) => {
   await dialog.getByRole("button", { name: /Rejected after interview/ }).click();
   await dialog.getByRole("button", { name: "Yes, change tag" }).click();
   await expect(mailRow(page, subject)).toHaveCount(0);
-  await page
-    .getByRole("status")
-    .filter({ hasText: "Tagged as Rejected after interview" })
-    .getByRole("button", { name: "Undo" })
-    .click();
+  await expect(notifications(page)).toContainText("Tagged as Rejected after interview");
+  await notifications(page).getByRole("button", { name: "Undo" }).click();
   await expect(mailRow(page, subject)).toContainText("Interview call");
 });
 

@@ -65,6 +65,14 @@ function Header({ title, item }: { title: string; item: MailItem }) {
   );
 }
 
+/** What the mail rule does to the company's one live application when an email gets this tag. */
+const ruleEffect: Partial<Record<MailTag, string>> = {
+  application: "that application is marked acknowledged",
+  applicationRejected: "that application is marked rejected",
+  interviewRejected: "that application is marked rejected",
+  offer: "an offer is recorded on that application",
+};
+
 /** Step 2: what will and won't change, then the one button that changes it. */
 export function ConfirmChange({
   item,
@@ -81,6 +89,11 @@ export function ConfirmChange({
   onBack: () => void;
   onConfirm: () => void;
 }) {
+  // A retag first undoes an outcome the rule recorded from this email, then the rule reads the
+  // new tag. It never overrides the user's own decisions, so a handled or linked email keeps them.
+  const undoesFirst = !!item.autoOutcome?.undoable && !item.autoOutcome.undone;
+  const untouched = item.attention === "open" && !item.application && !item.outcome;
+  const rule = item.company && (undoesFirst || untouched) ? ruleEffect[next] : undefined;
   return (
     <>
       <Header title="Change this email's tag?" item={item} />
@@ -94,10 +107,20 @@ export function ConfirmChange({
           <li>
             It moves from {tagLabel[item.tag]} to {tagLabel[next]} in the feed, filters and counts.
           </li>
-          <li>
-            It stays where it is: same company, same application,{" "}
-            {item.attention === "handled" ? "stays handled" : "still needs you"}.
-          </li>
+          {undoesFirst && <li>The outcome it recorded on your application is undone first.</li>}
+          {rule ? (
+            <li>
+              If it&apos;s about your one live application at {item.company?.name}, {rule} and this
+              email is handled. Undo puts it back.
+            </li>
+          ) : (
+            !undoesFirst && (
+              <li>
+                It stays where it is: same company, same application,{" "}
+                {item.attention === "handled" ? "stays handled" : "still needs you"}.
+              </li>
+            )
+          )}
           <li>You can change it again later.</li>
         </ul>
       </div>
@@ -170,8 +193,9 @@ export function EditTag({ item, className }: { item: MailItem; className?: strin
       action: {
         label: "Undo",
         onClick: async () => {
+          // Undo can also change the application, so the result is always said.
           const undone = await restoreMailKind(item.id, previous);
-          if (undone.error) show({ message: undone.error });
+          show({ message: undone.error ?? undone.success ?? "Tag restored." });
         },
       },
     });
