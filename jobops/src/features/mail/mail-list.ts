@@ -32,6 +32,10 @@ const outcome = sql<
 >`(SELECT e.payload->>'outcome' FROM application_events e WHERE e.payload->>'mailMessageId' = "mail_messages"."id"::text AND e.payload->>'outcome' IS NOT NULL ORDER BY e.created_at DESC LIMIT 1)`;
 /** True once the user undid an outcome the mail rule recorded from it. */
 const autoUndone = sql<boolean>`EXISTS (SELECT 1 FROM mail_events me WHERE me.mail_message_id = "mail_messages"."id" AND me.details->>'autoUndone' = 'true')`;
+/** The inbox of the earlier copy this email follows, when the mail rule settled it as a copy. */
+const copyOf = sql<
+  string | null
+>`(SELECT coalesce(c.account_email, '') FROM mail_events me JOIN mail_messages c ON c.id::text = me.details->>'copyOf' WHERE me.mail_message_id = "mail_messages"."id" LIMIT 1)`;
 /** Null unless the mail rule recorded an outcome from it; true while nothing newer was recorded. */
 const autoUndoable = sql<
   boolean | null
@@ -88,7 +92,7 @@ export async function listMail(
   }
   const [rows, [counted]] = await Promise.all([
     db
-      .select({ message: mailMessages, outcome, autoUndoable, autoUndone })
+      .select({ message: mailMessages, outcome, autoUndoable, autoUndone, copyOf })
       .from(mailMessages)
       .where(and(...page))
       .orderBy(desc(mailMessages.receivedAt), desc(mailMessages.id))
@@ -101,8 +105,8 @@ export async function listMail(
   const lookup = mailLookup(context);
   const items = rows
     .slice(0, pageSize)
-    .map(({ message, outcome, autoUndoable, autoUndone }) =>
-      toMailItem({ ...message, outcome, autoUndoable, autoUndone }, lookup),
+    .map(({ message, outcome, autoUndoable, autoUndone, copyOf }) =>
+      toMailItem({ ...message, outcome, autoUndoable, autoUndone, copyOf }, lookup),
     );
   const last = items.at(-1);
   return {
@@ -116,7 +120,7 @@ export async function listMail(
 export async function readMailItem(id: string, context?: MailContext): Promise<MailItem> {
   const [row] = z.uuid().safeParse(id).success
     ? await db
-        .select({ message: mailMessages, outcome, autoUndoable, autoUndone })
+        .select({ message: mailMessages, outcome, autoUndoable, autoUndone, copyOf })
         .from(mailMessages)
         .where(and(eq(mailMessages.id, id), notExcluded))
     : [];
@@ -127,6 +131,7 @@ export async function readMailItem(id: string, context?: MailContext): Promise<M
       outcome: row.outcome,
       autoUndoable: row.autoUndoable,
       autoUndone: row.autoUndone,
+      copyOf: row.copyOf,
     },
     mailLookup(context ?? (await loadMailContext())),
   );

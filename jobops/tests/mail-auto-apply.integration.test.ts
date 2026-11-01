@@ -22,7 +22,7 @@ import {
   undoAutoOutcome,
 } from "@/features/mail/auto-apply";
 import { loadMailContext, type MailContext } from "@/features/mail/context";
-import { updateMail } from "@/features/mail/handle-service";
+import { updateMail, updateMailKind } from "@/features/mail/handle-service";
 import { ingestPage } from "@/features/mail/ingest";
 import { readMailItem } from "@/features/mail/mail-list";
 import { unlinkMail } from "@/features/mail/triage-actions";
@@ -620,4 +620,240 @@ describe.skipIf(!dbTests)("auto-applying mail", () => {
     expect(await auto(mail.id)).toEqual({ kind: "ask", applicationId: app.id });
     expect((await record(app.id)).status).toBe("APPLIED");
   });
+
+  it("retagging an automatic acknowledgement away puts Applied back", async () => {
+    const { app, mail } = await fixture("APPLICATION_ACKNOWLEDGEMENT");
+    await auto(mail.id);
+    expect((await record(app.id)).status).toBe("ACKNOWLEDGED");
+    await updateMail(mail.id, { classification: "FOLLOW_UP" }, NOW);
+    expect((await record(app.id)).status).toBe("APPLIED");
+    expect(await eventsFor(mail.id)).toEqual([]);
+  });
+
+  it("an acknowledgement recorded by hand keeps Acknowledged after the automatic one goes", async () => {
+    const { app, mail } = await fixture("APPLICATION_ACKNOWLEDGEMENT");
+    await auto(mail.id);
+    await db.insert(applicationEvents).values({
+      applicationId: app.id,
+      eventType: "ACKNOWLEDGEMENT_RECEIVED",
+      occurredAt: new Date("2026-10-21T05:00:00Z"),
+      summary: "Application acknowledged",
+    });
+    await updateMail(mail.id, { classification: "FOLLOW_UP" }, NOW);
+    expect((await record(app.id)).status).toBe("ACKNOWLEDGED");
+  });
+
+  it("unlinking an automatic acknowledgement puts Applied back", async () => {
+    const { app, mail } = await fixture("APPLICATION_ACKNOWLEDGEMENT");
+    await auto(mail.id);
+    const form = new FormData();
+    form.set("mailId", mail.id);
+    form.set("recordId", app.id);
+    await unlinkMail({}, form);
+    expect((await record(app.id)).status).toBe("APPLIED");
+    expect(await message(mail.id)).toMatchObject({ linkedApplicationId: null });
+  });
+
+  it("after Undo, switching between the two rejection tags keeps the outcome undone", async () => {
+    const { app, mail } = await fixture("REJECTION");
+    await auto(mail.id);
+    await run((tx) => undoAutoOutcome(tx, mail.id, NOW));
+    const { effect } = await updateMailKind(
+      mail.id,
+      { classification: "INTERVIEW_REJECTION" },
+      NOW,
+    );
+    expect(effect).toEqual({ kind: "info", applicationId: app.id });
+    expect(await record(app.id)).toMatchObject({ status: "APPLIED", closedReason: null });
+    expect(await message(mail.id)).toMatchObject({
+      attentionState: "DONE",
+      linkedApplicationId: app.id,
+    });
+    expect((await readMailItem(mail.id)).autoOutcome).toEqual({ undoable: false, undone: true });
+  });
+
+  it("after Undo, a retag and the tag's own Undo never bring the outcome back", async () => {
+    const { app, mail } = await fixture("REJECTION");
+    await auto(mail.id);
+    await run((tx) => undoAutoOutcome(tx, mail.id, NOW));
+    await updateMail(mail.id, { classification: "FOLLOW_UP" }, NOW);
+    const { effect } = await updateMailKind(mail.id, { classification: "REJECTION" }, NOW);
+    expect(effect).toEqual({ kind: "info", applicationId: app.id });
+    expect((await record(app.id)).status).toBe("APPLIED");
+    expect((await eventsFor(mail.id)).filter((event) => event.payload.outcome)).toEqual([]);
+  });
+
+  it("without Undo, the tag's own Undo after a retag puts the automatic outcome back", async () => {
+    const { app, mail } = await fixture("REJECTION");
+    await auto(mail.id);
+    await updateMail(mail.id, { classification: "FOLLOW_UP" }, NOW);
+    expect((await record(app.id)).status).toBe("APPLIED");
+    await updateMail(mail.id, { classification: "REJECTION" }, NOW);
+    expect((await record(app.id)).status).toBe("REJECTED");
+  });
+
+  it("Undo refuses when an outcome recorded by hand lands while it waits for the lock", async () => {
+    const { app, mail } = await fixture("REJECTION");
+    await auto(mail.id);
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => (release = resolve));
+    let locked!: () => void;
+    const lockTaken = new Promise<void>((resolve) => (locked = resolve));
+    const hand = db.transaction(async (tx) => {
+      await tx.select().from(applications).where(eq(applications.id, app.id)).for("update");
+      locked();
+      await held;
+      await tx.insert(applicationEvents).values({
+        applicationId: app.id,
+        eventType: "OFFER_DECLINED",
+        occurredAt: NOW,
+        summary: "Recorded by hand",
+        payload: { outcome: "declined" },
+      });
+    });
+    await lockTaken;
+    const undo = run((tx) => undoAutoOutcome(tx, mail.id, NOW));
+    await waitForLockWait();
+    release();
+    await hand;
+    await expect(undo).rejects.toMatchObject({ status: 409 });
+    expect((await record(app.id)).status).toBe("REJECTED");
+  });
+
+  it("a retag waits for the application before it locks the email, so it cannot deadlock", async () => {
+    const { app, mail } = await fixture("REJECTION");
+    await auto(mail.id);
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => (release = resolve));
+    let locked!: () => void;
+    const lockTaken = new Promise<void>((resolve) => (locked = resolve));
+    // Every other writer takes the application, then the email.
+    const writer = db.transaction(async (tx) => {
+      await tx.select().from(applications).where(eq(applications.id, app.id)).for("update");
+      locked();
+      await held;
+      await tx.select().from(mailMessages).where(eq(mailMessages.id, mail.id)).for("update");
+    });
+    await lockTaken;
+    const retagged = updateMail(mail.id, { classification: "FOLLOW_UP" }, NOW);
+    await waitForLockWait();
+    release();
+    await expect(writer).resolves.toBeUndefined();
+    await expect(retagged).resolves.toMatchObject({ kind: "Application update" });
+    expect((await record(app.id)).status).toBe("APPLIED");
+  });
+
+  it("a tag and a company in one request move an automatically rejected email", async () => {
+    const { app, mail } = await fixture("REJECTION");
+    const other = await fixture("FOLLOW_UP");
+    await auto(mail.id);
+    await updateMail(mail.id, { classification: "FOLLOW_UP", company: other.mail.companyKey }, NOW);
+    expect(await message(mail.id)).toMatchObject({
+      companyKey: other.mail.companyKey,
+      linkedApplicationId: null,
+    });
+    expect((await record(app.id)).status).toBe("APPLIED");
+  });
+
+  it("an undated sent application counts from when it was recorded", async () => {
+    const found = await fixture("REJECTION", { receivedAt: new Date("2026-10-15T05:00:00Z") });
+    await db
+      .update(applications)
+      .set({ appliedAt: null, createdAt: new Date("2026-10-20T05:00:00Z") })
+      .where(eq(applications.id, found.app.id));
+    expect(await auto(found.mail.id)).toEqual({ kind: "none" });
+    await db
+      .update(mailMessages)
+      .set({ receivedAt: new Date("2026-10-29T05:00:00Z") })
+      .where(eq(mailMessages.id, found.mail.id));
+    expect(await auto(found.mail.id)).toMatchObject({ kind: "outcome", outcome: "rejected" });
+  });
+
+  it("a page read newest first still acknowledges before it rejects", async () => {
+    const found = await fixture("FOLLOW_UP");
+    await fetchPage(
+      found,
+      [
+        scanned(found, { receivedAt: "2026-10-25T05:00:00Z" }),
+        scanned(found, {
+          subject: "We received your application",
+          bodyText: "Thank you for applying. We have received your application.",
+          receivedAt: "2026-10-21T05:00:00Z",
+        }),
+      ],
+      null,
+    );
+    const events = await db
+      .select()
+      .from(applicationEvents)
+      .where(eq(applicationEvents.applicationId, found.app.id));
+    expect(events.map((event) => event.eventType).sort()).toEqual([
+      "ACKNOWLEDGEMENT_RECEIVED",
+      "REJECTION_RECEIVED",
+    ]);
+    expect(events.find((event) => event.eventType === "REJECTION_RECEIVED")).toMatchObject({
+      payload: expect.objectContaining({ previousStatus: "ACKNOWLEDGED" }),
+    });
+  });
+
+  it("an acknowledgement read after its rejection joins the journey and survives Undo", async () => {
+    const found = await fixture("FOLLOW_UP");
+    await fetchPage(found, [scanned(found, { receivedAt: "2026-10-25T05:00:00Z" })], null);
+    expect((await record(found.app.id)).status).toBe("REJECTED");
+    const { connection } = await fetchPage(
+      found,
+      [
+        scanned(found, {
+          subject: "We received your application",
+          bodyText: "Thank you for applying. We have received your application.",
+          receivedAt: "2026-10-21T05:00:00Z",
+        }),
+      ],
+      null,
+    );
+    const ack = await fetched(connection);
+    expect(ack).toMatchObject({ attentionState: "DONE", linkedApplicationId: found.app.id });
+    expect((await record(found.app.id)).status).toBe("REJECTED");
+    const [rejection] = await db
+      .select()
+      .from(applicationEvents)
+      .where(
+        sql`${applicationEvents.applicationId} = ${found.app.id} AND ${applicationEvents.eventType} = 'REJECTION_RECEIVED'`,
+      );
+    await run((tx) => undoAutoOutcome(tx, String(rejection.payload.mailMessageId), NOW));
+    expect((await record(found.app.id)).status).toBe("ACKNOWLEDGED");
+  });
+
+  it("the same email in a second inbox follows the first instead of asking", async () => {
+    const found = await fixture("FOLLOW_UP");
+    const copy = (patch: Partial<ScannedMessage> = {}) =>
+      scanned(found, { internetMessageId: `<${prefix}-same@fixture.invalid>`, ...patch });
+    const first = await fetchPage(found, [copy()], null);
+    const second = await fetchPage(found, [copy()], null);
+    const original = await fetched(first.connection);
+    const twin = await fetched(second.connection);
+    expect((await record(found.app.id)).status).toBe("REJECTED");
+    expect(twin).toMatchObject({ attentionState: "DONE", linkedApplicationId: null });
+    expect(await details(twin.id)).toEqual([
+      expect.objectContaining({ copyOf: original.id, justInfo: true }),
+    ]);
+    expect(second.first.counts.newAttention).toBe(0);
+    expect((await readMailItem(twin.id)).copyOf).toEqual({ account: first.connection.email });
+    // A copy without a Message-ID matches by sender, subject and time.
+    const third = await fetchPage(found, [scanned(found, {})], null);
+    const loose = await fetched(third.connection);
+    expect(await details(loose.id)).toEqual([expect.objectContaining({ copyOf: original.id })]);
+  });
 });
+
+/** Resolves once another connection is waiting on a row lock. */
+async function waitForLockWait() {
+  for (let attempt = 0; attempt < 100; attempt++) {
+    const result = await db.execute<{ waiting: number }>(
+      sql`SELECT count(*)::int AS waiting FROM pg_stat_activity WHERE datname = current_database() AND wait_event_type = 'Lock'`,
+    );
+    if (Number(result.rows[0]?.waiting) > 0) return;
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+  throw new Error("No transaction started waiting for the lock.");
+}
