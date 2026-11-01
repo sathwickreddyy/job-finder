@@ -66,7 +66,11 @@ export function AppShell({ children }: { children: ReactNode }) {
     }
     window.dispatchEvent(new Event("jobops-theme"));
   }
-  if (pathname.startsWith("/gallery/simple") || pathname.startsWith("/gallery/companies"))
+  if (
+    pathname.startsWith("/gallery/simple") ||
+    pathname.startsWith("/gallery/companies") ||
+    pathname === "/gallery/mobile"
+  )
     return <main id="main">{children}</main>;
   return (
     <LoadingProvider>
