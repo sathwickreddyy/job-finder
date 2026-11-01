@@ -29,10 +29,21 @@ export function JourneyTrack({
   className,
 }: {
   journey: Journey;
-  size?: "row" | "large";
+  size?: "row" | "large" | "mobile";
   className?: string;
 }) {
   const large = size === "large";
+  const mobile = size === "mobile";
+  const current = journey.steps.findLastIndex(
+    (step) => step.state === "reached" || step.state === "stopped",
+  );
+  const outline: Record<JourneyStep["tone"], string> = {
+    applied: "outline-tag-application",
+    interviewing: "outline-tag-interview-call",
+    offer: "outline-tag-offer",
+    bad: "outline-tag-rejection",
+    muted: "outline-muted-foreground",
+  };
   return (
     <ol
       aria-label="Progress"
@@ -72,10 +83,16 @@ export function JourneyTrack({
                   filled
                     ? cn(fill[step.tone], "text-background")
                     : "bg-card ring-2 ring-border ring-inset",
+                  mobile &&
+                    current === index &&
+                    step.state === "reached" &&
+                    cn("outline-2 outline-offset-[3px]", outline[step.tone]),
                 )}
               >
                 {step.state === "stopped" ? (
                   <X size={large ? 15 : 14} strokeWidth={3} />
+                ) : mobile && current === index && step.state === "reached" ? (
+                  <span className="size-2 rounded-full bg-current" />
                 ) : step.state === "reached" ? (
                   <Check size={large ? 15 : 14} strokeWidth={3} />
                 ) : null}
@@ -84,9 +101,11 @@ export function JourneyTrack({
                 className={cn(
                   "max-w-full truncate leading-tight",
                   // Four columns on a phone leave about 76px: "Acknowledged" fits only tightened.
-                  large
-                    ? "text-xs"
-                    : "text-[10.5px] tracking-tight sm:text-[11px] sm:tracking-normal",
+                  mobile
+                    ? "mt-1.5 text-[10px] tracking-tight"
+                    : large
+                      ? "text-xs"
+                      : "text-[10.5px] tracking-tight sm:text-[11px] sm:tracking-normal",
                   step.state === "stopped" && step.tone === "bad"
                     ? "font-medium text-destructive"
                     : step.state === "stopped"
@@ -96,7 +115,14 @@ export function JourneyTrack({
                         : "text-muted-foreground",
                 )}
               >
-                {step.label}
+                {mobile && step.label === "Acknowledged"
+                  ? "Received"
+                  : mobile && step.label === "Interviewing"
+                    ? "Interview"
+                    : step.label}
+                {mobile && step.label === "Acknowledged" && (
+                  <span className="sr-only"> (acknowledged)</span>
+                )}
                 <span className="sr-only">, {said[step.state]}</span>
               </span>
               <span

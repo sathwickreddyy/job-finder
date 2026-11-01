@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import type { WorkspaceData } from "./read";
+import { formatDay } from "@/features/applications/dates";
 export function ActivityChart({ data }: { data: WorkspaceData }) {
   const [metric, setMetric] = useState("saved");
   const date = new Intl.DateTimeFormat("en-CA", {
@@ -10,11 +11,6 @@ export function ActivityChart({ data }: { data: WorkspaceData }) {
     day: "2-digit",
   }).format(new Date(data.today));
   const end = new Date(`${date}T00:00:00+05:30`).valueOf() + 86400000;
-  const display = new Intl.DateTimeFormat("en-IN", {
-    timeZone: "Asia/Kolkata",
-    day: "numeric",
-    month: "short",
-  });
   const dates =
     metric === "saved"
       ? data.openings.map((job) => job.createdAt)
@@ -22,7 +18,7 @@ export function ActivityChart({ data }: { data: WorkspaceData }) {
   const series = Array.from({ length: 4 }, (_, index) => {
     const start = end - (4 - index) * 7 * 86400000;
     return {
-      label: display.format(start),
+      label: formatDay(new Date(start)),
       value: dates.filter(
         (value) =>
           new Date(value).valueOf() >= start && new Date(value).valueOf() < start + 7 * 86400000,

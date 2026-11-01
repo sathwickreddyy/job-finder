@@ -8,7 +8,7 @@ const NOW = new Date("2026-10-03T10:30:00+05:30");
 
 it("formats times against today in India time", () => {
   expect(formatWhen(new Date("2026-10-03T09:12:00+05:30"), NOW)).toBe("Today, 9:12 am");
-  expect(formatWhen(new Date("2026-09-20T16:19:00+05:30"), NOW)).toBe("20 Sept, 4:19 pm");
+  expect(formatWhen(new Date("2026-09-20T16:19:00+05:30"), NOW)).toBe("20 Sep, 4:19 pm");
 });
 
 it("lists newest first with a Today divider between booked and past entries", () => {

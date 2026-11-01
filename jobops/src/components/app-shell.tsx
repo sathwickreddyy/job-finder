@@ -5,6 +5,7 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useSyncExternalStore, type ReactNode } from "react";
 import {
   BriefcaseBusiness,
+  ChartNoAxesCombined,
   Building2,
   FileText,
   Home,
@@ -45,7 +46,13 @@ function snapshot() {
     return document.documentElement.dataset.theme === "light";
   }
 }
-export function AppShell({ children }: { children: ReactNode }) {
+export function AppShell({
+  children,
+  attentionCount = 0,
+}: {
+  children: ReactNode;
+  attentionCount?: number;
+}) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const emailsActive =
@@ -66,8 +73,6 @@ export function AppShell({ children }: { children: ReactNode }) {
     }
     window.dispatchEvent(new Event("jobops-theme"));
   }
-  if (pathname.startsWith("/gallery/simple") || pathname.startsWith("/gallery/companies"))
-    return <main id="main">{children}</main>;
   return (
     <LoadingProvider>
       <SnackbarProvider>
@@ -75,7 +80,25 @@ export function AppShell({ children }: { children: ReactNode }) {
           <a className="skip-link" href="#main">
             Skip to content
           </a>
-          <header className="border-b border-border bg-card">
+          <header className="sticky top-0 z-30 flex items-center justify-between border-b border-border bg-card px-4 pt-[env(safe-area-inset-top)] md:hidden">
+            <Link
+              href="/"
+              className="flex min-h-16 items-center gap-2 text-sm font-semibold text-foreground hover:no-underline"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/jobops-logo.svg" width={28} height={28} alt="" />
+              JobOps
+            </Link>
+            <button
+              type="button"
+              onClick={toggleTheme}
+              aria-label={light ? "Use dark theme" : "Use light theme"}
+              className="grid size-11 place-items-center rounded-full text-muted-foreground hover:bg-muted"
+            >
+              {light ? <Moon size={18} aria-hidden /> : <Sun size={18} aria-hidden />}
+            </button>
+          </header>
+          <header className="hidden border-b border-border bg-card md:block">
             <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-5 py-4 sm:px-8">
               <Link
                 href="/"
@@ -149,14 +172,60 @@ export function AppShell({ children }: { children: ReactNode }) {
           <main
             id="main"
             className={cn(
-              "mx-auto w-full min-w-0",
-              pathname === "/gallery/mail" || pathname === "/mail"
-                ? "max-w-[1600px] px-4 py-5 sm:px-6"
-                : "max-w-6xl px-5 py-8 sm:px-8 sm:py-10",
+              "mx-auto w-full min-w-0 px-4 pt-6 pb-[calc(7rem+env(safe-area-inset-bottom))] md:py-10",
+              pathname === "/mail" ? "max-w-[1600px] md:px-6" : "max-w-6xl md:px-8",
             )}
           >
             {children}
           </main>
+          <nav
+            aria-label="Mobile navigation"
+            className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card px-2 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] md:hidden"
+          >
+            <div className="mx-auto grid max-w-lg grid-cols-3">
+              {[
+                {
+                  label: "Overview",
+                  href: "/",
+                  icon: ChartNoAxesCombined,
+                  active: pathname === "/",
+                },
+                { label: "Mail", href: "/mail", icon: Inbox, active: emailsActive },
+                {
+                  label: "Applications",
+                  href: "/applications",
+                  icon: BriefcaseBusiness,
+                  active: pathname.startsWith("/applications") && !emailsActive,
+                },
+              ].map(({ label, href, icon: Icon, active }) => (
+                <Link
+                  key={href}
+                  href={href}
+                  aria-current={active ? "page" : undefined}
+                  className={cn(
+                    "flex min-h-12 flex-col items-center justify-center gap-1 text-[11px] font-medium hover:no-underline",
+                    active ? "text-foreground" : "text-muted-foreground",
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "relative flex h-7 w-16 items-center justify-center rounded-full",
+                      active && "bg-selected text-selected-foreground",
+                    )}
+                  >
+                    <Icon size={20} aria-hidden />
+                    {href === "/mail" && attentionCount > 0 && (
+                      <span className="absolute top-0 right-0 min-w-4 rounded-full bg-review px-1 text-[9px] text-review-foreground">
+                        <span className="sr-only">Needs attention: </span>
+                        {attentionCount}
+                      </span>
+                    )}
+                  </span>
+                  {label}
+                </Link>
+              ))}
+            </div>
+          </nav>
         </div>
       </SnackbarProvider>
     </LoadingProvider>

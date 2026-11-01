@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState, type ReactNode } from "react";
+import { useState, useSyncExternalStore, type ReactNode } from "react";
 import { ChevronDown } from "lucide-react";
 import { ActionForm } from "@/components/action-form";
 import { StatusPill } from "@/features/companies/status-pill";
@@ -38,7 +38,7 @@ export function Monogram({ name, className }: { name: string; className?: string
 export function NextAction({ next, returnTo }: { next: LaneNext; returnTo: string }) {
   if (next.action === "Open") return null;
   const pill =
-    "pressable relative z-10 inline-flex h-8 shrink-0 items-center rounded-full px-3.5 text-xs font-medium hover:no-underline";
+    "pressable relative z-10 inline-flex min-h-11 shrink-0 items-center rounded-full px-3.5 text-xs font-medium hover:no-underline md:min-h-8 md:h-8";
   if (next.action === "Not applying")
     return (
       <ActionForm
@@ -93,11 +93,13 @@ function Row({
   journey,
   open,
   detail,
+  mobile = false,
 }: {
   lane: Lane;
   journey: Journey | undefined;
   open: boolean;
   detail: ReactNode;
+  mobile?: boolean;
 }) {
   const role = lane.roles[0];
   return (
@@ -111,7 +113,8 @@ function Row({
         role="group"
         aria-label={lane.company}
         className={cn(
-          "relative grid gap-4 px-4 py-4 transition-colors hover:bg-muted/40 md:grid-cols-[minmax(0,1fr)_minmax(0,1.35fr)_minmax(0,1fr)] md:items-center",
+          "relative grid gap-4 px-4 py-4 transition-colors hover:bg-muted/40",
+          !mobile && "md:grid-cols-[minmax(0,1fr)_minmax(0,1.35fr)_minmax(0,1fr)] md:items-center",
           open && "bg-muted/30",
         )}
       >
@@ -143,8 +146,16 @@ function Row({
             )}
           />
         </Link>
-        {journey && <JourneyTrack journey={journey} />}
-        <NextStep next={lane.next} returnTo="/applications" />
+        {journey && <JourneyTrack journey={journey} size={mobile ? "mobile" : "row"} />}
+        <div
+          className={cn(
+            mobile && "rounded-2xl px-3 py-2.5",
+            mobile &&
+              (lane.group === "needs" ? "bg-selected text-selected-foreground" : "bg-secondary/60"),
+          )}
+        >
+          <NextStep next={lane.next} returnTo="/applications" />
+        </div>
       </div>
       {open && detail}
     </li>
@@ -152,6 +163,53 @@ function Row({
 }
 
 type Pin = { id: string; group: LaneGroup };
+type ListProps = {
+  lanes: Lane[];
+  journeys: Record<string, Journey>;
+  openId: string | null;
+  detail: ReactNode;
+};
+
+/** The focused row keeps its place while outcomes change, and every record stays visible. */
+export function MobileApplicationList({ lanes, journeys, openId, detail }: ListProps) {
+  const [anchor, setAnchor] = useState(() => ({
+    id: openId,
+    index: lanes.findIndex((lane) => lane.leadId === openId),
+  }));
+  if (anchor.id !== openId)
+    setAnchor({ id: openId, index: lanes.findIndex((lane) => lane.leadId === openId) });
+  const open = lanes.find((lane) => lane.leadId === openId);
+  const rows = open && anchor.id === openId ? lanes.filter((lane) => lane !== open) : [...lanes];
+  if (open && anchor.id === openId)
+    rows.splice(Math.max(0, Math.min(anchor.index, rows.length)), 0, open);
+  return (
+    <div className="space-y-4" data-testid="mobile-applications">
+      <p className="m-0 flex justify-between gap-3 px-1 text-xs text-muted-foreground">
+        <span>{lanes.length} applications</span>
+        <span>Next actions first</span>
+      </p>
+      <ul className="m-0 grid list-none gap-3 p-0">
+        {rows.map((lane) => (
+          <Row
+            key={lane.key}
+            lane={lane}
+            journey={journeys[lane.leadId]}
+            open={lane.leadId === openId}
+            detail={detail}
+            mobile
+          />
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function subscribePhone(callback: () => void) {
+  const query = window.matchMedia("(max-width: 767px)");
+  query.addEventListener("change", callback);
+  return () => query.removeEventListener("change", callback);
+}
+const isPhone = () => window.matchMedia("(max-width: 767px)").matches;
 
 /**
  * The open row stays in the group it opened in, so recording from it never moves it out from
@@ -184,6 +242,11 @@ export function ApplicationList({
   const [pin, setPin] = useState(() => pinFor(openId));
   if ((pin?.id ?? null) !== openId) setPin(pinFor(openId));
   const placed = pinOpenRow(lanes, pin?.id === openId ? pin : null);
+  const phone = useSyncExternalStore(subscribePhone, isPhone, () => false);
+  if (phone)
+    return (
+      <MobileApplicationList lanes={placed} journeys={journeys} openId={openId} detail={detail} />
+    );
   return (
     <div className="flex flex-col gap-8">
       {groups.map((group) => {

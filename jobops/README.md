@@ -163,7 +163,7 @@ Each activity has its own page. Editing a prompt does not submit anything. The a
 - **My sites & profile:** public profile/portfolio links, improvement notes, dedicated improvement prompts and reusable working preferences.
 - **Applications → Emails:** on-demand read-only Gmail and personal Outlook refresh, individual account status and three triage buckets. Link and record an outcome, save an opening, or dismiss mail with undo.
 - **Secondary settings:** candidate details, standard answers, preferences, display settings, storage, mail configuration, contacts and record exports.
-- **Interface:** shared Tailwind 4 tokens, Google-blue actions, neutral dark/light surfaces, press/focus feedback and reduced-motion support. The live A/B [gallery](http://127.0.0.1:3210/gallery/simple) remains available.
+- **Interface:** shared Tailwind 4 tokens, Google-blue actions, neutral dark/light surfaces, press/focus feedback and reduced-motion support.
 
 Previous task/mission/proposal entry pages redirect to Find openings. Their external API/context routes return HTTP 410. Historical database records remain intact; there is no agent-access setup in the current UI.
 
