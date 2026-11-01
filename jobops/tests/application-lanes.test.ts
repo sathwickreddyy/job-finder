@@ -332,7 +332,7 @@ describe("next steps and groups", () => {
     const next = Object.fromEntries(lanes.map((lane) => [lane.company, lane.next]));
     expect(next.Flipkart).toMatchObject({
       due: "overdue",
-      when: "Overdue since 27 Sept",
+      when: "Overdue since 27 Sep",
       action: "I followed up",
       href: `/applications?open=${quiet.id}&outcome=followup`,
     });
@@ -410,7 +410,7 @@ describe("next steps and groups", () => {
     expect(when(item("week", at("2026-10-06T10:00:00"), "followup"))).toBe("By Tue 6 Oct");
     expect(when(item("week", at("2026-10-06T15:00:00"), "round"))).toBe("Tue 6 Oct, 3:00 pm");
     expect(when(item("overdue", at("2026-09-29T10:00:00"), "followup"))).toBe(
-      "Overdue since 29 Sept",
+      "Overdue since 29 Sep",
     );
   });
 

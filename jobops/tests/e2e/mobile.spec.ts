@@ -31,7 +31,7 @@ test("iPhone essentials use real records, retain Undo and expand one flat applic
       subject: `Role details ${suffix}`,
       bodyText: "Please review the role details before our next conversation.",
       classification: "UNKNOWN",
-      receivedAt: new Date(),
+      receivedAt: new Date("2025-09-03T10:30:00+05:30"),
     })
     .returning();
   const errors: string[] = [];
@@ -50,8 +50,11 @@ test("iPhone essentials use real records, retain Undo and expand one flat applic
     const beforeCount = await badgeCount();
     await page.getByRole("button", { name: "7 days", exact: true }).click();
     await nav.getByRole("link", { name: /Mail/ }).click();
+    await expect(page.getByTestId("mobile-mail")).toBeVisible();
+    await page.goto(`/mail?company=${encodeURIComponent(company)}`);
     const workspace = page.getByTestId("mobile-mail");
     const row = workspace.locator(`#attention-${mail.id}`);
+    await expect(row).toContainText("3 Sep 2025");
     await row.getByRole("link").click();
     await row.getByRole("button", { name: "Mark as handled", exact: true }).click();
     await expect(row.getByRole("button", { name: "Undo", exact: true })).toBeVisible();
