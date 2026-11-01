@@ -6,6 +6,13 @@ The runnable JobOps application lives in `jobops/`. It is a Next.js App Router m
 PostgreSQL/Drizzle, private local PDF uploads, complete assistant prompts and direct application/outreach
 records. Legacy mission data remains stored, but its UI and agent endpoints are retired. There are no LLM calls or autonomous external submissions.
 
+Resume compatibility scoring lives separately in `services/resume-scoring/`: Python 3.13,
+FastAPI/Pydantic, pdfplumber, its own locked dependencies, tests and Docker image. Keep scoring
+implementation out of Next.js. The service accepts document contents over HTTP; it must not mount
+JobOps uploads or connect to its database. Scores must identify their method/version and evidence;
+lexical coverage is not an employer ATS score. Run service tests in its Docker test target.
+Keep the root README's installed assistant skill inventory updated when project-related skills change.
+
 Run the UI/API and PostgreSQL with `docker compose up -d --build` from the repository root or
 `jobops/`. Normal application use is Docker-only; do not start host UI/API/dev/test servers unless
 the user explicitly requests host-side development. Stop any project servers before switching to Docker.

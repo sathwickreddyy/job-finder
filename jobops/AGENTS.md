@@ -6,6 +6,11 @@ This directory contains the runnable JobOps application, a Next.js App Router mo
 PostgreSQL/Drizzle, private local PDF uploads, complete assistant prompts and direct application/outreach
 records. Legacy mission data remains stored, but its UI and agent endpoints are retired. There are no LLM calls or autonomous external submissions.
 
+Resume compatibility scoring is a separate Python/FastAPI service in `../services/resume-scoring/`.
+Keep its scoring and PDF-highlight extraction out of this Next.js application. Integration is over
+HTTP; no shared database access or upload mount. Preserve exact resume-version and JD-snapshot
+references when saving results, and label lexical scores by their source and method version.
+
 Run the UI/API and PostgreSQL with `docker compose up -d --build` from the repository root or
 `jobops/`. Normal application use is Docker-only; do not start host UI/API/dev/test servers unless
 the user explicitly requests host-side development. Stop any project servers before switching to Docker.
