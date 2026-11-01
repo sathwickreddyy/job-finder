@@ -23,6 +23,8 @@ export type MailItem = {
   outcome: OutcomeId | null;
   /** The mail rule recorded this email's outcome; Undo shows while nothing newer was recorded. */
   autoOutcome?: { undoable: boolean; undone?: true } | null;
+  /** Settled as a copy of the same email in another inbox, which carries the decision. */
+  copyOf?: { account: string } | null;
 };
 export type MailLookup = {
   companies: Map<string, string>;
@@ -43,6 +45,7 @@ export function toMailItem(
     outcome: string | null;
     autoUndoable?: boolean | null;
     autoUndone?: boolean | null;
+    copyOf?: string | null;
   },
   lookup: MailLookup,
 ): MailItem {
@@ -76,5 +79,6 @@ export function toMailItem(
         : row.autoUndone
           ? { undoable: false, undone: true }
           : null,
+    copyOf: row.copyOf !== null && row.copyOf !== undefined ? { account: row.copyOf } : null,
   };
 }

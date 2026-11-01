@@ -13,7 +13,7 @@ import { ApiError, refusal } from "@/features/agent-api/http";
 import { applyOutcome } from "@/features/applications/outcome-service";
 import { outcomeIds } from "@/features/applications/phase";
 import { roundKinds } from "@/lib/round-kinds";
-import { autoApplySafely, resetAutoEffect } from "./auto-apply";
+import { autoApplySafely, lockRecords, resetAutoEffect } from "./auto-apply";
 import type { MailEffect } from "./auto-apply-rule";
 import { loadMailContext, type MailContext } from "./context";
 import { lockMail, type MailTx } from "./handling-service";
@@ -237,6 +237,47 @@ async function reopenMail(
   });
 }
 
+/**
+ * Locks every application a retag or placement may touch before the email itself, in the order
+ * every other writer uses (application, job, then mail): the email's current and requested
+ * companies, its link and any application the rule recorded on from it.
+ */
+async function lockForUpdate(
+  tx: MailTx,
+  mailId: string,
+  body: z.output<typeof updateSchema>,
+  context: MailContext,
+) {
+  await readMailItem(mailId, context);
+  const [seen] = await tx.select().from(mailMessages).where(eq(mailMessages.id, mailId));
+  const requested = body.application
+    ? context.applications.find((app) => app.id === body.application)
+    : undefined;
+  const linkedTo = seen?.linkedApplicationId
+    ? context.applications.find((app) => app.id === seen.linkedApplicationId)
+    : undefined;
+  const companies = new Set(
+    [seen?.companyKey, body.company, requested?.company, linkedTo?.company].filter(Boolean),
+  );
+  const recorded = await tx
+    .select({ applicationId: applicationEvents.applicationId })
+    .from(applicationEvents)
+    .where(sql`${applicationEvents.payload}->>'mailMessageId' = ${mailId}`);
+  await lockRecords(tx, [
+    ...context.applications.filter((app) => companies.has(app.company)).map((app) => app.id),
+    ...(seen?.linkedApplicationId ? [seen.linkedApplicationId] : []),
+    ...(requested ? [requested.id] : []),
+    ...recorded.map((row) => row.applicationId),
+  ]);
+  const locked = await lockMail(tx, mailId);
+  if (
+    locked.message.linkedApplicationId !== seen?.linkedApplicationId ||
+    locked.message.companyKey !== seen?.companyKey
+  )
+    throw new ApiError("This email changed while saving. Refresh the page.", 409);
+  return locked;
+}
+
 /** Retag or place an email; `attention: "open"` undoes Just info. */
 export async function updateMail(
   mailId: string,
@@ -264,7 +305,7 @@ export async function updateMailKind(
   let effect: MailEffect | null = null;
   let undone = false;
   await db.transaction(async (tx) => {
-    const { message, events } = await lockVisibleMail(tx, mailId, context);
+    const { message, events } = await lockForUpdate(tx, mailId, body, context);
     previous = message.classification;
     const classification =
       body.classification ??
@@ -289,8 +330,12 @@ export async function updateMailKind(
         });
       }
     }
-    let linked = message.linkedApplicationId;
-    let companyKey = message.companyKey;
+    // The reset may have dropped the rule's link, so placement starts from the stored row.
+    const [current] = retagged
+      ? await tx.select().from(mailMessages).where(eq(mailMessages.id, mailId))
+      : [message];
+    let linked = current.linkedApplicationId;
+    let companyKey = current.companyKey;
     if (body.application !== undefined) {
       const app = body.application
         ? context.applications.find((row) => row.id === body.application)
@@ -311,7 +356,7 @@ export async function updateMailKind(
       companyKey = body.company;
     }
     if (body.attention === "open") await reopenMail(tx, message, events);
-    const placed = linked !== message.linkedApplicationId || companyKey !== message.companyKey;
+    const placed = linked !== current.linkedApplicationId || companyKey !== current.companyKey;
     if (placed) {
       await tx
         .update(mailMessages)

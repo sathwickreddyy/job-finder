@@ -105,6 +105,8 @@ export async function ingestPage(
     return decision;
   };
 
+  /** Stored for the first time on this page; the mail rule reads them once the page is in. */
+  const fresh: { messageId: string; receivedAt: number; handled: boolean }[] = [];
   for (const raw of input.messages) {
     if (raw.contextOnly) continue;
     counts.fetched++;
@@ -164,8 +166,7 @@ export async function ingestPage(
       Date.parse(raw.receivedAt) < input.recoveredBefore.getTime();
     let messageId: string | null = null;
     let tag: MailTag | null = null;
-    /** Stored for the first time here, so the mail rule reads it once the ledger row exists. */
-    let fresh: { handled: boolean } | null = null;
+    let handledOnArrival: boolean | null = null;
     if (kept) {
       const imported = await importMailRecords(record.data!, providerId, connection.email, tx);
       const [message] = await tx
@@ -225,7 +226,7 @@ export async function ingestPage(
             .where(eq(mailEvents.id, event.id));
         }
         if (await sortRejection(tx, messageId, context)) tag = "interviewRejected";
-        fresh = { handled };
+        handledOnArrival = handled;
       }
     }
     const values = {
@@ -271,14 +272,8 @@ export async function ingestPage(
     }
     // Provider pages can repeat an identity within one page.
     if (!saved) continue;
-    if (fresh && messageId) {
-      // Clear outcomes update their application; asking mail stays open, even from history.
-      const effect = await autoApplySafely(tx, messageId, context, new Date());
-      const opened = effect.kind === "ask";
-      if (fresh.handled && opened) counts.newAttention++;
-      if (!fresh.handled && (effect.kind === "acknowledge" || effect.kind === "outcome"))
-        counts.newAttention--;
-    }
+    if (handledOnArrival !== null && messageId)
+      fresh.push({ messageId, receivedAt: Date.parse(raw.receivedAt), handled: handledOnArrival });
     if (!previous) prior.push(saved);
     if (kept) counts.kept++;
     else counts.dropped++;
@@ -296,6 +291,15 @@ export async function ingestPage(
       companyKeys: decision.companyKeys,
       evidence: decision.evidence,
     });
+  }
+  // Oldest first, as the mail arrived: providers list newest first, and an acknowledgement
+  // must reach its application before the rejection that followed it.
+  fresh.sort((a, b) => a.receivedAt - b.receivedAt || a.messageId.localeCompare(b.messageId));
+  for (const { messageId, handled } of fresh) {
+    // Clear outcomes update their application; asking mail stays open, even from history.
+    const effect = await autoApplySafely(tx, messageId, context, new Date());
+    if (handled && effect.kind === "ask") counts.newAttention++;
+    if (!handled && effect.kind !== "ask" && effect.kind !== "none") counts.newAttention--;
   }
   return { counts, items };
 }

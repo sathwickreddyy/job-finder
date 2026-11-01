@@ -20,6 +20,8 @@ const app = (patch: Partial<RuleApplication> = {}): RuleApplication => ({
   outcomes: applied as RuleApplication["outcomes"],
   bookedRound: false,
   lastHeardAt: null,
+  closedAt: null,
+  acknowledged: false,
   ...patch,
 });
 const mail = (patch: Partial<RuleMail> = {}): RuleMail => ({
@@ -28,6 +30,8 @@ const mail = (patch: Partial<RuleMail> = {}): RuleMail => ({
   companyKey: "weave",
   namedApplicationIds: [],
   blocked: false,
+  copyOf: null,
+  undoneOutcomes: [],
   ...patch,
 });
 
@@ -172,5 +176,84 @@ describe("decideMailEffect", () => {
     expect(decideMailEffect(mail({ classification: "FOLLOW_UP" }), [app()])).toEqual({
       kind: "none",
     });
+  });
+
+  it("acknowledges an application a later email closed, so the journey keeps the step", () => {
+    const rejected = app({
+      phase: "Closed",
+      outcomes: [],
+      closedAt: new Date("2026-10-07T14:00:00+05:30"),
+    });
+    expect(decideMailEffect(mail(), [rejected])).toEqual({
+      kind: "acknowledge",
+      applicationId: "a1",
+    });
+  });
+
+  it("leaves an acknowledgement alone when the close came first or one is already recorded", () => {
+    const closedFirst = app({
+      phase: "Closed",
+      outcomes: [],
+      closedAt: new Date("2026-10-02T18:00:00+05:30"),
+    });
+    expect(decideMailEffect(mail(), [closedFirst])).toEqual({ kind: "none" });
+    const known = app({
+      phase: "Closed",
+      outcomes: [],
+      closedAt: new Date("2026-10-07T14:00:00+05:30"),
+      acknowledged: true,
+    });
+    expect(decideMailEffect(mail(), [known])).toEqual({ kind: "none" });
+    // Only acknowledgements reach back; a rejection never touches a closed application.
+    expect(
+      decideMailEffect(mail({ classification: "REJECTION" }), [
+        app({ phase: "Closed", outcomes: [], closedAt: new Date("2026-10-07T14:00:00+05:30") }),
+      ]),
+    ).toEqual({ kind: "none" });
+  });
+
+  it("asks which role when an acknowledgement fits a live and a later-closed application", () => {
+    const rejected = app({
+      id: "a2",
+      phase: "Closed",
+      outcomes: [],
+      closedAt: new Date("2026-10-07T14:00:00+05:30"),
+    });
+    expect(decideMailEffect(mail(), [app(), rejected])).toEqual({
+      kind: "ask",
+      applicationId: null,
+    });
+  });
+
+  it("settles a copy of an email already stored from another inbox", () => {
+    expect(decideMailEffect(mail({ classification: "REJECTION", copyOf: "m0" }), [app()])).toEqual({
+      kind: "copy",
+      of: "m0",
+    });
+    expect(decideMailEffect(mail({ copyOf: "m0", companyKey: null }), [])).toEqual({
+      kind: "copy",
+      of: "m0",
+    });
+  });
+
+  it("leaves copies of mail the rule ignores, and copies the user acted on, alone", () => {
+    expect(
+      decideMailEffect(mail({ classification: "RECRUITER_OUTREACH", copyOf: "m0" }), [app()]),
+    ).toEqual({ kind: "none" });
+    expect(decideMailEffect(mail({ copyOf: "m0", blocked: true }), [app()])).toEqual({
+      kind: "none",
+    });
+  });
+
+  it("keeps an outcome the user undid as information instead of recording it again", () => {
+    expect(
+      decideMailEffect(
+        mail({ classification: "INTERVIEW_REJECTION", undoneOutcomes: ["rejected"] }),
+        [app()],
+      ),
+    ).toEqual({ kind: "info", applicationId: "a1" });
+    expect(
+      decideMailEffect(mail({ classification: "OFFER", undoneOutcomes: ["rejected"] }), [app()]),
+    ).toEqual({ kind: "outcome", applicationId: "a1", outcome: "offer" });
   });
 });

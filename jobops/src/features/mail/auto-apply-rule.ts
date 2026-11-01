@@ -14,6 +14,10 @@ export type RuleApplication = {
   bookedRound: boolean;
   /** The latest reply or round from the company that the user recorded by hand. */
   lastHeardAt: Date | null;
+  /** When the outcome that closed it happened; null while it is open. */
+  closedAt: Date | null;
+  /** An acknowledgement is already on its journey. */
+  acknowledged: boolean;
 };
 export type RuleMail = {
   classification: MailClassification;
@@ -23,11 +27,18 @@ export type RuleMail = {
   namedApplicationIds: string[];
   /** The user or another rule acted on it, or the rule already applied or was undone. */
   blocked: boolean;
+  /** The same email stored earlier from another inbox, which carries the decision. */
+  copyOf: string | null;
+  /** Outcomes the user undid after the rule recorded them from this email. */
+  undoneOutcomes: string[];
 };
 export type MailEffect =
   | { kind: "acknowledge"; applicationId: string }
   | { kind: "outcome"; applicationId: string; outcome: "rejected" | "offer" }
   | { kind: "ask"; applicationId: string | null }
+  | { kind: "copy"; of: string }
+  /** The user undid this outcome before: the email stays on the application as information. */
+  | { kind: "info"; applicationId: string }
   | { kind: "none" };
 
 const clearOutcomes: Partial<Record<MailClassification, "rejected" | "offer">> = {
@@ -45,29 +56,48 @@ const isLive = (app: RuleApplication) =>
   app.phase !== "Closed" &&
   app.phase !== "Preparing";
 
+/** Closed by an outcome that came after the email, so an acknowledgement still belongs to it. */
+const closedAfter = (app: RuleApplication, at: Date) =>
+  !app.previousJob &&
+  !isOutreach(app.source) &&
+  app.sentAt !== null &&
+  app.phase === "Closed" &&
+  !app.acknowledged &&
+  app.closedAt !== null &&
+  app.closedAt >= at;
+
 /**
  * What an email does to its company's applications (spec §1). Acknowledgements, rejections and
  * offers apply by themselves to the one live application; anything that needs a date, a round or
- * a choice of role asks instead.
+ * a choice of role asks instead. An acknowledgement read after the rejection that followed it
+ * still joins that application's journey, so the order mail is read in never drops a step, and
+ * a second inbox's copy of an email follows the first.
  */
 export function decideMailEffect(mail: RuleMail, applications: RuleApplication[]): MailEffect {
   const acknowledgement = mail.classification === "APPLICATION_ACKNOWLEDGEMENT";
   const outcome = clearOutcomes[mail.classification];
   if (!acknowledgement && !outcome && !asking.has(mail.classification)) return { kind: "none" };
-  if (mail.blocked || !mail.companyKey) return { kind: "none" };
+  if (mail.blocked) return { kind: "none" };
+  if (mail.copyOf) return { kind: "copy", of: mail.copyOf };
+  if (!mail.companyKey) return { kind: "none" };
 
-  const live = applications.filter(isLive);
-  if (!live.length) return { kind: "none" };
-  const earliest = Math.min(...live.map((app) => app.sentAt!.getTime()));
+  const candidates = [
+    ...applications.filter(isLive),
+    ...(acknowledgement ? applications.filter((app) => closedAfter(app, mail.receivedAt)) : []),
+  ];
+  if (!candidates.length) return { kind: "none" };
+  const earliest = Math.min(...candidates.map((app) => app.sentAt!.getTime()));
   if (istDaysBetween(new Date(earliest), mail.receivedAt) < 0) return { kind: "none" };
 
-  const single = live.length === 1 ? live[0] : null;
+  const single = candidates.length === 1 ? candidates[0] : null;
   if (!single) return { kind: "ask", applicationId: null };
   // Another application is named (a referral contact's reply, an older role): ask, and keep
   // whichever application matching suggested.
   if (mail.namedApplicationIds.some((id) => id !== single.id))
     return { kind: "ask", applicationId: null };
   if (acknowledgement) return { kind: "acknowledge", applicationId: single.id };
+  if (outcome && mail.undoneOutcomes.includes(outcome))
+    return { kind: "info", applicationId: single.id };
   // The company answered after this email, so it is older news than what the user recorded.
   const answeredLater = single.lastHeardAt !== null && single.lastHeardAt > mail.receivedAt;
   if (outcome && single.outcomes.includes(outcome) && !single.bookedRound && !answeredLater)
