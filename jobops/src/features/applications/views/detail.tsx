@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ExternalLink, FileText, Link2, NotebookPen } from "lucide-react";
-import { linkMailOnly, unlinkMail } from "@/features/mail/triage-actions";
+import { unlinkMail } from "@/features/mail/triage-actions";
 import { ActionForm } from "@/components/action-form";
 import { Button, Field } from "@/components/ui";
 import { displayDate, type DisplayPreferences } from "@/features/candidate/preferences";
@@ -13,7 +13,6 @@ import { formatDay, formatDayTime, indiaDate, istClock, istDaysBetween } from ".
 import {
   availableOutcomes,
   canEditPlannedRecord,
-  initialOutcome,
   isOutreach,
   methodLabel,
   phaseText,
@@ -36,11 +35,6 @@ export function ApplicationDetail({
   versions,
   preferences,
   now,
-  requested,
-  mail,
-  selectionKey,
-  mailIntent,
-  mailError,
   notice,
 }: {
   record: ApplicationRecord;
@@ -48,11 +42,6 @@ export function ApplicationDetail({
   versions: Choice[];
   preferences: DisplayPreferences;
   now: Date;
-  requested?: string;
-  mail?: { id: string; subject: string; classification: string } | null;
-  selectionKey?: string;
-  mailIntent?: string;
-  mailError?: string;
   notice?: string;
 }) {
   const outreach = isOutreach(record.source);
@@ -187,19 +176,6 @@ export function ApplicationDetail({
               )}
             </div>
             <div className="mt-5 space-y-4">
-              {mail && (
-                <div className="space-y-2 rounded-2xl bg-selected px-4 py-3 text-sm text-selected-foreground [overflow-wrap:anywhere]">
-                  <p className="m-0">Linking mail: {mail.subject}</p>
-                  <ActionForm action={linkMailOnly} feedback="inverse" pendingLabel="Linking">
-                    <input type="hidden" name="mailId" value={mail.id} />
-                    <input type="hidden" name="recordId" value={record.id} />
-                    <input type="hidden" name="returnTo" value="record" />
-                    <Button variant="ghost" size="sm">
-                      Link without recording an outcome
-                    </Button>
-                  </ActionForm>
-                </div>
-              )}
               {editable && outreach && (
                 <p className="m-0 text-sm text-muted-foreground">
                   <Link href={`/outreach?record=${record.id}`} className="text-link">
@@ -220,16 +196,8 @@ export function ApplicationDetail({
               <OutcomeChips
                 key={`outcomes-${record.id}`}
                 recordId={record.id}
-                outcomes={mail?.classification === "APPLICATION_ACKNOWLEDGEMENT" ? [] : available}
-                initial={
-                  mailError || mail?.classification === "APPLICATION_ACKNOWLEDGEMENT"
-                    ? null
-                    : initialOutcome(available, requested)
-                }
-                mailId={mailIntent}
-                mailError={mailError}
-                selectionKey={selectionKey}
-                requested={requested}
+                outcomes={available}
+                initial={null}
                 today={indiaDate(now)}
                 booked={record.rounds.find((round) => round.outcome === "SCHEDULED")}
               />

@@ -79,7 +79,10 @@ export function JourneyTrack({
               <span
                 className={cn(
                   "max-w-full truncate leading-tight",
-                  large ? "text-xs" : "text-[11px]",
+                  // Four columns on a phone leave about 76px: "Acknowledged" fits only tightened.
+                  large
+                    ? "text-xs"
+                    : "text-[10.5px] tracking-tight sm:text-[11px] sm:tracking-normal",
                   step.state === "stopped" && step.tone === "bad"
                     ? "font-medium text-destructive"
                     : step.state === "stopped"
