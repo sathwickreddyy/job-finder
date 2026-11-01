@@ -54,10 +54,11 @@ async function run<T>(action: () => Promise<T>) {
   return workAsyncStorage.run(store, action);
 }
 // Kept without company context: an explicit update about the user's own application.
+// Each inbox gets its own email; one email in several inboxes is settled as copies instead.
 const message = (email: string, suffix = "first") => ({
   externalId: `${email}:${suffix}`,
   sender: "careers@example.invalid",
-  subject: "We received your application",
+  subject: `We received your application (${email})`,
   bodyText: "Thank you for applying to the Software Engineer role.",
   receivedAt: new Date().toISOString(),
   folders: ["Inbox"],
@@ -235,8 +236,7 @@ test("concurrent Check mail actions use the shared lock and import each message 
     release.resolve();
   }
   const results = await Promise.all([first, second]);
-  // The three inboxes hold one email: the first needs you, the other two are its copies.
-  expect(results.map((row) => row.mailCheck?.newAttention)).toEqual([1, 0]);
+  expect(results.map((row) => row.mailCheck?.newAttention)).toEqual([3, 0]);
   expect(
     (
       await pool.query(
