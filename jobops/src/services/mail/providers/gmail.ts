@@ -4,6 +4,7 @@ import { accessTokenFor } from "./connections";
 import type { MailFolder, MailProvider, ScannedMessage, TokenSet } from "./types";
 import { gmailSearchQuery, inWindow } from "./search-query";
 import { plainText } from "./plain-text";
+import { meteredFetch, timedFetch, type Refusal } from "./usage";
 class GmailReadError extends Error {
   constructor(
     message: string,
@@ -17,16 +18,20 @@ async function token(body: Record<string, string>, refreshing: boolean): Promise
   const config = gmail.configuration();
   if (!config.configured)
     throw new Error(`Gmail is not configured. Set ${config.missing.join(", ")}.`);
-  const response = await fetch("https://oauth2.googleapis.com/token", {
-    method: "POST",
-    body: new URLSearchParams({
-      client_id: config.clientId,
-      client_secret: config.clientSecret,
-      ...body,
-    }),
-    cache: "no-store",
-    signal: AbortSignal.timeout(15000),
-  });
+  const response = await timedFetch(
+    "https://oauth2.googleapis.com/token",
+    {
+      method: "POST",
+      body: new URLSearchParams({
+        client_id: config.clientId,
+        client_secret: config.clientSecret,
+        ...body,
+      }),
+      cache: "no-store",
+      signal: AbortSignal.timeout(15000),
+    },
+    { label: "Renew access", request: "POST oauth2.googleapis.com/token", units: 0 },
+  );
   if (!response.ok)
     throw new Error(
       refreshing
@@ -57,41 +62,73 @@ async function token(body: Record<string, string>, refreshing: boolean): Promise
     );
   return parseTokenResponse(data);
 }
+const rateReasons = ["rateLimitExceeded", "userRateLimitExceeded", "dailyLimitExceeded"];
+/** Which Gmail limit refused the request, from its reason code and known phrases only. */
+async function gmailRefusal(response: Response): Promise<Refusal | null> {
+  if (![403, 429].includes(response.status)) return null;
+  let error: { message?: unknown; errors?: { reason?: string }[] } | undefined;
+  try {
+    error = ((await response.json()) as { error?: typeof error }).error;
+  } catch {
+    /* Provider bodies never appear in logs or UI. */
+  }
+  const code = error?.errors
+    ?.map((row) => row.reason ?? "")
+    .find((reason) => rateReasons.includes(reason));
+  if (response.status === 403 && !code) return null;
+  const message = typeof error?.message === "string" ? error.message : "";
+  // Google's own limit name, such as "Queries per minute per user"; never other body text.
+  const limit =
+    /limit '([^'\n]{1,80})'/i.exec(message)?.[1] ??
+    (/concurrent/i.test(message)
+      ? "too many requests at once"
+      : /per minute per user|user-rate/i.test(message)
+        ? "per-user rate limit"
+        : /per minute/i.test(message)
+          ? "per-minute quota"
+          : "");
+  const after = Date.parse(/retry after (\S+)/i.exec(message)?.[1] ?? "");
+  return {
+    reason: [code ?? `${response.status} Too Many Requests`, limit].filter(Boolean).join(": "),
+    ...(Number.isFinite(after) ? { retryAt: after } : {}),
+    daily: code === "dailyLimitExceeded",
+  };
+}
+/** The log line for a Gmail path: label, the exact query and its quota cost. */
+export function gmailCall(path: string) {
+  const [resource, search = ""] = path.split("?");
+  const query = [...new URLSearchParams(search)]
+    .map(([key, value]) => `${key}=${key === "pageToken" ? "…" : value}`)
+    .join("&");
+  if (resource === "messages")
+    return { label: "List messages", request: `GET messages?${query}`, units: 5 };
+  if (resource.startsWith("messages/"))
+    return { label: "Read message", request: `GET messages/{id}?${query}`, units: 5 };
+  if (resource === "labels") return { label: "List folders", request: "GET labels", units: 1 };
+  return { label: "Read profile", request: `GET ${resource}`, units: 1 };
+}
 async function gmailRequest<T>(path: string, accessToken: string): Promise<T> {
-  const response = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/${path}`, {
-    headers: { Authorization: `Bearer ${accessToken}` },
-    cache: "no-store",
-    redirect: "error",
-    signal: AbortSignal.timeout(20000),
-  });
-  if (!response.ok) {
-    let rateLimited = response.status === 429;
-    if (response.status === 403) {
-      try {
-        const error = (await response.json()) as {
-          error?: { errors?: { reason?: string }[] };
-        };
-        rateLimited =
-          error.error?.errors?.some((row) =>
-            ["rateLimitExceeded", "userRateLimitExceeded", "dailyLimitExceeded"].includes(
-              row.reason ?? "",
-            ),
-          ) ?? false;
-      } catch {
-        /* Provider bodies never appear in logs or UI. */
-      }
-    }
+  const response = await meteredFetch(
+    "GMAIL",
+    `https://gmail.googleapis.com/gmail/v1/users/me/${path}`,
+    {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      cache: "no-store",
+      redirect: "error",
+      signal: AbortSignal.timeout(20000),
+    },
+    gmailCall(path),
+    gmailRefusal,
+  );
+  if (!response.ok)
     throw new GmailReadError(
       response.status === 401
         ? "Gmail authorization expired. Reconnect Gmail."
-        : rateLimited
-          ? "Gmail rate limit reached. Wait a few minutes and continue the check."
-          : response.status >= 500
-            ? "Gmail is temporarily unavailable. Retry to continue saved pages."
-            : "Gmail could not be read. Check your Google API configuration and retry.",
+        : response.status >= 500
+          ? "Gmail is temporarily unavailable. Retry to continue saved pages."
+          : "Gmail could not be read. Check your Google API configuration and retry.",
       response.status,
     );
-  }
   return (await response.json()) as T;
 }
 type GmailPart = {

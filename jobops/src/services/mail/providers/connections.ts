@@ -4,11 +4,15 @@ import { db, withDatabaseSession, type SessionDatabase } from "@/db";
 import { activityLogs, mailConnections, settings } from "@/db/schema";
 import { decryptToken, encryptToken } from "../crypto";
 import type { MailConnection, ProviderId, TokenSet } from "./types";
+import { metered, pendingUsage, usageKey, type StoredUsage } from "./usage";
 
 const context = new AsyncLocalStorage<{ database: SessionDatabase; id: string }>();
 const lockKey = (id: string) => `jobops-mail:${id}`;
 
-/** Shared across processes; always re-read after locking. Pages commit separately. */
+/**
+ * Shared across processes; always re-read after locking. Pages commit separately. Every
+ * provider request inside is metered, and the inbox's usage is stored when the work ends.
+ */
 export async function withConnectionLock<T>(
   id: string,
   work: (database: SessionDatabase, current: MailConnection) => Promise<T>,
@@ -21,7 +25,29 @@ export async function withConnectionLock<T>(
       .where(eq(mailConnections.id, id));
     if (!current)
       throw new Error("This inbox was disconnected. Connect it again before refreshing.");
-    return context.run({ database, id }, () => work(database, current));
+    const [usage] = await database
+      .select()
+      .from(settings)
+      .where(eq(settings.key, usageKey(id)));
+    return metered(
+      current.provider as ProviderId,
+      usage?.value as StoredUsage | undefined,
+      async () => {
+        try {
+          return await context.run({ database, id }, () => work(database, current));
+        } finally {
+          const value = pendingUsage();
+          if (value)
+            await database
+              .insert(settings)
+              .values({ key: usageKey(id), value })
+              .onConflictDoUpdate({ target: settings.key, set: { value, updatedAt: new Date() } })
+              .catch(() => {
+                /* Usage is a display aid; a failed write never fails the work. */
+              });
+        }
+      },
+    );
   });
 }
 
@@ -106,6 +132,7 @@ export async function disconnectConnection(id: string) {
       // Check progress and folder coverage belong to the credentials being removed.
       await tx.delete(settings).where(like(settings.key, `mailScan:v2:${id}:%`));
       await tx.delete(settings).where(eq(settings.key, `mailCoverage:${id}`));
+      await tx.delete(settings).where(eq(settings.key, usageKey(id)));
       await tx.delete(mailConnections).where(eq(mailConnections.id, id));
       await tx.insert(activityLogs).values({
         action: "MAIL_DISCONNECTED",

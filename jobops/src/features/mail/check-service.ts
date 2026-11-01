@@ -5,7 +5,17 @@ import { mailConnections, mailTracking, settings } from "@/db/schema";
 import { ApiError } from "@/features/agent-api/http";
 import { providerFor } from "@/services/mail/providers";
 import { withConnectionLock } from "@/services/mail/providers/connections";
-import type { MailConnection, MailFolder } from "@/services/mail/providers/types";
+import type { MailConnection, MailFolder, ProviderId } from "@/services/mail/providers/types";
+import {
+  meteredCalls,
+  meteredSummary,
+  RateLimitError,
+  summarize,
+  usageKey,
+  type ApiCall,
+  type StoredUsage,
+  type UsageSummary,
+} from "@/services/mail/providers/usage";
 import { loadMailContext, type MailContext } from "./context";
 import { ingestPage, noCounts, type IngestCounts } from "./ingest";
 
@@ -36,13 +46,19 @@ export type CheckProgress = {
 export type AccountCheck = {
   account: string;
   provider: string;
-  status: "done" | "more" | "failed";
+  /** `waiting`: the provider asked JobOps to slow down; the inbox resumes after `retryAt`. */
+  status: "done" | "more" | "failed" | "waiting";
   error: string | null;
   lastFetchedAt: string | null;
   /** This step's page; the client adds steps up for the whole fetch. */
   counts: IngestCounts;
   /** Where the window being fetched starts, or null when it is not known yet. */
   since: string | null;
+  until: string | null;
+  retryAt: string | null;
+  /** Every provider request this step sent for the inbox, in order. */
+  calls: ApiCall[];
+  usage: UsageSummary | null;
 };
 export type CheckResult = { more: boolean; newAttention: number; accounts: AccountCheck[] };
 
@@ -100,15 +116,20 @@ export async function checkConnection(
   lastDays?: number,
 ): Promise<AccountCheck & { newAttention: number }> {
   let since: string | null = null;
+  let until: string | null = null;
   const failed = (error: unknown, lastFetchedAt: Date | null) => ({
     account: connection.email,
     provider: connection.provider,
-    status: "failed" as const,
+    status: error instanceof RateLimitError ? ("waiting" as const) : ("failed" as const),
     error: failureText(error),
     lastFetchedAt: lastFetchedAt?.toISOString() ?? null,
     newAttention: 0,
     counts: noCounts(),
     since,
+    until,
+    retryAt: error instanceof RateLimitError ? error.cooldown.until : null,
+    calls: meteredCalls(),
+    usage: meteredSummary(),
   });
   try {
     return await withConnectionLock(connection.id, async (database, current) => {
@@ -134,6 +155,7 @@ export async function checkConnection(
           lastDays,
         );
         since = progress.since;
+        until = progress.until;
         const folders = await provider.folders(current);
         const coverage = {
           folders,
@@ -211,13 +233,21 @@ export async function checkConnection(
             newAttention,
             counts,
             since: progress.since,
+            until: progress.until,
+            retryAt: null,
+            calls: meteredCalls(),
+            usage: meteredSummary(),
           };
         });
       } catch (error) {
         try {
+          // A rate limit pauses the inbox; it isn't a connection problem to fix in Inboxes.
           await database
             .update(mailConnections)
-            .set({ lastError: failureText(error), updatedAt: new Date() })
+            .set({
+              lastError: error instanceof RateLimitError ? null : failureText(error),
+              updatedAt: new Date(),
+            })
             .where(eq(mailConnections.id, current.id));
         } catch {
           /* Committed pages stay safe even if the status write also fails. */
@@ -256,17 +286,26 @@ export async function checkMailStep(options: { lastDays?: number } = {}): Promis
       .where(
         inArray(
           settings.key,
-          connections.map((row) => checkKey(row.id)),
+          connections.flatMap((row) => [checkKey(row.id), usageKey(row.id)]),
         ),
       ),
   ]);
-  const incomplete = connections.filter(
+  const now = new Date();
+  const usageOf = (row: (typeof connections)[number]) =>
+    summarize(
+      row.provider as ProviderId,
+      saved.find((setting) => setting.key === usageKey(row.id))?.value as StoredUsage | undefined,
+      now,
+    );
+  // A paused inbox isn't asked again until its provider's retry time.
+  const ready = connections.filter((row) => !usageOf(row).cooldown);
+  const incomplete = ready.filter(
     (row) =>
       !row.lastError &&
       saved.find((setting) => setting.key === checkKey(row.id))?.value.complete === false,
   );
   // A last-N-days fetch starts a new window for every inbox, replacing unfinished ones.
-  const active = lastDays === undefined && incomplete.length ? incomplete : connections;
+  const active = lastDays === undefined && incomplete.length ? incomplete : ready;
   const results = await Promise.allSettled(
     active.map((row) => checkConnection(row, context, lastDays)),
   );
@@ -286,6 +325,10 @@ export async function checkMailStep(options: { lastDays?: number } = {}): Promis
               newAttention: 0,
               counts: noCounts(),
               since: null,
+              until: null,
+              retryAt: null,
+              calls: [],
+              usage: usageOf(row),
             },
       ];
     }),
@@ -301,17 +344,28 @@ export async function checkMailStep(options: { lastDays?: number } = {}): Promis
         lastFetchedAt: result.lastFetchedAt,
         counts: result.counts,
         since: result.since,
+        until: result.until,
+        retryAt: result.retryAt,
+        calls: result.calls,
+        usage: result.usage,
       };
-    // Waiting for the step that checks every inbox from its last fetch to now.
+    const window = saved.find((setting) => setting.key === checkKey(row.id))?.value;
+    const usage = usageOf(row);
+    // Paused, or waiting for the step that checks every inbox from its last fetch to now.
     return {
       account: row.email,
       provider: row.provider,
-      status: "more",
-      error: null,
+      status: usage.cooldown ? "waiting" : "more",
+      error: usage.cooldown
+        ? new RateLimitError(row.provider as ProviderId, usage.cooldown).message
+        : null,
       lastFetchedAt: row.lastSyncedAt?.toISOString() ?? null,
       counts: noCounts(),
-      since:
-        (saved.find((setting) => setting.key === checkKey(row.id))?.value.since as string) ?? null,
+      since: (window?.since as string) ?? null,
+      until: (window?.until as string) ?? null,
+      retryAt: usage.cooldown?.until ?? null,
+      calls: [],
+      usage,
     };
   });
   return {

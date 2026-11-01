@@ -4,6 +4,7 @@ import { oauthConfiguration, parseTokenResponse } from "./oauth";
 import type { MailProvider, TokenSet, MailFolder, ScannedMessage } from "./types";
 import { inWindow, outlookSearchQuery } from "./search-query";
 import { plainText } from "./plain-text";
+import { meteredFetch, timedFetch, type Refusal } from "./usage";
 
 export const OUTLOOK_SCOPES = "offline_access User.Read Mail.Read";
 const authority = "https://login.microsoftonline.com/consumers/oauth2/v2.0";
@@ -37,18 +38,22 @@ async function token(body: Record<string, string>, refreshing: boolean): Promise
   const config = outlook.configuration();
   if (!config.configured)
     throw new Error(`Outlook is not configured. Set ${config.missing.join(", ")}.`);
-  const response = await fetch(`${authority}/token`, {
-    method: "POST",
-    body: new URLSearchParams({
-      client_id: config.clientId,
-      client_secret: config.clientSecret,
-      scope: OUTLOOK_SCOPES,
-      ...body,
-    }),
-    cache: "no-store",
-    redirect: "error",
-    signal: AbortSignal.timeout(15000),
-  });
+  const response = await timedFetch(
+    `${authority}/token`,
+    {
+      method: "POST",
+      body: new URLSearchParams({
+        client_id: config.clientId,
+        client_secret: config.clientSecret,
+        scope: OUTLOOK_SCOPES,
+        ...body,
+      }),
+      cache: "no-store",
+      redirect: "error",
+      signal: AbortSignal.timeout(15000),
+    },
+    { label: "Renew access", request: "POST login.microsoftonline.com/…/token", units: 0 },
+  );
   if (!response.ok)
     throw new Error(
       refreshing
@@ -78,23 +83,59 @@ class OutlookReadError extends Error {
     super(message);
   }
 }
+/** Graph throttling: 429, or 503 with a Retry-After. The header itself sets the wait. */
+async function graphRefusal(response: Response): Promise<Refusal | null> {
+  if (response.status === 429) return { reason: "429 Too Many Requests" };
+  if (response.status === 503 && response.headers.has("retry-after"))
+    return { reason: "503 Service Unavailable" };
+  return null;
+}
+const graphLabels: [RegExp, string][] = [
+  [/^\/v1\.0\/me\/messages$/, "List messages"],
+  [/^\/v1\.0\/me\/messages\//, "Read message"],
+  [/^\/v1\.0\/me\/mailFolders/, "List folders"],
+  [/^\/v1\.0\/me$/, "Read profile"],
+];
+/** The log line for a Graph URL: ids, field lists and paging cursors are elided. */
+export function graphCall(url: string) {
+  const parsed = new URL(url);
+  const path = parsed.pathname
+    .split("/")
+    .map((part) => (part.length > 40 ? "{id}" : decodeURIComponent(part)))
+    .join("/");
+  const query = [...parsed.searchParams]
+    .map(
+      ([key, value]) =>
+        `${key}=${["$select", "$skiptoken", "$skip", "$deltatoken"].includes(key) ? "…" : value}`,
+    )
+    .join("&");
+  return {
+    label: graphLabels.find(([pattern]) => pattern.test(path))?.[1] ?? "Read mailbox",
+    request: `GET ${path.replace(/^\/v1\.0/, "")}${query ? `?${query}` : ""}`,
+    units: 1,
+  };
+}
 async function graphRequest<T>(url: string, accessToken: string): Promise<T> {
-  const response = await fetch(url, {
-    headers: { Authorization: `Bearer ${accessToken}`, Prefer: preference },
-    cache: "no-store",
-    // Never forward a bearer token through a redirect, including same-origin redirects.
-    redirect: "error",
-    signal: AbortSignal.timeout(20000),
-  });
+  const response = await meteredFetch(
+    "OUTLOOK",
+    url,
+    {
+      headers: { Authorization: `Bearer ${accessToken}`, Prefer: preference },
+      cache: "no-store",
+      // Never forward a bearer token through a redirect, including same-origin redirects.
+      redirect: "error",
+      signal: AbortSignal.timeout(20000),
+    },
+    graphCall(url),
+    graphRefusal,
+  );
   if (!response.ok)
     throw new OutlookReadError(
       response.status === 401
         ? "Outlook authorization expired. Reconnect Outlook."
-        : response.status === 429
-          ? "Outlook rate limit reached. Wait a few minutes and retry refresh."
-          : response.status >= 500
-            ? "Outlook is temporarily unavailable. Retry to continue saved pages."
-            : "Outlook could not be read. Check your Microsoft Graph configuration and retry.",
+        : response.status >= 500
+          ? "Outlook is temporarily unavailable. Retry to continue saved pages."
+          : "Outlook could not be read. Check your Microsoft Graph configuration and retry.",
       response.status,
     );
   return (await response.json()) as T;

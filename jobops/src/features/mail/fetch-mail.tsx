@@ -1,13 +1,12 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Check, CircleAlert, Loader2, RefreshCw } from "lucide-react";
-import { useLoadingTask } from "@/components/loading/overlay";
 import { formatDayTime } from "@/features/applications/dates";
 import type { ProviderId } from "@/services/mail/providers/types";
 import { cn } from "@/lib/utils";
-import { DroppedList } from "./dropped-list";
+import { FetchDialog, type FetchLane, type FetchSummary } from "./fetch-dialog";
 import { checkMail } from "./workspace-actions";
 
 const CAP = 180;
@@ -79,46 +78,10 @@ export function DaysField({
   );
 }
 
-export type FetchLane = {
-  account: string;
-  state: "reading" | "done" | "failed";
-  page: number;
-  kept: number;
-  error: string | null;
-};
-/** One row per inbox while a fetch runs. */
-export function FetchProgress({ lanes }: { lanes: FetchLane[] }) {
-  if (!lanes.length) return null;
-  return (
-    <ul className="m-0 mt-3 grid list-none gap-1.5 p-0 text-xs">
-      {lanes.map((lane) => (
-        <li key={lane.account} className="flex min-w-0 items-center gap-2">
-          <span className="min-w-0 flex-1 truncate">{lane.account}</span>
-          <span
-            className={cn(
-              "shrink-0 text-right",
-              lane.state === "failed"
-                ? "text-destructive"
-                : lane.state === "done"
-                  ? "text-success"
-                  : "text-muted-foreground",
-            )}
-          >
-            {lane.state === "failed"
-              ? lane.error
-              : lane.state === "done"
-                ? `Done, ${lane.kept} kept`
-                : `Page ${lane.page}`}
-          </span>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
 /**
- * Gallery Fetch new mail A: the button with its time frame beside it, the coverage
- * sentence under it, a row per inbox while it runs, then what was kept and dropped.
+ * Gallery Fetch new mail A: the button with its time frame beside it and the coverage
+ * sentence under it. A press opens the fetch dialog with a lane per inbox; once it is closed,
+ * the result stays beside the button with a way back to the details.
  */
 export function FetchMail({
   inboxes,
@@ -137,51 +100,88 @@ export function FetchMail({
   const [frame, setFrame] = useState<"since" | "days">("since");
   const [range, setRange] = useState({ days: 30, over: false });
   const [lanes, setLanes] = useState<FetchLane[]>([]);
-  const [result, setResult] = useState<{
-    text: string;
-    since: string;
-    failed: string[];
+  const [run, setRun] = useState<{
+    startedAt: string;
+    finishedAt: number | null;
+    coverage: string;
   } | null>(null);
-  const [showDropped, setShowDropped] = useState(false);
-  useLoadingTask(pending, "Fetching mail");
-  function run() {
-    const since = new Date().toISOString();
-    setResult(null);
-    setShowDropped(false);
+  const [summary, setSummary] = useState<FetchSummary | null>(null);
+  const [open, setOpen] = useState(false);
+  const [stopping, setStopping] = useState(false);
+  const stop = useRef(false);
+  function fetchMail() {
+    const startedAt = new Date().toISOString();
+    // Each lane shows its inbox's exact window: an unfinished one resumes from its own start.
+    const coverage = `${frame === "days" ? `Last ${range.days} days` : "Since the last fetch"}, every folder including Spam and Trash. An inbox with an unfinished window continues it first.`;
+    const progress = new Map<string, FetchLane>(
+      inboxes.map((inbox) => [
+        inbox.account,
+        {
+          account: inbox.account,
+          provider: inbox.provider,
+          state: "reading",
+          pages: 0,
+          counts: { fetched: 0, alreadyHere: 0, kept: 0, dropped: 0, newAttention: 0 },
+          calls: [],
+          usage: null,
+          since: null,
+          until: null,
+          error: null,
+          retryAt: null,
+        },
+      ]),
+    );
+    stop.current = false;
+    setStopping(false);
+    setSummary(null);
+    setLanes([...progress.values()]);
+    setRun({ startedAt, finishedAt: null, coverage });
+    setOpen(true);
     startTransition(async () => {
       const totals = { kept: 0, needYou: 0, dropped: 0 };
-      const progress = new Map<string, FetchLane>();
       let more = false;
       let error: string | undefined;
       try {
         // Last N days applies to the first step; later steps continue that window, and an
         // interrupted fetch resumes from each inbox's checkpoint on the next press.
-        for (let call = 0; call < 20; call++) {
+        for (let call = 0; call < 20 && !stop.current; call++) {
           const step = await checkMail(call === 0 && frame === "days" ? range.days : undefined);
           if (step.error || !step.mailCheck) {
             error = step.error ?? "Fetch stopped. Fetched pages are safe; fetch again to continue.";
             break;
           }
           for (const account of step.mailCheck.accounts) {
-            const lane = progress.get(account.account) ?? {
-              account: account.account,
-              state: "reading" as const,
-              page: 0,
-              kept: 0,
-              error: null,
-            };
+            const lane = progress.get(account.account);
+            if (!lane) continue;
             const read = account.counts.fetched > 0 || account.status === "done";
             progress.set(account.account, {
               ...lane,
               state:
-                account.status === "failed"
-                  ? "failed"
-                  : account.status === "done"
-                    ? "done"
-                    : "reading",
-              page: lane.page + (read ? 1 : 0),
-              kept: lane.kept + account.counts.kept,
+                account.status === "more"
+                  ? account.calls.length
+                    ? "reading"
+                    : lane.state === "reading"
+                      ? "reading"
+                      : "queued"
+                  : account.status === "waiting"
+                    ? "waiting"
+                    : account.status === "failed"
+                      ? "failed"
+                      : "done",
+              pages: lane.pages + (read && account.calls.length ? 1 : 0),
+              counts: {
+                fetched: lane.counts.fetched + account.counts.fetched,
+                alreadyHere: lane.counts.alreadyHere + account.counts.alreadyHere,
+                kept: lane.counts.kept + account.counts.kept,
+                dropped: lane.counts.dropped + account.counts.dropped,
+                newAttention: lane.counts.newAttention + account.counts.newAttention,
+              },
+              calls: [...lane.calls, ...account.calls],
+              usage: account.usage ?? lane.usage,
+              since: account.since ?? lane.since,
+              until: account.until ?? lane.until,
               error: account.error,
+              retryAt: account.retryAt,
             });
             totals.kept += account.counts.kept;
             totals.needYou += account.counts.newAttention;
@@ -194,21 +194,27 @@ export function FetchMail({
       } catch {
         error = "Connection interrupted. Fetched pages are safe. Fetch again to continue.";
       }
-      const failed = [...progress.values()]
-        .filter((lane) => lane.state === "failed")
-        .map((lane) => lane.account);
-      setResult({
+      const finished = [...progress.values()];
+      const paused = finished.filter((lane) => lane.state === "waiting");
+      setSummary({
         text:
           error ??
           [
             `${totals.kept} kept, ${totals.needYou} need you, ${totals.dropped} dropped.`,
-            more ? "More mail remains; fetch again to continue." : "",
+            stop.current && more
+              ? "Stopped; fetch again to continue."
+              : more
+                ? "More mail remains; fetch again to continue."
+                : "",
+            paused.length
+              ? `${paused.length === 1 ? "One inbox is" : `${paused.length} inboxes are`} paused for a rate limit.`
+              : "",
           ]
             .filter(Boolean)
             .join(" "),
-        since,
-        failed,
+        failed: finished.filter((lane) => lane.state === "failed").map((lane) => lane.account),
       });
+      setRun((current) => current && { ...current, finishedAt: Date.now() });
       router.refresh();
     });
   }
@@ -219,7 +225,7 @@ export function FetchMail({
         <button
           type="button"
           disabled={pending || !connected}
-          onClick={run}
+          onClick={fetchMail}
           title={connected ? undefined : "Connect an inbox first"}
           className="morph pressable inline-flex h-10 items-center gap-2 bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary-hover disabled:opacity-60"
         >
@@ -273,25 +279,23 @@ export function FetchMail({
           lastFetched,
         })}
       </p>
-      <FetchProgress lanes={lanes} />
-      {result && (
+      {summary && run && !open && (
         <div
           role="status"
           className="m-0 mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-2xl bg-muted/50 px-3 py-2 text-sm"
         >
           <span className="inline-flex items-center gap-1">
             <Check aria-hidden size={14} className="text-success" />
-            {result.text}
+            {summary.text}
           </span>
           <button
             type="button"
-            aria-expanded={showDropped}
-            onClick={() => setShowDropped(!showDropped)}
+            onClick={() => setOpen(true)}
             className="font-medium text-link hover:underline"
           >
-            {showDropped ? "Hide what was dropped" : "See what was dropped"}
+            Show fetch details
           </button>
-          {result.failed.map((account) => (
+          {summary.failed.map((account) => (
             <span key={account} className="inline-flex items-center gap-1 text-destructive">
               <CircleAlert aria-hidden size={14} />
               Reconnect {account} in Inboxes
@@ -299,8 +303,22 @@ export function FetchMail({
           ))}
         </div>
       )}
-      {result && showDropped && (
-        <DroppedList since={result.since} companies={companies} className="mt-3" />
+      {open && run && (
+        <FetchDialog
+          running={pending}
+          stopping={stopping}
+          lanes={lanes}
+          startedAt={run.startedAt}
+          finishedAt={run.finishedAt}
+          summary={summary}
+          coverage={run.coverage}
+          companies={companies}
+          onStop={() => {
+            stop.current = true;
+            setStopping(true);
+          }}
+          onClose={() => setOpen(false)}
+        />
       )}
     </div>
   );
