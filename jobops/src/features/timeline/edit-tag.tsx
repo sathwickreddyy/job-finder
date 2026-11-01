@@ -140,15 +140,15 @@ export function EditTag({ item, className }: { item: MailItem; className?: strin
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string>();
   const { show } = useSnackbar();
+  // The dialog is only on the page while open, so a long feed carries no hidden dialogs.
   useEffect(() => {
-    const element = dialog.current;
-    if (!element) return;
-    // showModal keeps focus inside and gives it back to the pencil when the dialog closes.
-    if (open && !element.open) element.showModal();
-    if (!open && element.open) element.close();
+    if (open) dialog.current?.showModal();
   }, [open]);
+  /** close() gives focus back to the pencil; the close event then takes the dialog off the page. */
   function close() {
-    if (saving) return;
+    if (!saving) dialog.current?.close();
+  }
+  function closed() {
     setOpen(false);
     setNext(null);
     setError(undefined);
@@ -164,8 +164,7 @@ export function EditTag({ item, className }: { item: MailItem; className?: strin
       return;
     }
     const previous = state.previous;
-    setOpen(false);
-    setNext(null);
+    dialog.current?.close();
     show({
       message: state.success ?? `Tagged as ${tagLabel[next]}`,
       action: {
@@ -183,7 +182,10 @@ export function EditTag({ item, className }: { item: MailItem; className?: strin
         type="button"
         aria-label="Edit tag"
         aria-haspopup="dialog"
-        onClick={() => setOpen(true)}
+        onClick={() => {
+          setError(undefined);
+          setOpen(true);
+        }}
         className={cn(
           "pressable grid size-7 shrink-0 place-items-center rounded-full text-muted-foreground transition-[opacity,background-color] hover:bg-muted hover:text-foreground",
           className,
@@ -191,18 +193,18 @@ export function EditTag({ item, className }: { item: MailItem; className?: strin
       >
         <Pencil aria-hidden size={14} />
       </button>
-      <dialog
-        ref={dialog}
-        aria-label={next ? "Change this email's tag?" : "Edit tag"}
-        onCancel={(event) => {
-          event.preventDefault();
-          close();
-        }}
-        onClose={() => open && close()}
-        onClick={(event) => event.target === dialog.current && close()}
-        className="m-auto max-h-[calc(100dvh-2rem)] w-[min(34rem,calc(100vw-2rem))] max-w-none overflow-y-auto rounded-[1.75rem] bg-card p-0 text-foreground shadow-surface backdrop:bg-scrim"
-      >
-        {open && (
+      {open && (
+        <dialog
+          ref={dialog}
+          aria-label={next ? "Change this email's tag?" : "Edit tag"}
+          onCancel={(event) => {
+            event.preventDefault();
+            close();
+          }}
+          onClose={closed}
+          onClick={(event) => event.target === dialog.current && close()}
+          className="m-auto max-h-[calc(100dvh-2rem)] w-[min(34rem,calc(100vw-2rem))] max-w-none overflow-y-auto rounded-[1.75rem] bg-card p-0 text-foreground shadow-surface backdrop:bg-scrim"
+        >
           <div className="reveal relative">
             <Button
               type="button"
@@ -236,8 +238,8 @@ export function EditTag({ item, className }: { item: MailItem; className?: strin
               />
             )}
           </div>
-        )}
-      </dialog>
+        </dialog>
+      )}
     </>
   );
 }

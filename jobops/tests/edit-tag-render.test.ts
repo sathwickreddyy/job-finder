@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import { SnackbarView } from "@/components/snackbar";
 import type { MailItem } from "@/features/mail/mail-item";
 import { tagLabel, tagsByStage } from "@/features/mail/tags";
-import { ConfirmChange, TagChoices } from "@/features/timeline/edit-tag";
+import { ConfirmChange, EditTag, TagChoices } from "@/features/timeline/edit-tag";
 
 vi.mock("@/features/mail/workspace-actions", () => ({
   retagMail: vi.fn(),
@@ -78,6 +78,12 @@ describe("Edit tag", () => {
     expect(confirm({ error: "Email not found." })).toMatch(
       /role="alert"[^>]*>[^<]*Email not found\./,
     );
+  });
+
+  it("a closed pencil adds no dialog to the page", () => {
+    const html = renderToStaticMarkup(createElement(EditTag, { item: item() }));
+    expect(html).toContain('aria-label="Edit tag"');
+    expect(html).not.toContain("<dialog");
   });
 
   it("snackbar is a polite status with its action", () => {
