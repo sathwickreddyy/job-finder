@@ -9,6 +9,7 @@ import { istDateTime } from "./dates";
 import {
   closeUnsentRecord,
   markRecordSent,
+  reopenUnsentRecord,
   updateRecordDetails,
   updateRecordRound,
 } from "./outcome-service";
@@ -131,6 +132,21 @@ export async function notApplying(_state: ActionState, form: FormData): Promise<
     refresh(data.id);
     return {
       success: "Closed as not applying.",
+      redirect: safeReturnTo(formString(form, "returnTo")) ?? `/applications?open=${data.id}`,
+    };
+  } catch (error) {
+    return actionError(error);
+  }
+}
+
+/** Undo for Not applying: the record is saved and unsent again. */
+export async function reopenRecord(_state: ActionState, form: FormData): Promise<ActionState> {
+  try {
+    const data = z.object({ id: z.uuid() }).parse({ id: formString(form, "id") });
+    await db.transaction((tx) => reopenUnsentRecord(tx, data, new Date()));
+    refresh(data.id);
+    return {
+      success: "Reopened. It is back in Needs you.",
       redirect: safeReturnTo(formString(form, "returnTo")) ?? `/applications?open=${data.id}`,
     };
   } catch (error) {

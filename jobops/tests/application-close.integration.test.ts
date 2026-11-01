@@ -3,7 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { and, eq, inArray } from "drizzle-orm";
 import { closeDatabase, db } from "@/db";
 import { activityLogs, applicationEvents, applications, jobs } from "@/db/schema";
-import { closeUnsentRecord } from "@/features/applications/outcome-service";
+import { closeUnsentRecord, reopenUnsentRecord } from "@/features/applications/outcome-service";
 import { assertE2eDatabase, dbTests } from "./helpers/e2e-db";
 
 const prefix = `app-close-${randomUUID()}`;
@@ -78,5 +78,41 @@ describe.skipIf(!dbTests)("Not applying", () => {
     ).rejects.toThrow("This record has already been sent or closed. Refresh the page.");
     const [stored] = await db.select().from(applications).where(eq(applications.id, app.id));
     expect(stored.status).toBe("APPLIED");
+  });
+
+  it("reopens a record closed as Not applying, as it was before", async () => {
+    const app = await saved();
+    await db.transaction((tx) => closeUnsentRecord(tx, { id: app.id }, NOW));
+    await db.transaction((tx) => reopenUnsentRecord(tx, { id: app.id }, NOW));
+    const [stored] = await db.select().from(applications).where(eq(applications.id, app.id));
+    expect(stored).toMatchObject({ status: "PREPARING", closedReason: null });
+    const [job] = await db.select().from(jobs).where(eq(jobs.id, app.jobId));
+    expect(job.status).toBe("PREPARING");
+    expect(
+      await db.select().from(applicationEvents).where(eq(applicationEvents.applicationId, app.id)),
+    ).toEqual([]);
+    expect(
+      await db
+        .select()
+        .from(activityLogs)
+        .where(
+          and(eq(activityLogs.entityId, app.id), eq(activityLogs.action, "APPLICATION_REOPENED")),
+        ),
+    ).toHaveLength(1);
+  });
+
+  it("refuses to reopen a record that was not closed as Not applying", async () => {
+    const open = await saved();
+    await expect(
+      db.transaction((tx) => reopenUnsentRecord(tx, { id: open.id }, NOW)),
+    ).rejects.toThrow("Only a record closed as Not applying can be reopened. Refresh the page.");
+    const sent = await saved({
+      status: "WITHDRAWN",
+      closedReason: "WITHDREW",
+      appliedAt: new Date("2026-10-20T05:00:00Z"),
+    });
+    await expect(
+      db.transaction((tx) => reopenUnsentRecord(tx, { id: sent.id }, NOW)),
+    ).rejects.toThrow("Only a record closed as Not applying can be reopened. Refresh the page.");
   });
 });

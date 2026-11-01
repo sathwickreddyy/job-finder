@@ -165,3 +165,25 @@ export function journeyOf(record: JourneySource): Journey {
   });
   return { kind: outreach ? "outreach" : "application", steps };
 }
+
+/**
+ * The outcome the mail rule recorded from an email, while it is still the application's latest
+ * outcome; that is when its Undo shows (spec §1, Undo).
+ */
+export function autoOutcomeOf(
+  record: Pick<JourneySource, "events">,
+): { mailMessageId: string; outcome: string; at: Date } | null {
+  const latest = record.events
+    .filter((event) => typeof event.payload.outcome === "string")
+    .reduce<JourneySource["events"][number] | null>(
+      (newest, event) => (!newest || event.createdAt > newest.createdAt ? event : newest),
+      null,
+    );
+  if (!latest || latest.payload.auto !== true || typeof latest.payload.mailMessageId !== "string")
+    return null;
+  return {
+    mailMessageId: latest.payload.mailMessageId,
+    outcome: latest.payload.outcome as string,
+    at: latest.occurredAt,
+  };
+}

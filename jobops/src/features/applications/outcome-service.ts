@@ -1,4 +1,4 @@
-import { asc, eq } from "drizzle-orm";
+import { and, asc, desc, eq } from "drizzle-orm";
 import { z } from "zod";
 import type { db } from "@/db";
 import {
@@ -200,7 +200,12 @@ export async function closeUnsentRecord(tx: Tx, data: { id: string }, now: Date)
     eventType: "WITHDRAWN",
     occurredAt: now,
     summary: "Not applying",
-    payload: { previousStatus: app.status, nextStatus: "CLOSED" },
+    payload: {
+      previousStatus: app.status,
+      previousJobStatus: job.status,
+      nextStatus: "CLOSED",
+      notApplying: true,
+    },
   });
   await tx
     .update(jobs)
@@ -211,6 +216,53 @@ export async function closeUnsentRecord(tx: Tx, data: { id: string }, now: Date)
     entityType: "APPLICATION",
     entityId: app.id,
     summary: `${job.company}: Not applying`,
+  });
+}
+
+/** Undoes Not applying: the record is saved and unsent again, exactly as before it closed. */
+export async function reopenUnsentRecord(tx: Tx, data: { id: string }, now: Date) {
+  const app = await lockApplication(tx, data.id);
+  const evidence = await recordEvidence(tx, app.id);
+  const state = recordStateFrom({ ...app, ...evidence }, [], []);
+  const [closing] = await tx
+    .select()
+    .from(applicationEvents)
+    .where(
+      and(
+        eq(applicationEvents.applicationId, app.id),
+        eq(applicationEvents.eventType, "WITHDRAWN"),
+      ),
+    )
+    .orderBy(desc(applicationEvents.createdAt))
+    .limit(1);
+  const notApplying =
+    closing && (closing.payload.notApplying === true || closing.summary === "Not applying");
+  if (app.status !== "CLOSED" || app.closedReason !== "WITHDREW" || state.sent || !notApplying)
+    throw new Error("Only a record closed as Not applying can be reopened. Refresh the page.");
+  const [job] = await tx.select().from(jobs).where(eq(jobs.id, app.jobId)).for("update");
+  if (!job) throw new Error("The linked opening no longer exists.");
+  const payload = closing.payload as {
+    previousStatus?: typeof app.status;
+    previousJobStatus?: typeof job.status;
+  };
+  const status = payload.previousStatus ?? "PREPARING";
+  await tx
+    .update(applications)
+    .set({ status, closedReason: null, updatedAt: now })
+    .where(eq(applications.id, app.id));
+  await tx.delete(applicationEvents).where(eq(applicationEvents.id, closing.id));
+  await tx
+    .update(jobs)
+    .set({
+      status: payload.previousJobStatus ?? jobStateForApplication(status, job.status),
+      updatedAt: now,
+    })
+    .where(eq(jobs.id, job.id));
+  await tx.insert(activityLogs).values({
+    action: "APPLICATION_REOPENED",
+    entityType: "APPLICATION",
+    entityId: app.id,
+    summary: `${job.company}: Reopened after Not applying`,
   });
 }
 
