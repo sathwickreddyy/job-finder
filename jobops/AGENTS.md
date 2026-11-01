@@ -31,3 +31,12 @@ database, port 3211, and `data/e2e-uploads`; never point them at personal data.
 ## Security
 
 Do not commit secrets, personal resumes, generated databases, or local data.
+
+## Mobile workflow
+
+Approved on 2026-11-02: below 768px, use bottom navigation for Overview, Mail and
+Applications. Open on real analytics and attention items. Mail is an attention-only
+compact inbox; applications are one list with connected dated circles and expansion
+in place, without category tabs. Keep desktop views. All existing gallery routes and
+demo code were removed at the user's request; older notes saying a gallery remains
+available are historical. Spec: `docs/superpowers/specs/2026-11-02-mobile-essentials-design.md`.

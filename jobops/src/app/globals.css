@@ -45,11 +45,6 @@
   --color-tag-opportunity-container: var(--tag-opportunity-container);
   --color-tag-other: var(--tag-other);
   --color-tag-other-container: var(--tag-other-container);
-  /* Frozen for the 2026-10-31 timeline gallery's five-tag palette. */
-  --color-tag-process: var(--tag-process);
-  --color-tag-process-container: var(--tag-process-container);
-  --color-tag-rejected: var(--tag-rejected);
-  --color-tag-rejected-container: var(--tag-rejected-container);
 }
 
 /* Mail tags are coloured by stage: purple before applying, blue applied, amber
@@ -76,10 +71,6 @@
   --tag-opportunity-container: var(--purple-soft);
   --tag-other: var(--muted-foreground);
   --tag-other-container: transparent;
-  --tag-process: var(--amber);
-  --tag-process-container: var(--amber-soft);
-  --tag-rejected: var(--danger);
-  --tag-rejected-container: var(--danger-soft);
 }
 
 @layer base {
@@ -726,39 +717,6 @@
     border-radius: 5px;
     padding: 3px 7px;
     font-size: 12px;
-  }
-  .gallery-choice {
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    background: var(--card);
-    padding: 20px;
-  }
-  .gallery-option-name {
-    display: flex;
-    justify-content: space-between;
-    margin-bottom: 17px;
-    color: var(--muted-foreground);
-    font-size: 12px;
-  }
-  .gallery-nav {
-    display: grid;
-    gap: 4px;
-    max-width: 210px;
-  }
-  .gallery-nav button {
-    text-align: left;
-    background: none;
-    border: 0;
-    color: var(--muted-foreground);
-    border-radius: 6px;
-    padding: 9px 12px;
-  }
-  .gallery-nav button:hover {
-    background: var(--muted);
-  }
-  .gallery-nav button[aria-pressed="true"] {
-    background: var(--accent-soft);
-    color: var(--foreground);
   }
   .queue-row {
     display: flex;
