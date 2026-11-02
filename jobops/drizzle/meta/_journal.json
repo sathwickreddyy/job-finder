@@ -134,6 +134,13 @@
       "when": 1793619365056,
       "tag": "0018_job_term_lists",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1793628093921,
+      "tag": "0019_resume_docx_path",
+      "breakpoints": true
     }
   ]
 }

@@ -88,6 +88,7 @@ export async function uploadResumeVersion(input: {
   file: File;
   makeCurrent: boolean;
   changeNotes?: string;
+  docxPath?: string | null;
   draft?: boolean;
   executor?: Parameters<Parameters<typeof db.transaction>[0]>[0];
 }) {
@@ -149,6 +150,7 @@ export async function uploadResumeVersion(input: {
           resumeId: input.resumeId,
           versionLabel: input.versionLabel,
           changeNotes: input.changeNotes ?? "",
+          docxPath: input.docxPath ?? null,
           originalFilename: safeFilename(input.file.name),
           ...stored,
           extractedText,

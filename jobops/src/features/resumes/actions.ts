@@ -19,6 +19,7 @@ import { MAX_UPLOAD_BYTES } from "@/services/storage";
 import { assessmentInput } from "./assessment";
 import { indiaDayBoundary } from "@/features/mail/attention";
 import { resumeFamilyHref, resumeFileHref } from "./links";
+import { docxPathSchema } from "./fit/service";
 
 const familySchema = z.object({
   name: z.string().min(2).max(100),
@@ -127,6 +128,9 @@ export async function uploadVersion(_state: ActionState, form: FormData): Promis
       file,
       makeCurrent: form.get("makeCurrent") === "on",
       changeNotes: z.string().max(20000).parse(formString(form, "changeNotes")),
+      docxPath: formString(form, "docxPath").trim()
+        ? docxPathSchema.parse(formString(form, "docxPath"))
+        : null,
     });
     refresh(resumeId);
     return {

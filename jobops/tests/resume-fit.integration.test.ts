@@ -150,6 +150,17 @@ describe.skipIf(!dbTests)("résumé fit records", () => {
     expect(log.action).toBe("RESUME_FIT_RECORDED");
   });
 
+  it("records the editable DOCX path on the posted version", async () => {
+    const resumeId = await family();
+    const mine = await version(resumeId);
+    await record(mine, { target: target(), assessments: [], docxPath: "/r/Revised.docx" }, now);
+    const [row] = await db
+      .select({ docxPath: resumeVersions.docxPath })
+      .from(resumeVersions)
+      .where(eq(resumeVersions.id, mine));
+    expect(row.docxPath).toBe("/r/Revised.docx");
+  });
+
   it("re-recording the same target appends and keeps the latest", async () => {
     const resumeId = await family();
     const mine = await version(resumeId);

@@ -208,6 +208,8 @@ export const resumeVersions = pgTable(
     targetSnapshotId: uuid("target_snapshot_id").references(() => jobSnapshots.id, {
       onDelete: "restrict",
     }),
+    // Where the agent keeps this version's editable DOCX; JobOps never reads the file.
+    docxPath: text("docx_path"),
   },
   (t) => [
     index("resume_versions_family_idx").on(t.resumeId),

@@ -33,9 +33,17 @@ import {
 } from "./tools";
 
 /** Record-only: the agent ran the checks; JobOps stores the target, snapshot and results. */
+/** An absolute local path to a version's editable DOCX. */
+export const docxPathSchema = z
+  .string()
+  .trim()
+  .max(1000)
+  .regex(/^\/.*\.docx$/i, "Give the absolute path to a .docx file.");
+
 export const fitInputSchema = z
   .strictObject({
     baseVersionId: z.uuid().optional(),
+    docxPath: docxPathSchema.optional(),
     target: z.strictObject({
       url: httpUrl,
       company: z.string().trim().min(1).max(200),
@@ -150,7 +158,12 @@ export async function recordFit(versionId: string, input: FitInput, now = new Da
 
     await tx
       .update(resumeVersions)
-      .set({ baseVersionId: baseId, targetJobId: jobId, targetSnapshotId: snapshot.id })
+      .set({
+        baseVersionId: baseId,
+        targetJobId: jobId,
+        targetSnapshotId: snapshot.id,
+        ...(input.docxPath ? { docxPath: input.docxPath } : {}),
+      })
       .where(eq(resumeVersions.id, versionId));
     const assessedAt = indiaDayBoundary(indiaDate(now))!;
     // The agent's reviewed requirements become the snapshot's term list, and every row recorded
