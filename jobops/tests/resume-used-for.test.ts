@@ -5,6 +5,7 @@ import { CompactUsageList } from "@/features/resumes/file-ui";
 import {
   orderedUses,
   shortList,
+  splitLabel,
   usedCompanies,
   type GalleryFile,
   type ResumeUse,
@@ -44,6 +45,20 @@ describe("resume usage summaries", () => {
       "Okta",
       "Ema AI",
     ]);
+  });
+});
+
+describe("splitLabel", () => {
+  it("keeps the part that tells versions apart and drops the date", () => {
+    expect(splitLabel("Walmart Senior SWE (GDF) · R-2655406 · 2 Nov 2026 · v2")).toEqual({
+      title: "Walmart Senior SWE (GDF)",
+      detail: "R-2655406 · v2",
+    });
+    expect(splitLabel("Master · professional experience only · 2 Nov 2026")).toEqual({
+      title: "Master",
+      detail: "professional experience only",
+    });
+    expect(splitLabel("Original upload")).toEqual({ title: "Original upload", detail: "" });
   });
 });
 
