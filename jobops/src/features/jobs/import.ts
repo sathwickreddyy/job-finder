@@ -16,8 +16,16 @@ export function normalizeJobUrl(input: string) {
   return u.toString();
 }
 const normalizedPart = (v: string) => v.normalize("NFKC").toLowerCase().trim().replace(/\s+/g, " ");
-export function jobDedupeKey(input: { company: string; title: string; location: string }) {
-  return JSON.stringify([input.company, input.title, input.location].map(normalizedPart));
+// A requisition id, when known, keeps same-title openings at one company apart.
+export function jobDedupeKey(input: {
+  company: string;
+  title: string;
+  location: string;
+  externalId?: string | null;
+}) {
+  const parts = [input.company, input.title, input.location];
+  if (input.externalId?.trim()) parts.push(input.externalId);
+  return JSON.stringify(parts.map(normalizedPart));
 }
 const numeric = z.preprocess(
   (v) =>

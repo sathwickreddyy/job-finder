@@ -112,6 +112,7 @@ export async function importJobRows(
           company: data.company,
           title: data.title,
           location: provided.has("location") ? data.location : existing.location,
+          externalId: provided.has("externalId") ? data.externalId : existing.externalId,
         });
         await tx.update(jobs).set(mergedValues).where(eq(jobs.id, jobId));
         summary.merged++;

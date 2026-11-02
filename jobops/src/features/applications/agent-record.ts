@@ -40,6 +40,7 @@ export const agentRecordSchema = z.strictObject({
       title: z.string().trim().min(1).max(300),
       location: z.string().trim().max(300).optional(),
       description: z.string().max(100000).optional(),
+      reqId: z.string().trim().min(1).max(200).optional(),
       postedAt: day.optional(),
       postedAtKind: z.enum(["original", "latest_publication"]).optional(),
       postedAtSourceUrl: httpUrl.optional(),
@@ -144,6 +145,7 @@ async function recordConfirmed(
       title: opening.title,
       location: opening.location ?? "",
       description: opening.description ?? "",
+      externalId: opening.reqId,
       source: "AGENT_RECORD",
     });
     const [found] = await tx
