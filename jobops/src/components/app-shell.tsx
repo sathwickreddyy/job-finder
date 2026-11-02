@@ -59,6 +59,8 @@ export function AppShell({
     pathname.startsWith("/mail") ||
     (pathname === "/applications" &&
       (searchParams.get("emails") === "1" || searchParams.get("tab") === "emails"));
+  // Workspaces with side-by-side panes use the wider frame.
+  const wide = pathname === "/mail" || pathname === "/resumes";
   const light = useSyncExternalStore(subscribe, snapshot, () => false);
   useEffect(() => {
     document.documentElement.dataset.theme = light ? "light" : "dark";
@@ -101,7 +103,12 @@ export function AppShell({
           <header className="hidden border-b border-border bg-card md:block">
             {/* One row at every desktop width: nav labels give way below lg, the
                 product name between lg and xl, so nothing wraps onto a second line. */}
-            <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-5 py-4 sm:px-8">
+            <div
+              className={cn(
+                "mx-auto flex items-center justify-between gap-3 px-5 py-4",
+                wide ? "max-w-[1600px] sm:px-6" : "max-w-6xl sm:px-8",
+              )}
+            >
               <Link
                 href="/"
                 className="flex shrink-0 items-center gap-3 text-lg font-semibold text-foreground hover:no-underline"
@@ -175,7 +182,7 @@ export function AppShell({
             id="main"
             className={cn(
               "mx-auto w-full min-w-0 px-4 pt-6 pb-[calc(7rem+env(safe-area-inset-bottom))] md:py-10",
-              pathname === "/mail" ? "max-w-[1600px] md:px-6" : "max-w-6xl md:px-8",
+              wide ? "max-w-[1600px] md:px-6" : "max-w-6xl md:px-8",
             )}
           >
             {children}

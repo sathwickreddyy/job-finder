@@ -186,7 +186,7 @@ export default async function Resumes({ searchParams }: { searchParams: Promise<
                   </>
                 }
               />
-              <div className="mt-6 grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+              <div className="mt-6 grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_360px] 2xl:grid-cols-[minmax(0,1fr)_440px]">
                 <div className="min-w-0 xl:sticky xl:top-4">
                   <PdfPreview file={file} height="h-[520px] sm:h-[700px]" />
                 </div>
