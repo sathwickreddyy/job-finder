@@ -19,6 +19,26 @@ export function carryNotes(previous: LexicalDetails | undefined): Record<string,
   return notes;
 }
 
+/** A re-run keeps each issue the user already set aside, matched by label ignoring case. */
+export function carryDecisions(
+  previous: ResumeNextDetails | undefined,
+  next: ResumeNextDetails,
+): ResumeNextDetails {
+  const decided = new Map(
+    (previous?.issues ?? [])
+      .filter((i) => i.decision)
+      .map((i) => [i.label.toLocaleLowerCase(), i.decision!]),
+  );
+  if (!decided.size) return next;
+  return {
+    ...next,
+    issues: next.issues.map((i) => {
+      const decision = i.decision ?? decided.get(i.label.toLocaleLowerCase());
+      return decision ? { ...i, decision } : i;
+    }),
+  };
+}
+
 export function toLexicalDetails(
   a: LexicalAssessment,
   terms: ReviewedTerm[],

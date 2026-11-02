@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  carryDecisions,
   carryNotes,
   jobOpsMethod,
   toLexicalDetails,
@@ -11,7 +12,11 @@ import type {
   OptimizerAssessment,
 } from "@/features/resumes/score/scoring-client";
 import type { ReviewedTerm } from "@/features/resumes/score/terms";
-import { toolDetailsSchema, type LexicalDetails } from "@/features/resumes/fit/tools";
+import {
+  toolDetailsSchema,
+  type LexicalDetails,
+  type ResumeNextDetails,
+} from "@/features/resumes/fit/tools";
 
 const terms: ReviewedTerm[] = [
   { term: "Java", aliases: [], importance: "required", jdQuote: "We need Java and Kafka." },
@@ -118,5 +123,46 @@ describe("tool result mapping", () => {
 
   it("method names say the check ran in JobOps", () => {
     expect(jobOpsMethod("weighted_coverage@1.1.0")).toBe("weighted_coverage@1.1.0, run in JobOps");
+  });
+});
+
+describe("ResumeNext decisions carried to a re-score", () => {
+  const issue = (label: string, decision?: string) => ({
+    label,
+    hint: "h",
+    severity: "important",
+    ...(decision ? { decision } : {}),
+  });
+  const details = (issues: ReturnType<typeof issue>[]) =>
+    ({
+      ats_score: 70,
+      grade: "C",
+      grade_label: "SATISFACTORY",
+      categories: [],
+      issues,
+      keyword_coverage: { coverage_percent: 40, matched: [], missing: [] },
+      keywords: [],
+      resume: {},
+    }) as ResumeNextDetails;
+
+  it("copies a decision onto the same label, ignoring case", () => {
+    const next = carryDecisions(
+      details([issue("Work Experience", "All roles have dates")]),
+      details([issue("work experience"), issue("Action verbs")]),
+    );
+    expect(next.issues.map((i) => i.decision)).toEqual(["All roles have dates", undefined]);
+  });
+
+  it("keeps a decision the new result already has", () => {
+    const next = carryDecisions(
+      details([issue("Action verbs", "old")]),
+      details([issue("Action verbs", "new")]),
+    );
+    expect(next.issues[0].decision).toBe("new");
+  });
+
+  it("returns the result unchanged without an earlier row", () => {
+    const fresh = details([issue("Action verbs")]);
+    expect(carryDecisions(undefined, fresh)).toEqual(fresh);
   });
 });

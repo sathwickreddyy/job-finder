@@ -5,8 +5,9 @@ import { ApiError } from "@/features/agent-api/http";
 import { indiaDate, indiaDayBoundary } from "@/features/mail/attention";
 import { readBuffer } from "@/services/storage";
 import { parseToolRow, type ParsedRow } from "../fit/derive";
-import type { LexicalDetails, ToolSource } from "../fit/tools";
+import { toolDetailsSchema, type LexicalDetails, type ToolSource } from "../fit/tools";
 import {
+  carryDecisions,
   carryNotes,
   jobOpsMethod,
   toLexicalDetails,
@@ -60,6 +61,23 @@ async function latestNotes(versionId: string, snapshotId: string) {
   return carryNotes(noted as LexicalDetails | undefined);
 }
 
+async function latestDecisions(versionId: string, snapshotId: string) {
+  const [row] = await db
+    .select({ details: resumeAssessments.details })
+    .from(resumeAssessments)
+    .where(
+      and(
+        eq(resumeAssessments.versionId, versionId),
+        eq(resumeAssessments.snapshotId, snapshotId),
+        eq(resumeAssessments.source, "resumenext"),
+      ),
+    )
+    .orderBy(desc(resumeAssessments.createdAt))
+    .limit(1);
+  const parsed = toolDetailsSchema.resumenext.safeParse(row?.details);
+  return parsed.success ? parsed.data : undefined;
+}
+
 /** Runs one tool for one file; every number comes from the scoring service or ResumeNext. */
 async function runTool(
   tool: ToolSource,
@@ -104,7 +122,10 @@ async function runTool(
     targetRole: job.title,
     targetCompany: job.company,
   });
-  const details = toResumeNextDetails(raw, list.fingerprint, sent);
+  const details = carryDecisions(
+    await latestDecisions(version.id, snapshot.id),
+    toResumeNextDetails(raw, list.fingerprint, sent),
+  );
   return { score: details.ats_score, method: jobOpsMethod("match_resume_to_job"), details };
 }
 
