@@ -20,11 +20,14 @@ async function snapshotOf({ params }: Params) {
   return snapshot;
 }
 
-/** The reviewed term list for this saved description, or null when nobody reviewed it. */
+/** The reviewed term list (null when nobody reviewed it) and the exact saved description. */
 export async function GET(_request: Request, context: Params) {
   try {
     const snapshot = await snapshotOf(context);
-    return apiResponse({ list: await getTermList(snapshot.id) });
+    return apiResponse({
+      list: await getTermList(snapshot.id),
+      description: snapshot.description,
+    });
   } catch (error) {
     return apiError(error);
   }

@@ -215,7 +215,7 @@ describe("fit panel rendering", () => {
     expect(reworded).toContain("Dates, titles and numbers unchanged");
   });
 
-  it("no target renders Not tailored for a job and derived links", () => {
+  it("no scores render the Score against a job pill and derived links", () => {
     const html = render(
       createElement(FitView, {
         fit: {
@@ -234,7 +234,7 @@ describe("fit panel rendering", () => {
         },
       }),
     );
-    expect(text(html)).toContain("Not tailored for a job");
+    expect(text(html)).toContain("Score against a job");
     expect(text(html)).toContain("2 tailored files were made from this one");
     expect(html).toContain('href="/resumes?file=a"');
   });

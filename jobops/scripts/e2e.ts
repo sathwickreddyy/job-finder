@@ -49,6 +49,10 @@ const environment = {
   MICROSOFT_REDIRECT_URI: "",
   MAIL_TOKEN_ENCRYPTION_KEY: "",
   GMAIL_TOKEN_ENCRYPTION_KEY: "",
+  // In-app résumé scoring: the local scoring service, and a closed port so ResumeNext is never
+  // called (no text leaves the machine) and its failure path is exercised.
+  SCORING_URL: "http://127.0.0.1:3212",
+  RESUMENEXT_MCP_URL: "http://127.0.0.1:9/mcp",
 };
 function run(command: string, args: string[]) {
   return new Promise<void>((resolve, reject) => {

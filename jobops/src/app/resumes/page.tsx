@@ -193,7 +193,14 @@ export default async function Resumes({ searchParams }: { searchParams: Promise<
                   <PdfPreview file={file} height="h-[520px] sm:h-[700px]" />
                 </div>
                 <div className="min-w-0 rounded-3xl bg-rail px-5 pt-5">
-                  {fit?.fit && <FitView fit={fit.fit} selected={p.fitJob ?? null} />}
+                  {fit?.fit && (
+                    <FitView
+                      fit={fit.fit}
+                      selected={p.fitJob ?? null}
+                      textReady={version?.parsingStatus === "COMPLETED"}
+                      rescore={p.rescore === "1"}
+                    />
+                  )}
                   <div className="mt-5 border-t border-border">
                     {fit?.diff && <ChangesSection diff={fit.diff} />}
                     <DetailSection

@@ -282,7 +282,9 @@ test("a tailored file shows its fit panel", async ({ page, request }) => {
   await page.getByText("What changed", { exact: true }).click();
   await expect(page.getByText(/From your master\./)).toBeVisible();
   await page.goto(`/resumes?file=${baseId}`);
-  await expect(page.getByText("Not tailored for a job")).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Score against a job", exact: true }),
+  ).toBeVisible();
   await expect(page.getByRole("link", { name: "Tailored for Fit Co" }).first()).toBeVisible();
 });
 
@@ -333,4 +335,86 @@ test("resume files and upload drawer work on a narrow screen", async ({ page }) 
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
   await page.getByRole("link", { name: "All files", exact: true }).click();
   await expect(rail(page)).toBeVisible();
+});
+
+test("a résumé file is scored against a saved opening with reviewed terms", async ({
+  page,
+  request,
+}) => {
+  test.setTimeout(120_000);
+  const suffix = Date.now();
+  const company = `Scoring Role ${suffix}`;
+  await page.goto("/jobs/new");
+  await page.getByLabel("Company", { exact: true }).fill(company);
+  await page.getByLabel("Role / title").fill("Backend Engineer");
+  await page.getByLabel("Original job URL").fill(`https://example.invalid/score/${suffix}`);
+  await page
+    .getByLabel("Job description", { exact: true })
+    .fill("Must have Java and Kafka.\nNice to have: Docker and gRPC.");
+  await page.getByRole("button", { name: "Save job", exact: true }).click();
+  await expect(page).toHaveURL(/\/jobs\/[0-9a-f-]+$/);
+
+  const fileId = await upload(
+    page,
+    `Scoring resume ${suffix}`,
+    await pdf("Asha Example asha@example.com +91 98765 43210 Built Java and Docker services"),
+  );
+  await page.getByRole("button", { name: "Score against a job", exact: true }).click();
+  const picker = page.getByRole("dialog", { name: "Choose an opening" });
+  await picker.getByRole("combobox", { name: "Search saved openings" }).fill(company);
+  await picker.getByRole("option", { name: new RegExp(company) }).click();
+
+  const review = page.getByRole("region", { name: "Confirm what the job requires" });
+  await expect(review.getByRole("button", { name: "Kafka: Preferred" })).toBeVisible();
+  await expect(review.getByRole("button", { name: "Score with these terms" })).toBeDisabled();
+  await review.getByRole("button", { name: "Kafka: Preferred" }).click();
+  await review.getByRole("button", { name: "Kafka: Not counted" }).click();
+  await expect(review.getByRole("button", { name: "Kafka: Required" })).toBeVisible();
+
+  // Select "gRPC" in the saved description to add it as a term tied to the job's own line.
+  await review.getByRole("button", { name: "Add a term from the job" }).click();
+  const box = review.getByLabel("Saved job description");
+  await box.evaluate((element) => {
+    const node = element.firstChild!;
+    const at = node.textContent!.indexOf("gRPC");
+    const range = document.createRange();
+    range.setStart(node, at);
+    range.setEnd(node, at + 4);
+    const selection = window.getSelection()!;
+    selection.removeAllRanges();
+    selection.addRange(range);
+  });
+  await box.dispatchEvent("mouseup");
+  await expect(review.getByRole("button", { name: "gRPC: Required" })).toBeVisible();
+  await review.getByRole("button", { name: "Score with these terms" }).click();
+
+  const rows = page.getByRole("region", { name: "Checks for this job" });
+  await expect(rows.getByText("Couldn't reach ResumeNext (bridge on port 8004)")).toBeVisible({
+    timeout: 30_000,
+  });
+  await expect(rows.getByRole("button", { name: "Done" })).toBeVisible({ timeout: 30_000 });
+  await expect(rows.getByLabel("Done")).toHaveCount(2);
+  await rows.getByRole("button", { name: "Done" }).click();
+  await expect(page).toHaveURL(new RegExp(`file=${fileId}&fitJob=[0-9a-f-]+`));
+  const snapshotId = new URL(page.url()).searchParams.get("fitJob")!;
+  const table = page.getByRole("region", { name: "Jobs this file was scored against" });
+  await expect(table.getByRole("link", { name: company })).toBeVisible();
+  await expect(table).not.toContainText("older terms");
+
+  // Changing the reviewed terms marks the earlier scores until the file is re-scored.
+  const terms = await (await request.get(`/api/v1/jobs/snapshots/${snapshotId}/terms`)).json();
+  const edited = terms.list.terms.map((t: { term: string; importance: string }) =>
+    t.term === "Java" ? { ...t, importance: "skip" } : t,
+  );
+  expect(
+    (
+      await request.put(`/api/v1/jobs/snapshots/${snapshotId}/terms`, { data: { terms: edited } })
+    ).status(),
+  ).toBe(200);
+  await page.reload();
+  await expect(table).toContainText("older terms");
+  await table.getByRole("link", { name: "Re-score" }).click();
+  await expect(rows.getByRole("button", { name: "Done" })).toBeVisible({ timeout: 30_000 });
+  await rows.getByRole("button", { name: "Done" }).click();
+  await expect(table).not.toContainText("older terms");
 });

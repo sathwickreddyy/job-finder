@@ -33,9 +33,10 @@ export function proxy(request: NextRequest) {
   const taskApi = /^\/api\/v1\/tasks\/[0-9a-f-]+(?:\/(?:updates|proposals|resume))?$/.test(
     request.nextUrl.pathname,
   );
-  // Local agent routes: companies, mail, application records, resume files and résumé fit records.
+  // Local agent routes: companies, mail, application records, resume files, résumé fit records,
+  // in-app scoring and the reviewed term lists it uses.
   const agentApi =
-    /^\/api\/v1\/(?:companies(?:\/[^/]+)?|mail(?:\/check|\/dropped|\/company\/[^/]+\/(?:search|rule)|\/[0-9a-f-]{36}(?:\/handle|\/include)?)?|applications|resumes(?:\/[0-9a-f-]{36}\/fit)?)\/?$/.test(
+    /^\/api\/v1\/(?:companies(?:\/[^/]+)?|mail(?:\/check|\/dropped|\/company\/[^/]+\/(?:search|rule)|\/[0-9a-f-]{36}(?:\/handle|\/include)?)?|applications|resumes(?:\/[0-9a-f-]{36}\/(?:fit|score|openings))?|jobs\/snapshots\/[0-9a-f-]{36}\/terms(?:\/suggest)?)\/?$/.test(
       request.nextUrl.pathname,
     );
   if ((taskApi || agentApi) && request.headers.has("next-action"))
