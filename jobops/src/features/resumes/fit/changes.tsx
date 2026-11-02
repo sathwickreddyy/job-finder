@@ -43,7 +43,7 @@ export function TrackedChanges({ diff }: { diff: Diff }) {
   return (
     <div>
       <p className="m-0 text-xs text-muted-foreground">
-        From your master. {counts.length ? `${counts.join(", ")}.` : "No edits."}{" "}
+        From the current résumé. {counts.length ? `${counts.join(", ")}.` : "No edits."}{" "}
         {diff.factsUnchanged ? (
           "Dates, titles and numbers unchanged."
         ) : (

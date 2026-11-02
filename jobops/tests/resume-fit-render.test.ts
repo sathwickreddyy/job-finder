@@ -3,12 +3,16 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { assessmentInput } from "@/features/resumes/assessment";
 import { TrackedChanges } from "@/features/resumes/fit/changes";
-import { ChipDetail, Chips } from "@/features/resumes/fit/chips";
-import type { Chip, ParsedRow, ToolSummary } from "@/features/resumes/fit/derive";
+import type { ParsedRow, ToolSummary } from "@/features/resumes/fit/derive";
 import { diffResumes } from "@/features/resumes/fit/diff";
 import { JobBar } from "@/features/resumes/fit/job-bar";
 import { FitView } from "@/features/resumes/fit/panel";
-import { Scores } from "@/features/resumes/fit/scores";
+import type { Brief } from "@/features/resumes/fit/brief";
+import { BriefView } from "@/features/resumes/fit/brief-view";
+import { Dials } from "@/features/resumes/fit/dials";
+import { ResumeNextIssues } from "@/features/resumes/fit/issues-view";
+import type { MustHaveRow } from "@/features/resumes/fit/must-haves";
+import { MustHaves } from "@/features/resumes/fit/must-haves-view";
 import type { Fit, FitGroup } from "@/features/resumes/fit/service";
 
 // Visible text, with tags dropped and entities decoded.
@@ -36,16 +40,6 @@ const snapshot = {
   capturedAt: new Date("2026-11-02T06:00:00Z"),
   description: "Build distributed Java services.",
 };
-const chip = (patch: Partial<Chip>): Chip => ({
-  term: "Java",
-  importance: "required",
-  closeness: "exact",
-  isNew: false,
-  quote: "You know Java.",
-  evidence: ["Built Java services."],
-  matched: ["Java"],
-  ...patch,
-});
 const summary = (score: number, base: number | null): ToolSummary => ({
   score,
   baseScore: base,
@@ -133,41 +127,84 @@ describe("fit panel rendering", () => {
     );
   });
 
-  it("scores show Not checked yet for a missing tool and the diagnostics line once", () => {
+  it("dials show each score of 100, coloured by band, beside the current résumé", () => {
+    const html = render(
+      createElement(Dials, {
+        tools: {
+          "jobops-lexical": summary(52.3, 43.2),
+          resumenext: { notChecked: true },
+          "resume-ats-optimizer": summary(84, null),
+        },
+        captions: { "resume-ats-optimizer": "7 of 13 must-haves found" },
+      }),
+    );
+    const out = text(html);
+    expect(out).toMatch(/52 of 100 Keyword check/);
+    expect(out).toContain("Current 43.2");
+    expect(out).toContain("7 of 13 must-haves found");
+    expect(out).toContain("Not checked yet");
+    expect(html).toMatch(/text-warning[^>]*>52</);
+    expect(html).toMatch(/text-success[^>]*>84</);
+    expect(out.split("Tool diagnostics, not an employer's ATS.")).toHaveLength(2);
+    expect(out).toContain("The résumé rewrite rule needs all three checks.");
+    expect(out).toContain("The tick marks the current résumé.");
+  });
+
+  it("must-haves table gives each state its next step", () => {
+    const rows: MustHaveRow[] = [
+      { term: "Java", state: "shown", where: { summary: 1, skills: 1, experience: 1 } },
+      { term: "Kafka", state: "add-bullet", where: { summary: 0, skills: 1, experience: 0 } },
+      { term: "Rust", state: "unclear", where: null },
+      { term: "Spark", state: "missing", where: null },
+    ];
+    const out = text(render(createElement(MustHaves, { rows, hasOptimizer: true, format: [] })));
+    expect(out).toMatch(/Java .*Shown/);
+    expect(out).toMatch(/Kafka .*Add a bullet/);
+    expect(out).toMatch(/Rust Unclear Ask/);
+    expect(out).toMatch(/Spark Not on the résumé Missing/);
+    expect(out).toContain("1 of 2 found must-haves have no Experience mention.");
+    const bare = text(
+      render(createElement(MustHaves, { rows: rows.slice(2), hasOptimizer: false, format: [] })),
+    );
+    expect(bare).toContain("Sections need the ATS optimizer check.");
+  });
+
+  it("ResumeNext issues split into worth fixing and checked, with reasons", () => {
     const out = text(
       render(
-        createElement(Scores, {
-          tools: {
-            "jobops-lexical": summary(61.1, 50),
-            resumenext: { notChecked: true },
-            "resume-ats-optimizer": summary(61.1, null),
-          },
-          format: [],
+        createElement(ResumeNextIssues, {
+          summary: summary(69, 66),
+          issues: [
+            { label: "Action verbs", hint: "Start with verbs", severity: "important" },
+            { label: "Work experience", hint: "Dates", severity: "urgent", decision: "Has dates" },
+            { label: "Experience — x: company missing", hint: "Add", severity: "important" },
+          ],
         }),
       ),
     );
-    expect(out).toContain("Not checked yet");
-    expect(out).toContain("from 50 on the master");
-    expect(out).toContain("from — on the master");
-    expect(out.split("Tool diagnostics, not an employer's ATS.")).toHaveLength(2);
-    expect(out).toContain("The résumé rewrite rule needs all three checks.");
+    expect(out).toContain("69 of 100");
+    expect(out).toMatch(/Worth fixing 1 .*Action verbs Start with verbs/);
+    expect(out).toMatch(/Checked and left as is 2 .*Has dates .*wrapped bullet line/);
   });
 
-  it("chips mark new terms with a plus and missing ones dashed", () => {
-    const html = render(
-      createElement(Chips, {
-        chips: [
-          chip({ term: "LLM", isNew: true }),
-          chip({ term: "Go", closeness: "missing", evidence: [], matched: [] }),
-          chip({ term: "Kafka", closeness: "unclear", importance: "preferred" }),
-        ],
-      }),
+  it("brief section shows the JSON the agent reads", () => {
+    const out = text(
+      render(
+        createElement(BriefView, {
+          brief: { askUserFirst: [{ term: "Spark" }], rules: ["Ask first"] } as unknown as Brief,
+        }),
+      ),
     );
-    expect(text(html)).toContain("1 of 3 on your résumé");
-    expect(text(html)).toContain("New in this version LLM");
-    expect(html).toMatch(/border-dashed[^>]*>[^<]*Go/);
-    expect(text(html)).toContain("Must have");
-    expect(text(html)).toContain("Nice to have");
+    expect(out).toContain("What the agent is told");
+    expect(out).toContain('"askUserFirst"');
+    expect(out).toContain("Claude Code or Codex reads this when it opens the résumé.");
+  });
+
+  it("the panel never says master and shows the DOCX path", () => {
+    const fit = { ...scoredFit(), docxPath: "/r/Walmart.docx" };
+    const out = text(render(createElement(FitView, { fit, selected: null })));
+    expect(out.toLowerCase()).not.toContain("master");
+    expect(out).toContain("/r/Walmart.docx");
   });
 
   it("job bar never presents a date of unknown type as the original posting", () => {
@@ -179,23 +216,6 @@ describe("fit panel rendering", () => {
       render(createElement(JobBar, { target: { ...target, postedAtKind: "ORIGINAL" }, snapshot })),
     );
     expect(original).not.toContain("(");
-  });
-
-  it("missing chip without a note says only Not on this résumé", () => {
-    const plain = text(render(createElement(ChipDetail, { chip: chip({ closeness: "missing" }) })));
-    expect(plain).toContain("Not on this résumé");
-    expect(plain).not.toContain("Left out");
-    const noted = text(
-      render(
-        createElement(ChipDetail, {
-          chip: chip({ closeness: "missing", note: "Left out: no experience to back it" }),
-        }),
-      ),
-    );
-    expect(noted).toContain("Left out: no experience to back it");
-    expect(
-      text(render(createElement(ChipDetail, { chip: chip({ closeness: "unclear" }) }))),
-    ).toContain("The tool couldn't tell");
   });
 
   it("changes header omits the unchanged claim when facts changed", () => {
@@ -250,7 +270,7 @@ describe("fit panel rendering", () => {
     expect(table.indexOf("Walmart Global Tech")).toBeLessThan(table.indexOf("Atlassian"));
     expect(table).toContain("Tailored for");
     expect(table).toMatch(/56\.4 up 18\.2/);
-    expect(text(html)).toContain("Arrows compare with the master on the same job.");
+    expect(text(html)).toContain("Arrows compare with the current résumé on the same job.");
     expect(html).toContain(`href="/resumes?file=m&amp;fitJob=s2"`);
   });
 
@@ -269,7 +289,9 @@ describe("fit panel rendering", () => {
   it("table hidden with only the tailored job", () => {
     const fit = scoredFit();
     fit.groups = fit.groups.slice(0, 1);
-    expect(render(createElement(FitView, { fit, selected: null }))).not.toContain("<table");
+    expect(render(createElement(FitView, { fit, selected: null }))).not.toContain(
+      "Jobs this file was scored against",
+    );
   });
 
   it("an earlier description is marked in the table", () => {

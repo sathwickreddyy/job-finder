@@ -6,14 +6,21 @@ import { DetailSection } from "../workspace/pane";
 import { editCount, TrackedChanges } from "./changes";
 import { ScoreFlow } from "../score/ui/flow";
 import { ComparisonTable, showsComparison } from "./compare";
-import { ToolChecks } from "./checks";
-import { Chips } from "./chips";
+import { BriefView } from "./brief-view";
 import { summarizeTool } from "./derive";
+import { Dials } from "./dials";
 import { diffResumes } from "./diff";
+import { ResumeNextIssues } from "./issues-view";
 import { JobBar } from "./job-bar";
-import { Scores } from "./scores";
+import { mustHaveRows } from "./must-haves";
+import { MustHaves } from "./must-haves-view";
 import { getFit, type Fit } from "./service";
-import { TOOL_SOURCES, type OptimizerDetails } from "./tools";
+import {
+  TOOL_SOURCES,
+  type OptimizerDetails,
+  type ResumeNextDetails,
+  type ToolSource,
+} from "./tools";
 
 /** The recorded fit plus tracked changes from the base version's extracted text. */
 export async function loadFit(versionId: string) {
@@ -67,10 +74,17 @@ export function FitView({
   const group = fit.groups.find((g) => g.snapshotId === selected) ?? fit.groups[0];
   const tools = Object.fromEntries(
     TOOL_SOURCES.map((s) => [s, summarizeTool(s, group.mine[s], group.base[s])]),
-  ) as Parameters<typeof Scores>[0]["tools"];
+  ) as Record<ToolSource, ReturnType<typeof summarizeTool>>;
   const optimizer = group.mine["resume-ats-optimizer"]?.parsed as OptimizerDetails | undefined;
+  const resumenext = group.mine.resumenext?.parsed as ResumeNextDetails | undefined;
+  const ats = group.brief?.scores.atsOptimizer;
   return (
     <div className="space-y-6">
+      {fit.docxPath && (
+        <p className="m-0 truncate px-1 text-[11px] text-muted-foreground" title={fit.docxPath}>
+          Editable DOCX: {fit.docxPath}
+        </p>
+      )}
       <JobBar
         key={group.snapshotId}
         target={group.target}
@@ -98,9 +112,25 @@ export function FitView({
           selected={group.snapshotId}
         />
       )}
-      <Scores key={`scores-${group.snapshotId}`} tools={tools} format={optimizer?.format ?? []} />
-      {group.chips.length > 0 && <Chips chips={group.chips} />}
-      <ToolChecks mine={group.mine} />
+      <Dials
+        tools={tools}
+        captions={
+          ats?.mustHavesFound != null
+            ? {
+                "resume-ats-optimizer": `${ats.mustHavesFound} of ${ats.mustHaves} must-haves found`,
+              }
+            : {}
+        }
+      />
+      {group.mine["jobops-lexical"] && (
+        <MustHaves
+          rows={mustHaveRows(group)}
+          hasOptimizer={!!optimizer}
+          format={optimizer?.format ?? []}
+        />
+      )}
+      <ResumeNextIssues summary={tools.resumenext} issues={resumenext?.issues ?? null} />
+      {group.brief && <BriefView key={`brief-${group.snapshotId}`} brief={group.brief} />}
     </div>
   );
 }
