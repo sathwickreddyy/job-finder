@@ -1,13 +1,28 @@
-import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, ne, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
-import { activityLogs, jobSnapshots, jobs, resumeAssessments, resumeVersions } from "@/db/schema";
+import {
+  activityLogs,
+  jobSnapshots,
+  jobs,
+  jobTermLists,
+  resumeAssessments,
+  resumeVersions,
+} from "@/db/schema";
 import { ApiError } from "@/features/agent-api/http";
 import { day, httpUrl } from "@/features/applications/agent-record";
 import { jobInputSchema } from "@/features/jobs/import";
 import { importJobRows } from "@/features/jobs/service";
 import { indiaDate, indiaDayBoundary } from "@/features/mail/attention";
-import { deriveChips, latestBySource, parseToolRow, type Chip, type ParsedRow } from "./derive";
+import {
+  deriveChips,
+  latestBySource,
+  parseToolRow,
+  pickBase,
+  pickRows,
+  type Chip,
+  type ParsedRow,
+} from "./derive";
 import { fromRequirements, saveTermList, termsFingerprint } from "../score/terms";
 import {
   TOOL_SOURCES,
@@ -180,6 +195,24 @@ export async function recordFit(versionId: string, input: FitInput, now = new Da
   });
 }
 
+type Target = NonNullable<Fit["target"]>;
+type Snapshot = NonNullable<Fit["snapshot"]>;
+
+/** One job a file was scored against: its saved description, rows and comparison with the base. */
+export type FitGroup = {
+  snapshotId: string;
+  target: Target;
+  snapshot: Snapshot;
+  tailored: boolean;
+  /** The job has a newer saved description than the one these scores used. */
+  earlierDescription: boolean;
+  fingerprint: string | null;
+  mine: Partial<Record<ToolSource, ParsedRow>>;
+  base: Partial<Record<ToolSource, ParsedRow>>;
+  olderTerms: Partial<Record<ToolSource, boolean>>;
+  chips: Chip[];
+};
+
 export type Fit = {
   versionId: string;
   baseVersionId: string | null;
@@ -197,8 +230,98 @@ export type Fit = {
   mine: Partial<Record<ToolSource, ParsedRow>>;
   base: Partial<Record<ToolSource, ParsedRow>>;
   chips: Chip[];
+  /** Every job this file was scored against, the tailored one first. */
+  groups: FitGroup[];
   derivedFrom: { id: string; label: string }[];
 };
+
+const targetOf = (job: typeof jobs.$inferSelect): Target => ({
+  jobId: job.id,
+  company: job.company,
+  title: job.title,
+  location: job.location,
+  url: job.canonicalUrl,
+  reqId: job.externalId,
+  postedAt: job.postedAt ? indiaDate(job.postedAt) : null,
+  postedAtKind: job.postedAtKind,
+});
+
+const chipsOf = (
+  mine: Partial<Record<ToolSource, ParsedRow>>,
+  base: Partial<Record<ToolSource, ParsedRow>>,
+) => {
+  const lexical = mine["jobops-lexical"]?.parsed as LexicalDetails | undefined;
+  return lexical
+    ? deriveChips(
+        lexical,
+        base["jobops-lexical"]?.parsed as LexicalDetails | undefined,
+        mine["resume-ats-optimizer"]?.parsed as OptimizerDetails | undefined,
+      )
+    : [];
+};
+
+async function fitGroups(version: typeof resumeVersions.$inferSelect): Promise<FitGroup[]> {
+  const ids = [version.id, ...(version.baseVersionId ? [version.baseVersionId] : [])];
+  const rows = (
+    await db.select().from(resumeAssessments).where(inArray(resumeAssessments.versionId, ids))
+  )
+    .map((row) => parseToolRow({ ...row, details: row.details }))
+    .filter((row): row is ParsedRow => row !== null);
+  const snapshotIds = [
+    ...new Set([
+      ...(version.targetSnapshotId ? [version.targetSnapshotId] : []),
+      ...rows.filter((r) => r.versionId === version.id).map((r) => r.snapshotId),
+    ]),
+  ];
+  if (!snapshotIds.length) return [];
+  const snapshots = await db
+    .select()
+    .from(jobSnapshots)
+    .where(inArray(jobSnapshots.id, snapshotIds));
+  const jobIds = [...new Set(snapshots.map((s) => s.jobId))];
+  const [jobRows, lists, latest] = await Promise.all([
+    db.select().from(jobs).where(inArray(jobs.id, jobIds)),
+    db
+      .select({ snapshotId: jobTermLists.snapshotId, fingerprint: jobTermLists.fingerprint })
+      .from(jobTermLists)
+      .where(inArray(jobTermLists.snapshotId, snapshotIds)),
+    db
+      .selectDistinctOn([jobSnapshots.jobId], { jobId: jobSnapshots.jobId, id: jobSnapshots.id })
+      .from(jobSnapshots)
+      .where(and(inArray(jobSnapshots.jobId, jobIds), ne(jobSnapshots.description, "")))
+      .orderBy(jobSnapshots.jobId, desc(jobSnapshots.capturedAt), desc(jobSnapshots.id)),
+  ]);
+  const jobOf = new Map(jobRows.map((j) => [j.id, j]));
+  const fingerprintOf = new Map(lists.map((l) => [l.snapshotId, l.fingerprint]));
+  const latestOf = new Map(latest.map((l) => [l.jobId, l.id]));
+  const newest = (group: FitGroup) =>
+    Math.max(0, ...Object.values(group.mine).map((r) => r!.createdAt.getTime()));
+  return snapshots
+    .map((snapshot) => {
+      const fingerprint = fingerprintOf.get(snapshot.id) ?? null;
+      const picked = pickRows(rows, version.id, snapshot.id, fingerprint);
+      const base = version.baseVersionId
+        ? pickBase(rows, version.baseVersionId, snapshot.id, picked.rows)
+        : {};
+      return {
+        snapshotId: snapshot.id,
+        target: targetOf(jobOf.get(snapshot.jobId)!),
+        snapshot: {
+          id: snapshot.id,
+          capturedAt: snapshot.capturedAt,
+          description: snapshot.description,
+        },
+        tailored: snapshot.id === version.targetSnapshotId,
+        earlierDescription: latestOf.get(snapshot.jobId) !== snapshot.id,
+        fingerprint,
+        mine: picked.rows,
+        base,
+        olderTerms: picked.olderTerms,
+        chips: chipsOf(picked.rows, base),
+      };
+    })
+    .sort((a, b) => Number(b.tailored) - Number(a.tailored) || newest(b) - newest(a));
+}
 
 export async function getFit(versionId: string): Promise<Fit | null> {
   const [version] = await db.select().from(resumeVersions).where(eq(resumeVersions.id, versionId));
@@ -216,6 +339,7 @@ export async function getFit(versionId: string): Promise<Fit | null> {
     mine: {},
     base: {},
     chips: [],
+    groups: await fitGroups(version),
     derivedFrom,
   };
   if (!version.targetJobId || !version.targetSnapshotId) return fit;
@@ -223,16 +347,7 @@ export async function getFit(versionId: string): Promise<Fit | null> {
     db.select().from(jobs).where(eq(jobs.id, version.targetJobId)),
     db.select().from(jobSnapshots).where(eq(jobSnapshots.id, version.targetSnapshotId)),
   ]);
-  fit.target = {
-    jobId: job.id,
-    company: job.company,
-    title: job.title,
-    location: job.location,
-    url: job.canonicalUrl,
-    reqId: job.externalId,
-    postedAt: job.postedAt ? indiaDate(job.postedAt) : null,
-    postedAtKind: job.postedAtKind,
-  };
+  fit.target = targetOf(job);
   fit.snapshot = {
     id: snapshot.id,
     capturedAt: snapshot.capturedAt,
@@ -254,12 +369,6 @@ export async function getFit(versionId: string): Promise<Fit | null> {
     .filter((row): row is ParsedRow => row !== null);
   fit.mine = latestBySource(rows, versionId, snapshot.id);
   if (version.baseVersionId) fit.base = latestBySource(rows, version.baseVersionId, snapshot.id);
-  const lexical = fit.mine["jobops-lexical"]?.parsed as LexicalDetails | undefined;
-  if (lexical)
-    fit.chips = deriveChips(
-      lexical,
-      fit.base["jobops-lexical"]?.parsed as LexicalDetails | undefined,
-      fit.mine["resume-ats-optimizer"]?.parsed as OptimizerDetails | undefined,
-    );
+  fit.chips = chipsOf(fit.mine, fit.base);
   return fit;
 }

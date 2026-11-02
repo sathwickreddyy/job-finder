@@ -35,13 +35,15 @@ function postedLine(target: NonNullable<Fit["target"]>) {
 export function JobBar({
   target,
   snapshot,
+  label = "Job this file is tailored for",
 }: {
   target: NonNullable<Fit["target"]>;
   snapshot: NonNullable<Fit["snapshot"]>;
+  label?: string;
 }) {
   const [open, setOpen] = useState(false);
   return (
-    <section aria-label="Job this file is tailored for">
+    <section aria-label={label}>
       <button
         type="button"
         onClick={() => setOpen((x) => !x)}

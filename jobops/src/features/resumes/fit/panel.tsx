@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { resumeVersions } from "@/db/schema";
 import { DetailSection } from "../workspace/pane";
 import { editCount, TrackedChanges } from "./changes";
+import { ComparisonTable, showsComparison } from "./compare";
 import { ToolChecks } from "./checks";
 import { Chips } from "./chips";
 import { summarizeTool } from "./derive";
@@ -26,8 +27,8 @@ export async function loadFit(versionId: string) {
   return { fit, diff: mine && base ? diffResumes(base, mine) : null };
 }
 
-export function FitView({ fit }: { fit: Fit }) {
-  if (!fit.target || !fit.snapshot)
+export function FitView({ fit, selected = null }: { fit: Fit; selected?: string | null }) {
+  if (!fit.groups.length)
     return (
       <section aria-label="Job this file is tailored for" className="space-y-3">
         <p className="m-0 rounded-full bg-muted px-4 py-2.5 text-sm text-muted-foreground">
@@ -54,16 +55,29 @@ export function FitView({ fit }: { fit: Fit }) {
         )}
       </section>
     );
+  const group = fit.groups.find((g) => g.snapshotId === selected) ?? fit.groups[0];
   const tools = Object.fromEntries(
-    TOOL_SOURCES.map((s) => [s, summarizeTool(s, fit.mine[s], fit.base[s])]),
+    TOOL_SOURCES.map((s) => [s, summarizeTool(s, group.mine[s], group.base[s])]),
   ) as Parameters<typeof Scores>[0]["tools"];
-  const optimizer = fit.mine["resume-ats-optimizer"]?.parsed as OptimizerDetails | undefined;
+  const optimizer = group.mine["resume-ats-optimizer"]?.parsed as OptimizerDetails | undefined;
   return (
     <div className="space-y-6">
-      <JobBar target={fit.target} snapshot={fit.snapshot} />
-      <Scores tools={tools} format={optimizer?.format ?? []} />
-      {fit.chips.length > 0 && <Chips chips={fit.chips} />}
-      <ToolChecks mine={fit.mine} />
+      <JobBar
+        key={group.snapshotId}
+        target={group.target}
+        snapshot={group.snapshot}
+        label={group.tailored ? undefined : "Job this file was scored against"}
+      />
+      {showsComparison(fit.groups) && (
+        <ComparisonTable
+          versionId={fit.versionId}
+          groups={fit.groups}
+          selected={group.snapshotId}
+        />
+      )}
+      <Scores key={`scores-${group.snapshotId}`} tools={tools} format={optimizer?.format ?? []} />
+      {group.chips.length > 0 && <Chips chips={group.chips} />}
+      <ToolChecks mine={group.mine} />
     </div>
   );
 }

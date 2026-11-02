@@ -4,6 +4,7 @@ import { eq, inArray, like } from "drizzle-orm";
 import { closeDatabase, db } from "@/db";
 import { activityLogs, jobs, resumeAssessments, resumes, resumeVersions } from "@/db/schema";
 import { fitInputSchema, getFit, recordFit } from "@/features/resumes/fit/service";
+import { termsFingerprint } from "@/features/resumes/score/terms";
 import { assertE2eDatabase, dbTests } from "./helpers/e2e-db";
 
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
@@ -236,5 +237,46 @@ describe.skipIf(!dbTests)("résumé fit records", () => {
     const missing = await GET(new Request(`http://localhost/api/v1/resumes/${id}/fit`), params);
     expect(missing.status).toBe(404);
     expect(await missing.json()).toEqual({ error: "Unknown résumé file." });
+  });
+
+  it("getFit groups every snapshot the file was scored against", async () => {
+    const resumeId = await family();
+    const base = await version(resumeId);
+    const mine = await version(resumeId);
+    const tailored = await record(
+      mine,
+      { baseVersionId: base, target: target(), assessments: [assessment(mine, 56)] },
+      now,
+    );
+    const other = await record(
+      await version(resumeId),
+      { target: target({ company: `Other Co ${prefix}` }), assessments: [] },
+      now,
+    );
+    const fingerprint = termsFingerprint([
+      { term: "Java", aliases: [], importance: "required", jdQuote: "Java." },
+    ]);
+    for (const [versionId, score] of [
+      [mine, 58],
+      [base, 61],
+    ] as const)
+      await db.insert(resumeAssessments).values({
+        versionId,
+        snapshotId: other.snapshotId,
+        source: "jobops-lexical",
+        method: "weighted_coverage@1.1.0, run in JobOps",
+        score,
+        assessedAt: now,
+        details: { ...lexical(score), termsFingerprint: fingerprint },
+      });
+    const fit = (await getFit(mine))!;
+    expect(fit.groups.map((g) => [g.snapshotId, g.tailored])).toEqual([
+      [tailored.snapshotId, true],
+      [other.snapshotId, false],
+    ]);
+    expect(fit.groups[1].mine["jobops-lexical"]?.score).toBe(58);
+    expect(fit.groups[1].base["jobops-lexical"]?.score).toBe(61);
+    expect(fit.groups[1].target.company).toBe(`Other Co ${prefix}`);
+    expect(fit.groups[1].earlierDescription).toBe(false);
   });
 });
