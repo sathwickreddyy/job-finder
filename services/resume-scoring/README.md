@@ -73,6 +73,8 @@ request. Document text, filenames and assessment bodies are not logged. Response
 | `GET /v1/metadata-schema` | JSON Schema for the PDF endpoint's `metadata` form field |
 | `POST /v1/assessments` | JSON: resume text, JD, optional reviewed requirements and reference IDs |
 | `POST /v1/assessments/pdf` | Multipart: `resume` PDF and `metadata` JSON string |
+| `POST /v1/ats-optimizer/pdf` | Multipart like above; at least one `required` term. The resume-ats-optimizer rubric: required terms found ÷ required × 100, keyword counts by section and layout checks (undeterminable checks warn) |
+| `POST /v1/requirements/suggest` | JSON `job_description`; catalogue terms with aliases and the JD line each came from, no importance |
 
 Synthetic, runnable text example:
 

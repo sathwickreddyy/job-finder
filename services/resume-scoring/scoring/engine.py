@@ -39,6 +39,12 @@ METHODS = [
         "formula": "100 * sum(weights of mentioned requirements) / sum(all requirement weights)",
         "weights": {"required": 3, "preferred": 1, "unspecified": 1},
     },
+    {
+        "id": "ats_optimizer",
+        "version": ENGINE_VERSION,
+        "formula": "100 * required terms found / required terms",
+        "description": "Positive mentions only; layout checks that cannot be established warn.",
+    },
 ]
 LIMITATIONS = [
     "These are lexical coverage scores, not employer ATS scores or interview probabilities.",
