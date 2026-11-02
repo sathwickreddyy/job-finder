@@ -17,12 +17,12 @@ import { normalizeCompany } from "./lanes";
 import { recordMethods, recordSentAt } from "./domain";
 import { isPlannedRecord, recordApplication } from "./record-service";
 
-const httpUrl = z
+export const httpUrl = z
   .url()
   .max(2000)
   .refine((value) => ["http:", "https:"].includes(new URL(value).protocol), "Use an http(s) URL.");
 // The format alone lets 2026-02-30 through, which Date silently rolls into March.
-const day = z
+export const day = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD.")
   .refine((value) => {
