@@ -8,6 +8,7 @@ import { jobInputSchema } from "@/features/jobs/import";
 import { importJobRows } from "@/features/jobs/service";
 import { indiaDate, indiaDayBoundary } from "@/features/mail/attention";
 import { deriveChips, latestBySource, parseToolRow, type Chip, type ParsedRow } from "./derive";
+import { fromRequirements, saveTermList, termsFingerprint } from "../score/terms";
 import {
   TOOL_SOURCES,
   toolDetailsSchema,
@@ -137,6 +138,16 @@ export async function recordFit(versionId: string, input: FitInput, now = new Da
       .set({ baseVersionId: baseId, targetJobId: jobId, targetSnapshotId: snapshot.id })
       .where(eq(resumeVersions.id, versionId));
     const assessedAt = indiaDayBoundary(indiaDate(now))!;
+    // The agent's reviewed requirements become the snapshot's term list, and every row recorded
+    // with them carries their fingerprint so in-app scores compare like with like.
+    const lexical = input.assessments.find(
+      (a) => a.source === "jobops-lexical" && a.versionId === versionId,
+    );
+    const reviewed = lexical
+      ? fromRequirements(toolDetailsSchema["jobops-lexical"].parse(lexical.details).requirements)
+      : null;
+    if (reviewed) await saveTermList(snapshot.id, reviewed, "agent", tx);
+    const fingerprint = reviewed ? termsFingerprint(reviewed) : undefined;
     if (input.assessments.length)
       await tx.insert(resumeAssessments).values(
         input.assessments.map((a) => ({
@@ -146,7 +157,10 @@ export async function recordFit(versionId: string, input: FitInput, now = new Da
           method: a.method,
           score: a.score,
           findings: a.findings,
-          details: toolDetailsSchema[a.source].parse(a.details),
+          details: {
+            ...toolDetailsSchema[a.source].parse(a.details),
+            ...(fingerprint ? { termsFingerprint: fingerprint } : {}),
+          },
           assessedAt,
         })),
       );

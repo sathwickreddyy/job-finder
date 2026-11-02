@@ -10,4 +10,8 @@ export async function register() {
   // After the sort, so rejections after an interview already carry their own kind.
   const { catchUpMailSync } = await import("@/features/mail/catch-up");
   await catchUpMailSync().catch((error) => console.error("Mail catch-up failed", error));
+  const { backfillTermFingerprints } = await import("@/features/resumes/score/backfill");
+  await backfillTermFingerprints().catch((error) =>
+    console.error("Résumé term fingerprint backfill failed", error),
+  );
 }
