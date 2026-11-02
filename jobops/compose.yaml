@@ -12,6 +12,8 @@ services:
       DATABASE_URL: postgresql://jobops:jobops_local_only@postgres:5432/jobops
       APP_URL: ${APP_URL:-http://127.0.0.1:3210}
       STORAGE_ROOT: /app/data/uploads
+      SCORING_URL: http://resume-scoring:8000
+      RESUMENEXT_MCP_URL: http://host.docker.internal:8004/mcp
     ports:
       - "3210:3210"
     volumes:
