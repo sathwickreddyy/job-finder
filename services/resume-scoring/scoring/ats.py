@@ -27,7 +27,8 @@ HEADINGS = {
 }
 STANDARD_FONTS = ("arial", "helvetica", "calibri", "georgia", "timesnewroman", "times")
 EMAIL = re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+")
-PHONE = re.compile(r"\+?\d[\d\s\-()]{8,}\d")
+PHONE = re.compile(r"(?<![\d+])\+?\d[\d\s\-()]{8,16}\d(?!\d)")
+YEAR_RANGE = re.compile(r"^(19|20)\d{2}\s*[-–]\s*(19|20)\d{2}$")
 FILE_NAME = re.compile(r"^[A-Za-z]+_[A-Za-z]+.*resume.*\.pdf$", re.IGNORECASE)
 
 
@@ -37,13 +38,25 @@ class LayoutFacts(BaseModel):
     images: int
     tables: int
     multi_column: bool
+    # Most lines start at one left margin and none splits into two blocks.
+    single_column: bool
     pages: int
+
+
+def has_phone(text: str) -> bool:
+    """10–13 digits that aren't a year range such as "2019 - 2023"."""
+    for match in PHONE.finditer(text):
+        candidate = match.group().strip()
+        digits = sum(c.isdigit() for c in candidate)
+        if 10 <= digits <= 13 and not YEAR_RANGE.match(candidate):
+            return True
+    return False
 
 
 def layout_facts(data: bytes) -> LayoutFacts:
     fonts: set[str] = set()
     sizes: Counter[float] = Counter()
-    images = tables = indented = lines = 0
+    images = tables = indented = split = lines = 0
     with pdfplumber.open(BytesIO(data)) as pdf:
         for page in pdf.pages:
             for char in page.chars:
@@ -52,20 +65,29 @@ def layout_facts(data: bytes) -> LayoutFacts:
                 sizes[round(char["size"] * 2) / 2] += 1
             images += len(page.images)
             tables += len(page.find_tables())
-            starts: dict[int, float] = {}
+            rows: dict[int, list[dict]] = {}
             for word in page.extract_words():
-                top = round(word["top"])
-                starts[top] = min(starts.get(top, word["x0"]), word["x0"])
-            lines += len(starts)
-            indented += sum(1 for x0 in starts.values() if x0 > page.width * 0.4)
+                rows.setdefault(round(word["top"]), []).append(word)
+            for words in rows.values():
+                words.sort(key=lambda w: w["x0"])
+                lines += 1
+                if words[0]["x0"] > page.width * 0.25:
+                    indented += 1
+                # A wide gap followed by text in the middle of the page is a second column;
+                # right-aligned dates start near the right margin and don't count.
+                if any(
+                    b["x0"] - a["x1"] > 40 and page.width * 0.25 < b["x0"] < page.width * 0.7
+                    for a, b in zip(words, words[1:], strict=False)
+                ):
+                    split += 1
         pages = len(pdf.pages)
     return LayoutFacts(
         fonts=sorted(fonts),
         body_size=sizes.most_common(1)[0][0] if sizes else None,
         images=images,
         tables=tables,
-        # Right-aligned dates end a line; a second column starts lines in the right half.
-        multi_column=lines > 0 and indented / lines > 0.25,
+        multi_column=lines > 0 and (indented + split) / lines > 0.25,
+        single_column=lines > 0 and indented / lines < 0.2 and split / lines < 0.1,
         pages=pages,
     )
 
@@ -116,9 +138,9 @@ def format_checks(document: Document, facts: LayoutFacts | None, filename: str |
         ),
         item(
             "Contact details in the body",
-            bool(EMAIL.search(document.text) and PHONE.search(document.text)),
+            bool(EMAIL.search(document.text) and has_phone(document.text)),
             "Email and phone number appear in the text."
-            if EMAIL.search(document.text) and PHONE.search(document.text)
+            if EMAIL.search(document.text) and has_phone(document.text)
             else "An email address or phone number was not found in the text.",
         ),
     ]
@@ -145,15 +167,24 @@ def format_checks(document: Document, facts: LayoutFacts | None, filename: str |
                 facts.body_size is not None and 10 <= facts.body_size <= 12,
                 f"Most text is {facts.body_size} pt." if facts.body_size else "No text found.",
             ),
-            item("No tables", facts.tables == 0, f"{facts.tables} table(s) found."),
+            item("No tables", False, f"{facts.tables} ruled table(s) found.")
+            if facts.tables
+            else item(
+                "No tables",
+                False,
+                "No ruled tables found; borderless tables can't be detected.",
+                warn=True,
+            ),
             item("No images", facts.images == 0, f"{facts.images} image(s) found."),
             item(
                 "Single column",
-                not facts.multi_column,
-                "Text reads as one column."
-                if not facts.multi_column
-                else "Many lines start in the right half of the page, like a second column.",
-            ),
+                False,
+                "Many lines split into two blocks or start mid-page, like a second column.",
+            )
+            if facts.multi_column
+            else item("Single column", True, "Lines start at one left margin.")
+            if facts.single_column
+            else item("Single column", False, "The layout couldn't be read as one column.", True),
         ]
     if filename is None:
         checks.append(unknown("File name"))

@@ -51,8 +51,8 @@ def requirements(required=("Java", "Kafka", "Spark"), preferred=("Docker",)):
     ] + [Requirement(term=t, importance="preferred", jd_quote=QUOTE_PREFERRED) for t in preferred]
 
 
-def run(lines, *, filename="Asha_Example_Resume.pdf", reqs=None, **pdf_options):
-    data = make_pdf(lines, **pdf_options)
+def run(lines, *, filename="Asha_Example_Resume.pdf", reqs=None, data=None, **pdf_options):
+    data = data or make_pdf(lines, **pdf_options)
     metadata = Metadata(job_description=JD, requirements=reqs or requirements())
     return ats_optimizer(extract_pdf(data), layout_facts(data), metadata, filename)
 
@@ -94,7 +94,6 @@ def test_format_checks_pass_on_a_plain_single_column_pdf():
         "Contact details in the body",
         "Standard fonts",
         "Body font size 10–12 pt",
-        "No tables",
         "No images",
         "Single column",
         "File name",
@@ -163,3 +162,75 @@ def test_endpoint_requires_a_required_term(client):
         files={"resume": ("a.pdf", make_pdf(RESUME), "application/pdf")},
     )
     assert response.status_code == 422
+
+
+def make_two_column_pdf():
+    output = BytesIO()
+    pdf = canvas.Canvas(output, pagesize=(600, 800))
+    pdf.setFont("Helvetica", 11)
+    for index, line in enumerate(RESUME):
+        y = 740 - index * 20
+        pdf.drawString(40, y, "Sidebar item")
+        pdf.drawString(230, y, line)
+    pdf.showPage()
+    pdf.save()
+    return output.getvalue()
+
+
+def make_ruled_table_pdf():
+    output = BytesIO()
+    pdf = canvas.Canvas(output, pagesize=(600, 800))
+    pdf.setFont("Helvetica", 11)
+    for index, line in enumerate(RESUME):
+        pdf.drawString(50, 740 - index * 20, line)
+    for row in range(4):
+        for col in range(3):
+            pdf.rect(50 + col * 120, 400 - row * 30, 120, 30)
+            pdf.drawString(55 + col * 120, 410 - row * 30, f"Cell {row}{col}")
+    pdf.showPage()
+    pdf.save()
+    return output.getvalue()
+
+
+def test_plain_pdf_tables_warn_because_borderless_ones_cant_be_seen():
+    item = check(run(RESUME), "No tables")
+    assert item["ok"] is False and item["warn"] is True
+    assert "borderless" in item["detail"]
+
+
+def test_ruled_table_fails():
+    item = check(run(RESUME, data=make_ruled_table_pdf()), "No tables")
+    assert item["ok"] is False
+    assert not item["warn"]
+
+
+def test_two_columns_sharing_a_baseline_fail_single_column():
+    item = check(run(RESUME, data=make_two_column_pdf()), "Single column")
+    assert item["ok"] is False
+    assert not item["warn"]
+
+
+def test_year_ranges_are_not_a_phone_number():
+    lines = [line for line in RESUME if "@" not in line] + [
+        "asha@example.com",
+        "Example Corp 2019 - 2023",
+        "B.Tech 2014 - 2018",
+    ]
+    assert check(run(lines), "Contact details in the body")["ok"] is False
+
+
+def test_large_body_text_fails_the_size_check():
+    assert check(run(RESUME, size=14), "Body font size 10–12 pt")["ok"] is False
+
+
+def test_blank_pdf_fails_text_based():
+    output = BytesIO()
+    pdf = canvas.Canvas(output, pagesize=(600, 800))
+    pdf.showPage()
+    pdf.save()
+    data = output.getvalue()
+    metadata = Metadata(job_description=JD, requirements=requirements())
+    result = ats_optimizer(
+        extract_pdf(data), layout_facts(data), metadata, "Asha_Example_Resume.pdf"
+    )
+    assert check(result, "Text-based PDF")["ok"] is False
