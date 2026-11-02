@@ -102,6 +102,11 @@ const optimizerSchema = z.looseObject({
   ),
 });
 
+/** A row the fit panel reads: a tool's name and details that parse; anything else is manual. */
+export function isRecordedToolCheck(source: string, details: unknown) {
+  return isToolSource(source) && toolDetailsSchema[source].safeParse(details).success;
+}
+
 export const toolDetailsSchema = {
   "jobops-lexical": lexicalSchema,
   resumenext: resumeNextSchema,

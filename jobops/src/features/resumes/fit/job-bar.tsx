@@ -21,7 +21,12 @@ function postedLine(target: NonNullable<Fit["target"]>) {
   );
   return [
     `Posted ${shortDay(target.postedAt)}, ${age <= 0 ? "today" : `${age} day${age === 1 ? "" : "s"} ago`}`,
-    target.postedAtKind && target.postedAtKind !== "ORIGINAL" ? " (latest publication)" : "",
+    // Unknown stays unknown: a date of unrecorded type is never shown as the original posting.
+    !target.postedAtKind
+      ? " (date type not recorded)"
+      : target.postedAtKind !== "ORIGINAL"
+        ? " (latest publication)"
+        : "",
     target.reqId ? `, req ${target.reqId}` : "",
   ].join("");
 }

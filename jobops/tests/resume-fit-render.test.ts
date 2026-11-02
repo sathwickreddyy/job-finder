@@ -78,6 +78,7 @@ describe("fit panel rendering", () => {
     expect(out).toContain("from 50 on the master");
     expect(out).toContain("from — on the master");
     expect(out.split("Tool diagnostics, not an employer's ATS.")).toHaveLength(2);
+    expect(out).toContain("The résumé rewrite rule needs all three checks.");
   });
 
   it("chips mark new terms with a plus and missing ones dashed", () => {
@@ -95,6 +96,17 @@ describe("fit panel rendering", () => {
     expect(html).toMatch(/border-dashed[^>]*>[^<]*Go/);
     expect(text(html)).toContain("Must have");
     expect(text(html)).toContain("Nice to have");
+  });
+
+  it("job bar never presents a date of unknown type as the original posting", () => {
+    const out = text(
+      render(createElement(JobBar, { target: { ...target, postedAtKind: null }, snapshot })),
+    );
+    expect(out).toMatch(/Posted 30 Oct, [^(]+\(date type not recorded\)/);
+    const original = text(
+      render(createElement(JobBar, { target: { ...target, postedAtKind: "ORIGINAL" }, snapshot })),
+    );
+    expect(original).not.toContain("(");
   });
 
   it("missing chip without a note says only Not on this résumé", () => {

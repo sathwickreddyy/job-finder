@@ -16,7 +16,7 @@ import {
 } from "@/features/resumes/actions";
 import { PdfPreview } from "@/features/resumes/file-ui";
 import { ChangesSection, FitView, loadFit } from "@/features/resumes/fit/panel";
-import { isToolSource } from "@/features/resumes/fit/tools";
+import { isRecordedToolCheck } from "@/features/resumes/fit/tools";
 import { resumePresentation } from "@/features/resumes/presentation";
 import { getResume, listResumes } from "@/features/resumes/service";
 import { ResumeUploadDrawer } from "@/features/resumes/upload-drawer";
@@ -322,7 +322,8 @@ async function Assessments({
   // Recorded tool checks show in the fit panel; this lists only manual assessments.
   const assessments = resume.assessments.filter(
     (record) =>
-      record.assessment.versionId === versionId && !isToolSource(record.assessment.source),
+      record.assessment.versionId === versionId &&
+      !isRecordedToolCheck(record.assessment.source, record.assessment.details),
   );
   return (
     <DetailSection

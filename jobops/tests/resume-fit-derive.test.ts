@@ -6,7 +6,11 @@ import {
   summarizeTool,
   type ParsedRow,
 } from "@/features/resumes/fit/derive";
-import type { LexicalDetails, OptimizerDetails } from "@/features/resumes/fit/tools";
+import {
+  isRecordedToolCheck,
+  type LexicalDetails,
+  type OptimizerDetails,
+} from "@/features/resumes/fit/tools";
 
 const evidence = (text: string, context = `Built services in ${text}.`) => ({
   start: 0,
@@ -91,6 +95,14 @@ describe("parseToolRow", () => {
     const details = { ...resumenext(70), extra: "kept" };
     const result = parseToolRow(row({ source: "resumenext", score: 70, details }));
     expect(result?.parsed).toMatchObject({ ats_score: 70, extra: "kept" });
+  });
+});
+
+describe("isRecordedToolCheck", () => {
+  it("counts a tool-named row only when its details parse", () => {
+    expect(isRecordedToolCheck("resumenext", {})).toBe(false);
+    expect(isRecordedToolCheck("jobops-lexical", row().details)).toBe(true);
+    expect(isRecordedToolCheck("Claude", row().details)).toBe(false);
   });
 });
 

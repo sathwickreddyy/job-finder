@@ -55,6 +55,11 @@ export function Scores({
           </button>
         ))}
       </div>
+      {TOOL_SOURCES.some((id) => "notChecked" in tools[id]) && (
+        <p className="m-0 mt-2 text-[11px] text-warning">
+          The résumé rewrite rule needs all three checks.
+        </p>
+      )}
       {TOOL_SOURCES.map((id) => {
         const s = tools[id];
         return (

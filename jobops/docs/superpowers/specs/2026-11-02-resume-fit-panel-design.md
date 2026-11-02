@@ -175,8 +175,8 @@ What the route does:
 Refusals:
 - 404 for an unknown version.
 - 409 when `baseVersionId` belongs to a different résumé family or equals `versionId`.
-- 422 for a non-PDF-parsed version, an invalid payload or any assessment `versionId` other than this version or
-  its base.
+- 422 for a non-PDF-parsed version or any assessment `versionId` other than this version or its base.
+- 400 with the issue list for an invalid payload, as on every other agent route.
 - No auth beyond the existing LAN trust.
 
 `GET /api/v1/resumes/{versionId}/fit` returns the same structure the panel renders: target, snapshot description,

@@ -8,9 +8,10 @@ export type Change = {
   to?: number;
 };
 
+// Full and abbreviated month names, capitalised as résumés write them ("Jan", "Sept", "July").
 const MONTHS =
-  "January|February|March|April|May|June|July|August|September|October|November|December";
-const DATE = `(?:(?:${MONTHS}) \\d{4}|\\d{4})`;
+  "Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|June?|July?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?";
+const DATE = `(?:(?:${MONTHS})\\.? \\d{4}|\\d{4})`;
 const datedLine = new RegExp(`\\s+${DATE}\\s*[–-]\\s*(?:Present|${DATE})$`);
 const placedLine = /\s+[A-Z][a-z]+, [A-Z][a-z]+$/;
 // Employer and role lines end with a date range or a "City, Country" location.
@@ -145,11 +146,22 @@ function diffUnits(where: string, a: string[], b: string[]): Change[] {
   return changes.sort((x, y) => x.at - y.at).map((c) => c.change);
 }
 
-const factPattern = new RegExp(`\\d[\\d.,%$+]*|\\b(?:${MONTHS})\\b`, "g");
-const facts = (text: string) =>
-  (contentLines(text).join("\n").match(factPattern) ?? [])
-    .map((f) => f.replace(/[.,]+$/, ""))
-    .sort();
+const factPattern = new RegExp(`\\d[\\d.,%$+]*[kKmMbBxX]?|\\b(?:${MONTHS})\\b`, "g");
+// Employer and role lines (dates removed) stand for the employment titles.
+function titleLines(lines: string[]) {
+  let experience = false;
+  return lines.filter((line) => {
+    if (headingLine.test(line)) experience = line.includes("EXPERIENCE");
+    return experience && isHeader(line);
+  });
+}
+const facts = (text: string) => {
+  const lines = contentLines(text);
+  return [
+    ...(lines.join("\n").match(factPattern) ?? []).map((f) => f.replace(/[.,]+$/, "")),
+    ...titleLines(lines).map((line) => line.replace(datedLine, "")),
+  ].sort();
+};
 
 // Multiset difference: each fact in `a` not matched one-for-one in `b`.
 function without(a: string[], b: string[]) {

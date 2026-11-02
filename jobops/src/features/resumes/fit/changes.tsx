@@ -48,7 +48,7 @@ export function TrackedChanges({ diff }: { diff: Diff }) {
           "Dates, titles and numbers unchanged."
         ) : (
           <span className="text-warning">
-            Numbers or dates changed:
+            Dates, titles or numbers changed:
             {removed.length ? ` removed ${removed.join(", ")}` : ""}
             {removed.length && added.length ? ";" : ""}
             {added.length ? ` added ${added.join(", ")}` : ""}.

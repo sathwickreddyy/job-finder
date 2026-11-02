@@ -141,6 +141,23 @@ describe("diffResumes", () => {
     expect(diff.counts.reworded).toBe(1);
   });
 
+  it("factsUnchanged false when a role title changes", () => {
+    const diff = diffResumes(
+      base,
+      edit("Senior Software Engineer Bengaluru", "Staff Software Engineer Bengaluru"),
+    );
+    expect(diff.factsUnchanged).toBe(false);
+    expect(diff.factChanges.added).toContain("Staff Software Engineer Bengaluru, India");
+  });
+
+  it("factsUnchanged false for abbreviated months and number suffixes", () => {
+    const short = edit("Example Bank July 2023 – Present", "Example Bank Jan 2023 – Present");
+    expect(splitSections(short).map((s) => s.name)).toContain("Example Bank");
+    expect(diffResumes(short, short.replace("Jan 2023", "Feb 2023")).factsUnchanged).toBe(false);
+    const counts = edit("payment services.", "payment services handling 5K requests.");
+    expect(diffResumes(counts, counts.replace("5K", "5M")).factsUnchanged).toBe(false);
+  });
+
   it("ignores the extractor's page markers", () => {
     const paged = edit(
       "• Built Kafka consumers for ledger events.",
