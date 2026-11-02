@@ -127,9 +127,9 @@ describe("score flow rendering", () => {
     );
     expect(html).toContain("JobOps scoring service, on this computer");
     expect(html).toContain("Sends the text to resumenext.io");
-    expect(html).toContain("master 38.2");
+    expect(html).toContain("current 38.2");
     expect(html).toContain(
-      "Each check scores this file and the master, so the comparison uses the same terms.",
+      "Each check scores this file and the current résumé, so the comparison uses the same terms.",
     );
     expect(html).toContain("Using your terms from 2 Nov");
     expect(html).toContain("Edit terms");
@@ -180,7 +180,7 @@ describe("score flow rendering", () => {
       ),
     );
     expect(html).toContain("Needs a manual look");
-    expect(html).toContain("The master couldn't be scored");
+    expect(html).toContain("The current résumé couldn't be scored");
   });
 
   it("a master that failed says why", () => {
@@ -205,7 +205,7 @@ describe("score flow rendering", () => {
       ),
     );
     expect(html).toContain(
-      "The master couldn't be scored: The PDF for this file is missing from storage",
+      "The current résumé couldn't be scored: The PDF for this file is missing from storage",
     );
   });
 });
