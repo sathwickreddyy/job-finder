@@ -24,6 +24,7 @@ import {
   type ParsedRow,
 } from "./derive";
 import { fromRequirements, saveTermList, termsFingerprint } from "../score/terms";
+import { buildBrief, type Brief, type FileRef } from "./brief";
 import {
   TOOL_SOURCES,
   toolDetailsSchema,
@@ -33,9 +34,19 @@ import {
 } from "./tools";
 
 /** Record-only: the agent ran the checks; JobOps stores the target, snapshot and results. */
+/** An absolute local path to a version's editable DOCX. */
+export const docxPathSchema = z
+  .string()
+  .trim()
+  .max(1000)
+  .regex(/^\/.*\.docx$/i, "Give the absolute path to a .docx file.");
+
 export const fitInputSchema = z
   .strictObject({
     baseVersionId: z.uuid().optional(),
+    docxPath: docxPathSchema.optional(),
+    // The saved description to link to, from a brief; without it the job's newest one is used.
+    snapshotId: z.uuid().optional(),
     target: z.strictObject({
       url: httpUrl,
       company: z.string().trim().min(1).max(200),
@@ -121,8 +132,16 @@ export async function recordFit(versionId: string, input: FitInput, now = new Da
     const providedFields = ["url", "company", "title", "description"];
     if (target.location !== undefined) providedFields.push("location");
     if (target.reqId) providedFields.push("externalId");
-    const summary = await importJobRows([{ ...job, providedFields }], "merge", tx);
-    const jobId = summary.ids[0];
+    // A given saved description fixes the job and snapshot, so nothing is re-imported or duplicated.
+    const [chosen] = input.snapshotId
+      ? await tx
+          .select({ id: jobSnapshots.id, jobId: jobSnapshots.jobId })
+          .from(jobSnapshots)
+          .where(eq(jobSnapshots.id, input.snapshotId))
+      : [];
+    if (input.snapshotId && !chosen) throw new ApiError("Unknown job description.", 404);
+    const jobId =
+      chosen?.jobId ?? (await importJobRows([{ ...job, providedFields }], "merge", tx)).ids[0];
     if (current && current.id !== jobId) throw alreadyTailored(current);
 
     const [stored] = await tx.select().from(jobs).where(eq(jobs.id, jobId));
@@ -141,16 +160,23 @@ export async function recordFit(versionId: string, input: FitInput, now = new Da
           updatedAt: now,
         })
         .where(eq(jobs.id, jobId));
-    const [snapshot] = await tx
-      .select({ id: jobSnapshots.id })
-      .from(jobSnapshots)
-      .where(eq(jobSnapshots.jobId, jobId))
-      .orderBy(desc(jobSnapshots.capturedAt))
-      .limit(1);
+    const [snapshot] = chosen
+      ? [chosen]
+      : await tx
+          .select({ id: jobSnapshots.id })
+          .from(jobSnapshots)
+          .where(eq(jobSnapshots.jobId, jobId))
+          .orderBy(desc(jobSnapshots.capturedAt))
+          .limit(1);
 
     await tx
       .update(resumeVersions)
-      .set({ baseVersionId: baseId, targetJobId: jobId, targetSnapshotId: snapshot.id })
+      .set({
+        baseVersionId: baseId,
+        targetJobId: jobId,
+        targetSnapshotId: snapshot.id,
+        ...(input.docxPath ? { docxPath: input.docxPath } : {}),
+      })
       .where(eq(resumeVersions.id, versionId));
     const assessedAt = indiaDayBoundary(indiaDate(now))!;
     // The agent's reviewed requirements become the snapshot's term list, and every row recorded
@@ -211,6 +237,8 @@ export type FitGroup = {
   base: Partial<Record<ToolSource, ParsedRow>>;
   olderTerms: Partial<Record<ToolSource, boolean>>;
   chips: Chip[];
+  /** What an agent follows when it revises this file for this job. */
+  brief: Brief | null;
 };
 
 export type Fit = {
@@ -233,6 +261,9 @@ export type Fit = {
   /** Every job this file was scored against, the tailored one first. */
   groups: FitGroup[];
   derivedFrom: { id: string; label: string }[];
+  /** The tailored job's brief, as on its group. */
+  brief: Brief | null;
+  docxPath: string | null;
 };
 
 const targetOf = (job: typeof jobs.$inferSelect): Target => ({
@@ -259,6 +290,12 @@ const chipsOf = (
       )
     : [];
 };
+
+const fileRef = (v: typeof resumeVersions.$inferSelect): FileRef => ({
+  versionId: v.id,
+  label: v.versionLabel,
+  docxPath: v.docxPath,
+});
 
 async function fitGroups(version: typeof resumeVersions.$inferSelect): Promise<FitGroup[]> {
   const ids = [version.id, ...(version.baseVersionId ? [version.baseVersionId] : [])];
@@ -294,6 +331,10 @@ async function fitGroups(version: typeof resumeVersions.$inferSelect): Promise<F
   const jobOf = new Map(jobRows.map((j) => [j.id, j]));
   const fingerprintOf = new Map(lists.map((l) => [l.snapshotId, l.fingerprint]));
   const latestOf = new Map(latest.map((l) => [l.jobId, l.id]));
+  const [baseVersion] = version.baseVersionId
+    ? await db.select().from(resumeVersions).where(eq(resumeVersions.id, version.baseVersionId))
+    : [];
+  const files = { revised: fileRef(version), current: baseVersion ? fileRef(baseVersion) : null };
   const newest = (group: FitGroup) =>
     Math.max(0, ...Object.values(group.mine).map((r) => r!.createdAt.getTime()));
   return snapshots
@@ -303,7 +344,7 @@ async function fitGroups(version: typeof resumeVersions.$inferSelect): Promise<F
       const base = version.baseVersionId
         ? pickBase(rows, version.baseVersionId, snapshot.id, picked.rows)
         : {};
-      return {
+      const group = {
         snapshotId: snapshot.id,
         target: targetOf(jobOf.get(snapshot.jobId)!),
         snapshot: {
@@ -319,8 +360,22 @@ async function fitGroups(version: typeof resumeVersions.$inferSelect): Promise<F
         olderTerms: picked.olderTerms,
         chips: chipsOf(picked.rows, base),
       };
+      return { ...group, brief: buildBrief(group, files) };
     })
     .sort((a, b) => Number(b.tailored) - Number(a.tailored) || newest(b) - newest(a));
+}
+
+export const versionPatchSchema = z.strictObject({ docxPath: docxPathSchema.nullable() });
+
+/** Records (or clears) where a version's editable DOCX lives; JobOps never reads the file. */
+export async function setDocxPath(versionId: string, docxPath: string | null) {
+  const [row] = await db
+    .update(resumeVersions)
+    .set({ docxPath })
+    .where(eq(resumeVersions.id, versionId))
+    .returning({ id: resumeVersions.id, docxPath: resumeVersions.docxPath });
+  if (!row) throw new ApiError("Unknown résumé file.", 404);
+  return row;
 }
 
 export async function getFit(versionId: string): Promise<Fit | null> {
@@ -341,7 +396,10 @@ export async function getFit(versionId: string): Promise<Fit | null> {
     chips: [],
     groups: await fitGroups(version),
     derivedFrom,
+    brief: null,
+    docxPath: version.docxPath,
   };
+  fit.brief = fit.groups.find((g) => g.tailored)?.brief ?? null;
   if (!version.targetJobId || !version.targetSnapshotId) return fit;
   const [[job], [snapshot]] = await Promise.all([
     db.select().from(jobs).where(eq(jobs.id, version.targetJobId)),

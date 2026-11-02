@@ -40,7 +40,7 @@ function Status({ status }: { status: RunStatus }) {
   return <span className="size-2 rounded-full bg-muted-foreground/50" aria-label="Waiting" />;
 }
 
-/** One row per tool while the checks run, each with this file's score and the master's. */
+/** One row per tool while the checks run, each with this file's score and the current résumé's. */
 export function RunRows({
   opening,
   statuses,
@@ -99,8 +99,8 @@ export function RunRows({
                   (status.baseSkipped === "no_text" || status.baseSkipped === "failed") && (
                     <span className="mt-1 block text-[11px] text-muted-foreground">
                       {status.baseError
-                        ? `The master couldn't be scored: ${status.baseError}`
-                        : "The master couldn't be scored"}
+                        ? `The current résumé couldn't be scored: ${status.baseError}`
+                        : "The current résumé couldn't be scored"}
                     </span>
                   )}
               </span>
@@ -113,7 +113,7 @@ export function RunRows({
                   )}
                   {status.baseScore !== null && (
                     <span className="block text-[11px] text-muted-foreground">
-                      master {fmt(status.baseScore)}
+                      current {fmt(status.baseScore)}
                     </span>
                   )}
                 </span>
@@ -123,7 +123,7 @@ export function RunRows({
         })}
       </ul>
       <p className="m-0 mt-3 text-[11px] text-muted-foreground">
-        Each check scores this file and the master, so the comparison uses the same terms.
+        Each check scores this file and the current résumé, so the comparison uses the same terms.
       </p>
       {finished && (
         <button

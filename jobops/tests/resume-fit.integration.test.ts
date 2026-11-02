@@ -2,13 +2,21 @@ import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { eq, inArray, like } from "drizzle-orm";
 import { closeDatabase, db } from "@/db";
-import { activityLogs, jobs, resumeAssessments, resumes, resumeVersions } from "@/db/schema";
+import {
+  activityLogs,
+  jobSnapshots,
+  jobs,
+  resumeAssessments,
+  resumes,
+  resumeVersions,
+} from "@/db/schema";
 import { fitInputSchema, getFit, recordFit } from "@/features/resumes/fit/service";
 import { termsFingerprint } from "@/features/resumes/score/terms";
 import { assertE2eDatabase, dbTests } from "./helpers/e2e-db";
 
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 import { GET, POST } from "@/app/api/v1/resumes/[versionId]/fit/route";
+import { PATCH as patchVersion } from "@/app/api/v1/resumes/[versionId]/route";
 
 const prefix = `resume-fit-${randomUUID()}`;
 const now = new Date("2026-11-02T10:00:00Z");
@@ -148,6 +156,93 @@ describe.skipIf(!dbTests)("résumé fit records", () => {
     ]);
     const [log] = await db.select().from(activityLogs).where(eq(activityLogs.entityId, mine));
     expect(log.action).toBe("RESUME_FIT_RECORDED");
+  });
+
+  it("serves a brief that starts from the current résumé", async () => {
+    const resumeId = await family();
+    const base = await version(resumeId);
+    const mine = await version(resumeId);
+    await record(
+      mine,
+      { baseVersionId: base, target: target(), assessments: [assessment(mine, 61.1)] },
+      now,
+    );
+    const fit = (await getFit(mine))!;
+    expect(fit.brief?.startFrom.versionId).toBe(base);
+    expect(fit.brief?.revision?.versionId).toBe(mine);
+    expect(fit.groups[0].brief).toEqual(fit.brief);
+    expect(fit.brief?.scores.keywordCheck.revised).toBe(61.1);
+  });
+
+  it("links to the given saved description, even when the job has a newer one", async () => {
+    const resumeId = await family();
+    const first = await version(resumeId);
+    const second = await version(resumeId);
+    const third = await version(resumeId);
+    const t = target();
+    await record(first, { target: t, assessments: [] }, now);
+    const old = (await getFit(first))!.snapshot!.id;
+    await record(
+      second,
+      { target: { ...t, description: "Now we need Go." }, assessments: [] },
+      now,
+    );
+    const before = await db
+      .select()
+      .from(jobSnapshots)
+      .where(eq(jobSnapshots.jobId, (await getFit(first))!.target!.jobId));
+    await record(third, { target: t, snapshotId: old, assessments: [] }, now);
+    expect((await getFit(third))!.snapshot!.id).toBe(old);
+    const after = await db
+      .select()
+      .from(jobSnapshots)
+      .where(eq(jobSnapshots.jobId, (await getFit(first))!.target!.jobId));
+    expect(after).toHaveLength(before.length);
+  });
+
+  it("refuses an unknown saved description", async () => {
+    const resumeId = await family();
+    const mine = await version(resumeId);
+    await expect(
+      record(mine, { target: target(), snapshotId: randomUUID(), assessments: [] }, now),
+    ).rejects.toMatchObject({ status: 404 });
+  });
+
+  it("sets and clears an existing version's DOCX path", async () => {
+    const resumeId = await family();
+    const mine = await version(resumeId);
+    const patch = (body: unknown) =>
+      patchVersion(
+        new Request("http://localhost/api", {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(body),
+        }),
+        { params: Promise.resolve({ versionId: mine }) },
+      );
+    const stored = async () =>
+      (
+        await db
+          .select({ docxPath: resumeVersions.docxPath })
+          .from(resumeVersions)
+          .where(eq(resumeVersions.id, mine))
+      )[0].docxPath;
+    expect((await patch({ docxPath: "/r/Master.docx" })).status).toBe(200);
+    expect(await stored()).toBe("/r/Master.docx");
+    expect((await patch({ docxPath: "Master.docx" })).status).toBe(400);
+    expect((await patch({ docxPath: null })).status).toBe(200);
+    expect(await stored()).toBeNull();
+  });
+
+  it("records the editable DOCX path on the posted version", async () => {
+    const resumeId = await family();
+    const mine = await version(resumeId);
+    await record(mine, { target: target(), assessments: [], docxPath: "/r/Revised.docx" }, now);
+    const [row] = await db
+      .select({ docxPath: resumeVersions.docxPath })
+      .from(resumeVersions)
+      .where(eq(resumeVersions.id, mine));
+    expect(row.docxPath).toBe("/r/Revised.docx");
   });
 
   it("re-recording the same target appends and keeps the latest", async () => {

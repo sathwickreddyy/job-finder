@@ -174,7 +174,7 @@ function UploadFields({
       </div>
       {!isNew && (
         <details>
-          <summary className="text-sm font-medium">Bullet changes and default setting</summary>
+          <summary className="text-sm font-medium">Bullet changes, DOCX and default</summary>
           <div className="mt-3 space-y-4">
             <label htmlFor={`${id}-notes`} className="block text-xs text-muted-foreground">
               Bullet changes with this upload
@@ -185,6 +185,15 @@ function UploadFields({
               rows={4}
               maxLength={20000}
               placeholder="Original wording, revised wording and confirmed facts"
+            />
+            <label htmlFor={`${id}-docx`} className="block text-xs text-muted-foreground">
+              Editable DOCX path
+            </label>
+            <input
+              id={`${id}-docx`}
+              name="docxPath"
+              maxLength={1000}
+              placeholder="/Users/you/Resumes/Company_Role.docx"
             />
             <label className="flex items-center gap-2 text-xs">
               <input type="checkbox" name="makeCurrent" />

@@ -10,7 +10,7 @@ const round1 = (n: number) => Math.round(n * 10) / 10;
 export const showsComparison = (groups: FitGroup[]) =>
   groups.length > 1 || (groups.length === 1 && !groups[0].tailored);
 
-/** One row per job the file was scored against; arrows compare with the master on the same job. */
+/** One row per job the file was scored against; arrows compare with the current résumé on the same job. */
 export function ComparisonTable({
   versionId,
   groups,
@@ -88,7 +88,7 @@ export function ComparisonTable({
         </tbody>
       </table>
       <p className="m-0 mt-2 px-1 text-[11px] text-muted-foreground">
-        Arrows compare with the master on the same job.
+        Arrows compare with the current résumé on the same job.
       </p>
     </section>
   );

@@ -21,58 +21,6 @@ export function Delta({ value }: { value: number | null }) {
   );
 }
 
-/** One 0–100 track: the filled bar is this file, the ring marks the master. */
-export function ScaleBar({
-  base,
-  mine,
-  target,
-}: {
-  base: number | null;
-  mine: number | null;
-  target?: number;
-}) {
-  return (
-    <div className="relative h-2 rounded-full bg-muted" aria-hidden>
-      <div
-        className="absolute inset-y-0 left-0 rounded-full bg-primary"
-        style={{ width: `${mine ?? 0}%` }}
-      />
-      {base != null && (
-        <div
-          className="absolute -top-1 h-4 w-1 -translate-x-1/2 rounded-full border-2 border-foreground/60 bg-card"
-          style={{ left: `${base}%` }}
-        />
-      )}
-      {target != null && (
-        <div
-          className="absolute -top-0.5 h-3 w-px bg-muted-foreground/70"
-          style={{ left: `${target}%` }}
-        />
-      )}
-    </div>
-  );
-}
-
-const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-export function Highlight({ text, terms }: { text: string; terms: string[] }) {
-  const words = terms.filter(Boolean);
-  if (!words.length) return <>{text}</>;
-  const parts = text.split(new RegExp(`(${words.map(escape).join("|")})`, "ig"));
-  return (
-    <>
-      {parts.map((part, i) =>
-        words.some((w) => w.toLowerCase() === part.toLowerCase()) ? (
-          <mark key={i} className="rounded bg-selected px-0.5 text-selected-foreground">
-            {part}
-          </mark>
-        ) : (
-          <span key={i}>{part}</span>
-        ),
-      )}
-    </>
-  );
-}
-
 export function Severity({ level }: { level: string }) {
   return (
     <span

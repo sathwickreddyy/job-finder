@@ -5,8 +5,9 @@ import { ApiError } from "@/features/agent-api/http";
 import { indiaDate, indiaDayBoundary } from "@/features/mail/attention";
 import { readBuffer } from "@/services/storage";
 import { parseToolRow, type ParsedRow } from "../fit/derive";
-import type { LexicalDetails, ToolSource } from "../fit/tools";
+import { toolDetailsSchema, type LexicalDetails, type ToolSource } from "../fit/tools";
 import {
+  carryDecisions,
   carryNotes,
   jobOpsMethod,
   toLexicalDetails,
@@ -42,7 +43,16 @@ async function pdfOf(version: Version) {
   }
 }
 
-async function latestNotes(versionId: string, snapshotId: string) {
+// A new version with no rows of its own for the job inherits its base's reasons, so the agent
+// isn't asked again about gaps the user already settled.
+async function latestNotes(version: Version, snapshotId: string) {
+  return (
+    (await notesOf(version.id, snapshotId)) ??
+    (version.baseVersionId ? await notesOf(version.baseVersionId, snapshotId) : undefined)
+  );
+}
+
+async function notesOf(versionId: string, snapshotId: string) {
   const rows = await db
     .select({ details: resumeAssessments.details })
     .from(resumeAssessments)
@@ -57,7 +67,31 @@ async function latestNotes(versionId: string, snapshotId: string) {
   const noted = rows
     .map((r) => r.details as Partial<LexicalDetails>)
     .find((d) => d.requirements?.some((r) => r.note));
-  return carryNotes(noted as LexicalDetails | undefined);
+  return noted ? carryNotes(noted as LexicalDetails) : undefined;
+}
+
+async function latestDecisions(version: Version, snapshotId: string) {
+  return (
+    (await decisionsOf(version.id, snapshotId)) ??
+    (version.baseVersionId ? await decisionsOf(version.baseVersionId, snapshotId) : undefined)
+  );
+}
+
+async function decisionsOf(versionId: string, snapshotId: string) {
+  const [row] = await db
+    .select({ details: resumeAssessments.details })
+    .from(resumeAssessments)
+    .where(
+      and(
+        eq(resumeAssessments.versionId, versionId),
+        eq(resumeAssessments.snapshotId, snapshotId),
+        eq(resumeAssessments.source, "resumenext"),
+      ),
+    )
+    .orderBy(desc(resumeAssessments.createdAt))
+    .limit(1);
+  const parsed = toolDetailsSchema.resumenext.safeParse(row?.details);
+  return parsed.success ? parsed.data : undefined;
 }
 
 /** Runs one tool for one file; every number comes from the scoring service or ResumeNext. */
@@ -76,7 +110,7 @@ async function runTool(
       jd,
       list.terms,
     );
-    const notes = await latestNotes(version.id, snapshot.id);
+    const notes = (await latestNotes(version, snapshot.id)) ?? {};
     const details = toLexicalDetails(result, list.terms, list.fingerprint, notes);
     return {
       score: details.weighted,
@@ -104,7 +138,10 @@ async function runTool(
     targetRole: job.title,
     targetCompany: job.company,
   });
-  const details = toResumeNextDetails(raw, list.fingerprint, sent);
+  const details = carryDecisions(
+    await latestDecisions(version, snapshot.id),
+    toResumeNextDetails(raw, list.fingerprint, sent),
+  );
   return { score: details.ats_score, method: jobOpsMethod("match_resume_to_job"), details };
 }
 

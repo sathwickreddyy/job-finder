@@ -254,6 +254,7 @@ export async function listResumeFiles() {
       family: resumes.name,
       label: resumeVersions.versionLabel,
       isCurrent: resumeVersions.isCurrent,
+      docxPath: resumeVersions.docxPath,
     })
     .from(resumeVersions)
     .innerJoin(resumes, eq(resumes.id, resumeVersions.resumeId))
