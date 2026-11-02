@@ -106,6 +106,7 @@ function scoredFit(): Fit {
     base: { "jobops-lexical": lexicalRow("b", snapshotId, base) },
     olderTerms: {},
     chips: [],
+    brief: null,
   });
   const groups = [group(target, "s1", true, 56.4, 38.2), group(other, "s2", false, 58.3, 61.5)];
   return {
@@ -118,6 +119,8 @@ function scoredFit(): Fit {
     chips: [],
     groups,
     derivedFrom: [],
+    brief: null,
+    docxPath: null,
   };
 }
 
@@ -227,6 +230,8 @@ describe("fit panel rendering", () => {
           base: {},
           chips: [],
           groups: [],
+          brief: null,
+          docxPath: null,
           derivedFrom: [
             { id: "a", label: "Walmart · v2" },
             { id: "b", label: "Google One" },

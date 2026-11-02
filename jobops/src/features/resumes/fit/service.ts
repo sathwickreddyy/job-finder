@@ -24,6 +24,7 @@ import {
   type ParsedRow,
 } from "./derive";
 import { fromRequirements, saveTermList, termsFingerprint } from "../score/terms";
+import { buildBrief, type Brief, type FileRef } from "./brief";
 import {
   TOOL_SOURCES,
   toolDetailsSchema,
@@ -224,6 +225,8 @@ export type FitGroup = {
   base: Partial<Record<ToolSource, ParsedRow>>;
   olderTerms: Partial<Record<ToolSource, boolean>>;
   chips: Chip[];
+  /** What an agent follows when it revises this file for this job. */
+  brief: Brief | null;
 };
 
 export type Fit = {
@@ -246,6 +249,9 @@ export type Fit = {
   /** Every job this file was scored against, the tailored one first. */
   groups: FitGroup[];
   derivedFrom: { id: string; label: string }[];
+  /** The tailored job's brief, as on its group. */
+  brief: Brief | null;
+  docxPath: string | null;
 };
 
 const targetOf = (job: typeof jobs.$inferSelect): Target => ({
@@ -272,6 +278,12 @@ const chipsOf = (
       )
     : [];
 };
+
+const fileRef = (v: typeof resumeVersions.$inferSelect): FileRef => ({
+  versionId: v.id,
+  label: v.versionLabel,
+  docxPath: v.docxPath,
+});
 
 async function fitGroups(version: typeof resumeVersions.$inferSelect): Promise<FitGroup[]> {
   const ids = [version.id, ...(version.baseVersionId ? [version.baseVersionId] : [])];
@@ -307,6 +319,10 @@ async function fitGroups(version: typeof resumeVersions.$inferSelect): Promise<F
   const jobOf = new Map(jobRows.map((j) => [j.id, j]));
   const fingerprintOf = new Map(lists.map((l) => [l.snapshotId, l.fingerprint]));
   const latestOf = new Map(latest.map((l) => [l.jobId, l.id]));
+  const [baseVersion] = version.baseVersionId
+    ? await db.select().from(resumeVersions).where(eq(resumeVersions.id, version.baseVersionId))
+    : [];
+  const files = { revised: fileRef(version), current: baseVersion ? fileRef(baseVersion) : null };
   const newest = (group: FitGroup) =>
     Math.max(0, ...Object.values(group.mine).map((r) => r!.createdAt.getTime()));
   return snapshots
@@ -316,7 +332,7 @@ async function fitGroups(version: typeof resumeVersions.$inferSelect): Promise<F
       const base = version.baseVersionId
         ? pickBase(rows, version.baseVersionId, snapshot.id, picked.rows)
         : {};
-      return {
+      const group = {
         snapshotId: snapshot.id,
         target: targetOf(jobOf.get(snapshot.jobId)!),
         snapshot: {
@@ -332,6 +348,7 @@ async function fitGroups(version: typeof resumeVersions.$inferSelect): Promise<F
         olderTerms: picked.olderTerms,
         chips: chipsOf(picked.rows, base),
       };
+      return { ...group, brief: buildBrief(group, files) };
     })
     .sort((a, b) => Number(b.tailored) - Number(a.tailored) || newest(b) - newest(a));
 }
@@ -354,7 +371,10 @@ export async function getFit(versionId: string): Promise<Fit | null> {
     chips: [],
     groups: await fitGroups(version),
     derivedFrom,
+    brief: null,
+    docxPath: version.docxPath,
   };
+  fit.brief = fit.groups.find((g) => g.tailored)?.brief ?? null;
   if (!version.targetJobId || !version.targetSnapshotId) return fit;
   const [[job], [snapshot]] = await Promise.all([
     db.select().from(jobs).where(eq(jobs.id, version.targetJobId)),

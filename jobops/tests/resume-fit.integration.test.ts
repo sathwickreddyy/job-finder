@@ -150,6 +150,22 @@ describe.skipIf(!dbTests)("résumé fit records", () => {
     expect(log.action).toBe("RESUME_FIT_RECORDED");
   });
 
+  it("serves a brief that starts from the current résumé", async () => {
+    const resumeId = await family();
+    const base = await version(resumeId);
+    const mine = await version(resumeId);
+    await record(
+      mine,
+      { baseVersionId: base, target: target(), assessments: [assessment(mine, 61.1)] },
+      now,
+    );
+    const fit = (await getFit(mine))!;
+    expect(fit.brief?.startFrom.versionId).toBe(base);
+    expect(fit.brief?.revision?.versionId).toBe(mine);
+    expect(fit.groups[0].brief).toEqual(fit.brief);
+    expect(fit.brief?.scores.keywordCheck.revised).toBe(61.1);
+  });
+
   it("records the editable DOCX path on the posted version", async () => {
     const resumeId = await family();
     const mine = await version(resumeId);
