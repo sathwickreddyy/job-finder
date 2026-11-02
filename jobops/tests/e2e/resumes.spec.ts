@@ -125,6 +125,7 @@ test("resume files, bullet changes, exact usage and sourced assessments survive 
     "Clarified ownership of the existing Kafka project.",
   );
   await page.goto(`/resumes?file=${originalId}`);
+  await page.getByText("Used for", { exact: true }).click();
   await expect(
     page
       .getByRole("region", { name: /^Applications using/ })
@@ -165,6 +166,124 @@ test("resume files, bullet changes, exact usage and sourced assessments survive 
   expect(
     (await (await request.get(`/api/resumes/${originalId}/file`)).body()).equals(original),
   ).toBe(true);
+});
+
+test("a tailored file shows its fit panel", async ({ page, request }) => {
+  const suffix = Date.now();
+  const baseId = await upload(
+    page,
+    `Fit resume ${suffix}`,
+    await pdf("Fictional base resume: Kafka"),
+  );
+  await page.getByRole("button", { name: "Upload revision", exact: true }).click();
+  await page.getByLabel("Version label", { exact: true }).fill("Tailored for Fit Co");
+  await page.getByLabel("PDF file", { exact: true }).setInputFiles({
+    name: "tailored.pdf",
+    mimeType: "application/pdf",
+    buffer: await pdf("Fictional tailored resume: Kafka and Java"),
+  });
+  await page.getByRole("button", { name: "Upload PDF", exact: true }).click();
+  await expect(page).toHaveURL((url) => url.searchParams.get("file") !== baseId);
+  const mineId = new URL(page.url()).searchParams.get("file")!;
+  const lexical = (score: number) => ({
+    keyword: score,
+    required: score,
+    preferred: score,
+    weighted: score,
+    engineVersion: "lexical-e2e",
+    requirements: [
+      { term: "Kafka", aliases: [], importance: "required", jd_quote: "Run Kafka pipelines." },
+      { term: "Go", aliases: [], importance: "preferred", jd_quote: "Go is a plus." },
+    ],
+    findings: [
+      {
+        term: "Kafka",
+        aliases: [],
+        importance: "required",
+        status: "mentioned",
+        resume_evidence: [{ start: 0, end: 5, text: "Kafka", context: "Kafka and Java" }],
+      },
+      {
+        term: "Go",
+        aliases: [],
+        importance: "preferred",
+        status: "not_evidenced",
+        resume_evidence: [],
+      },
+    ],
+  });
+  const recorded = await request.post(`/api/v1/resumes/${mineId}/fit`, {
+    data: {
+      baseVersionId: baseId,
+      target: {
+        url: `https://jobs.example.invalid/fit/${suffix}`,
+        company: `Fit Co ${suffix}`,
+        title: "Backend Engineer",
+        location: "Bengaluru",
+        reqId: `FIT-${suffix}`,
+        postedAt: "2026-10-30",
+        postedAtKind: "original",
+        description: "Run Kafka pipelines. Go is a plus.",
+      },
+      assessments: [
+        {
+          versionId: mineId,
+          source: "jobops-lexical",
+          method: "lexical-e2e",
+          score: 75,
+          details: lexical(75),
+        },
+        {
+          versionId: baseId,
+          source: "jobops-lexical",
+          method: "lexical-e2e",
+          score: 50,
+          details: lexical(50),
+        },
+        {
+          versionId: mineId,
+          source: "resumenext",
+          method: "match_resume_to_job",
+          score: 74,
+          details: {
+            ats_score: 74,
+            grade: "C",
+            grade_label: "SATISFACTORY",
+            categories: [{ id: "structure", label: "Structure", percent: 68, points: 19, max: 28 }],
+            issues: [
+              {
+                label: "Action verbs",
+                hint: "Start with a verb.",
+                severity: "important",
+                decision: "Present tense kept.",
+              },
+            ],
+            keyword_coverage: { coverage_percent: 50, matched: ["Kafka"], missing: ["Go"] },
+            keywords: [],
+            resume: {},
+          },
+        },
+      ],
+    },
+  });
+  expect(recorded.status()).toBe(201);
+  await page.goto(`/resumes?file=${mineId}`);
+  await page
+    .getByRole("button", { name: new RegExp(`Fit Co ${suffix} · Backend Engineer`) })
+    .click();
+  await expect(page.getByRole("link", { name: "Open the live posting" })).toBeVisible();
+  await expect(page.getByText("Run Kafka pipelines. Go is a plus.", { exact: true })).toBeVisible();
+  await page.getByRole("tab", { name: "ResumeNext" }).click();
+  await expect(page.getByRole("tabpanel", { name: "ResumeNext" })).toContainText("74");
+  await expect(page.getByRole("tabpanel", { name: "ATS optimizer" })).toBeHidden();
+  await page.getByRole("button", { name: "Kafka", exact: true }).click();
+  await expect(page.getByText("“Run Kafka pipelines.”")).toBeVisible();
+  await expect(page.getByText("Not changing: Present tense kept.")).toBeVisible();
+  await page.getByText("What changed", { exact: true }).click();
+  await expect(page.getByText(/From your master\./)).toBeVisible();
+  await page.goto(`/resumes?file=${baseId}`);
+  await expect(page.getByText("Not tailored for a job")).toBeVisible();
+  await expect(page.getByRole("link", { name: "Tailored for Fit Co" }).first()).toBeVisible();
 });
 
 test("old resume detail links open the matching file in the workspace", async ({ page }) => {

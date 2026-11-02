@@ -165,6 +165,8 @@ describe("deriveChips", () => {
     ]);
     expect(chips[0].quote).toBe("You know Java.");
     expect(chips[0].evidence).toEqual(["Built services in java.", "Second line."]);
+    expect(chips[0].matched).toEqual(["java", "Java"]);
+    expect(chips[1].matched).toEqual(["K8s"]);
   });
 
   it("deriveChips isNew", () => {

@@ -40,16 +40,27 @@ export function FileHeader({ file, actions }: { file: GalleryFile; actions?: Rea
   );
 }
 
-export function UsedFor({ file, className }: { file: GalleryFile; className?: string }) {
+export function UsedFor({
+  file,
+  className,
+  bare = false,
+}: {
+  file: GalleryFile;
+  className?: string;
+  /** Inside a section that already shows the heading and counts. */
+  bare?: boolean;
+}) {
   const sent = submittedCount(file);
   return (
     <section aria-label={`Applications using ${file.label}`} className={cn("min-w-0", className)}>
-      <h3 className="m-0 flex items-baseline justify-between gap-3 text-sm font-semibold">
-        Used for
-        <span className="text-xs font-normal text-muted-foreground">
-          {sent} sent{file.uses.length > sent ? `, ${file.uses.length - sent} preparing` : ""}
-        </span>
-      </h3>
+      {!bare && (
+        <h3 className="m-0 flex items-baseline justify-between gap-3 text-sm font-semibold">
+          Used for
+          <span className="text-xs font-normal text-muted-foreground">
+            {sent} sent{file.uses.length > sent ? `, ${file.uses.length - sent} preparing` : ""}
+          </span>
+        </h3>
+      )}
       {file.uses.length ? (
         <CompactUsageList key={file.id} uses={orderedUses(file)} />
       ) : (

@@ -96,6 +96,8 @@ export type Chip = {
   isNew: boolean;
   quote: string;
   evidence: string[];
+  /** The résumé wording the tool matched, for highlighting (alias matches included). */
+  matched: string[];
   note?: string;
   where?: { count: number; places: string[] };
 };
@@ -126,6 +128,7 @@ export function deriveChips(
       isNew: f.status === "mentioned" && before?.status === "not_evidenced",
       quote: requirement?.jd_quote ?? "",
       evidence: [...new Set(f.resume_evidence.map((e) => e.context))].slice(0, 2),
+      matched: [...new Set(f.resume_evidence.map((e) => e.text))],
     };
     if (closeness === "missing" && requirement?.note) chip.note = requirement.note;
     if (keyword && keyword.found > 0)
