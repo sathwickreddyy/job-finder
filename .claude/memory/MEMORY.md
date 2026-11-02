@@ -3,3 +3,4 @@
 - [Record résumé at submit](record-resume-at-submit.md) — ask which résumé before recording; JobOps locks it after
 - [Backlog: job-apply skill](backlog-job-apply-skill.md) — build on 2026-11-02; rules from the 2026-11-01 apply session
 - [No personal projects on résumé](resume-no-personal-projects.md) — professional experience only; current master DOCX path inside
+- [Résumé rewrite checks rule](resume-rewrite-checks-rule.md) — score every rewrite with local scorer + ResumeNext + resume-ats-optimizer vs exact JD
