@@ -22,6 +22,7 @@ import { getResume, listResumes } from "@/features/resumes/service";
 import { ResumeUploadDrawer } from "@/features/resumes/upload-drawer";
 import { DetailSection, FileHeader, UsedFor } from "@/features/resumes/workspace/pane";
 import { ResumeRail } from "@/features/resumes/workspace/rail";
+import { ScoreTextSheet } from "@/features/resumes/score/ui/text-sheet";
 import { submittedCount } from "@/features/resumes/view-types";
 import { cn } from "@/lib/utils";
 
@@ -75,6 +76,14 @@ export default async function Resumes({ searchParams }: { searchParams: Promise<
   const activeFamilies = visible
     .filter((item) => !item.isArchived)
     .map(({ id, name }) => ({ id, name }));
+  // Score a description lists every file with extracted text, newest first within each résumé.
+  const scoreFiles = details
+    .filter((item) => item.isActive || item.id === family?.id)
+    .flatMap((item) =>
+      item.versions
+        .filter((v) => v.parsingStatus === "COMPLETED")
+        .map((v) => ({ id: v.id, family: item.name, label: v.versionLabel })),
+    );
 
   return (
     <div>
@@ -85,7 +94,8 @@ export default async function Resumes({ searchParams }: { searchParams: Promise<
             Every PDF version, where it was sent and what changed.
           </p>
         </div>
-        <div className="flex flex-wrap gap-x-5 gap-y-2 text-sm">
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
+          <ScoreTextSheet files={scoreFiles} initialId={file?.id} />
           <Link href="/resume-prompt">Tailor a resume for a role</Link>
           <Link href={`/resumes${toggleArchived.toString() ? `?${toggleArchived}` : ""}`}>
             {includeArchived ? "Hide archived resumes" : "Include archived resumes"}

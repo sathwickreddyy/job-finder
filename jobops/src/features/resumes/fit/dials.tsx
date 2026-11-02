@@ -61,9 +61,12 @@ function Ring({ value, base }: { value: number | null; base: number | null }) {
 export function Dials({
   tools,
   captions = {},
+  footnote,
 }: {
   tools: Record<ToolSource, ToolSummary>;
   captions?: Partial<Record<ToolSource, string>>;
+  /** Replaces the default footnote, e.g. where no current résumé is marked. */
+  footnote?: string;
 }) {
   return (
     <section aria-label="Scores against this job">
@@ -108,9 +111,13 @@ export function Dials({
         </p>
       )}
       <p className="m-0 mt-3 text-[11px] leading-relaxed text-muted-foreground">
-        Red is under 50, amber 50–79 and green 80 or more. The bands are a JobOps display choice (80
-        is the ATS optimizer&apos;s suggestion), not a verdict from any tool. The tick marks the
-        current résumé. Tool diagnostics, not an employer&apos;s ATS.
+        {footnote ?? (
+          <>
+            Red is under 50, amber 50–79 and green 80 or more. The bands are a JobOps display choice
+            (80 is the ATS optimizer&apos;s suggestion), not a verdict from any tool. The tick marks
+            the current résumé. Tool diagnostics, not an employer&apos;s ATS.
+          </>
+        )}
       </p>
     </section>
   );

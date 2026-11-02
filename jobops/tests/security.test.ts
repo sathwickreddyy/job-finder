@@ -327,6 +327,8 @@ describe("trusted local-network access", () => {
       `/api/v1/resumes/${id}/fit`,
       `/api/v1/resumes/${id}/score`,
       `/api/v1/resumes/${id}/openings`,
+      `/api/v1/resumes/${id}/score-text`,
+      "/api/v1/score-text/terms",
       `/api/v1/jobs/snapshots/${id}/terms`,
       `/api/v1/jobs/snapshots/${id}/terms/suggest`,
     ]) {
@@ -355,6 +357,9 @@ describe("trusted local-network access", () => {
       `/api/v1/resumes/${id}`,
       "/api/v1/resumes/not-an-id/score",
       `/api/v1/resumes/${id}/score/extra`,
+      "/api/v1/resumes/not-an-id/score-text",
+      "/api/v1/score-text",
+      "/api/v1/score-text/terms/extra",
       "/api/v1/jobs/snapshots/not-an-id/terms",
       `/api/v1/jobs/snapshots/${id}/terms/extra`,
       `/api/v1/jobs/snapshots/${id}`,
