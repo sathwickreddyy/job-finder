@@ -212,3 +212,17 @@ Decided by the user: JobOps records where each version's editable DOCX lives.
 - Exact spacing, dial size within the panel width, and mobile layout (stack the dials in one row of three; they fit at
   375 px in the gallery).
 - Test layout: unit tests for the brief builder and row-state logic; extend existing fit component/integration tests.
+
+## Changes after the branch review
+
+- **Reasons follow the revision.** When `/score` runs on a version with no noted or decided rows of its own for the
+  job, keep-out notes and ResumeNext decisions come from its base version's latest rows. Rule 6 now says reasons carry
+  over automatically.
+- **Exact snapshot.** `POST /fit` accepts an optional `snapshotId`. When given, it fixes the job and description
+  (unknown id → 404) and nothing is re-imported, so an older description can't spawn a duplicate snapshot. Rule 5
+  sends `snapshotId = job.snapshotId`.
+- **DOCX path on existing versions.** `PATCH /api/v1/resumes/{versionId}` with `{ docxPath }` (or `null` to clear).
+  Rule 3 tells the agent to record a missing path this way.
+- **Keep the revision's changes.** `startFrom` stays the current résumé (the user's rule: build from the preserved
+  DOCX master), and rule 3 now tells the agent to keep the changes the revision already made, pointing at
+  `revision.docxPath`.

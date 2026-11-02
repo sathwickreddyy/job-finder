@@ -211,6 +211,10 @@ describe("agent brief", () => {
       WRAPPED_LINE_REASON,
     ]);
     expect(brief.rules).toEqual(BRIEF_RULES);
+    expect(brief.rules[2]).toContain("PATCH /api/v1/resumes/{startFrom.versionId}");
+    expect(brief.rules[2]).toContain("Keep the changes the revision already made");
+    expect(brief.rules[4]).toContain("snapshotId = job.snapshotId");
+    expect(brief.rules[5]).toContain("carry over");
   });
 
   it("pairs scores with the current résumé and sends the snapshot back as the target", () => {

@@ -45,6 +45,8 @@ export const fitInputSchema = z
   .strictObject({
     baseVersionId: z.uuid().optional(),
     docxPath: docxPathSchema.optional(),
+    // The saved description to link to, from a brief; without it the job's newest one is used.
+    snapshotId: z.uuid().optional(),
     target: z.strictObject({
       url: httpUrl,
       company: z.string().trim().min(1).max(200),
@@ -130,8 +132,16 @@ export async function recordFit(versionId: string, input: FitInput, now = new Da
     const providedFields = ["url", "company", "title", "description"];
     if (target.location !== undefined) providedFields.push("location");
     if (target.reqId) providedFields.push("externalId");
-    const summary = await importJobRows([{ ...job, providedFields }], "merge", tx);
-    const jobId = summary.ids[0];
+    // A given saved description fixes the job and snapshot, so nothing is re-imported or duplicated.
+    const [chosen] = input.snapshotId
+      ? await tx
+          .select({ id: jobSnapshots.id, jobId: jobSnapshots.jobId })
+          .from(jobSnapshots)
+          .where(eq(jobSnapshots.id, input.snapshotId))
+      : [];
+    if (input.snapshotId && !chosen) throw new ApiError("Unknown job description.", 404);
+    const jobId =
+      chosen?.jobId ?? (await importJobRows([{ ...job, providedFields }], "merge", tx)).ids[0];
     if (current && current.id !== jobId) throw alreadyTailored(current);
 
     const [stored] = await tx.select().from(jobs).where(eq(jobs.id, jobId));
@@ -150,12 +160,14 @@ export async function recordFit(versionId: string, input: FitInput, now = new Da
           updatedAt: now,
         })
         .where(eq(jobs.id, jobId));
-    const [snapshot] = await tx
-      .select({ id: jobSnapshots.id })
-      .from(jobSnapshots)
-      .where(eq(jobSnapshots.jobId, jobId))
-      .orderBy(desc(jobSnapshots.capturedAt))
-      .limit(1);
+    const [snapshot] = chosen
+      ? [chosen]
+      : await tx
+          .select({ id: jobSnapshots.id })
+          .from(jobSnapshots)
+          .where(eq(jobSnapshots.jobId, jobId))
+          .orderBy(desc(jobSnapshots.capturedAt))
+          .limit(1);
 
     await tx
       .update(resumeVersions)
@@ -351,6 +363,19 @@ async function fitGroups(version: typeof resumeVersions.$inferSelect): Promise<F
       return { ...group, brief: buildBrief(group, files) };
     })
     .sort((a, b) => Number(b.tailored) - Number(a.tailored) || newest(b) - newest(a));
+}
+
+export const versionPatchSchema = z.strictObject({ docxPath: docxPathSchema.nullable() });
+
+/** Records (or clears) where a version's editable DOCX lives; JobOps never reads the file. */
+export async function setDocxPath(versionId: string, docxPath: string | null) {
+  const [row] = await db
+    .update(resumeVersions)
+    .set({ docxPath })
+    .where(eq(resumeVersions.id, versionId))
+    .returning({ id: resumeVersions.id, docxPath: resumeVersions.docxPath });
+  if (!row) throw new ApiError("Unknown résumé file.", 404);
+  return row;
 }
 
 export async function getFit(versionId: string): Promise<Fit | null> {

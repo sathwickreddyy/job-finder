@@ -32,10 +32,10 @@ export type Brief = {
 export const BRIEF_RULES = [
   "Ask the user about every askUserFirst term in the chat, one at a time, before writing. Use only what they confirm, in their words.",
   "Truthful re-weighting only: never add skills, metrics or keywords the user hasn't confirmed.",
-  "Edit a copy of the DOCX at startFrom.docxPath (ask the user where it is if that is null), keep its layout, and list every change you make. Save the revision as a new DOCX beside it; never overwrite the original.",
+  "Edit a copy of the DOCX at startFrom.docxPath. If it is null, ask the user where it is and record it with PATCH /api/v1/resumes/{startFrom.versionId} { docxPath }. Keep the changes the revision already made (its DOCX is at revision.docxPath when set), keep the layout, and list every change you make. Save the result as a new DOCX; never overwrite the original.",
   "Export a text-based PDF and upload it as a new version on the Résumés page.",
-  "Link the new version with POST /api/v1/resumes/{newVersionId}/fit: send job.target unchanged, baseVersionId = startFrom.versionId, docxPath = the new DOCX and no assessments. Then run POST /api/v1/resumes/{newVersionId}/score with { snapshotId: job.snapshotId, tool } for each of jobops-lexical, resumenext and resume-ats-optimizer.",
-  "Carry every keepOut reason and keepAsIs reason into the new version's records, so the user isn't asked again.",
+  "Link the new version with POST /api/v1/resumes/{newVersionId}/fit: send job.target unchanged with snapshotId = job.snapshotId, baseVersionId = startFrom.versionId, docxPath = the new DOCX and no assessments. Then run POST /api/v1/resumes/{newVersionId}/score with { snapshotId: job.snapshotId, tool } for each of jobops-lexical, resumenext and resume-ats-optimizer.",
+  "keepOut and keepAsIs reasons carry over to the new version when /score runs, so the user isn't asked again. If you record assessments yourself, include those reasons.",
   "Scores are tool diagnostics, not an employer's ATS.",
 ];
 

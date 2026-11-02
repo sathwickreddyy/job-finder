@@ -31,6 +31,7 @@ vi.mock("@/features/resumes/score/resumenext-client", async (original) => ({
 }));
 
 import { fitInputSchema, recordFit } from "@/features/resumes/fit/service";
+import { matchResumeToJob } from "@/features/resumes/score/resumenext-client";
 import { listScorableOpenings } from "@/features/resumes/score/openings";
 import { scoreVersion } from "@/features/resumes/score/run";
 import { saveTermList, termsFingerprint, type ReviewedTerm } from "@/features/resumes/score/terms";
@@ -340,6 +341,72 @@ describe.skipIf(!dbTests)("scoring a résumé file against a saved opening", () 
     const result = await scoreVersion(mine, snapshotId, "jobops-lexical", now);
     const details = result.mine.details as { requirements: { term: string; note?: string }[] };
     expect(details.requirements.find((r) => r.term === "Kafka")?.note).toBe("Never used");
+  });
+
+  it("a new version with no rows of its own inherits its base's notes and decisions", async () => {
+    const { base, mine } = await pair();
+    const { snapshotId } = await opening();
+    await saveTermList(snapshotId, [java, kafka], "user");
+    const rn = (decision?: string) => ({
+      ats_score: 70,
+      grade: "C",
+      grade_label: "SATISFACTORY",
+      categories: [],
+      issues: [
+        {
+          label: "Action verbs",
+          hint: "h",
+          severity: "important",
+          ...(decision ? { decision } : {}),
+        },
+      ],
+      keyword_coverage: { coverage_percent: 40, matched: [], missing: [] },
+      keywords: [],
+      resume: {},
+    });
+    await db.insert(resumeAssessments).values([
+      {
+        versionId: base,
+        snapshotId,
+        source: "jobops-lexical",
+        method: "agent",
+        score: 10,
+        assessedAt: now,
+        details: {
+          keyword: 10,
+          required: 10,
+          preferred: 10,
+          weighted: 10,
+          engineVersion: "1.0.0",
+          requirements: [
+            {
+              term: "Kafka",
+              aliases: [],
+              importance: "preferred",
+              jd_quote: JD,
+              note: "Never used",
+            },
+          ],
+          findings: [],
+        },
+      },
+      {
+        versionId: base,
+        snapshotId,
+        source: "resumenext",
+        method: "agent",
+        score: 70,
+        assessedAt: now,
+        details: rn("Present tense on purpose"),
+      },
+    ]);
+    const lexical = await scoreVersion(mine, snapshotId, "jobops-lexical", now);
+    const notes = lexical.mine.details as { requirements: { term: string; note?: string }[] };
+    expect(notes.requirements.find((r) => r.term === "Kafka")?.note).toBe("Never used");
+    vi.mocked(matchResumeToJob).mockResolvedValue(rn());
+    const resumenext = await scoreVersion(mine, snapshotId, "resumenext", now);
+    const issues = (resumenext.mine.details as { issues: { decision?: string }[] }).issues;
+    expect(issues[0].decision).toBe("Present tense on purpose");
   });
 
   it("openings flag tailored, scored, over 14 days and unknown date; tailored uses targetSnapshotId", async () => {
