@@ -10,9 +10,10 @@ from fastapi.exceptions import RequestValidationError
 from pydantic import ValidationError
 from starlette.responses import JSONResponse
 
-from scoring.engine import ENGINE_VERSION, METHODS, calculate
+from scoring.ats import calculate_ats
+from scoring.engine import ENGINE_VERSION, METHODS, calculate, suggested_requirements
 from scoring.extraction import MAX_PDF_BYTES, DocumentError
-from scoring.models import Assessment, Metadata, TextRequest
+from scoring.models import Assessment, Metadata, SuggestRequest, TextRequest
 
 MAX_BODY_BYTES = 11 * 1024 * 1024
 PROCESS_TIMEOUT_SECONDS = 20
@@ -143,6 +144,10 @@ def methods():
 
 
 async def run_assessment(data: str | bytes, metadata: Metadata, input_kind: str):
+    return await run_in_worker(calculate, data, metadata.model_dump(), input_kind)
+
+
+async def run_in_worker(function, *args):
     try:
         app.state.slots.acquire_nowait()
     except anyio.WouldBlock as exc:
@@ -152,9 +157,7 @@ async def run_assessment(data: str | bytes, metadata: Metadata, input_kind: str)
     try:
         # A cancellation kills this subprocess, rather than leaving a runaway parser thread.
         with anyio.fail_after(PROCESS_TIMEOUT_SECONDS):
-            return await to_process.run_sync(
-                calculate, data, metadata.model_dump(), input_kind, cancellable=True
-            )
+            return await to_process.run_sync(function, *args, cancellable=True)
     except TimeoutError as exc:
         raise HTTPException(504, "Document processing timed out") from exc
     except DocumentError as exc:
@@ -189,6 +192,41 @@ async def assess_pdf(
         return await run_assessment(data, parsed, "pdf")
     finally:
         await resume.close()
+
+
+@app.post("/v1/ats-optimizer/pdf")
+async def ats_optimizer_pdf(
+    resume: Annotated[UploadFile, File(description="Text-based PDF, at most 10 MiB / 12 pages")],
+    metadata: Annotated[str, Form(description="JSON conforming to the Metadata schema")],
+):
+    """The resume-ats-optimizer rubric: required terms found ÷ required, plus layout checks."""
+    try:
+        if len(metadata) > 300_000:
+            raise HTTPException(413, "Metadata exceeds 300,000 characters")
+        try:
+            parsed = Metadata.model_validate_json(metadata)
+        except ValidationError as exc:
+            return invalid_fields(exc.errors())
+        if not any(r.importance == "required" for r in parsed.requirements or []):
+            return JSONResponse({"error": "Mark at least one term as required"}, status_code=422)
+        data = await resume.read(MAX_PDF_BYTES + 1)
+        if len(data) > MAX_PDF_BYTES:
+            raise HTTPException(413, "PDF exceeds 10 MiB")
+        return await run_in_worker(calculate_ats, data, parsed.model_dump(), resume.filename)
+    finally:
+        await resume.close()
+
+
+@app.post("/v1/requirements/suggest")
+def suggest(payload: SuggestRequest):
+    """Catalogue terms found in a JD, each with its line. The caller decides what is required."""
+    return {
+        "engine_version": ENGINE_VERSION,
+        "requirements": [
+            {"term": r.term, "aliases": r.aliases, "jd_quote": r.jd_quote}
+            for r in suggested_requirements(payload.job_description)
+        ],
+    }
 
 
 @app.get("/v1/metadata-schema")

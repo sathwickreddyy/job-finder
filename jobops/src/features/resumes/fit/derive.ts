@@ -27,6 +27,56 @@ export function parseToolRow(
   return result.success ? { ...row, source: row.source, parsed: result.data } : null;
 }
 
+const fingerprintOf = (row: ParsedRow) =>
+  (row.details as { termsFingerprint?: string }).termsFingerprint;
+const newestFirst = (a: ParsedRow, b: ParsedRow) => b.createdAt.getTime() - a.createdAt.getTime();
+
+/**
+ * A file's rows for one job: per tool, the latest scored with the job's current term list, else
+ * the latest of any list, flagged as older terms. Without a reviewed list, simply the latest.
+ */
+export function pickRows(
+  rows: ParsedRow[],
+  versionId: string,
+  snapshotId: string,
+  fingerprint: string | null,
+) {
+  const picked: Partial<Record<ToolSource, ParsedRow>> = {};
+  const olderTerms: Partial<Record<ToolSource, boolean>> = {};
+  const mine = rows
+    .filter((r) => r.versionId === versionId && r.snapshotId === snapshotId)
+    .sort(newestFirst);
+  for (const row of mine) {
+    if (picked[row.source] && !olderTerms[row.source]) continue;
+    if (fingerprint === null || fingerprintOf(row) === fingerprint) {
+      picked[row.source] = row;
+      delete olderTerms[row.source];
+    } else if (!picked[row.source]) {
+      picked[row.source] = row;
+      olderTerms[row.source] = true;
+    }
+  }
+  return { rows: picked, olderTerms };
+}
+
+/** The base's rows scored with the same term list as each of the file's rows; never another list. */
+export function pickBase(
+  rows: ParsedRow[],
+  baseId: string,
+  snapshotId: string,
+  mine: Partial<Record<ToolSource, ParsedRow>>,
+) {
+  const picked: Partial<Record<ToolSource, ParsedRow>> = {};
+  const base = rows
+    .filter((r) => r.versionId === baseId && r.snapshotId === snapshotId)
+    .sort(newestFirst);
+  for (const [source, row] of Object.entries(mine) as [ToolSource, ParsedRow][]) {
+    const match = base.find((b) => b.source === source && fingerprintOf(b) === fingerprintOf(row));
+    if (match) picked[source] = match;
+  }
+  return picked;
+}
+
 export function latestBySource(rows: ParsedRow[], versionId: string, snapshotId: string) {
   const latest: Partial<Record<ToolSource, ParsedRow>> = {};
   for (const row of rows) {

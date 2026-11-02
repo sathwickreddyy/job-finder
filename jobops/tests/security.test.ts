@@ -325,6 +325,10 @@ describe("trusted local-network access", () => {
       "/api/v1/applications",
       "/api/v1/resumes",
       `/api/v1/resumes/${id}/fit`,
+      `/api/v1/resumes/${id}/score`,
+      `/api/v1/resumes/${id}/openings`,
+      `/api/v1/jobs/snapshots/${id}/terms`,
+      `/api/v1/jobs/snapshots/${id}/terms/suggest`,
     ]) {
       expect(proxy(request("192.168.1.10:3210", path, { method: "POST" })).status).toBe(200);
       expect(
@@ -349,6 +353,11 @@ describe("trusted local-network access", () => {
       "/api/v1/mail/check/extra",
       "/api/v1/resumes/not-an-id/fit",
       `/api/v1/resumes/${id}`,
+      "/api/v1/resumes/not-an-id/score",
+      `/api/v1/resumes/${id}/score/extra`,
+      "/api/v1/jobs/snapshots/not-an-id/terms",
+      `/api/v1/jobs/snapshots/${id}/terms/extra`,
+      `/api/v1/jobs/snapshots/${id}`,
     ])
       expect(proxy(request("192.168.1.10:3210", path, { method: "POST" })).status).toBe(403);
   });

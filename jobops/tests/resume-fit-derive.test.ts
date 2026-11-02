@@ -3,6 +3,8 @@ import {
   deriveChips,
   latestBySource,
   parseToolRow,
+  pickBase,
+  pickRows,
   summarizeTool,
   type ParsedRow,
 } from "@/features/resumes/fit/derive";
@@ -222,5 +224,56 @@ describe("deriveChips", () => {
     expect(chips[0].where).toEqual({ count: 3, places: ["summary", "skills", "experience"] });
     expect(chips.find((c) => c.term === "Go")?.where).toBeUndefined();
     expect(deriveChips(mine)[0].where).toBeUndefined();
+  });
+});
+
+describe("rows for a scored job", () => {
+  const at = (minute: number) => new Date(`2026-11-02T10:${String(minute).padStart(2, "0")}:00Z`);
+  const scored = (
+    versionId: string,
+    fingerprint: string | undefined,
+    score: number,
+    minute: number,
+  ) =>
+    parseToolRow({
+      versionId,
+      snapshotId: "s1",
+      source: "jobops-lexical",
+      score,
+      method: "weighted_coverage@1.1.0, run in JobOps",
+      details: {
+        ...lexical([finding("Java", "mentioned", [evidence("Java")])]),
+        ...(fingerprint ? { termsFingerprint: fingerprint } : {}),
+      },
+      createdAt: at(minute),
+    })!;
+
+  it("pickRows prefers the current fingerprint", () => {
+    const rows = [scored("v1", "new", 70, 1), scored("v1", "old", 90, 2)];
+    const picked = pickRows(rows, "v1", "s1", "new");
+    expect(picked.rows["jobops-lexical"]?.score).toBe(70);
+    expect(picked.olderTerms["jobops-lexical"]).toBeFalsy();
+  });
+
+  it("pickRows flags older terms", () => {
+    const rows = [scored("v1", "old", 40, 1), scored("v1", "older", 30, 0)];
+    const picked = pickRows(rows, "v1", "s1", "new");
+    expect(picked.rows["jobops-lexical"]?.score).toBe(40);
+    expect(picked.olderTerms["jobops-lexical"]).toBe(true);
+  });
+
+  it("pickRows without a reviewed list takes the latest row unflagged", () => {
+    const picked = pickRows([scored("v1", "a", 10, 1), scored("v1", "b", 20, 3)], "v1", "s1", null);
+    expect(picked.rows["jobops-lexical"]?.score).toBe(20);
+    expect(picked.olderTerms["jobops-lexical"]).toBeFalsy();
+  });
+
+  it("base never falls back to another term list", () => {
+    const mine = pickRows([scored("v1", "new", 70, 1)], "v1", "s1", "new").rows;
+    const baseRows = [scored("b1", "old", 50, 5), scored("b1", "new", 45, 2)];
+    expect(pickBase(baseRows, "b1", "s1", mine)["jobops-lexical"]?.score).toBe(45);
+    expect(
+      pickBase([scored("b1", "old", 50, 5)], "b1", "s1", mine)["jobops-lexical"],
+    ).toBeUndefined();
   });
 });

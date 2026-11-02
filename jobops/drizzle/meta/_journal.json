@@ -127,6 +127,13 @@
       "when": 1793602860504,
       "tag": "0017_resume_fit",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1793619365056,
+      "tag": "0018_job_term_lists",
+      "breakpoints": true
     }
   ]
 }

@@ -285,6 +285,30 @@ export const jobSnapshots = pgTable(
   (t) => [index("job_snapshots_job_idx").on(t.jobId, t.capturedAt)],
 );
 
+/** One reviewed term list per saved description; every in-app score of that snapshot uses it. */
+export const jobTermLists = pgTable("job_term_lists", {
+  id: id(),
+  snapshotId: uuid("snapshot_id")
+    .notNull()
+    .unique()
+    .references(() => jobSnapshots.id, { onDelete: "cascade" }),
+  terms: jsonb("terms")
+    .$type<
+      {
+        term: string;
+        aliases: string[];
+        importance: "required" | "preferred" | "skip";
+        jdQuote: string;
+        added?: boolean;
+      }[]
+    >()
+    .notNull()
+    .default([]),
+  fingerprint: text("fingerprint").notNull(),
+  reviewedBy: text("reviewed_by").notNull(),
+  reviewedAt: timestamp("reviewed_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const jobResumeMatches = pgTable(
   "job_resume_matches",
   {

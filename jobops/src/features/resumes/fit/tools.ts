@@ -11,12 +11,14 @@ export function isToolSource(source: string): source is ToolSource {
 const percent = z.number().min(0).max(100).nullable();
 const importance = z.enum(["required", "preferred"]);
 
-const lexicalSchema = z.looseObject({
+export const lexicalSchema = z.looseObject({
   keyword: percent,
   required: percent,
   preferred: percent,
   weighted: percent,
   engineVersion: z.string().min(1),
+  // The reviewed term list this row was scored with (see score/terms.ts).
+  termsFingerprint: z.string().optional(),
   requirements: z.array(
     z.looseObject({
       term: z.string().min(1),
@@ -74,12 +76,14 @@ const resumeNextSchema = z.looseObject({
   }),
   keywords: z.array(z.looseObject({})),
   resume: z.looseObject({}),
+  termsFingerprint: z.string().optional(),
 });
 
 const optimizerSchema = z.looseObject({
   match_score: z.number().min(0).max(100),
   target: z.literal(80),
   method: z.string(),
+  termsFingerprint: z.string().optional(),
   format: z.array(
     z.looseObject({
       check: z.string(),
@@ -93,6 +97,8 @@ const optimizerSchema = z.looseObject({
       term: z.string(),
       importance,
       found: z.number().int().nonnegative(),
+      // Mentioned only in a negated or uncertain context, so not counted as found.
+      unclear: z.boolean().optional(),
       where: z.looseObject({
         summary: z.number().int().nonnegative(),
         skills: z.number().int().nonnegative(),

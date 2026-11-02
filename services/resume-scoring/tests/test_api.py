@@ -24,7 +24,7 @@ def test_text_api_uses_real_worker_and_has_versioned_contract(client):
     assert data["status"] == "completed"
     assert data["resume_version_id"] == "version-a"
     assert data["scores"][0]["value"] == 100
-    assert data["engine_version"] == "1.0.0"
+    assert data["engine_version"] == "1.1.0"
     assert response.headers["cache-control"] == "no-store"
     assert client.get("/v1/scoring-methods").status_code == 200
     assert "job_description" in client.get("/v1/metadata-schema").json()["properties"]
@@ -137,3 +137,26 @@ def test_busy_service_returns_retry_after(client, monkeypatch):
     response = client.post("/v1/assessments", json=payload())
     assert response.status_code == 429
     assert response.headers["retry-after"] == "2"
+
+
+def test_engine_version_is_1_1_0(client):
+    assert client.get("/health").json()["engine_version"] == "1.1.0"
+
+
+def test_suggest_returns_catalogue_terms_with_quotes(client):
+    jd = "We use Kafka and Java.\nNice: Docker."
+    response = client.post("/v1/requirements/suggest", json={"job_description": jd})
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert data["engine_version"] == "1.1.0"
+    terms = {item["term"]: item for item in data["requirements"]}
+    assert set(terms) == {"Kafka", "Java", "Docker"}
+    for item in terms.values():
+        assert item["jd_quote"] in jd
+        assert "importance" not in item
+        assert isinstance(item["aliases"], list)
+
+
+def test_suggest_rejects_blank_description(client):
+    response = client.post("/v1/requirements/suggest", json={"job_description": "   "})
+    assert response.status_code == 422

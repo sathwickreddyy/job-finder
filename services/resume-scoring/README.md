@@ -30,9 +30,12 @@ flowchart LR
   API --> DB[JobOps stores application assessment history]
 ```
 
-**Current delivery:** the standalone scoring service and Compose integration. JobOps does not yet
-call it or save its structured response. Application/resume UI integration must first be previewed
-in the gallery. Existing manual assessments and submitted resume references are unchanged.
+**Current delivery:** JobOps calls this service from the résumé panel ("Score against a job"): it
+sends the file's stored PDF, the exact saved job description and the snapshot's reviewed terms to
+`/v1/assessments/pdf` and `/v1/ats-optimizer/pdf`, gets term suggestions from
+`/v1/requirements/suggest`, and stores each response as a `resume_assessments` row tied to the exact
+résumé version and job snapshot, labelled by method version. Submitted résumé references are
+unchanged.
 
 ## Run in Docker
 
@@ -73,6 +76,8 @@ request. Document text, filenames and assessment bodies are not logged. Response
 | `GET /v1/metadata-schema` | JSON Schema for the PDF endpoint's `metadata` form field |
 | `POST /v1/assessments` | JSON: resume text, JD, optional reviewed requirements and reference IDs |
 | `POST /v1/assessments/pdf` | Multipart: `resume` PDF and `metadata` JSON string |
+| `POST /v1/ats-optimizer/pdf` | Multipart like above; at least one `required` term. The resume-ats-optimizer rubric: required terms found ÷ required × 100, keyword counts by section and layout checks (undeterminable checks warn) |
+| `POST /v1/requirements/suggest` | JSON `job_description`; catalogue terms with aliases and the JD line each came from, no importance |
 
 Synthetic, runnable text example:
 
