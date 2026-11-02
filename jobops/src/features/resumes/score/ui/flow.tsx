@@ -66,7 +66,11 @@ async function suggestions(snapshotId: string): Promise<ReviewedTerm[]> {
 }
 
 /** The flow's steps, outside React so each async step only sets state after it resolves. */
-function controller(versionId: string, setState: Dispatch<SetStateAction<State>>) {
+export function scoreFlowController(versionId: string, setState: Dispatch<SetStateAction<State>>) {
+  // Each pick gets a token; a cancelled or superseded pick drops its answer instead of running
+  // the checks (and sending text to resumenext.io) after the user moved on.
+  let pickToken = 0;
+
   async function runTool(opening: Opening, tool: ToolSource) {
     const set = (status: RunStatus) =>
       setState((s) =>
@@ -124,19 +128,18 @@ function controller(versionId: string, setState: Dispatch<SetStateAction<State>>
   }
 
   async function start(opening: Opening) {
+    const token = ++pickToken;
     try {
       const { list, description } = await call<{ list: TermList | null; description: string }>(
         termsUrl(opening.snapshotId),
       );
+      if (token !== pickToken) return;
       if (list) return run(opening, description, list.terms, new Date(list.reviewedAt));
-      setState({
-        step: "reviewing",
-        opening,
-        description,
-        initial: await suggestions(opening.snapshotId),
-      });
+      const initial = await suggestions(opening.snapshotId);
+      if (token !== pickToken) return;
+      setState({ step: "reviewing", opening, description, initial });
     } catch (error) {
-      setState({ step: "idle", error: (error as Error).message });
+      if (token === pickToken) setState({ step: "idle", error: (error as Error).message });
     }
   }
 
@@ -163,7 +166,12 @@ function controller(versionId: string, setState: Dispatch<SetStateAction<State>>
     }
   }
 
-  return { runTool, start, pick, confirm };
+  function cancel() {
+    pickToken++;
+    setState({ step: "idle" });
+  }
+
+  return { runTool, start, pick, confirm, cancel };
 }
 
 /** Score this file against any saved opening: pick it, confirm its terms once, watch each check. */
@@ -179,7 +187,7 @@ export function ScoreFlow({
   rescore?: Opening;
 }) {
   const [state, setState] = useState<State>({ step: "idle" });
-  const flow = useMemo(() => controller(versionId, setState), [versionId]);
+  const flow = useMemo(() => scoreFlowController(versionId, setState), [versionId]);
   const rescoreId = rescore?.snapshotId;
 
   useEffect(() => {
@@ -199,7 +207,7 @@ export function ScoreFlow({
         tailored={tailored}
         disabledReason={textReady ? undefined : "This file's text hasn't been extracted yet"}
         expanded={state.step === "picking"}
-        onClick={() => (state.step === "picking" ? setState({ step: "idle" }) : void flow.pick())}
+        onClick={() => (state.step === "picking" ? flow.cancel() : void flow.pick())}
       />
       {state.step === "idle" && state.error && (
         <p className="m-0 px-1 text-xs text-danger-action">{state.error}</p>
@@ -208,7 +216,7 @@ export function ScoreFlow({
         <OpeningPicker
           openings={state.openings}
           error={state.error}
-          onClose={() => setState({ step: "idle" })}
+          onClose={flow.cancel}
           onPick={(o) =>
             void flow.start({ snapshotId: o.snapshotId, company: o.company, title: o.title })
           }
@@ -223,7 +231,7 @@ export function ScoreFlow({
           busy={state.busy}
           error={state.error}
           onConfirm={(terms) => void flow.confirm(state, terms)}
-          onCancel={() => setState({ step: "idle" })}
+          onCancel={flow.cancel}
         />
       )}
       {state.step === "running" && (
