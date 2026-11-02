@@ -58,6 +58,25 @@ describe.skipIf(!dbTests)("agent application records", () => {
     await closeDatabase();
   });
 
+  it("two openings with one title and different req ids are two records", async () => {
+    const shared = { title: `Software Engineer III ${prefix}`, location: "Bengaluru" };
+    const first = opening({ ...shared, reqId: "R-2694949" });
+    const second = opening({ ...shared, reqId: "R-2655406" });
+    const a = await post(first);
+    const b = await post(second);
+    expect(a.duplicate).toBe(false);
+    expect(b.duplicate).toBe(false);
+    const [jobA, jobB] = [await job(first.url as string), await job(second.url as string)];
+    expect(jobA.id).not.toBe(jobB.id);
+    expect(jobA.externalId).toBe("R-2694949");
+  });
+
+  it("the same URL is still a duplicate", async () => {
+    const open = opening({ reqId: "R-1" });
+    expect((await post(open)).duplicate).toBe(false);
+    expect((await post(open)).duplicate).toBe(true);
+  });
+
   it("records a confirmed direct application", async () => {
     const open = opening({ postedAt: "2026-10-25" });
     const result = await post(open, { submittedAt: "2026-10-30" });

@@ -1,9 +1,18 @@
 import { z } from "zod";
 import { indiaDayBoundary } from "@/features/mail/attention";
+import { isToolSource } from "./fit/tools";
 export const assessmentInput = z.object({
   versionId: z.uuid(),
   snapshotId: z.uuid(),
-  source: z.string().trim().min(1).max(200),
+  source: z
+    .string()
+    .trim()
+    .min(1)
+    .max(200)
+    .refine(
+      (value) => !isToolSource(value.toLowerCase()),
+      "This name is reserved for recorded tool checks.",
+    ),
   method: z.string().trim().min(1).max(5000),
   score: z.preprocess(
     (value) =>

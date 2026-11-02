@@ -15,11 +15,14 @@ import {
   toggleArchive,
 } from "@/features/resumes/actions";
 import { PdfPreview } from "@/features/resumes/file-ui";
+import { ChangesSection, FitView, loadFit } from "@/features/resumes/fit/panel";
+import { isRecordedToolCheck } from "@/features/resumes/fit/tools";
 import { resumePresentation } from "@/features/resumes/presentation";
 import { getResume, listResumes } from "@/features/resumes/service";
 import { ResumeUploadDrawer } from "@/features/resumes/upload-drawer";
 import { DetailSection, FileHeader, UsedFor } from "@/features/resumes/workspace/pane";
 import { ResumeRail } from "@/features/resumes/workspace/rail";
+import { submittedCount } from "@/features/resumes/view-types";
 import { cn } from "@/lib/utils";
 
 type Params = {
@@ -56,6 +59,7 @@ export default async function Resumes({ searchParams }: { searchParams: Promise<
   const family = chosenFamily ?? visible.find((item) => item.id === file?.familyId);
   const resume = raw(family?.id);
   const version = resume?.versions.find((item) => item.id === file?.id);
+  const fit = version ? await loadFit(version.id) : null;
   const hasSelection = Boolean(p.file || p.resume);
   // Drawers remount (and close) when the URL selection changes, e.g. after an upload redirect,
   // but not when an action's revalidation changes which file is the default.
@@ -182,13 +186,24 @@ export default async function Resumes({ searchParams }: { searchParams: Promise<
                   </>
                 }
               />
-              <div className="mt-6 grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_288px]">
+              <div className="mt-6 grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
                 <div className="min-w-0 xl:sticky xl:top-4">
                   <PdfPreview file={file} height="h-[520px] sm:h-[700px]" />
                 </div>
                 <div className="min-w-0 rounded-3xl bg-rail px-5 pt-5">
-                  <UsedFor file={file} className="pb-2" />
-                  <div className="mt-3 border-t border-border">
+                  {fit?.fit && <FitView fit={fit.fit} />}
+                  <div className="mt-5 border-t border-border">
+                    {fit?.diff && <ChangesSection diff={fit.diff} />}
+                    <DetailSection
+                      title="Used for"
+                      status={`${submittedCount(file)} sent${
+                        file.uses.length > submittedCount(file)
+                          ? `, ${file.uses.length - submittedCount(file)} preparing`
+                          : ""
+                      }`}
+                    >
+                      <UsedFor file={file} bare />
+                    </DetailSection>
                     <DetailSection
                       title="Bullet changes"
                       status={version.changeNotes ? "Recorded" : "None recorded"}
@@ -304,8 +319,11 @@ async function Assessments({
   const latest = new Map<string, string>();
   for (const row of snapshotRows)
     if (!latest.has(row.job.id)) latest.set(row.job.id, row.snapshot.id);
+  // Recorded tool checks show in the fit panel; this lists only manual assessments.
   const assessments = resume.assessments.filter(
-    (record) => record.assessment.versionId === versionId,
+    (record) =>
+      record.assessment.versionId === versionId &&
+      !isRecordedToolCheck(record.assessment.source, record.assessment.details),
   );
   return (
     <DetailSection

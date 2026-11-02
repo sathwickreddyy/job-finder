@@ -14,8 +14,8 @@ export default defineConfig({
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: {
     command: "npm exec -- next dev --hostname 127.0.0.1 --port 3211",
-    url: "http://127.0.0.1:3211/gallery",
+    url: "http://127.0.0.1:3211/api/v1/resumes",
     reuseExistingServer: false,
-    timeout: 60000,
+    timeout: 120000,
   },
 });

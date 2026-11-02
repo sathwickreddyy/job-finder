@@ -20,6 +20,19 @@ describe("job import", () => {
     ).toBe(
       jobDedupeKey({ company: "atlas labs", title: "senior engineer", location: "bengaluru" }),
     ));
+  it("jobDedupeKey keeps old keys without a req id", () =>
+    expect(jobDedupeKey({ company: "A", title: "T", location: "L" })).toBe(
+      JSON.stringify(["a", "t", "l"]),
+    ));
+  it("jobDedupeKey separates req ids", () => {
+    const base = { company: "Walmart", title: "Software Engineer III", location: "Bengaluru" };
+    const one = jobDedupeKey({ ...base, externalId: "R-1" });
+    const two = jobDedupeKey({ ...base, externalId: "R-2" });
+    expect(one).not.toBe(two);
+    expect(one).not.toBe(jobDedupeKey(base));
+    expect(jobDedupeKey({ ...base, externalId: " r-1 " })).toBe(one);
+    expect(jobDedupeKey({ ...base, externalId: null })).toBe(jobDedupeKey(base));
+  });
   it("reports row and field for invalid data", () => {
     const r = parseJobImport(
       '[{"company":"A","title":"Role","url":"bad","experienceMin":7,"experienceMax":2}]',

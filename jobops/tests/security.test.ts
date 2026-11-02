@@ -324,6 +324,7 @@ describe("trusted local-network access", () => {
       `/api/v1/mail/${id}/handle`,
       "/api/v1/applications",
       "/api/v1/resumes",
+      `/api/v1/resumes/${id}/fit`,
     ]) {
       expect(proxy(request("192.168.1.10:3210", path, { method: "POST" })).status).toBe(200);
       expect(
@@ -343,7 +344,12 @@ describe("trusted local-network access", () => {
         ).status,
       ).toBe(403);
     }
-    for (const path of ["/api/v1/mail/not-an-id/handle", "/api/v1/mail/check/extra"])
+    for (const path of [
+      "/api/v1/mail/not-an-id/handle",
+      "/api/v1/mail/check/extra",
+      "/api/v1/resumes/not-an-id/fit",
+      `/api/v1/resumes/${id}`,
+    ])
       expect(proxy(request("192.168.1.10:3210", path, { method: "POST" })).status).toBe(403);
   });
 

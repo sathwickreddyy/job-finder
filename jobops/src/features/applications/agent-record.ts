@@ -17,12 +17,12 @@ import { normalizeCompany } from "./lanes";
 import { recordMethods, recordSentAt } from "./domain";
 import { isPlannedRecord, recordApplication } from "./record-service";
 
-const httpUrl = z
+export const httpUrl = z
   .url()
   .max(2000)
   .refine((value) => ["http:", "https:"].includes(new URL(value).protocol), "Use an http(s) URL.");
 // The format alone lets 2026-02-30 through, which Date silently rolls into March.
-const day = z
+export const day = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD.")
   .refine((value) => {
@@ -40,6 +40,7 @@ export const agentRecordSchema = z.strictObject({
       title: z.string().trim().min(1).max(300),
       location: z.string().trim().max(300).optional(),
       description: z.string().max(100000).optional(),
+      reqId: z.string().trim().min(1).max(200).optional(),
       postedAt: day.optional(),
       postedAtKind: z.enum(["original", "latest_publication"]).optional(),
       postedAtSourceUrl: httpUrl.optional(),
@@ -144,6 +145,7 @@ async function recordConfirmed(
       title: opening.title,
       location: opening.location ?? "",
       description: opening.description ?? "",
+      externalId: opening.reqId,
       source: "AGENT_RECORD",
     });
     const [found] = await tx

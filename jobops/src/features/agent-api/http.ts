@@ -11,19 +11,19 @@ export class ApiError extends Error {
   }
 }
 const headers = { "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff" };
-const limit = 64 * 1024;
+const defaultLimit = 64 * 1024;
 
 export function apiResponse(body: unknown, status = 200): Response {
   return Response.json(body, { status, headers });
 }
 
-export async function readJson(request: Request): Promise<unknown> {
+export async function readJson(request: Request, limit = defaultLimit): Promise<unknown> {
+  const tooLarge = `Request exceeds ${limit >= 1048576 ? `${limit / 1048576} MB` : `${limit / 1024} KiB`}.`;
   if (request.headers.has("next-action"))
     throw new ApiError("Server actions are not available on this API.", 403);
   if (!/^application\/json(?:\s*;|$)/i.test(request.headers.get("content-type") ?? ""))
     throw new ApiError("Send application/json.", 415);
-  if (Number(request.headers.get("content-length") ?? 0) > limit)
-    throw new ApiError("Request exceeds 64 KiB.", 413);
+  if (Number(request.headers.get("content-length") ?? 0) > limit) throw new ApiError(tooLarge, 413);
   const reader = request.body?.getReader();
   if (!reader) throw new ApiError("A JSON request body is required.");
   const chunks: Uint8Array[] = [];
@@ -35,7 +35,7 @@ export async function readJson(request: Request): Promise<unknown> {
       size += value.length;
       if (size > limit) {
         await reader.cancel();
-        throw new ApiError("Request exceeds 64 KiB.", 413);
+        throw new ApiError(tooLarge, 413);
       }
       chunks.push(value);
     }
