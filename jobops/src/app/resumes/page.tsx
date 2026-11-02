@@ -86,25 +86,29 @@ export default async function Resumes({ searchParams }: { searchParams: Promise<
           </Link>
         </div>
       </header>
-      <div className="grid overflow-hidden rounded-panel border border-border bg-card shadow-surface lg:grid-cols-[236px_minmax(0,1fr)]">
+      {/* overflow-clip, not hidden: clipping the corners must not break the sticky rail and PDF. */}
+      <div className="grid overflow-clip rounded-panel border border-border bg-card shadow-surface grid-cols-[minmax(0,1fr)] lg:grid-cols-[236px_minmax(0,1fr)] xl:grid-cols-[272px_minmax(0,1fr)]">
         <aside
           className={cn("border-border bg-rail/60 lg:border-r", hasSelection && "hidden lg:block")}
         >
-          <ResumeRail
-            families={visible}
-            selectedId={file?.id}
-            selectedFamilyId={family?.id}
-            variant="lineage"
-            linkBase={base}
-            action={
-              <ResumeUploadDrawer
-                key={`rail-${selection}-${upload}`}
-                families={activeFamilies}
-                initialOpen={upload && !chosenFamily}
-                className="w-full !min-h-10"
-              />
-            }
-          />
+          {/* Desktop: the rail stays beside the PDF at screen height and scrolls on its own. */}
+          <div className="lg:sticky lg:top-0 lg:flex lg:max-h-dvh lg:flex-col">
+            <ResumeRail
+              families={visible}
+              selectedId={file?.id}
+              selectedFamilyId={family?.id}
+              variant="lineage"
+              linkBase={base}
+              action={
+                <ResumeUploadDrawer
+                  key={`rail-${selection}-${upload}`}
+                  families={activeFamilies}
+                  initialOpen={upload && !chosenFamily}
+                  className="w-full !min-h-10"
+                />
+              }
+            />
+          </div>
         </aside>
         <div
           data-resume-id={family?.id}

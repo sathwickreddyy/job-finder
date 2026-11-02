@@ -46,6 +46,18 @@ export function shortList(names: string[], max = 2) {
   return `${names.slice(0, max).join(", ")} +${names.length - max}`;
 }
 
+const dateLike = /^(\d{1,2} [A-Z][a-z]{2,8} \d{4}|\d{4}-\d{2}-\d{2})$/;
+
+/**
+ * Splits "Walmart Senior SWE (GDF) · R-2655406 · 2 Nov 2026 · v2" into a short
+ * title and the details that tell versions apart ("R-2655406 · v2"). The date is
+ * dropped because the rail already groups files by upload day.
+ */
+export function splitLabel(label: string) {
+  const [title, ...rest] = label.split(" · ").map((part) => part.trim());
+  return { title, detail: rest.filter((part) => part && !dateLike.test(part)).join(" · ") };
+}
+
 /** Sent applications first, then outreach and drafts, keeping each group's order. */
 export function orderedUses(file: GalleryFile) {
   return [

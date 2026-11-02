@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
+  type AnyPgColumn,
   boolean,
   check,
   index,
@@ -199,6 +200,14 @@ export const resumeVersions = pgTable(
     parsingError: text("parsing_error"),
     createdAt: createdAt(),
     isCurrent: boolean("is_current").notNull().default(false),
+    // A tailored file records the version it was made from and the saved job description it targets.
+    baseVersionId: uuid("base_version_id").references((): AnyPgColumn => resumeVersions.id, {
+      onDelete: "restrict",
+    }),
+    targetJobId: uuid("target_job_id").references(() => jobs.id, { onDelete: "restrict" }),
+    targetSnapshotId: uuid("target_snapshot_id").references(() => jobSnapshots.id, {
+      onDelete: "restrict",
+    }),
   },
   (t) => [
     index("resume_versions_family_idx").on(t.resumeId),
@@ -313,10 +322,12 @@ export const resumeAssessments = pgTable(
     score: real("score"),
     findings: text("findings").notNull().default(""),
     assessedAt: date("assessed_at").notNull(),
+    details: jsonb("details").$type<Record<string, unknown>>().notNull().default({}),
     createdAt: createdAt(),
   },
   (t) => [
     index("resume_assessments_version_idx").on(t.versionId),
+    index("resume_assessments_fit_idx").on(t.versionId, t.snapshotId, t.source),
     check(
       "resume_assessments_score",
       sql`${t.score} IS NULL OR (${t.score} >= 0 AND ${t.score} <= 100)`,

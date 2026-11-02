@@ -120,6 +120,13 @@
       "when": 1793472872251,
       "tag": "0016_interview_rejection",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1793602860504,
+      "tag": "0017_resume_fit",
+      "breakpoints": true
     }
   ]
 }

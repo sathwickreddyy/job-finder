@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   shortList,
+  splitLabel,
   submittedCount,
   usedCompanies,
   type GalleryFamily,
@@ -154,54 +155,86 @@ function GroupedRows({ files, ...row }: RowsProps) {
 }
 
 function LineageRows({ files, ...row }: RowsProps) {
+  // Newest first, one heading per upload day instead of a date on every row.
+  const days: { day: string; files: GalleryFile[] }[] = [];
+  for (const file of files) {
+    const last = days.at(-1);
+    if (last?.day === file.uploaded) last.files.push(file);
+    else days.push({ day: file.uploaded, files: [file] });
+  }
+  const root = files.at(-1)?.id;
   return (
-    <ol className="relative m-0 list-none p-0 before:absolute before:bottom-6 before:left-[15px] before:top-6 before:w-0.5 before:rounded-full before:bg-border">
-      {files.map((file, index) => {
-        const selected = row.selectedId === file.id;
-        const root = index === files.length - 1;
-        const companies = usedCompanies(file);
-        return (
-          <li key={file.id} className="relative pl-8">
-            <span
-              aria-hidden
-              className={cn(
-                "absolute left-[9px] top-[18px] z-10 rounded-full border-2",
-                root ? "size-3.5 rounded-[4px]" : "size-3.5",
-                selected
-                  ? "border-primary bg-primary"
-                  : file.isDefault
-                    ? "border-primary bg-card"
-                    : "border-input bg-card",
-              )}
-            />
-            <Row file={file} selected={selected} {...rowLink(row, file)} className="my-0.5">
-              <span className="line-clamp-2 text-[13px] font-semibold leading-snug">
-                {file.label}
-              </span>
-              <span className="mt-1.5 flex flex-wrap items-center gap-2 text-[11px] opacity-75">
-                {root ? `Started ${file.uploaded}` : `Revised ${file.uploaded}`}
-                {file.isDefault && <DefaultMark />}
-              </span>
-              {file.uses.length > 0 && (
-                <span
-                  className="mt-2 flex min-w-0 items-center gap-2 text-[11px]"
-                  title={companies.join(", ")}
-                >
-                  <Companies file={file} />
-                  <span className="min-w-0 truncate opacity-80" aria-hidden>
-                    {submittedCount(file)
-                      ? `Sent to ${shortList(companies, companies.length > 3 ? 1 : 2)}`
-                      : "Preparing"}
-                  </span>
-                  <span className="sr-only">
-                    {submittedCount(file) ? `Sent to ${companies.join(", ")}` : "Preparing"}
-                  </span>
-                </span>
-              )}
-            </Row>
-          </li>
-        );
-      })}
+    <ol className="relative m-0 list-none p-0 before:absolute before:bottom-4 before:left-[15px] before:top-8 before:w-0.5 before:rounded-full before:bg-border">
+      {days.map(({ day, files: dayFiles }) => (
+        <li key={day} className="mt-2 first:mt-0">
+          <p className="relative z-10 m-0 mb-0.5 pl-8 text-[11px] font-medium text-muted-foreground">
+            {day}
+          </p>
+          <ol className="m-0 list-none p-0">
+            {dayFiles.map((file) => {
+              const selected = row.selectedId === file.id;
+              const companies = usedCompanies(file);
+              const { title, detail } = splitLabel(file.label);
+              const original = file.id === root;
+              const meta = [original ? "Original" : "", detail].filter(Boolean).join(" · ");
+              return (
+                <li key={file.id} className="relative pl-8">
+                  <span
+                    aria-hidden
+                    className={cn(
+                      "absolute left-[9px] top-[13px] z-10 size-3.5 rounded-full border-2",
+                      original && "rounded-[4px]",
+                      selected
+                        ? "border-primary bg-primary"
+                        : file.isDefault
+                          ? "border-primary bg-card"
+                          : "border-input bg-card",
+                    )}
+                  />
+                  <Row
+                    file={file}
+                    selected={selected}
+                    {...rowLink(row, file)}
+                    className="my-px !py-2"
+                  >
+                    <span
+                      className="block truncate text-[13px] font-semibold leading-snug"
+                      title={file.label}
+                    >
+                      {title}
+                    </span>
+                    {(meta || file.isDefault) && (
+                      <span className="mt-0.5 flex min-w-0 items-center gap-2 text-[11px] opacity-75">
+                        {meta && <span className="min-w-0 truncate">{meta}</span>}
+                        {file.isDefault && <DefaultMark />}
+                      </span>
+                    )}
+                    {file.uses.length > 0 && (
+                      <span
+                        className="mt-1.5 flex min-w-0 items-center gap-2 text-[11px]"
+                        title={companies.join(", ")}
+                      >
+                        <Companies file={file} />
+                        <span className="min-w-0 truncate opacity-80" aria-hidden>
+                          {/* Avatars already name the first few; the text says how many. */}
+                          {!submittedCount(file)
+                            ? "Preparing"
+                            : companies.length > 2
+                              ? `${companies.length} companies`
+                              : `Sent to ${shortList(companies)}`}
+                        </span>
+                        <span className="sr-only">
+                          {submittedCount(file) ? `Sent to ${companies.join(", ")}` : "Preparing"}
+                        </span>
+                      </span>
+                    )}
+                  </Row>
+                </li>
+              );
+            })}
+          </ol>
+        </li>
+      ))}
     </ol>
   );
 }
@@ -284,6 +317,17 @@ export function ResumeRail({
 }) {
   const [query, setQuery] = useState("");
   const [usedOnly, setUsedOnly] = useState(false);
+  const list = useRef<HTMLDivElement>(null);
+  // On desktop the file list scrolls on its own; keep the open file in view.
+  useEffect(() => {
+    const box = list.current;
+    const current = box?.querySelector('[aria-current="true"]');
+    if (!box || !current || box.scrollHeight <= box.clientHeight) return;
+    const outer = box.getBoundingClientRect();
+    const inner = current.getBoundingClientRect();
+    if (inner.top < outer.top || inner.bottom > outer.bottom)
+      box.scrollTop += inner.top - outer.top - (outer.height - inner.height) / 2;
+  }, [selectedId]);
   const Rows = variant === "lineage" ? LineageRows : variant === "sent" ? SentRows : GroupedRows;
   const groups = families
     .map((family) => ({
@@ -296,7 +340,7 @@ export function ResumeRail({
       (group) => group.files.length || (!group.family.files.length && !query.trim() && !usedOnly),
     );
   return (
-    <nav aria-label="Resume files" className="flex h-full min-w-0 flex-col gap-4 p-4">
+    <nav aria-label="Resume files" className="flex h-full min-h-0 min-w-0 flex-col gap-4 p-4">
       {action}
       <div className="relative">
         <Search
@@ -334,7 +378,10 @@ export function ResumeRail({
           </button>
         ))}
       </div>
-      <div className="min-h-0 flex-1 space-y-5">
+      <div
+        ref={list}
+        className="-mx-1 min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain px-1"
+      >
         {groups.map(({ family, files }) => (
           <section key={family.id} aria-label={family.name}>
             <h2 className="m-0 mb-2 flex items-baseline justify-between gap-2 px-3 text-xs font-medium text-muted-foreground">
