@@ -45,7 +45,7 @@ export function MustHaves({
                     {c === "experience" ? "Exp." : c}
                   </th>
                 ))}
-              <th className="w-20 pb-2 text-right font-normal">Next</th>
+              <th className="w-24 pb-2 text-right font-normal whitespace-nowrap">Next</th>
             </tr>
           </thead>
           <tbody>
@@ -78,7 +78,12 @@ export function MustHaves({
                       {SPAN[r.state]}
                     </td>
                   ))}
-                <td className={cn("py-0.5 text-right text-[11px] font-medium", NEXT[r.state].tone)}>
+                <td
+                  className={cn(
+                    "py-0.5 pl-2 text-right text-[11px] font-medium whitespace-nowrap",
+                    NEXT[r.state].tone,
+                  )}
+                >
                   {NEXT[r.state].text}
                 </td>
               </tr>
