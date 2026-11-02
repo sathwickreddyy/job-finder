@@ -100,6 +100,8 @@ class Document(Model):
 
 
 class Evidence(Span):
+    # The resume line holding the mention, so callers can show it without re-reading the text.
+    context: str = ""
     boxes: list[Box] = Field(default_factory=list)
 
 
@@ -142,3 +144,14 @@ class Assessment(Model):
     pages: list[Page]
     warnings: list[str]
     limitations: list[str]
+
+
+class SuggestRequest(Model):
+    job_description: Text
+
+    @field_validator("job_description")
+    @classmethod
+    def nonblank_jd(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("Job description must contain text")
+        return value

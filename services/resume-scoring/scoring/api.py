@@ -10,9 +10,9 @@ from fastapi.exceptions import RequestValidationError
 from pydantic import ValidationError
 from starlette.responses import JSONResponse
 
-from scoring.engine import ENGINE_VERSION, METHODS, calculate
+from scoring.engine import ENGINE_VERSION, METHODS, calculate, suggested_requirements
 from scoring.extraction import MAX_PDF_BYTES, DocumentError
-from scoring.models import Assessment, Metadata, TextRequest
+from scoring.models import Assessment, Metadata, SuggestRequest, TextRequest
 
 MAX_BODY_BYTES = 11 * 1024 * 1024
 PROCESS_TIMEOUT_SECONDS = 20
@@ -189,6 +189,18 @@ async def assess_pdf(
         return await run_assessment(data, parsed, "pdf")
     finally:
         await resume.close()
+
+
+@app.post("/v1/requirements/suggest")
+def suggest(payload: SuggestRequest):
+    """Catalogue terms found in a JD, each with its line. The caller decides what is required."""
+    return {
+        "engine_version": ENGINE_VERSION,
+        "requirements": [
+            {"term": r.term, "aliases": r.aliases, "jd_quote": r.jd_quote}
+            for r in suggested_requirements(payload.job_description)
+        ],
+    }
 
 
 @app.get("/v1/metadata-schema")

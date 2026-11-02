@@ -162,3 +162,15 @@ def test_blank_partial_corrupt_encrypted_and_oversized_pdfs():
     ):
         with pytest.raises(DocumentError):
             extract_pdf(data)
+
+
+def test_evidence_carries_line_context():
+    jd = "Kafka experience required."
+    result = assess(
+        text_document("Summary\nBuilt Kafka pipelines on AWS\nSkills"),
+        Metadata(
+            job_description=jd,
+            requirements=[Requirement(term="Kafka", importance="required", jd_quote=jd)],
+        ),
+    )
+    assert result.findings[0].resume_evidence[0].context == "Built Kafka pipelines on AWS"

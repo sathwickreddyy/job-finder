@@ -15,7 +15,7 @@ from scoring.models import (
     Span,
 )
 
-ENGINE_VERSION = "1.0.0"
+ENGINE_VERSION = "1.1.0"
 METHODS = [
     {
         "id": "keyword_coverage",
@@ -90,6 +90,17 @@ def suggested_requirements(jd: str) -> list[Requirement]:
     return result
 
 
+def line_context(text: str, span: Span, limit: int = 200) -> str:
+    start = text.rfind("\n", 0, span.start) + 1
+    end = text.find("\n", span.end)
+    end = len(text) if end < 0 else end
+    # Long lines are clipped around the mention so the context stays readable.
+    if end - start > limit:
+        start = max(start, span.start - (limit - (span.end - span.start)) // 2)
+        end = min(end, start + limit)
+    return text[start:end].strip()
+
+
 def uncertain_context(text: str, span: Span) -> bool:
     start = max(text.rfind("\n", 0, span.start) + 1, span.start - 100)
     end = text.find("\n", span.end)
@@ -128,6 +139,7 @@ def assess(document: Document, metadata: Metadata) -> Assessment:
                 resume_evidence=[
                     Evidence(
                         **span.model_dump(),
+                        context=line_context(document.text, span),
                         boxes=[
                             word.box
                             for word in document.words
