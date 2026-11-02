@@ -141,6 +141,16 @@ describe("diffResumes", () => {
     expect(diff.counts.reworded).toBe(1);
   });
 
+  it("ignores the extractor's page markers", () => {
+    const paged = edit(
+      "• Built Kafka consumers for ledger events.",
+      "• Built Kafka consumers for ledger\n-- 1 of 2 --\nevents.",
+    );
+    const diff = diffResumes(paged, `${base}-- 2 of 2 --\n`);
+    expect(diff.sections).toEqual([]);
+    expect(diff.factsUnchanged).toBe(true);
+  });
+
   it("factsUnchanged false when a month changes", () =>
     expect(diffResumes(base, edit("July 2023", "June 2023")).factsUnchanged).toBe(false));
 });

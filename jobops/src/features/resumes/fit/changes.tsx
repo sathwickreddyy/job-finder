@@ -23,7 +23,7 @@ function Words({ change }: { change: Change }) {
             {part.text}
           </ins>
         ) : part.op === "del" ? (
-          <del key={i} className="text-danger-action">
+          <del key={i} className="mr-0.5 text-danger-action">
             {part.text}
           </del>
         ) : (

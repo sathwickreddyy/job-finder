@@ -47,7 +47,7 @@ export function Scores({
             tabIndex={tab === id ? 0 : -1}
             onClick={() => setTab(id)}
             className={cn(
-              "flex-1 rounded-full px-2 py-1.5 text-xs font-medium",
+              "flex-auto rounded-full px-1.5 py-1.5 text-[11px] leading-tight font-medium sm:whitespace-nowrap sm:px-2.5 sm:text-xs",
               tab === id ? "bg-card text-foreground shadow-surface" : "text-muted-foreground",
             )}
           >

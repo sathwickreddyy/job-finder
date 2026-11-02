@@ -18,6 +18,13 @@ const isHeader = (line: string) =>
   !line.startsWith("•") && (datedLine.test(line) || placedLine.test(line));
 // All-caps ruled headings; a wrapped line such as "AWS." has a period and is not one.
 const headingLine = /^[A-Z][A-Z&/ ]{3,}[A-Z]$/;
+// The PDF extractor's page footer ("-- 1 of 2 --") is not résumé content.
+const pageMarker = /^--\s*\d+\s+of\s+\d+\s*--$/;
+const contentLines = (text: string) =>
+  text
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l && !pageMarker.test(l));
 const skillRow = /^[A-Z][\w &/+.-]*:/;
 
 function sectionName(heading: string) {
@@ -28,10 +35,7 @@ function sectionName(heading: string) {
 }
 
 export function splitSections(text: string): { name: string; units: string[] }[] {
-  const lines = text
-    .split("\n")
-    .map((l) => l.trim())
-    .filter(Boolean);
+  const lines = contentLines(text);
   const sections: { name: string; units: string[] }[] = [];
   if (lines[1]) sections.push({ name: "Title line", units: [lines[1]] });
   let current: { name: string; units: string[] } | null = null;
@@ -143,7 +147,9 @@ function diffUnits(where: string, a: string[], b: string[]): Change[] {
 
 const factPattern = new RegExp(`\\d[\\d.,%$+]*|\\b(?:${MONTHS})\\b`, "g");
 const facts = (text: string) =>
-  (text.match(factPattern) ?? []).map((f) => f.replace(/[.,]+$/, "")).sort();
+  (contentLines(text).join("\n").match(factPattern) ?? [])
+    .map((f) => f.replace(/[.,]+$/, ""))
+    .sort();
 
 // Multiset difference: each fact in `a` not matched one-for-one in `b`.
 function without(a: string[], b: string[]) {
