@@ -79,7 +79,8 @@ function controller(versionId: string, setState: Dispatch<SetStateAction<State>>
       const result = await call<{
         mine: { score: number | null };
         base: { score: number | null } | null;
-        baseSkipped?: "no_text" | "no_base";
+        baseSkipped?: "no_text" | "no_base" | "failed";
+        baseError?: string;
       }>(`/api/v1/resumes/${versionId}/score`, {
         method: "POST",
         body: JSON.stringify({ snapshotId: opening.snapshotId, tool }),
@@ -89,6 +90,7 @@ function controller(versionId: string, setState: Dispatch<SetStateAction<State>>
         score: result.mine.score,
         baseScore: result.base?.score ?? null,
         baseSkipped: result.baseSkipped,
+        baseError: result.baseError,
       });
     } catch (error) {
       const e = error as CallError;

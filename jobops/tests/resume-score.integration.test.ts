@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { and, eq, inArray, like } from "drizzle-orm";
+import { and, eq, inArray, like, sql } from "drizzle-orm";
 import { closeDatabase, db } from "@/db";
 import {
   activityLogs,
@@ -235,6 +235,37 @@ describe.skipIf(!dbTests)("scoring a résumé file against a saved opening", () 
     expect(error).toBeInstanceOf(ToolError);
     expect(error.code).toBe("missing_pdf");
     expect(await rowsFor(mine, snapshotId)).toHaveLength(0);
+  });
+
+  it("a base that fails still saves the file row", async () => {
+    const resumeId = await family();
+    const base = await version(resumeId, { storagePath: `${prefix}/missing-base.pdf` });
+    const mine = await version(resumeId, { baseVersionId: base });
+    const { snapshotId } = await opening();
+    await saveTermList(snapshotId, [java], "user");
+    const result = await scoreVersion(mine, snapshotId, "jobops-lexical", now);
+    expect(result.baseSkipped).toBe("failed");
+    expect(result.baseError).toBe("The PDF for this file is missing from storage");
+    expect(result.base).toBeNull();
+    expect(await rowsFor(mine, snapshotId)).toHaveLength(1);
+    expect(await rowsFor(base, snapshotId)).toHaveLength(0);
+  });
+
+  it("tools run with no database transaction open", async () => {
+    const { mine } = await pair();
+    const { snapshotId } = await opening();
+    await saveTermList(snapshotId, [java], "user");
+    const open: number[] = [];
+    lexicalCall.mockImplementation(async () => {
+      const { rows } = await db.execute<{ n: number }>(
+        sql`select count(*)::int as n from pg_stat_activity
+            where datname = current_database() and state like 'idle in transaction%'`,
+      );
+      open.push(rows[0].n);
+      return assessment(60);
+    });
+    await scoreVersion(mine, snapshotId, "jobops-lexical", now);
+    expect(open).toEqual([0, 0]);
   });
 
   it("base without text is skipped", async () => {

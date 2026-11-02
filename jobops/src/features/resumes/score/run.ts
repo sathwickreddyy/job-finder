@@ -18,6 +18,7 @@ import { assessLexical, assessOptimizer } from "./scoring-client";
 import { getTermList, type TermList } from "./terms";
 import { ToolError, toolErrorCopy } from "./tool-error";
 
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 type Version = typeof resumeVersions.$inferSelect;
 type Job = typeof jobs.$inferSelect;
 type Snapshot = typeof jobSnapshots.$inferSelect;
@@ -26,7 +27,9 @@ type Outcome = { score: number | null; method: string; details: Record<string, u
 export type ScoreResult = {
   mine: ParsedRow;
   base: ParsedRow | null;
-  baseSkipped?: "no_text" | "no_base";
+  baseSkipped?: "no_text" | "no_base" | "failed";
+  /** Why the base couldn't be scored, when it failed. */
+  baseError?: string;
 };
 
 const semver = (method: string) => /@(\d+\.\d+\.\d+)/.exec(method)?.[1] ?? null;
@@ -129,43 +132,61 @@ export async function scoreVersion(
   const [base] = version.baseVersionId
     ? await db.select().from(resumeVersions).where(eq(resumeVersions.id, version.baseVersionId))
     : [];
-  const baseSkipped: ScoreResult["baseSkipped"] = !base
+  let baseSkipped: ScoreResult["baseSkipped"] = !base
     ? "no_base"
     : base.parsingStatus !== "COMPLETED" || !base.extractedText.trim()
       ? "no_text"
       : undefined;
+  let baseError: string | undefined;
   const assessedAt = indiaDayBoundary(indiaDate(now))!;
 
+  async function comparableBase(tx: Tx | typeof db, baseId: string) {
+    const rows = await tx
+      .select()
+      .from(resumeAssessments)
+      .where(
+        and(
+          eq(resumeAssessments.versionId, baseId),
+          eq(resumeAssessments.snapshotId, snapshotId),
+          eq(resumeAssessments.source, tool),
+        ),
+      )
+      .orderBy(desc(resumeAssessments.createdAt));
+    return rows
+      .map((row) => parseToolRow(row))
+      .filter((row): row is ParsedRow => row !== null)
+      .find(
+        (row) =>
+          (row.details as { termsFingerprint?: string }).termsFingerprint === list!.fingerprint &&
+          semver(row.method) === semver(mine.method),
+      );
+  }
+
+  // Tools run outside any transaction, so a slow check never holds a database connection. A
+  // failed base still saves the file's score; the run row says the master couldn't be scored.
+  let baseOutcome: Outcome | null = null;
+  let existing: ParsedRow | undefined;
+  if (base && !baseSkipped) {
+    existing = await comparableBase(db, base.id);
+    if (!existing)
+      try {
+        baseOutcome = await runTool(tool, base, job, snapshot, list);
+      } catch (error) {
+        if (!(error instanceof ToolError)) throw error;
+        baseSkipped = "failed";
+        baseError = error.message;
+      }
+  }
+
   return db.transaction(async (tx) => {
-    let baseRow: ParsedRow | null = null;
-    if (base && !baseSkipped) {
-      // Serialises runs for this base, snapshot and tool so a double click scores the base once.
+    let baseRow: ParsedRow | null = existing ?? null;
+    if (base && baseOutcome) {
+      // A short lock around re-check-then-insert: two runs at once save one base row.
       await tx.execute(
         sql`select pg_advisory_xact_lock(hashtext(${`${base.id}:${snapshotId}:${tool}`}))`,
       );
-      const existing = (
-        await tx
-          .select()
-          .from(resumeAssessments)
-          .where(
-            and(
-              eq(resumeAssessments.versionId, base.id),
-              eq(resumeAssessments.snapshotId, snapshotId),
-              eq(resumeAssessments.source, tool),
-            ),
-          )
-          .orderBy(desc(resumeAssessments.createdAt))
-      )
-        .map((row) => parseToolRow(row))
-        .filter((row): row is ParsedRow => row !== null)
-        .find(
-          (row) =>
-            (row.details as { termsFingerprint?: string }).termsFingerprint === list.fingerprint &&
-            semver(row.method) === semver(mine.method),
-        );
-      if (existing) baseRow = existing;
-      else {
-        const outcome = await runTool(tool, base, job, snapshot, list);
+      baseRow = (await comparableBase(tx, base.id)) ?? null;
+      if (!baseRow) {
         const [inserted] = await tx
           .insert(resumeAssessments)
           .values({
@@ -174,7 +195,7 @@ export async function scoreVersion(
             source: tool,
             findings: "",
             assessedAt,
-            ...outcome,
+            ...baseOutcome,
           })
           .returning();
         baseRow = parseToolRow(inserted);
@@ -188,6 +209,7 @@ export async function scoreVersion(
       mine: parseToolRow(inserted)!,
       base: baseRow,
       ...(baseSkipped ? { baseSkipped } : {}),
+      ...(baseError ? { baseError } : {}),
     };
   });
 }

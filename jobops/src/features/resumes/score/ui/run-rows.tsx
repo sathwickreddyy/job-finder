@@ -10,7 +10,8 @@ export type RunStatus =
       state: "done";
       score: number | null;
       baseScore: number | null;
-      baseSkipped?: "no_text" | "no_base";
+      baseSkipped?: "no_text" | "no_base" | "failed";
+      baseError?: string;
     }
   | { state: "error"; message: string; code?: string };
 
@@ -94,11 +95,14 @@ export function RunRows({
                     </button>
                   </span>
                 )}
-                {status.state === "done" && status.baseSkipped === "no_text" && (
-                  <span className="mt-1 block text-[11px] text-muted-foreground">
-                    {"The master couldn't be scored"}
-                  </span>
-                )}
+                {status.state === "done" &&
+                  (status.baseSkipped === "no_text" || status.baseSkipped === "failed") && (
+                    <span className="mt-1 block text-[11px] text-muted-foreground">
+                      {status.baseError
+                        ? `The master couldn't be scored: ${status.baseError}`
+                        : "The master couldn't be scored"}
+                    </span>
+                  )}
               </span>
               {status.state === "done" && (
                 <span className="text-right tabular-nums">

@@ -182,4 +182,30 @@ describe("score flow rendering", () => {
     expect(html).toContain("Needs a manual look");
     expect(html).toContain("The master couldn't be scored");
   });
+
+  it("a master that failed says why", () => {
+    const html = text(
+      renderToStaticMarkup(
+        createElement(RunRows, {
+          opening,
+          statuses: statuses({
+            "jobops-lexical": {
+              state: "done",
+              score: 56.4,
+              baseScore: null,
+              baseSkipped: "failed",
+              baseError: "The PDF for this file is missing from storage",
+            },
+          }),
+          reviewedAt: new Date("2026-11-02T06:00:00Z"),
+          onRetry: noop,
+          onEditTerms: noop,
+          onDone: noop,
+        }),
+      ),
+    );
+    expect(html).toContain(
+      "The master couldn't be scored: The PDF for this file is missing from storage",
+    );
+  });
 });
