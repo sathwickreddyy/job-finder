@@ -17,7 +17,14 @@ These skills provide assistant instructions; application runtime dependencies ar
 
 | Skill | Source | Installed location | Role in this project |
 | --- | --- | --- | --- |
+| `job-apply` | Project-owned shared playbook | Canonical `.claude/skills/job-apply/SKILL.md`; Codex `.agents/skills/job-apply` links to it | One-opening applications, referral deadlines, master-based résumé checks, reusable answers, mail verification and independent daily Naukri maintenance. |
 | `resume-ats-optimizer` | [Paramchoudhary/ResumeSkills](https://github.com/Paramchoudhary/ResumeSkills/tree/main/skills/resume-ats-optimizer) | User-level `~/.agents/skills/resume-ats-optimizer/SKILL.md` (verified 2026-11-02) | Resume/JD review guidance and the baseline keyword-coverage rubric used by the separate scoring service. |
+
+Say **Apply for this job: <link>**, invoke `$job-apply` in Codex or `/job-apply` in Claude Code.
+Without an identified opening, the assistant asks which one. Another assistant or a person can
+read [the same ordered skill](.claude/skills/job-apply/SKILL.md) and its references directly.
+Private answers/handoffs/maintenance receipts stay under ignored `jobops/data/job-apply/`.
+See the [approved workflow design](jobops/docs/superpowers/specs/2026-11-03-job-apply-skill-design.md).
 
 To install this skill in another assistant environment:
 

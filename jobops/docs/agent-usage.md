@@ -1,5 +1,9 @@
 # Using your existing assistant
 
+For a complete one-opening application, read the shared [job-apply skill](../../.claude/skills/job-apply/SKILL.md)
+and its references for referral waits, current master selection, three-tool checks, confirmed-answer
+reuse, mail verification and portable handoffs.
+
 The current app supplies complete prompts and stores results. The earlier task/mission/API workflow has been retired. Follow the [first-opening walkthrough](../README.md#your-first-opening-step-by-step).
 
 1. **Find openings:** copy the complete prompt into a conversation that already knows your work. Review its India-focused shortlist; require real source links and full descriptions.

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Apply to a job"
+  short_description: "Apply to one opening with JobOps tracking"
+  default_prompt: "Use $job-apply to prepare and track my application for this opening."

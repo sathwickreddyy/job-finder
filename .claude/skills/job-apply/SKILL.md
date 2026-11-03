@@ -1,97 +1,67 @@
 ---
 name: job-apply
-description: Use when the user asks to apply to a job opening, prepare or tailor a résumé for a specific opening, fill an application form, or record a submitted application in JobOps.
+description: Use when the user asks to apply for a job, work on one opening, tailor its résumé, fill or record its application, resume a referral wait, or perform the approved daily Naukri profile refresh. Not broad discovery or a cold-email campaign.
 ---
 
-# Apply to an opening
+# Apply to one opening
 
-Run these five steps in order for each opening. Stop at any failed gate and tell the user; never guess.
-The user signs in, solves captchas, answers personal and legal questions and clicks the final Submit.
+Read repository `AGENTS.md` and current JobOps records first. Follow these steps in order. Private answers, documents and checkpoints stay under ignored `jobops/data/job-apply/`.
 
-## 1. Check the opening is live
+**Daily Naukri invocation:** go directly to [Naukri maintenance](references/naukri.md). It runs independently and needs no job opening.
 
-- Open the official careers page (not LinkedIn, not the saved JobOps copy). If it says "not found" or
-  "taken down", or the role is missing from that company's careers search: stop. Tailor nothing. Tell
-  the user and ask whether to mark it closed in JobOps.
-- The official posting date must be today−13 or later in Asia/Kolkata. Use the ATS's own date
-  (Greenhouse `first_published`, Ashby `publishedAt` = latest publication, Lever, Workday cxs,
-  amazon.jobs `search.json`, Oracle HCM REST, Eightfold). LinkedIn dates are usually refreshes. Unknown
-  date: hold.
-- `GET http://localhost:3210/api/v1/applications?company=<name>` (and `?url=`) must show no earlier
-  application.
-- Scope: Bengaluru or Hyderabad; sourced pay above ₹32 LPA preferred, unknown stays unknown; minimum
-  experience about 6 years or less; no QA/SDET, front-end, mobile, Staff+ or manager roles.
+**Unavailable capability:** explain the exact manual step, preserve the checkpoint and wait for its result. Another assistant or a person can follow this file directly; vendor-specific tools are optional adapters. Never mark an unperformed step complete.
 
-## 2. Tailor the résumé as local files only
+## 1. Identify and verify
 
-- Start from the current editable DOCX master in `jobops/data/resume-exports/` (the newest
-  `..._Backend_Platform_Resume_<date>.docx`; confirm with the user if unsure).
-- Truthful re-weighting only: reorder, re-title, reword with existing evidence. Keep present tense for
-  the current Morgan Stanley role. No personal or side projects.
-- Save `Sathwick_Reddy_Yalla_Resume_<company>-<reqId>_<date>.docx` (keep "Resume" in the name; the ATS optimizer checks it) and its text-based PDF to
-  `jobops/data/resume-exports/tailored/`.
-- Do not upload anything to JobOps or create a résumé version yet.
-- Gap in the JD (mentoring, design reviews, a skill): ask the user in this chat. Never add a skill,
-  metric or claim they haven't confirmed.
+**Input:** one job link or unambiguous company/role/requisition. Missing or ambiguous → ask which opening and wait; do not choose automatically.
 
-## 3. Check the draft
+Fetch the official full description, live apply URL and sourced publication date. Distinguish original posting from latest publication/repost; keep discovery time separate. Check current eligibility/preferences, the 14-day India-date cutoff and prior submissions by URL and company/requisition. Follow [JobOps operations](references/jobops-api.md).
 
-Score the master PDF and the tailored PDF against the exact job description with all three tools:
+Closed, ineligible or already submitted → explain and stop this application. Unknown date or unresolved evidence → verify or hold. Another role at the company is not automatically a duplicate.
 
-| Tool | How |
-|---|---|
-| Local scoring service | `http://127.0.0.1:3212` — `/v1/requirements/suggest`, `/v1/assessments/pdf`, reviewed requirements with verbatim JD quotes |
-| ResumeNext | `match_resume_to_job` (bridge on port 8004) with the PDF's extracted text and the full JD, `SOURCE:`/`POSTED:` lines removed |
-| resume-ats-optimizer | Load the skill; formatting checklist plus matched ÷ required keywords, with frequency and location |
+## 2. Refresh mail and establish tracking
 
-Show the user one side-by-side table: master vs tailored per tool, matched and missing terms, gaps left
-unclaimed on purpose. A tailored score below the master on any check needs a stated reason. Label every
-number a tool diagnostic, never an employer ATS result. ResumeNext keyword lists are noisy: show them,
-don't chase them.
+Refresh all connected inboxes before applying, continuing pages and retaining partial successes. Read/create the company's page using verified identity. Preserve existing rules, add observed company-specific identities, inspect actual Gmail/Outlook queries, and check kept **and dropped** messages. Follow [mail verification](references/mail.md).
 
-## 4. Apply
+**Urgent mail at any step** → save the current step, show the message/action/deadline, and pause. Once the user acknowledges noticing it, resume the saved step. The email can remain open; acknowledgement is separate from handling it.
 
-- Use the built-in browser pane; the user watches it. The user signs in there.
-- Fill every field you can source without asking: the tailored résumé, JobOps `candidate_profiles`
-  (name, email, phone, city, notice period, pay, `standard_answers`) and facts the user confirmed.
-  Ask only for facts stored nowhere (e.g. street address), in one batched message. Terms and consent
-  boxes still need the user's go-ahead.
-- Check what Workday autofill parsed: it drops company names, cuts role descriptions after the first
-  bullet and leaves second roles at one employer empty. Remove suggested skills the résumé doesn't
-  claim; add the JD's must-haves the résumé does.
-- If the user is clicking in the same page, stop and ask instead of fighting over a field.
-- Show the user the Review page and wait. Never click Submit.
-- The built-in pane cannot attach files: give the user the exact file path and the field. Claude in
-  Chrome may run on another machine, where `localhost` is not JobOps. Don't work around it.
+## 3. Choose referral or direct
 
-## 5. Upload and record — only after the user confirms they submitted
+Check contacts and actual outreach first, then relevant LinkedIn people through an available connector or permitted browser session. Verify identity and the employer's referral process. Show the actual recipient and drafted request for approval before sending.
 
-1. Ask: "Which résumé file did you attach?"
-2. Open `/resumes?file=<an existing version>` in the built-in pane, click **Upload revision** and
-   fill the label, change notes (job link, every change, gaps, scores) and DOCX path; leave "default"
-   unticked. The user attaches the PDF and clicks Upload. Confirm the new version's `sha256` equals
-   the local file's.
-3. Record the three checks with `POST /api/v1/resumes/{versionId}/fit`: `baseVersionId` = the
-   current résumé, `snapshotId` = the saved description, `target` with posting date, and six
-   assessments (each tool for base and tailored) in the shapes `src/features/resumes/fit/tools.ts`
-   validates. Put "not changing because…" in ResumeNext issue `decision`s and unclaimed-gap reasons in
-   lexical requirement `note`s.
-4. `POST /api/v1/applications`:
+- Request actually sent → wait **24 hours** for a response; prepare the résumé meanwhile.
+- Positive reply agreeing to help → allow **another 24 hours from that reply** for completion.
+- Referral completed → follow the actual referral instructions.
+- No response, decline or incomplete referral at its deadline → prepare a direct application after rechecking freshness, availability and submission history.
 
-```json
-{
-  "opening": { "url": "...", "company": "...", "title": "...", "location": "...", "reqId": "...",
-               "postedAt": "YYYY-MM-DD", "postedAtKind": "original", "postedAtSourceUrl": "..." },
-  "application": { "method": "DIRECT", "submittedAt": "YYYY-MM-DD", "resumeVersionId": "<uuid>" },
-  "humanConfirmed": true
-}
-```
+Use [referral deadlines and handoffs](references/referrals-and-handoff.md). Schedule a bounded wakeup where supported; otherwise leave the exact deadline and next action. A chat cannot wake itself without scheduling support.
 
-JobOps locks the résumé once the record is sent, so `resumeVersionId` must be right the first time.
+## 4. Select or build the résumé
 
-## Never without asking
+Fetch the explicit master and its **current DOCX revision through JobOps**, not the newest filename. Read applied PDFs/fits as examples; the current master and confirmed corrections govern facts.
 
-- Delete or archive openings, résumé versions or files. Archive rather than delete; never touch a
-  version that has been sent.
-- Revise an earlier submitted application because a newer variant exists.
-- Apply to Tracxn/Hirist.
+Reuse a suitable current PDF or create a truthful tailored DOCX from the master and export a text-based PDF. Ask only about unresolved experience gaps. Save confirmed additions/corrections in dated master revisions; keep excluded claims excluded. Follow [résumés and answers](references/resumes-and-answers.md).
+
+## 5. Score and decide
+
+Compare the master baseline PDF and selected/revised PDF against the **same exact JD and reviewed terms** using local scoring, ResumeNext `match_resume_to_job`, and ATS optimizer. Preserve scores, versions, evidence, gaps and source revision. Read the starting file's brief and keep-out decisions.
+
+All three green (**80+ in current JobOps**) with facts/formatting checked → prepare the form. Below green after supported improvements, unavailable tooling, or a lower tailored score → show gaps/reasons and ask whether to revise, proceed or stop; wait for that decision.
+
+These are tool diagnostics, not employer ATS results. Never add unsupported skills or change requirements/thresholds merely to turn a score green.
+
+## 6. Fill, review and submit
+
+Use the exact selected PDF and confirmed profile/standard answers. Reuse equivalent explicit answers, including demographic choices. Ask only about unknown, conflicting, stale or context-dependent facts; batch missing questions and save reusable answers in shared records.
+
+Check autofill, employment dates, skills and attachment identity. Immediately before final review, recheck the live opening, freshness and submission history, including after any long hold. Show the completed review page and exact file. **The user performs final Submit under the existing rule.** Sign-in, CAPTCHA, signatures, new consent and refused access remain user holds. If uploading needs the user, provide the exact path and field.
+
+Uncertain submission → inspect confirmation/history before retrying. Never submit twice.
+
+## 7. Record, refresh and finish
+
+After real submission, confirm which PDF was attached. Upload only the used revision if missing; preserve its DOCX/master lineage and checks. Record the exact `resumeVersionId`, India date and confirmation. [JobOps operations](references/jobops-api.md) explains supported uploads and distinguishes referral outreach from submission.
+
+Refresh mail again, complete pagination, report account errors and refine company rules from real acknowledgement evidence. No acknowledgement yet → report pending; never infer submission failure or poll indefinitely.
+
+Finish with result, exact résumé and next action. Preserve a [private handoff](references/referrals-and-handoff.md) for held work. Never revise earlier submitted files or delete/archive records without authorization. Do not apply to Tracxn/Hirist. Cold email remains a separate strategy.
