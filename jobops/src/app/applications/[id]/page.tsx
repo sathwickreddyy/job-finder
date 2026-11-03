@@ -30,7 +30,8 @@ export default async function ApplicationPage({
     db
       .select({ version: resumeVersions, family: resumes })
       .from(resumeVersions)
-      .innerJoin(resumes, eq(resumeVersions.resumeId, resumes.id)),
+      .innerJoin(resumes, eq(resumeVersions.resumeId, resumes.id))
+      .where(eq(resumeVersions.isMaster, false)),
     getDisplayPreferences(),
   ]);
   const record = records.find((row) => row.id === id);

@@ -263,6 +263,41 @@ Settings → Mail connections removes local credentials and cursor only; mail/hi
 
 ## Resume storage and backup
 
+The master is an editable DOCX source pinned above the file timeline. Selecting it
+shows its complete content beside a dated ledger (approved master-only option A).
+Applied PDFs continue to use the existing PDF preview and job-fit inspector.
+Download the DOCX, edit it in Word or with an agent, then **Update master** to
+save it with a reason. An optional PDF export must come from that DOCX; JobOps
+stores it and does not run Office or generate documents. Master updates create
+immutable source revisions, never extra PDF timeline rows or replacements for
+submitted files. Earlier wording can be copied; removals recorded as corrected
+facts are labelled as excluded from reuse.
+
+Agent routes on the trusted LAN:
+
+- `GET /api/v1/resumes` lists application PDFs under `resumes` and source anchors
+  under `masters` (including each current revision id and DOCX download URL).
+  A master cannot be selected as a submitted PDF or retargeted as a tailored output.
+- `GET /api/v1/resumes/{versionId}/master` returns the current revision and full
+  source history, including extracted blocks, reason, source date and actual
+  recording time. Start from the current DOCX; historical wording must be checked
+  for factual corrections before reuse.
+- `GET /api/v1/resumes/{versionId}/master/file` downloads the current DOCX;
+  `?revision=<id>` selects an exact historical DOCX. Add `format=pdf` for that
+  revision's supplied export (404 when absent).
+- `POST /api/v1/resumes/{versionId}/master` accepts multipart fields `file` (DOCX),
+  `reason`, `expectedRevisionId` (the current id; empty only on first import),
+  optional `pdf`, optional historical `sourceDate` (`YYYY-MM-DD`), and
+  `removedDisposition` (`retained` or `incorrect`). Stale edits return 409.
+  DOCX/PDF files are each limited to 10 MiB. The first import marks one unsubmitted,
+  untailored anchor per family as its master. Server code reads uploaded bytes,
+  never arbitrary local `docx_path` references.
+
+When creating an application résumé, record the exact master revision id in its
+change notes, keep unsupported claims out, and retain the exact submitted PDF.
+Existing fit assessments remain tied to their original PDF baseline; importing
+a master revision does not retarget or rescore them.
+
 Original PDFs are limited to 10 MiB, validated by type/extension/signature, stored using opaque UUID filenames with private permissions, and served through protected routes. Names supplied by users never determine filesystem paths. Path traversal and symlinks are rejected. Parsing uses local `pdf-parse`, without OCR or network calls. Scanned/encrypted/corrupt PDFs may not yield usable text; originals remain available to view or download.
 
 Back up the database and storage together. A JSON/CSV export is useful for portability but does not contain original resume/evidence bytes, OAuth connections or every settings record.
@@ -292,5 +327,5 @@ The local Compose password is development-only. Use a managed/private database o
 - This is a single-user local app. Live Gmail/Outlook OAuth and personal-mailbox refresh still need your credentials and have not been tested against your actual inbox.
 - Research, resume writing, applications and messages happen through your external assistant or by you. Saving a record never performs an external action.
 - There is no closed-app push notification service or automatic background mail refresh.
-- The app stores PDF resumes; OCR and document generation are not included.
+- The app stores application PDFs and editable DOCX master revisions; OCR and document generation are not included.
 - Record exports do not replace a database-plus-files backup.

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Search } from "lucide-react";
+import { FileText, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   shortList,
@@ -333,7 +333,7 @@ export function ResumeRail({
     .map((family) => ({
       family,
       files: family.files.filter(
-        (file) => (!usedOnly || submittedCount(file) > 0) && matches(file, query),
+        (file) => (file.isMaster || !usedOnly || submittedCount(file) > 0) && matches(file, query),
       ),
     }))
     .filter(
@@ -382,39 +382,70 @@ export function ResumeRail({
         ref={list}
         className="-mx-1 min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain px-1"
       >
-        {groups.map(({ family, files }) => (
-          <section key={family.id} aria-label={family.name}>
-            <h2 className="m-0 mb-2 flex items-baseline justify-between gap-2 px-3 text-xs font-medium text-muted-foreground">
-              <span className="truncate">{family.name}</span>
-              {family.isArchived ? (
-                <span className="shrink-0 rounded-full bg-muted px-2 py-px text-[10px]">
-                  Archived
-                </span>
-              ) : (
-                <span className="shrink-0 tabular-nums">{family.files.length}</span>
-              )}
-            </h2>
-            {files.length ? (
-              <Rows files={files} selectedId={selectedId} linkBase={linkBase} onSelect={onSelect} />
-            ) : (
-              linkBase !== undefined && (
-                <Link
-                  href={`${linkBase}resume=${family.id}&upload=1`}
-                  scroll={false}
-                  aria-current={selectedFamilyId === family.id ? "true" : undefined}
-                  className={cn(
-                    "block rounded-2xl border border-dashed border-border px-3 py-2.5 text-xs font-medium hover:no-underline",
-                    selectedFamilyId === family.id
-                      ? "bg-selected text-selected-foreground"
-                      : "text-link hover:bg-muted/60",
-                  )}
+        {groups.map(({ family, files: visibleFiles }) => {
+          const masters = visibleFiles.filter((file) => file.isMaster);
+          const files = visibleFiles.filter((file) => !file.isMaster);
+          return (
+            <section key={family.id} aria-label={family.name}>
+              <h2 className="m-0 mb-2 flex items-baseline justify-between gap-2 px-3 text-xs font-medium text-muted-foreground">
+                <span className="truncate">{family.name}</span>
+                {family.isArchived ? (
+                  <span className="shrink-0 rounded-full bg-muted px-2 py-px text-[10px]">
+                    Archived
+                  </span>
+                ) : (
+                  <span className="shrink-0 tabular-nums">{family.files.length}</span>
+                )}
+              </h2>
+              {masters.map((master) => (
+                <div
+                  key={master.id}
+                  aria-label="Master résumé"
+                  className="sticky top-0 z-10 mb-4 border-b border-border bg-rail pb-3"
                 >
-                  Upload its first PDF
-                </Link>
-              )
-            )}
-          </section>
-        ))}
+                  <Row
+                    file={master}
+                    selected={selectedId === master.id}
+                    {...rowLink({ linkBase, onSelect }, master)}
+                  >
+                    <span className="flex items-center gap-2 text-[13px] font-semibold">
+                      <FileText size={15} aria-hidden />
+                      Master résumé
+                    </span>
+                    <span className="mt-1 block text-[11px] opacity-75">
+                      Complete editable source
+                    </span>
+                  </Row>
+                </div>
+              ))}
+              {files.length ? (
+                <Rows
+                  files={files}
+                  selectedId={selectedId}
+                  linkBase={linkBase}
+                  onSelect={onSelect}
+                />
+              ) : (
+                !masters.length &&
+                linkBase !== undefined && (
+                  <Link
+                    href={`${linkBase}resume=${family.id}&upload=1`}
+                    scroll={false}
+                    aria-current={selectedFamilyId === family.id ? "true" : undefined}
+                    className={cn(
+                      "block rounded-2xl border border-dashed border-border px-3 py-2.5 text-xs font-medium hover:no-underline",
+                      selectedFamilyId === family.id
+                        ? "bg-selected text-selected-foreground"
+                        : "text-link hover:bg-muted/60",
+                    )}
+                  >
+                    Upload its first PDF
+                  </Link>
+                )
+              )}
+            </section>
+          );
+        })}
         {!families.length && (
           <p className="m-0 px-3 py-4 text-sm leading-relaxed text-muted-foreground">
             No resumes yet. Upload your original PDF to start.

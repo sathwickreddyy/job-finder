@@ -29,6 +29,7 @@ export function resumePresentation(
       uploaded: displayDate(file.createdAt, preferences),
       size: `${(file.fileSize / 1024).toFixed(1)} KB`,
       isDefault: file.isCurrent && family.isActive,
+      isMaster: file.isMaster,
       isArchived: !family.isActive,
       textExtracted: file.parsingStatus === "COMPLETED",
       changeNotes: file.changeNotes,

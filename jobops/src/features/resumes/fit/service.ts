@@ -98,6 +98,11 @@ export async function recordFit(versionId: string, input: FitInput, now = new Da
       .from(resumeVersions)
       .where(eq(resumeVersions.id, versionId));
     if (!version) throw new ApiError("Unknown résumé file.", 404);
+    if (version.isMaster)
+      throw new ApiError(
+        "The master is a content source. Record a separate tailored application PDF.",
+        409,
+      );
     if (version.parsingStatus !== "COMPLETED")
       throw new ApiError("This file's text has not been extracted yet.", 422);
     const [current] = version.targetJobId
@@ -144,7 +149,7 @@ export async function recordFit(versionId: string, input: FitInput, now = new Da
       chosen?.jobId ?? (await importJobRows([{ ...job, providedFields }], "merge", tx)).ids[0];
     if (current && current.id !== jobId) throw alreadyTailored(current);
 
-    const [stored] = await tx.select().from(jobs).where(eq(jobs.id, jobId));
+    const [stored] = await tx.select().from(jobs).where(eq(jobs.id, jobId)).for("update");
     // A repost date never replaces a recorded original posting date.
     if (
       target.postedAt &&
@@ -169,6 +174,18 @@ export async function recordFit(versionId: string, input: FitInput, now = new Da
           .orderBy(desc(jobSnapshots.capturedAt))
           .limit(1);
 
+    // Match application writers' job → version order. Recheck the role while held:
+    // an import may have marked the source as master since the initial read.
+    const [locked] = await tx
+      .select({ isMaster: resumeVersions.isMaster })
+      .from(resumeVersions)
+      .where(eq(resumeVersions.id, versionId))
+      .for("update");
+    if (locked?.isMaster)
+      throw new ApiError(
+        "The master is a content source. Record a separate tailored application PDF.",
+        409,
+      );
     await tx
       .update(resumeVersions)
       .set({
