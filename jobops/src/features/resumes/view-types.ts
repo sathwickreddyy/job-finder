@@ -17,6 +17,7 @@ export type GalleryFile = {
   uploaded: string;
   size: string;
   isDefault: boolean;
+  isMaster?: boolean;
   isArchived?: boolean;
   textExtracted: boolean;
   changeNotes: string;

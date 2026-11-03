@@ -20,6 +20,7 @@ export default async function NewApplication({
       .select({ version: resumeVersions, family: resumes })
       .from(resumeVersions)
       .innerJoin(resumes, eq(resumeVersions.resumeId, resumes.id))
+      .where(eq(resumeVersions.isMaster, false))
       .orderBy(desc(resumeVersions.createdAt)),
     getJobContext(jobId),
     readWorkspace(),

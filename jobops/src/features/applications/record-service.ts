@@ -66,8 +66,11 @@ export async function recordApplication(
     const [version] = await tx
       .select()
       .from(resumeVersions)
-      .where(eq(resumeVersions.id, input.versionId));
+      .where(eq(resumeVersions.id, input.versionId))
+      .for("share");
     if (!version) throw new Error("Choose an existing resume file.");
+    if (version.isMaster)
+      throw new Error("The master is a content source. Choose the exact application PDF instead.");
   }
   const values = {
     jobId: input.jobId,

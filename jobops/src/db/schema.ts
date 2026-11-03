@@ -15,6 +15,7 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 import { roundKinds } from "../lib/round-kinds";
+import type { MasterBlock } from "../features/resumes/master/document";
 
 export const jobStatuses = [
   "NEW",
@@ -200,6 +201,7 @@ export const resumeVersions = pgTable(
     parsingError: text("parsing_error"),
     createdAt: createdAt(),
     isCurrent: boolean("is_current").notNull().default(false),
+    isMaster: boolean("is_master").notNull().default(false),
     // A tailored file records the version it was made from and the saved job description it targets.
     baseVersionId: uuid("base_version_id").references((): AnyPgColumn => resumeVersions.id, {
       onDelete: "restrict",
@@ -213,11 +215,43 @@ export const resumeVersions = pgTable(
   },
   (t) => [
     index("resume_versions_family_idx").on(t.resumeId),
+    uniqueIndex("resume_versions_master_idx")
+      .on(t.resumeId)
+      .where(sql`${t.isMaster} = true`),
     index("resume_versions_sha_idx").on(t.sha256),
     uniqueIndex("resume_versions_current_idx")
       .on(t.resumeId)
       .where(sql`${t.isCurrent} = true`),
     check("resume_versions_size_check", sql`${t.fileSize} > 0 AND ${t.fileSize} <= 10485760`),
+  ],
+);
+
+export const resumeMasterRevisions = pgTable(
+  "resume_master_revisions",
+  {
+    id: id(),
+    versionId: uuid("version_id")
+      .notNull()
+      .references(() => resumeVersions.id, { onDelete: "restrict" }),
+    createdAt: createdAt(),
+    sourceDate: text("source_date"),
+    reason: text("reason").notNull(),
+    removedDisposition: text("removed_disposition").notNull().default("retained"),
+    blocks: jsonb("blocks").$type<MasterBlock[]>().notNull(),
+    originalFilename: text("original_filename").notNull(),
+    storagePath: text("storage_path").notNull(),
+    sha256: text("sha256").notNull(),
+    fileSize: integer("file_size").notNull(),
+    pdfStoragePath: text("pdf_storage_path"),
+    pdfFilename: text("pdf_filename"),
+  },
+  (t) => [
+    index("resume_master_revisions_version_idx").on(t.versionId, t.createdAt),
+    check(
+      "resume_master_revision_disposition",
+      sql`${t.removedDisposition} in ('retained','incorrect')`,
+    ),
+    check("resume_master_revision_size", sql`${t.fileSize} > 0 and ${t.fileSize} <= 10485760`),
   ],
 );
 

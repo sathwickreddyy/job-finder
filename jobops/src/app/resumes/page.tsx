@@ -25,6 +25,8 @@ import { ResumeRail } from "@/features/resumes/workspace/rail";
 import { ScoreTextSheet } from "@/features/resumes/score/ui/text-sheet";
 import { submittedCount } from "@/features/resumes/view-types";
 import { cn } from "@/lib/utils";
+import { getMaster } from "@/features/resumes/master/service";
+import { MasterView } from "@/features/resumes/master/view";
 
 type Params = {
   file?: string;
@@ -58,11 +60,14 @@ export default async function Resumes({ searchParams }: { searchParams: Promise<
       ? (chosenFamily.files.find(
           (item) => raw(chosenFamily.id)?.versions.find((v) => v.id === item.id)?.isCurrent,
         ) ?? chosenFamily.files[0])
-      : (visibleFiles.find((item) => item.isDefault) ?? visibleFiles[0]));
+      : (visibleFiles.find((item) => item.isMaster) ??
+        visibleFiles.find((item) => item.isDefault) ??
+        visibleFiles[0]));
   const family = chosenFamily ?? visible.find((item) => item.id === file?.familyId);
   const resume = raw(family?.id);
   const version = resume?.versions.find((item) => item.id === file?.id);
-  const fit = version ? await loadFit(version.id) : null;
+  const master = version?.isMaster ? await getMaster(version.id) : null;
+  const fit = version && !version.isMaster ? await loadFit(version.id) : null;
   const hasSelection = Boolean(p.file || p.resume);
   // Drawers remount (and close) when the URL selection changes, e.g. after an upload redirect,
   // but not when an action's revalidation changes which file is the default.
@@ -174,6 +179,13 @@ export default async function Resumes({ searchParams }: { searchParams: Promise<
                 <FileMenu resume={resume} />
               </div>
             </header>
+          ) : master ? (
+            <MasterView
+              master={master}
+              familyName={family.name}
+              preferences={prefs}
+              legacyNotes={version.changeNotes}
+            />
           ) : (
             <>
               <FileHeader

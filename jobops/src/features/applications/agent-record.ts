@@ -258,7 +258,7 @@ export async function listResumeFiles() {
     })
     .from(resumeVersions)
     .innerJoin(resumes, eq(resumes.id, resumeVersions.resumeId))
-    .where(eq(resumes.isActive, true))
+    .where(and(eq(resumes.isActive, true), eq(resumeVersions.isMaster, false)))
     .orderBy(desc(resumeVersions.isCurrent), desc(resumeVersions.createdAt));
   return rows;
 }

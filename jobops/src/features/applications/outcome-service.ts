@@ -283,10 +283,13 @@ export async function updateRecordDetails(
     );
   if (resumeVersionId) {
     const [version] = await tx
-      .select({ id: resumeVersions.id })
+      .select({ id: resumeVersions.id, isMaster: resumeVersions.isMaster })
       .from(resumeVersions)
-      .where(eq(resumeVersions.id, resumeVersionId));
+      .where(eq(resumeVersions.id, resumeVersionId))
+      .for("share");
     if (!version) throw new Error("Selected resume no longer exists.");
+    if (version.isMaster)
+      throw new Error("The master is a content source. Choose the exact application PDF instead.");
   }
   await tx
     .update(applications)
