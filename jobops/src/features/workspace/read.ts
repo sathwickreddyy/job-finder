@@ -13,6 +13,7 @@ import {
 
 import { notPreviousJob } from "@/features/companies/previous-job";
 import { identityFrom } from "./identity";
+import { readNaukriStatus } from "./naukri-updates";
 import { jobPreferencesContext } from "./prompts";
 
 // Real personal records shared by the home page and the read-only gallery.
@@ -128,6 +129,7 @@ export async function readWorkspace() {
       matches: matches.filter((item) => item.versionId === row.id),
     })),
     today: new Date().toISOString(),
+    naukri: await readNaukriStatus(),
   };
 }
 export type WorkspaceData = Awaited<ReturnType<typeof readWorkspace>>;

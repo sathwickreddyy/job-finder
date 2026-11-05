@@ -53,7 +53,11 @@ export function WorkspaceHome({ data }: { data: WorkspaceData }) {
             Browse Bengaluru & Hyderabad companies
           </Link>
         </div>
-        <JobSiteCards role={data.identity.searchRole} city={data.identity.searchCity} />
+        <JobSiteCards
+          role={data.identity.searchRole}
+          city={data.identity.searchCity}
+          naukri={data.naukri}
+        />
       </section>
       <section className="space-y-4">
         <div>

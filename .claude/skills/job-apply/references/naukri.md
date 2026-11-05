@@ -12,6 +12,17 @@ Independent maintenance mode: do not ask for an opening or start applications/di
 6. Verify success feedback and persisted profile/file/update date where available. No verifiable save → unverified, not success. Do not invent a site timestamp that is not shown.
 7. Record success only after verification. Login/CAPTCHA/refusal, unsupported attachment or ambiguous file → record the block and required user action, leave pending and stop. The evening run retries after checking state. A failed evening attempt stays pending for user/next normal run; no endless retry schedule.
 
+## JobOps indicator
+
+The Naukri card on Home shows an indicator (status chip plus fourteen-day strip) fed only by verified updates. After recording a verified success in the private receipt, also record it in JobOps so the card stays current:
+
+```
+POST http://localhost:3210/api/v1/naukri
+{"action": "<same action as the receipt>", "evidence": "<what Naukri displayed>", "verified": true}
+```
+
+`indiaDate` defaults to today in India; pass it only to backfill a day you actually verified. A day already recorded is kept as it was, and a future date is refused. Never post for a blocked or unverified run. `GET /api/v1/naukri` returns the same status for checking before an edit.
+
 ## Private receipt
 
 Use `jobops/data/job-apply/naukri.json`, shared between assistants, ignored by Git. Create as needed with `schemaVersion: 1`, `timezone: "Asia/Kolkata"`, an `attempts` list, optional verified account/general-résumé identity and optional `lastSuccess`.

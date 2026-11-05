@@ -1,6 +1,8 @@
 import { ArrowUpRight, Building2, CodeXml, Globe, Search } from "lucide-react";
 import { RemoteImage } from "./embeds";
 import { jobSearchSites, jobSiteAction } from "./job-sites";
+import { NaukriChip, NaukriStrip } from "./naukri-indicator";
+import type { NaukriStatus } from "./naukri-status";
 import { favicon } from "./profile-links";
 
 export function SiteIcon({ name }: { name: string }) {
@@ -15,11 +17,20 @@ export function SiteIcon({ name }: { name: string }) {
 }
 
 /** Job sites A from /gallery/home: the bottom line says exactly what the click opens. */
-export function JobSiteCards({ role, city }: { role: string; city: string }) {
+export function JobSiteCards({
+  role,
+  city,
+  naukri,
+}: {
+  role: string;
+  city: string;
+  naukri?: NaukriStatus;
+}) {
   return (
     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
       {jobSearchSites.map((site) => {
         const action = jobSiteAction(site, role, city);
+        const tracked = site.name === "Naukri" ? naukri : undefined;
         return (
           <a
             key={site.name}
@@ -38,6 +49,12 @@ export function JobSiteCards({ role, city }: { role: string; city: string }) {
             </span>
             <span className="mt-4 font-semibold">{site.name}</span>
             <span className="mt-1 flex-1 text-sm text-muted-foreground">{site.bestFor}</span>
+            {tracked ? (
+              <span className="mt-4 block space-y-3">
+                <NaukriChip status={tracked} />
+                <NaukriStrip status={tracked} />
+              </span>
+            ) : null}
             <span className="mt-5 flex items-start gap-1.5 border-t border-border pt-3 text-sm font-medium text-link">
               {action.search ? (
                 <Search size={15} className="mt-0.5 shrink-0" aria-hidden />
