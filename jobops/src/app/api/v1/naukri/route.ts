@@ -1,5 +1,5 @@
 import { revalidatePath } from "next/cache";
-import { apiError, apiResponse, readJson, refusal } from "@/features/agent-api/http";
+import { apiError, apiResponse, readJson } from "@/features/agent-api/http";
 import {
   naukriUpdateSchema,
   readNaukriStatus,
@@ -25,6 +25,6 @@ export async function POST(request: Request) {
     revalidatePath("/", "layout");
     return apiResponse({ naukri: status }, 201);
   } catch (error) {
-    return apiError(refusal(error));
+    return apiError(error);
   }
 }

@@ -56,6 +56,8 @@ describe.skipIf(!dbTests)("Naukri update records", () => {
 
   it("requires the update to have been verified on Naukri", () => {
     expect(() => naukriUpdateSchema.parse({ action: "x", evidence: "y" })).toThrow();
-    expect(() => naukriUpdateSchema.parse({ action: "x", evidence: "y", verified: false })).toThrow();
+    expect(() =>
+      naukriUpdateSchema.parse({ action: "x", evidence: "y", verified: false }),
+    ).toThrow();
   });
 });

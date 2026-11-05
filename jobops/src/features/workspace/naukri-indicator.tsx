@@ -3,7 +3,10 @@ import { NAUKRI_WINDOW_DAYS, type NaukriStatus, type NaukriTone } from "./naukri
 
 const chipTones: Record<NaukriTone, { chip: string; dot: string }> = {
   fresh: { chip: "bg-tag-offer-container text-tag-offer", dot: "bg-tag-offer" },
-  due: { chip: "bg-tag-interview-call-container text-tag-interview-call", dot: "bg-tag-interview-call" },
+  due: {
+    chip: "bg-tag-interview-call-container text-tag-interview-call",
+    dot: "bg-tag-interview-call",
+  },
   late: { chip: "bg-tag-rejection-container text-tag-rejection", dot: "bg-tag-rejection" },
   none: { chip: "border border-border text-muted-foreground", dot: "bg-muted-foreground" },
 };
@@ -35,7 +38,11 @@ export function NaukriStrip({ status }: { status: NaukriStatus }) {
         {status.days.map((day, index) => {
           const today = index === status.days.length - 1;
           return (
-            <div key={day.iso} className="flex flex-1 flex-col items-center gap-1" title={day.label}>
+            <div
+              key={day.iso}
+              className="flex flex-1 flex-col items-center gap-1"
+              title={day.label}
+            >
               <span
                 className={cn(
                   "h-7 w-full rounded-sm",

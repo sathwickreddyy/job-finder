@@ -50,10 +50,10 @@ export function JobSiteCards({
             <span className="mt-4 font-semibold">{site.name}</span>
             <span className="mt-1 flex-1 text-sm text-muted-foreground">{site.bestFor}</span>
             {tracked ? (
-              <span className="mt-4 block space-y-3">
+              <div className="mt-4 space-y-3">
                 <NaukriChip status={tracked} />
                 <NaukriStrip status={tracked} />
-              </span>
+              </div>
             ) : null}
             <span className="mt-5 flex items-start gap-1.5 border-t border-border pt-3 text-sm font-medium text-link">
               {action.search ? (
