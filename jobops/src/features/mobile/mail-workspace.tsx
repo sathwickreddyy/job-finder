@@ -5,6 +5,7 @@ import { InboxesPanel } from "@/features/mail/inboxes-panel";
 import type { ProviderId } from "@/services/mail/providers/types";
 import { Drawer } from "@/features/timeline/drawer";
 import type { MailViewData } from "@/features/timeline/mail-data";
+import { TagPills } from "@/features/timeline/mail-view";
 import { cn } from "@/lib/utils";
 import { mailHref, type MailQuery } from "@/features/timeline/query";
 import { AttentionFeed } from "./attention-feed";
@@ -70,6 +71,34 @@ export function MobileMailWorkspace({
           </Link>
         ))}
       </nav>
+      {query.all && (
+        <div className="space-y-3">
+          <form role="search" action="/mail" className="flex items-center gap-2">
+            <input type="hidden" name="view" value="all" />
+            {query.tag && <input type="hidden" name="tag" value={query.tag} />}
+            <label htmlFor="mobile-mail-search" className="sr-only">
+              Search mail
+            </label>
+            <input
+              key={query.q}
+              id="mobile-mail-search"
+              type="search"
+              name="q"
+              defaultValue={query.q ?? ""}
+              placeholder="Search mail"
+              maxLength={200}
+              className="min-h-11 min-w-0 flex-1"
+            />
+            <button
+              type="submit"
+              className="min-h-11 shrink-0 rounded-full bg-selected px-4 text-sm font-medium text-selected-foreground"
+            >
+              Search
+            </button>
+          </form>
+          {data.pane.kind === "all" && <TagPills query={query} tags={data.pane.tags} />}
+        </div>
+      )}
       {query.cursor && (
         <Link
           href={mailHref({ ...query, cursor: null, mail: null })}
@@ -80,7 +109,7 @@ export function MobileMailWorkspace({
       )}
       {filtered && (
         <Link
-          href={mailHref({ all: query.all, mail: query.mail })}
+          href={mailHref({ all: query.all })}
           className="inline-flex min-h-11 items-center rounded-full px-3 text-sm font-medium text-link ring-1 ring-border"
         >
           Clear filters

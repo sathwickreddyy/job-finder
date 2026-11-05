@@ -130,7 +130,7 @@ export async function readMailView(
       () => true,
     );
     shown = { ...shown, cursor, all: true };
-    if (data.days.length || cursor)
+    if (data.days.length || cursor || query.all)
       pane = {
         kind: "all",
         days: data.days,

@@ -257,7 +257,7 @@ function TagIcon({ tag }: { tag: MailTag }) {
 }
 
 /** Gallery tags B: tonal pills that carry the colour, one tag at a time. */
-function TagPills({ query, tags }: { query: MailQuery; tags: TagCounts }) {
+export function TagPills({ query, tags }: { query: MailQuery; tags: TagCounts }) {
   const total = Object.values(tags).reduce((sum, count) => sum + count, 0);
   const base = { ...query, mail: null, cursor: null };
   return (
@@ -267,7 +267,7 @@ function TagPills({ query, tags }: { query: MailQuery; tags: TagCounts }) {
         scroll={false}
         aria-current={!query.tag ? "page" : undefined}
         className={cn(
-          "pressable inline-flex h-9 items-center gap-1.5 rounded-full px-4 text-sm font-medium hover:no-underline",
+          "pressable inline-flex min-h-11 items-center gap-1.5 rounded-full px-4 text-sm font-medium hover:no-underline md:min-h-9",
           !query.tag ? "bg-foreground text-background" : "bg-muted text-muted-foreground",
         )}
       >
@@ -282,7 +282,7 @@ function TagPills({ query, tags }: { query: MailQuery; tags: TagCounts }) {
             scroll={false}
             aria-current={query.tag === tag ? "page" : undefined}
             className={cn(
-              "pressable inline-flex h-9 items-center gap-1.5 rounded-full px-4 text-sm font-medium hover:no-underline",
+              "pressable inline-flex min-h-11 items-center gap-1.5 rounded-full px-4 text-sm font-medium hover:no-underline md:min-h-9",
               tagClass[tag].tonal,
               query.tag === tag ? "ring-2 ring-current" : query.tag && "opacity-60",
             )}
