@@ -5,32 +5,28 @@ import { InboxesPanel } from "@/features/mail/inboxes-panel";
 import type { ProviderId } from "@/services/mail/providers/types";
 import { Drawer } from "@/features/timeline/drawer";
 import type { MailViewData } from "@/features/timeline/mail-data";
-import { mailHref } from "@/features/timeline/query";
+import { cn } from "@/lib/utils";
+import { mailHref, type MailQuery } from "@/features/timeline/query";
 import { AttentionFeed } from "./attention-feed";
-import type { AttentionMail } from "./read";
+import type { MobileMail } from "./read";
 
 export function MobileMailWorkspace({
   data,
-  attention,
+  feed,
+  query,
 }: {
   data: MailViewData;
-  attention: AttentionMail;
+  feed: MobileMail;
+  query: MailQuery;
 }) {
-  const filtered =
-    data.query.company ||
-    data.query.home ||
-    data.query.tag ||
-    data.query.q ||
-    data.query.cursor ||
-    data.query.role;
+  const filtered = query.company || query.home || query.tag || query.q || query.role;
   return (
     <div className="space-y-5 md:hidden" data-testid="mobile-mail">
       <header className="flex items-start justify-between gap-3">
         <div>
           <h1 className="m-0 text-[28px] font-semibold tracking-tight">Mail</h1>
           <p className="m-0 mt-1 text-sm text-muted-foreground">
-            {attention.openCount} {attention.openCount === 1 ? "email needs" : "emails need"} your
-            attention
+            {feed.openCount} {feed.openCount === 1 ? "email needs" : "emails need"} your attention
           </p>
         </div>
         <Drawer label="Inboxes" icon={<Inbox size={16} aria-hidden />} title="Inboxes">
@@ -54,17 +50,45 @@ export function MobileMailWorkspace({
           {data.notice}
         </p>
       )}
+      <nav aria-label="Mail view" className="flex flex-wrap gap-2">
+        {[
+          { all: false, label: "Needs attention" },
+          { all: true, label: "All job mail" },
+        ].map(({ all, label }) => (
+          <Link
+            key={label}
+            href={mailHref({ all, tag: query.tag, q: query.q })}
+            aria-current={query.all === all ? "page" : undefined}
+            className={cn(
+              "inline-flex min-h-11 items-center rounded-full px-4 text-sm font-medium hover:no-underline",
+              query.all === all
+                ? "bg-selected text-selected-foreground"
+                : "text-link ring-1 ring-border",
+            )}
+          >
+            {label}
+          </Link>
+        ))}
+      </nav>
+      {query.cursor && (
+        <Link
+          href={mailHref({ ...query, cursor: null, mail: null })}
+          className="inline-flex min-h-11 items-center rounded-full px-3 text-sm font-medium text-link"
+        >
+          Back to newest
+        </Link>
+      )}
       {filtered && (
         <Link
-          href={mailHref({ mail: data.query.mail })}
+          href={mailHref({ all: query.all, mail: query.mail })}
           className="inline-flex min-h-11 items-center rounded-full px-3 text-sm font-medium text-link ring-1 ring-border"
         >
-          Show all attention mail
+          Clear filters
         </Link>
       )}
       <AttentionFeed
-        data={attention}
-        query={data.query}
+        data={feed}
+        query={query}
         inboxes={data.inboxes.connections.map((row) => row.email)}
         placeOptions={data.placeOptions}
       />

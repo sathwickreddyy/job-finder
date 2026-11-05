@@ -2,12 +2,12 @@ import { readWorkspace } from "@/features/workspace/read";
 import { WorkspaceHome } from "@/features/workspace/home";
 import { readApplications } from "@/features/applications/read";
 import { mobileAnalytics } from "@/features/mobile/analytics";
-import { readAttentionMail } from "@/features/mobile/read";
+import { readMobileMail } from "@/features/mobile/read";
 import { MobileOverview } from "@/features/mobile/overview";
 export const dynamic = "force-dynamic";
 export default async function Home() {
   const [data, { records }] = await Promise.all([readWorkspace(), readApplications()]);
-  const attention = await readAttentionMail({}, records);
+  const attention = await readMobileMail({}, records);
   return (
     <>
       <MobileOverview

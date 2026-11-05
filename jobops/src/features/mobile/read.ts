@@ -19,17 +19,14 @@ export const readAttentionCount = cache(async () => {
   return row?.value ?? 0;
 });
 
-export async function readAttentionMail(
-  query: Partial<MailQuery> = {},
-  loaded?: ApplicationRecord[],
-) {
+export async function readMobileMail(query: Partial<MailQuery> = {}, loaded?: ApplicationRecord[]) {
   const [context, records] = await Promise.all([
     loadMailContext(),
     loaded ? Promise.resolve(loaded) : readApplications().then((data) => data.records),
   ]);
   const page = await listMail(
     {
-      attention: "open",
+      attention: query.all ? "all" : "open",
       company: query.company ?? undefined,
       application: query.role ?? undefined,
       tag: query.tag ?? undefined,
@@ -77,4 +74,4 @@ export async function readAttentionMail(
     ),
   };
 }
-export type AttentionMail = Awaited<ReturnType<typeof readAttentionMail>>;
+export type MobileMail = Awaited<ReturnType<typeof readMobileMail>>;

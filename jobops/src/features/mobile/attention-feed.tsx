@@ -7,7 +7,7 @@ import { TagPill } from "@/features/mail/tag-pill";
 import { EditTag } from "@/features/timeline/edit-tag";
 import { HandledLine, HandlingBar, type PlaceOptions } from "@/features/timeline/handling";
 import { mailHref, type MailQuery } from "@/features/timeline/query";
-import type { AttentionMail } from "./read";
+import type { MobileMail } from "./read";
 import { mailTimestamp } from "./mail-date";
 
 export function AttentionFeed({
@@ -17,7 +17,7 @@ export function AttentionFeed({
   inboxes = [],
   placeOptions,
 }: {
-  data: AttentionMail;
+  data: MobileMail;
   query?: Partial<MailQuery>;
   compact?: boolean;
   inboxes?: string[];
@@ -34,8 +34,12 @@ export function AttentionFeed({
       {!entries.length && (
         <div className="rounded-3xl bg-card p-6 text-center ring-1 ring-border">
           <Check size={24} aria-hidden className="mx-auto mb-3 text-link" />
-          <p className="m-0 font-semibold">You’re all caught up</p>
-          <p className="m-0 mt-1 text-sm text-muted-foreground">No mail needs your attention.</p>
+          <p className="m-0 font-semibold">
+            {query.all ? "No job mail to show" : "You’re all caught up"}
+          </p>
+          {!query.all && (
+            <p className="m-0 mt-1 text-sm text-muted-foreground">No mail needs your attention.</p>
+          )}
         </div>
       )}
       {entries.length > 0 && (
@@ -121,7 +125,7 @@ export function AttentionFeed({
           href={mailHref({ ...query, mail: null, cursor: data.nextCursor })}
           className="inline-flex min-h-11 items-center rounded-full px-4 text-sm font-medium text-link hover:bg-selected hover:no-underline"
         >
-          Show older attention mail
+          {query.all ? "Show older mail" : "Show older attention mail"}
         </Link>
       )}
     </div>

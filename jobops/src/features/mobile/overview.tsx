@@ -3,14 +3,14 @@ import { ArrowUpRight, ChevronRight, Mail } from "lucide-react";
 import type { MobileAnalytics } from "./analytics";
 import { AnalyticsView } from "./analytics-view";
 import { AttentionFeed } from "./attention-feed";
-import type { AttentionMail } from "./read";
+import type { MobileMail } from "./read";
 
 export function MobileOverview({
   analytics,
   attention,
 }: {
   analytics: MobileAnalytics;
-  attention: AttentionMail;
+  attention: MobileMail;
 }) {
   return (
     <div className="space-y-6 md:hidden" data-testid="mobile-overview">

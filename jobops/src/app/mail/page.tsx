@@ -1,7 +1,8 @@
 import { MailView } from "@/features/timeline/mail-view";
 import { readMailView } from "@/features/timeline/mail-data";
-import { readAttentionMail } from "@/features/mobile/read";
+import { readMobileMail } from "@/features/mobile/read";
 import { MobileMailWorkspace } from "@/features/mobile/mail-workspace";
+import { mailCursor } from "@/features/timeline/query";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Mail" };
@@ -17,10 +18,17 @@ export default async function MailPage({
     ),
   );
   const data = await readMailView(raw);
-  const attention = await readAttentionMail(data.query);
+  const mobileQuery = {
+    ...data.query,
+    // Desktop may infer All job mail and a cursor for a deep link. On mobile, only
+    // the explicit URL selects the full feed or moves away from its first page.
+    all: data.pinned && data.query.all,
+    cursor: mailCursor.safeParse(raw.cursor).data ?? null,
+  };
+  const mobileMail = await readMobileMail(mobileQuery);
   return (
     <>
-      <MobileMailWorkspace data={data} attention={attention} />
+      <MobileMailWorkspace data={data} feed={mobileMail} query={mobileQuery} />
       <div className="hidden md:block">
         <MailView data={data} />
       </div>
