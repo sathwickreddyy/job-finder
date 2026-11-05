@@ -7,4 +7,4 @@
 - [Résumé revisions by agent](resume-revisions-by-agent.md) — Claude Code/Codex revise via JobOps API; ask gaps in agent chat, not portal; say current vs revised
 - [Confirmed work skills](confirmed-work-skills.md) — MongoDB, Spark used at work; Kotlin, Micronaut not (2026-11-03)
 - [Fill forms without asking](fill-forms-without-asking.md) — fill from résumé + JobOps profile; ask only for facts stored nowhere
-- [Pane file-attach workaround](pane-file-attach-workaround.md) — how to upload PDFs to JobOps from the pane; employer forms need the user to attach
+- [Pane file-attach workaround](pane-file-attach-workaround.md) — historical browser pane attachment behavior and the current upload instructions
