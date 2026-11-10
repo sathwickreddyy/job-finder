@@ -10,7 +10,7 @@ included as the separate `resume-scoring` container. Its API documentation is at
 
 External browser agents: read the [Company research API and working curl examples](jobops/README.md#company-research-api--for-browser-agents-and-curl). JobOps listens on `0.0.0.0:3210`; company ingestion uses ordinary JSON REST calls on the trusted LAN with no ingestion token.
 
-The local API also exposes [application and outreach transitions](jobops/docs/api/application-transitions.md) and [mail actions](jobops/docs/api/mail-search.md#handle-mail).
+Codex, Claude Code, Antigravity and other assistants share the [JobOps API automation guide](jobops/docs/api/automation.md). It lists what agents can do through the API and which steps require user confirmation or an external site.
 
 ## Installed assistant skills
 

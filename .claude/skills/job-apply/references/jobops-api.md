@@ -2,6 +2,8 @@
 
 Resolve the repo from its `AGENTS.md`. Run commands there. `JOBOPS_URL=http://127.0.0.1:3210` works only on the JobOps machine; remote agents need the approved reachable address. Keep the existing Docker setup. Prefer APIs when supported. Read every response/error. Use private JSON files with `--data-binary @file`, never interpolated shell payloads.
 
+Read the [shared API automation guide](../../../../jobops/docs/api/automation.md) for the full route inventory and authorization rules. For an existing record, use the [transition API](../../../../jobops/docs/api/application-transitions.md) to read and record valid actions. Use the mail API when an email supplies the evidence.
+
 ## Read records
 
 ```sh

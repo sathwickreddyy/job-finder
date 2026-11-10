@@ -1,5 +1,12 @@
 # Repository Guidelines
 
+## JobOps API automation
+
+Before operating JobOps, read the [API automation guide](jobops/docs/api/automation.md).
+Use the supported API for in-scope reads and updates. The guide lists the available actions,
+their access requirements, and which steps still require user confirmation or an external site.
+Update the guide in the same change whenever a supported endpoint or its authorization changes.
+
 ## Current State
 
 The runnable JobOps application lives in `jobops/`. It is a Next.js App Router modular monolith with
