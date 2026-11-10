@@ -276,8 +276,15 @@ facts are labelled as excluded from reuse.
 Agent routes on the trusted LAN:
 
 - `GET /api/v1/resumes` lists application PDFs under `resumes` and source anchors
-  under `masters` (including each current revision id and DOCX download URL).
+  under `masters` (including their family `resumeId`, current revision id and DOCX download URL).
   A master cannot be selected as a submitted PDF or retargeted as a tailored output.
+- `POST /api/v1/resumes` accepts multipart `file` (PDF up to 10 MiB), `resumeId`
+  (the active family ID), `versionLabel`, and optional `changeNotes` and `docxPath`.
+  The client reads the local PDF; the server never opens a client-supplied path.
+  The route uses the same validation and private storage as the upload drawer.
+  A new upload returns 201 with `versionId`, `sha256`, `parsingStatus`, and links.
+  Retrying the same bytes, label and family returns the existing version with 200.
+  Uploading through this API does not change the current/default PDF.
 - `GET /api/v1/resumes/{versionId}/master` returns the current revision and full
   source history, including extracted blocks, reason, source date and actual
   recording time. Start from the current DOCX; historical wording must be checked
@@ -297,6 +304,17 @@ When creating an application résumé, record the exact master revision id in it
 change notes, keep unsupported claims out, and retain the exact submitted PDF.
 Existing fit assessments remain tied to their original PDF baseline; importing
 a master revision does not retarget or rescore them.
+
+Upload a PDF from a local path (choose the family `resumeId` from the list API):
+
+```sh
+pdf='/absolute/path/to/submitted-resume.pdf'
+curl --fail-with-body --silent --show-error \
+  --form "file=@$pdf;type=application/pdf" \
+  --form-string "resumeId=$resume_id" \
+  --form-string 'versionLabel=Company · Role · requisition' \
+  http://127.0.0.1:3210/api/v1/resumes
+```
 
 Original PDFs are limited to 10 MiB, validated by type/extension/signature, stored using opaque UUID filenames with private permissions, and served through protected routes. Names supplied by users never determine filesystem paths. Path traversal and symlinks are rejected. Parsing uses local `pdf-parse`, without OCR or network calls. Scanned/encrypted/corrupt PDFs may not yield usable text; originals remain available to view or download.
 

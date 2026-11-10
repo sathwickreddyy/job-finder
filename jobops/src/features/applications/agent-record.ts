@@ -251,6 +251,7 @@ export async function listResumeFiles() {
   const rows = await db
     .select({
       id: resumeVersions.id,
+      resumeId: resumes.id,
       family: resumes.name,
       label: resumeVersions.versionLabel,
       isCurrent: resumeVersions.isCurrent,

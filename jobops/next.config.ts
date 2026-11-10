@@ -6,7 +6,11 @@ const config: NextConfig = {
   agentRules: false,
   allowedDevOrigins: localHostAliases(),
   serverExternalPackages: ["pdf-parse", "pg"],
-  experimental: { serverActions: { bodySizeLimit: "12mb" } },
+  experimental: {
+    // Leave room for the multipart fields around a 10 MiB PDF.
+    proxyClientMaxBodySize: "12mb",
+    serverActions: { bodySizeLimit: "12mb" },
+  },
   async headers() {
     return [
       {

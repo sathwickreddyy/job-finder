@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { and, count, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
@@ -82,6 +83,8 @@ export async function getResume(id: string) {
   return { ...resume, versions, usage, assessments };
 }
 
+export class ResumeUploadFamilyNotFound extends Error {}
+
 export async function uploadResumeVersion(input: {
   resumeId: string;
   versionLabel: string;
@@ -90,11 +93,13 @@ export async function uploadResumeVersion(input: {
   changeNotes?: string;
   docxPath?: string | null;
   draft?: boolean;
+  reuseExisting?: boolean;
   executor?: Parameters<Parameters<typeof db.transaction>[0]>[0];
 }) {
   const bytes = Buffer.from(await input.file.arrayBuffer());
   validatePdf(bytes, input.file.name, input.file.type);
-  const stored = await putBuffer(bytes, { namespace: "resumes", extension: "pdf" });
+  const hash = input.reuseExisting ? createHash("sha256").update(bytes).digest("hex") : null;
+  let storagePath: string | undefined;
   let extractedText = "";
   let parsingStatus = "COMPLETED";
   let parsingError: string | null = null;
@@ -117,8 +122,28 @@ export async function uploadResumeVersion(input: {
         .from(resumes)
         .where(eq(resumes.id, input.resumeId))
         .for("update");
-      if (!family)
-        throw new Error("Resume family no longer exists. Create or select a family first.");
+      if (!family || (input.reuseExisting && !family.isActive))
+        throw new ResumeUploadFamilyNotFound(
+          "Resume family no longer exists or is archived. Choose an active family.",
+        );
+      if (hash) {
+        const [previous] = await tx
+          .select()
+          .from(resumeVersions)
+          .where(
+            and(
+              eq(resumeVersions.resumeId, input.resumeId),
+              eq(resumeVersions.versionLabel, input.versionLabel),
+              eq(resumeVersions.sha256, hash),
+              eq(resumeVersions.isMaster, false),
+            ),
+          )
+          .orderBy(desc(resumeVersions.createdAt), desc(resumeVersions.id))
+          .limit(1);
+        if (previous) return { ...previous, duplicate: true };
+      }
+      const stored = await putBuffer(bytes, { namespace: "resumes", extension: "pdf" });
+      storagePath = stored.storagePath;
       const [current] = await tx
         .select({ id: resumeVersions.id })
         .from(resumeVersions)
@@ -169,10 +194,10 @@ export async function uploadResumeVersion(input: {
         summary: `Uploaded ${family.name} — ${input.versionLabel}`,
         metadata: { versionId: version.id, parsingStatus },
       });
-      return version;
+      return { ...version, duplicate: false };
     });
   } catch (error) {
-    await removeFile(stored.storagePath).catch(() => undefined);
+    if (storagePath) await removeFile(storagePath).catch(() => undefined);
     throw error;
   }
 }

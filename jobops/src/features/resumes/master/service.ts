@@ -38,7 +38,7 @@ export type Master = NonNullable<Awaited<ReturnType<typeof getMaster>>>;
 
 export async function listMasterSources() {
   const sources = await db
-    .select({ id: resumeVersions.id, family: resumes.name })
+    .select({ id: resumeVersions.id, resumeId: resumes.id, family: resumes.name })
     .from(resumeVersions)
     .innerJoin(resumes, eq(resumeVersions.resumeId, resumes.id))
     .where(and(eq(resumeVersions.isMaster, true), eq(resumes.isActive, true)));
