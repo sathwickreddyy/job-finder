@@ -49,7 +49,7 @@ and user permission boundaries. Keep credentials and personal artifacts out of G
 | `POST /api/v1/companies/batch` | Write up to 100 companies in one transaction. |
 
 Research outside JobOps, preserve source URLs and date provenance, and apply the company
-shortlist rules in [`AGENTS.md`](../../../AGENTS.md). Use the [company ingestion examples](../../README.md#company-research-api--for-browser-agents-and-curl)
+shortlist rules in [`AGENTS.md`](../../../AGENTS.md). Use the [company ingestion examples](../operator-reference.md#company-research-api--for-browser-agents-and-curl)
 for field formats. Get user authorization before archiving or restoring companies.
 
 ### Applications and outreach
@@ -116,7 +116,7 @@ job description to an external service. Confirm authorization for the material b
 before invoking it. Label scores as tool diagnostics. The separate
 [scoring service API](../../../services/resume-scoring/README.md#api) can score supplied text or
 PDF bytes and returns results without writing JobOps records. See the
-[résumé storage contract](../../README.md#resume-storage-and-backup) and
+[résumé storage contract](../operator-reference.md#resume-storage-and-backup) and
 [application workflow reference](../../../.claude/skills/job-apply/references/jobops-api.md).
 
 ### Naukri and protected reads

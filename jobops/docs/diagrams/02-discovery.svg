@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 292" role="img" aria-labelledby="title description">
+  <title id="title">Find and save an opening</title>
+  <desc id="description">1. Find openings. Copy the discovery prompt or open a job source. 2. Verify the role. Check the official URL, requisition and posted date. 3. Save the description. Store the full job text and source details. 4. Saved opening. Open the job and check the exact text. The role is open, eligible and within the posting window.</desc>
+
+  <defs>
+    <marker id="filled" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto">
+      <path d="M0 0 L10 5 L0 10 Z" fill="#1F59AB"/>
+    </marker>
+    <marker id="open" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto">
+      <path d="M1 1 L9 5 L1 9" fill="none" stroke="#1F59AB" stroke-width="1.7"/>
+    </marker>
+  </defs>
+  <g font-family="system-ui, -apple-system, Segoe UI, sans-serif">
+    <rect x="1" y="1" width="1118" height="290" rx="22" fill="#F5F8FC" stroke="#CAD6E5" stroke-width="1.5"/>
+    <text x="32" y="35" fill="#1F59AB" font-size="15" font-weight="750" text-anchor="start" letter-spacing="2">WALKTHROUGH / 02</text>
+    <text x="32" y="70" fill="#142842" font-size="31" font-weight="750" text-anchor="start" letter-spacing="0">Find and save an opening</text>
+    <text x="32" y="99" fill="#475B73" font-size="19" font-weight="500" text-anchor="start" letter-spacing="0">Start with a role you can verify on the employer’s site.</text>
+    <rect x="32" y="132" width="237" height="99" rx="12" fill="#FFFFFF" stroke="#CAD6E5" stroke-width="1.7"/><text x="150.5" y="161" fill="#142842" font-size="21" font-weight="720" text-anchor="middle" letter-spacing="0">Find openings</text><text x="150.5" y="185" fill="#475B73" font-size="17" font-weight="500" text-anchor="middle" letter-spacing="0">Copy the discovery prompt</text><text x="150.5" y="206" fill="#475B73" font-size="17" font-weight="500" text-anchor="middle" letter-spacing="0">or open a job source</text>
+    <circle cx="53" cy="130" r="13" fill="#143B78"/><text x="53" y="135" fill="#FFFFFF" font-size="14" font-weight="700" text-anchor="middle" letter-spacing="0">1</text>
+    <path d="M273 180 H300" fill="none" stroke="#1F59AB" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#filled)"/>
+    <rect x="305" y="132" width="237" height="99" rx="12" fill="#FFFFFF" stroke="#CAD6E5" stroke-width="1.7"/><text x="423.5" y="161" fill="#142842" font-size="21" font-weight="720" text-anchor="middle" letter-spacing="0">Verify the role</text><text x="423.5" y="185" fill="#475B73" font-size="17" font-weight="500" text-anchor="middle" letter-spacing="0">Check the official URL,</text><text x="423.5" y="206" fill="#475B73" font-size="17" font-weight="500" text-anchor="middle" letter-spacing="0">requisition and posted date</text>
+    <circle cx="326" cy="130" r="13" fill="#143B78"/><text x="326" y="135" fill="#FFFFFF" font-size="14" font-weight="700" text-anchor="middle" letter-spacing="0">2</text>
+    <path d="M546 180 H573" fill="none" stroke="#1F59AB" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#filled)"/>
+    <rect x="578" y="132" width="237" height="99" rx="12" fill="#FFFFFF" stroke="#CAD6E5" stroke-width="1.7"/><text x="696.5" y="161" fill="#142842" font-size="21" font-weight="720" text-anchor="middle" letter-spacing="0">Save the description</text><text x="696.5" y="185" fill="#475B73" font-size="17" font-weight="500" text-anchor="middle" letter-spacing="0">Store the full job text</text><text x="696.5" y="206" fill="#475B73" font-size="17" font-weight="500" text-anchor="middle" letter-spacing="0">and source details</text>
+    <circle cx="599" cy="130" r="13" fill="#143B78"/><text x="599" y="135" fill="#FFFFFF" font-size="14" font-weight="700" text-anchor="middle" letter-spacing="0">3</text>
+    <path d="M819 180 H846" fill="none" stroke="#1F59AB" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#filled)"/>
+    <rect x="851" y="132" width="237" height="99" rx="12" fill="#EBF3FF" stroke="#1F59AB" stroke-width="1.7"/><text x="969.5" y="161" fill="#142842" font-size="21" font-weight="720" text-anchor="middle" letter-spacing="0">Saved opening</text><text x="969.5" y="185" fill="#475B73" font-size="17" font-weight="500" text-anchor="middle" letter-spacing="0">Open the job and</text><text x="969.5" y="206" fill="#475B73" font-size="17" font-weight="500" text-anchor="middle" letter-spacing="0">check the exact text</text>
+    <circle cx="872" cy="130" r="13" fill="#143B78"/><text x="872" y="135" fill="#FFFFFF" font-size="14" font-weight="700" text-anchor="middle" letter-spacing="0">4</text>
+    <text x="32" y="263" fill="#143B78" font-size="14" font-weight="750" text-anchor="start" letter-spacing="1.5">CHECKPOINT</text>
+    <text x="158" y="264" fill="#475B73" font-size="17" font-weight="500" text-anchor="start" letter-spacing="0">The role is open, eligible and within the posting window.</text>
+  </g>
+</svg>

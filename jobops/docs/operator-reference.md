@@ -1,0 +1,319 @@
+# JobOps operator reference
+
+For the product demo and illustrated workflow, start with the [JobOps walkthrough](../../README.md). For agent calls, use the [API automation guide](api/automation.md).
+
+## Local setup
+
+Requires Docker Desktop. The UI, API and PostgreSQL all run in Docker; no host Node.js server is needed. From the repository root:
+
+```bash
+cp jobops/.env.example jobops/.env # First setup only; preserve an existing .env.
+docker compose up -d --build
+docker compose ps
+```
+
+Open [JobOps](http://127.0.0.1:3210). PostgreSQL binds to `127.0.0.1:5549`; the application listens on `0.0.0.0:3210` so you can also open `http://<your-private-LAN-IP>:3210`. These ports avoid the other local projects. No fictional candidate, resume, job or application records are inserted during normal setup.
+
+Compose works from either the repository root or `jobops/`. It shows three services: `app`, `postgres`, and the independent `resume-scoring` Python API. The scoring service has its own image, dependencies and tests; it does not access the JobOps database or uploads. See its [API and service documentation](../../services/resume-scoring/README.md). The app waits for a healthy database, applies committed migrations, and starts the production Next.js server. Existing PostgreSQL data stays in the original `jobops_jobops_postgres` volume; existing PDFs stay in `jobops/data/uploads` (or the host `STORAGE_ROOT` configured in `jobops/.env`). Secrets are supplied at runtime from that file and excluded from the image build. Review pending migrations before upgrading an existing database, especially migrations that remove obsolete tables.
+
+Use `docker compose logs -f app` for startup errors, `docker compose up -d --build` after source changes, and `docker compose stop` to stop the whole application. Do not add `-v` to `docker compose down` unless you intend to delete the database volume.
+
+Node.js 22.16+ (tested with 24) and npm are only needed for optional host-side development and tests. For hot reload, run `npm install` in `jobops/`, stop the Docker app with `docker compose stop app`, then run `npm run dev`. Stop that process before returning to Docker so port 3210 is free. Normal use should use Docker only.
+
+With a local `APP_URL`, loopback, private IPv4/local IPv6 addresses and Tailscale IPv4 addresses (`100.64.0.0/10`) at the configured port are accepted. From another device on your tailnet, open `http://<this-computer's-Tailscale-IP>:3210`; you can keep `APP_URL=http://127.0.0.1:3210` for both local and Tailscale access. For device-name/MagicDNS URLs such as `http://m4-pro:3210`, set `JOBOPS_LOCAL_HOSTS=m4-pro,m4-pro.your-tailnet.ts.net` in `.env` and restart the server. These are exact hostname aliases (no URLs, ports or wildcards), accepted only with a local-address `APP_URL` and its configured port. The same alias list allows Next.js development resources and hot reload. Browser mutations must come from the exact origin you opened. The [supported local API routes](api/automation.md) accept ordinary local or tailnet `curl` requests without an Origin header or access token. Protected routes retain their origin and session checks. Host checks classify the target address, not the caller; the host firewall and tailnet policy control who can reach the listener. If you change the port, update the launch command and `APP_URL`; keep both inbox callbacks on their configured origin.
+
+`npm run db:seed` adds no dummy data. The company migration preserves the eight existing real companies and reviewed official location links, without inventing openings, salaries or application activity. Fictional fixtures are restricted to `db:seed:test`, which refuses every database except the local, ownership-marked `jobops_e2e`. Unknown application answers remain `UNKNOWN` until you provide them.
+
+## Company research API — for browser agents and curl
+
+Use this section as the ingestion contract for an external ChatGPT, Claude or Codex session. Read the machine-readable [OpenAPI schema](http://127.0.0.1:3210/api/v1/companies/schema) before writing. Ordinary curl calls from this computer or the trusted LAN require **no ingestion token**, no access cookie and no Origin header. Use a local terminal/execution tool; a cloud-only tool cannot reach your private LAN, and JavaScript on a LeetCode page has a different browser origin.
+
+```bash
+# On this computer. From another LAN device, use this computer's private IP.
+export JOBOPS_URL=http://127.0.0.1:3210
+# Example LAN target: export JOBOPS_URL=http://192.168.0.5:3210
+
+curl --fail-with-body --silent --show-error "$JOBOPS_URL/api/v1/companies/schema"
+curl --fail-with-body --silent --show-error "$JOBOPS_URL/api/v1/companies?city=Bengaluru"
+curl --fail-with-body --silent --show-error "$JOBOPS_URL/api/v1/companies?city=Hyderabad"
+curl --fail-with-body --silent --show-error "$JOBOPS_URL/api/v1/companies/google"
+```
+
+Create or update a company with a stable lowercase slug (letters, numbers and hyphens; `schema`, `batch` and UUID-shaped slugs are reserved). This runnable example uses Google's actual careers portal; it creates no fictional job, offer or application. Existing Google fields not supplied remain unchanged. Repeat it safely: locations and facts use stable identities.
+
+```bash
+curl --fail-with-body --silent --show-error \
+  -X POST "$JOBOPS_URL/api/v1/companies" \
+  -H 'Content-Type: application/json' \
+  --data-binary @- <<'JSON'
+{
+  "slug": "google",
+  "name": "Google",
+  "careersUrl": "https://www.google.com/about/careers/applications/jobs/results/?location=India",
+  "locations": [
+    {"city": "Bengaluru", "state": "Karnataka", "country": "India"},
+    {"city": "Hyderabad", "state": "Telangana", "country": "India"}
+  ],
+  "facts": [{
+    "factKey": "official-india-careers-portal",
+    "category": "OTHER",
+    "title": "India careers search",
+    "summary": "Use the official careers search and inspect each role's location.",
+    "data": {"portal": "Google Careers", "country": "India"},
+    "sourceUrl": "https://www.google.com/about/careers/applications/jobs/results/?location=India",
+    "sourceTitle": "Google Careers — India search",
+    "sourceKind": "OFFICIAL"
+  }]
+}
+JSON
+```
+
+Patch only supplied fields, using either the slug or UUID returned by the API:
+
+```bash
+curl --fail-with-body --silent --show-error \
+  -X PATCH "$JOBOPS_URL/api/v1/companies/google" \
+  -H 'Content-Type: application/json' \
+  --data-binary '{"portalNote":"Google Careers · Choose Bengaluru or Hyderabad in the location filter."}'
+
+# After extracting real evidence, save its JSON payload to company-research.json.
+curl --fail-with-body --silent --show-error \
+  -X PATCH "$JOBOPS_URL/api/v1/companies/google" \
+  -H 'Content-Type: application/json' --data-binary @company-research.json
+```
+
+Ingest multiple companies atomically. This runnable batch updates official portal links for two existing real companies; unknown data stays unknown:
+
+```bash
+curl --fail-with-body --silent --show-error \
+  -X POST "$JOBOPS_URL/api/v1/companies/batch" \
+  -H 'Content-Type: application/json' \
+  --data-binary @- <<'JSON'
+{"companies":[
+  {"slug":"google","name":"Google","careersUrl":"https://www.google.com/about/careers/applications/jobs/results/?location=India"},
+  {"slug":"microsoft","name":"Microsoft","careersUrl":"https://careers.microsoft.com/"}
+]}
+JSON
+```
+
+| Endpoint                             | Behavior                                                                                                                     |
+| ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
+| `GET /api/v1/companies`              | Active companies by default; optional `city`, `q`, `status=ACTIVE\|ARCHIVED\|ALL`, `updatedAfter`, `include=facts,locations` |
+| `GET /api/v1/companies/{idOrSlug}`   | Company, locations, facts and each fact's observation history                                                                |
+| `POST /api/v1/companies`             | Idempotent upsert; requires `slug` and `name`; returns 201 on create, 200 on merge                                           |
+| `PATCH /api/v1/companies/{idOrSlug}` | Partial update; requires an existing identifier                                                                              |
+| `POST /api/v1/companies/batch`       | `{ "companies": [...] }`, at most 100; all writes succeed or all roll back                                                   |
+| `GET /api/v1/companies/schema`       | OpenAPI 3.1 payload schemas and category-specific data fields                                                                |
+
+Write responses contain canonical company fields, `outcome` (`created`, `updated`, `unchanged`) and `changes`. Batch responses include counts and canonical company results. Errors contain `error` and optional field `issues` or `canonicalCompany`: 400 invalid input, 404 missing company, 409 identity conflict, 413 body/batch too large, 415 wrong content type. Bodies are limited to 512 KiB. Responses are not cached.
+
+Core fields are `slug`, `name`, `aliases`, `focus`, `websiteUrl`, `careersUrl`, `portalNote`, `locations`, `facts`, `archive`, and `replaceAliases`. Omitted fields preserve data; `null` clears nullable URLs. Slugs stay fixed. Aliases merge without duplicates unless `replaceAliases: true` is supplied with `aliases`; a rename also retains the previous name for application matching. An overlapping active-company name/alias returns 409; patch the returned canonical identifier instead of creating a duplicate. `archive: true` hides a company from normal lists/cards; `archive: false` restores it. There is no delete endpoint.
+
+Locations use `city`, optional `state`/`country` (default India), `workModes`, `isPrimary`, `sourceUrl`, and `verificationStatus`. Bangalore is normalized to Bengaluru. The full city/state/country tuple is the identity; include those values whenever known. A city-only patch can update a uniquely matching location while preserving its state; ambiguous locations require a state. Work modes accept `ONSITE`, `HYBRID`, `REMOTE`, `UNKNOWN`. Never infer office policy from the existence of an office.
+
+Every new fact requires `factKey`, `category`, `title`, and `sourceUrl`. Optional fields: `summary`, `data`, `sourceTitle`, `sourceKind`, `verificationStatus`, `confidence` (0–1), `occurredAt` (ISO date/timestamp). Use a stable fact key derived from the post ID and subject, so retrying the same report does not duplicate it. A correction supplies the same fact key. Nested `data` objects merge; supplied arrays replace. Changed contents append an observation snapshot; identical contents only advance the observation time. First-observed timestamps stay fixed.
+
+Every category accepts `data.publicationYear` (integer, e.g. the year printed on the source) and `data.publishedAt` (ISO publication date/timestamp). Record only publication metadata actually shown by the source; omit it if unknown. When both are supplied their years must match. `occurredAt` is the interview/offer/event date, and observation timestamps track when JobOps saw the report; neither substitutes for publication year.
+
+Company research is presented as **Compensation**, **Interview details**, and **Interview questions** tables, each with publication year and clickable source references. Missing fields show “Not recorded.” Other categories have their own report/details/reference tables. On narrow screens each table scrolls horizontally. Original notes and additional fields remain available under **All report details**, and source timestamps under **Source dates**.
+
+| Category                | Known `data` fields (additional JSON fields are preserved)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `COMPENSATION`          | **Required:** `role`, `currency` (uppercase ISO code, `INR`), and `fixedAnnual` or `totalAnnual` (number, whole currency units per year: `3100000` = 31 LPA). Optional: `level`, `yearsExperience`, `variableAnnual`, `variablePercent` (0–100), `joiningBonus` (total across instalments), `equity` (`{ amount?, annualAmount?, units?, currency?, vestingYears?, type?: RSU/ESOP/STOCK_BONUS/OTHER }`: the total grant, the yearly value and/or the number of units; a value needs its own `currency`, usually `USD`, and is never converted), `benefits` (strings), `vestingNotes`, `offerDate`. `variableAnnual`/`joiningBonus` may be `0` when the report says there is none. Any `…Original` text needs its numeric twin; text with no single amount (a range, units without a price) belongs in `…Notes` instead. |
+| `INTERVIEW`             | **Required:** `role`, `outcome` (`OFFER`, `REJECTED`, `PENDING`, `WITHDREW`, `UNKNOWN`; detail in `outcomeNotes`), `roundCount` (≥ described rounds), `rounds` (non-empty; each `{ name, kind }` where `kind` is `ONLINE_ASSESSMENT`, `DSA`, `LLD`, `HLD`, `BEHAVIORAL`, `HIRING_MANAGER`, `DOMAIN` or `OTHER`). Optional: `level`, `yearsExperience`, `topics`, `questions`, `applicationRoute`.                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `TECH_STACK`            | `languages`, `frameworks`, `platforms`, `infrastructure`, `team`, `domain`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| `ROLE`, `HIRING_SIGNAL` | `role`, `title`, `level`, `employmentType`, `minExperience`, `maxExperience`, `skills`, `status`, `openingUrl`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `WORK_MODE`             | `city`, `mode`, `officeDaysPerWeek`, `effectiveDate`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `REFERRAL`              | `route`, `contactContext`, `responseNotes`, `conversionNotes`, `instructions`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `CULTURE`, `OTHER`      | A JSON object for source-backed information that does not fit another category                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+
+Interview question objects use `{ "text": "…", "referenceUrl": "https://…", "topic": "…", "round": "…" }`; only `text` is required. Keep the question's wording and actual reference link. A string question links to its report. Round objects require `name` and `kind`, and accept `summary`, `durationMinutes`, `topics`, `referenceUrl`, and their own `questions` array in the same format. Nested questions appear in the question table with their round name; their own link takes precedence over the round link, then the report source. Do not manufacture questions from a vague round description. Reference URLs must use HTTP(S) without credentials. The generated schema includes these fields.
+
+For the file-based PATCH command above, `company-research.json` contains `{ "facts": [...] }` with stable `factKey` values, publication metadata and the actual extracted compensation/interview data. Keep each distinct source report as its own fact.
+
+Compensation and interview facts are validated strictly after merging with the stored record; a 400 response names each missing field (for example `data.fixedAnnual` or `data.rounds.0.kind`). Store Indian compensation in rupees with `currency: "INR"` (1 LPA = 100000 INR/year): `"31 LPA"` becomes `fixedAnnual: 3100000`, and the text may stay alongside as `fixedAnnualOriginal`. Distinguish fixed pay, variable pay, joining bonus and total compensation. Stock is an `equity` object in its own currency (`{"amount": 58000, "currency": "USD", "vestingYears": 4, "type": "RSU"}`) and is never converted or added to INR totals. Unknown numbers should be omitted; a report with no usable pay figure is not a compensation fact. `sourceKind` accepts `OFFICIAL`, `LEETCODE`, `LINKEDIN`, `COMMUNITY`, `OTHER`; `verificationStatus` accepts `VERIFIED`, `COMMUNITY_REPORTED`, `UNVERIFIED`, `STALE`. LeetCode is automatically identified from its URL and defaults to community-reported; community evidence cannot be labelled verified. Keep reports from different authors or dates as separate facts when they describe distinct experiences. Company presence does not establish a current vacancy.
+
+The Companies page reads these persisted records in three views (`?view=grid|compare|pipeline`): city-sectioned cards with the fixed-pay range, typical rounds, bonus/stock/benefits and interview style; a sortable compare table on one shared LPA scale; and a pipeline board derived from saved openings and application statuses. Pay ranges use INR compensation facts only (middle half of reports, p25–p75). Each card opens `/companies/{slug}`, a tabbed page (`?tab=pay|interviews|progress|about`) with pay, the typical interview loop and questions to practise, your saved openings, resume references and applications, and the raw sourced research tables. The clicked city's resume reference appears first; company records cover all locations, including remote openings. Application counts and histories are joins over actual saved jobs/applications; ingestion does not invent them. Resume references still follow the family's current PDF, while submitted applications retain their exact file. REST writes refresh both the directory and company page.
+
+Copy this instruction into your browser-control conversation:
+
+> Read the Company research API section of this repository's README and GET http://127.0.0.1:3210/api/v1/companies/schema. Use my browser session to research developer opportunities in Bengaluru and Hyderabad, including LeetCode Discuss and official company careers pages. Research only software development roles; skip QA, testing, SDET and test-automation roles. Record only information actually observed, with the exact source URL, publication year/date in data.publicationYear/data.publishedAt, and separate event date in occurredAt when known. Keep question-specific reference links in structured question objects. Extract roles/levels; convert every pay figure to numbers (fixedAnnual/totalAnnual in whole rupees per year, keep the original text in fixedAnnualOriginal; stock as an equity object in its own currency); tag every interview round with its kind and use the outcome enum; tech stacks, work modes, referral routes and hiring/culture signals into sourced facts. Label community reports clearly; omit unknown fields. Check existing companies first, preserve slugs, and use stable fact keys. Use curl from this computer's terminal to POST/PATCH or batch real findings into JobOps, check every response, and resolve 409 conflicts using the returned canonical identifier. Never store external credentials, fabricate records, send messages, submit applications or change my resume files. Refresh /companies, open the company card, and verify the source-labelled research on its company page.
+
+## Source map
+
+```text
+src/app/                 Pages, downloads, exports and provider-specific inbox OAuth routes
+src/components/          Navigation, prompt copy/edit controls and accessible forms
+src/features/workspace/  Shared real-record reads, cards, graphs and prompts
+src/features/            Jobs, applications, resumes, profiles, contacts and mail
+src/db/                  Typed schema and lazy PostgreSQL pool
+drizzle/                 Additive migrations and snapshots
+scripts/                 Isolated browser tests; guarded test-only fictional fixtures
+tests/                   Domain, security, storage and browser tests
+data/uploads/            Private PDF files; ignored by Git
+```
+
+A resume assessment references one immutable job-description snapshot and one PDF version. Later edits cannot silently retarget that assessment. Direct submission dates and outreach-sent events are different facts. Legacy tables and domain code remain for historical integrity; they do not create a second user workflow.
+
+External ATS-readiness estimates must name their source and method. They are not employer ATS results. The existing dictionary-overlap engine is keyword coverage; it is never presented as an external ATS score.
+
+## Commands
+
+| Command                                   | Purpose                                                        |
+| ----------------------------------------- | -------------------------------------------------------------- |
+| `npm run dev`                             | Local workbench on port 3210                                   |
+| `npm run build` / `npm start`             | Production build / LAN server on port 3210                     |
+| `npm run lint`                            | ESLint                                                         |
+| `npm run typecheck`                       | Strict TypeScript                                              |
+| `npm run test`                            | Vitest domain/security/storage/PDF tests                       |
+| `npm run test:e2e`                        | Real Chromium workflows in an isolated database/server/storage |
+| `npm run format` / `npm run format:check` | Prettier                                                       |
+| `npm run db:generate`                     | Generate SQL after a schema change                             |
+| `npm run db:migrate`                      | Apply committed migrations                                     |
+| `npm run db:seed`                         | Safe no-op; never inserts fictional data                       |
+| `npm run db:seed:test`                    | Fixtures only in the marked local jobops_e2e database          |
+| `npm run db:studio`                       | Local Drizzle Studio; keep it private                          |
+
+Install the browser once with `npx playwright install chromium`. `test:e2e` derives a separate `jobops_e2e` database using the local PostgreSQL credentials, uses `data/e2e-uploads`, `.next-e2e`, and port 3211, and checks an ownership marker before using an existing test database. It never drops or resets your normal database. The database role needs `CREATEDB` (the Docker development role has it). Test data remains in the isolated database for inspection; application data is not cleaned or reset.
+
+Verified results and integration limits are recorded in [verification.md](verification.md). The retired endpoint and origin-protection checks are included in the normal browser suite.
+
+## Environment
+
+| Variable                                         | Required / behavior                                                                                                     |
+| ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`                                   | PostgreSQL connection; example targets the local Compose service                                                        |
+| `APP_URL`                                        | Canonical origin; defaults to `http://127.0.0.1:3210`                                                                   |
+| `JOBOPS_LOCAL_HOSTS`                             | Optional comma-separated exact LAN/MagicDNS hostname aliases; accepted only with a local-address `APP_URL` at its port. |
+| `JOBOPS_ACCESS_TOKEN`                            | Optional browser unlock on the trusted LAN; 32+ characters required for public hosts. Local company API needs no token. |
+| `STORAGE_ROOT`                                   | Default `./data/uploads`; persistent private local directory                                                            |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`       | Optional Gmail web OAuth client                                                                                         |
+| `GOOGLE_REDIRECT_URI`                            | Same-origin `/api/mail/gmail/callback`; example in `.env.example`                                                       |
+| `MICROSOFT_CLIENT_ID`, `MICROSOFT_CLIENT_SECRET` | Optional Outlook personal-account OAuth web client                                                                      |
+| `MICROSOFT_REDIRECT_URI`                         | Same-origin `/api/mail/outlook/callback`                                                                                |
+| `MAIL_TOKEN_ENCRYPTION_KEY`                      | Base64-encoded 32 random bytes; encrypts inbox tokens; legacy `GMAIL_TOKEN_ENCRYPTION_KEY` remains a fallback           |
+
+Use `.env`; do not commit it. Generate independent access/encryption secrets locally:
+
+```bash
+node -e 'console.log(require("node:crypto").randomBytes(32).toString("hex"))'
+node -e 'console.log(require("node:crypto").randomBytes(32).toString("base64"))'
+```
+
+The first output can be `JOBOPS_ACCESS_TOKEN`; the second is `MAIL_TOKEN_ENCRYPTION_KEY` for a new installation. For an existing Gmail connection, copy the **exact existing bytes/value** from `GMAIL_TOKEN_ENCRYPTION_KEY` to the new variable; do not generate a replacement. The new name takes precedence and the legacy name remains a fallback. Keep the key with secure backups: changing its bytes makes stored inbox tokens unreadable.
+
+## Inbox read-only setup
+
+JSON import works with provider credentials empty. OAuth setup is optional; configure only the providers you use. Set `APP_URL` to the canonical origin (locally `http://127.0.0.1:3210`), and use callbacks on that **same exact origin**. OAuth connect canonicalizes LAN/Tailscale aliases to `APP_URL` before setting sign-in cookies; use a reachable HTTPS origin for non-loopback OAuth. The old `/api/gmail/callback` route is retired: update the registered Google callback and `.env` together.
+
+**Gmail**
+
+1. Create a Google Cloud project, enable the Gmail API, and configure an External OAuth consent screen. Request only `https://www.googleapis.com/auth/gmail.readonly`.
+2. Create an OAuth **Web application** client and register `http://127.0.0.1:3210/api/mail/gmail/callback` (or the same path on your canonical HTTPS origin). Put its ID/secret and exact URI in `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`.
+3. For ongoing use, set publishing status to **In production**. Google documents seven-day refresh-token expiry for an External app left in **Testing** when it requests Gmail access; add your account as a test user while testing. Production status does not itself complete verification or guarantee consent without warnings: `gmail.readonly` is a restricted scope. Follow the applicable personal-use/verification guidance. See [Google OAuth token expiry](https://developers.google.com/identity/protocols/oauth2), [Gmail scope requirements](https://developers.google.com/workspace/gmail/api/auth/scopes), and [web-server OAuth setup](https://developers.google.com/identity/protocols/oauth2/web-server).
+
+**Outlook personal accounts (outlook.in and outlook.com)**
+
+1. Obtain access to a Microsoft Entra directory where you can register an app. Microsoft's current [registration guide](https://learn.microsoft.com/en-us/entra/identity-platform/quickstart-register-app) lists an Azure account with an active subscription, a workforce/external tenant and at least Application Developer access as prerequisites. Owning a personal Outlook account alone does not guarantee app-registration access.
+2. Register one app with account audience **Personal accounts only**, then add a **Web** redirect URI `http://127.0.0.1:3210/api/mail/outlook/callback` (or its canonical HTTPS equivalent). Create a client secret and put the application/client ID, secret **value**, and URI in `MICROSOFT_CLIENT_ID`, `MICROSOFT_CLIENT_SECRET`, `MICROSOFT_REDIRECT_URI`.
+   Microsoft's redirect-URI form rejects HTTP `127.0.0.1` addresses. For the local callback above, open **Manifest** and add `http://127.0.0.1:3210/api/mail/outlook/callback` to `web.redirectUris` (Microsoft Graph format; legacy manifests use `replyUrlsWithType` with type `Web`), preserving existing entries. See [Microsoft's loopback redirect guidance](https://learn.microsoft.com/en-us/entra/identity-platform/reply-url#prefer-127001-over-localhost). Do not substitute `localhost` only in the registration: callbacks must match `APP_URL` and the configured provider redirect URI.
+3. Use delegated Microsoft Graph `Mail.Read` and `User.Read`, with `offline_access` in the authorization request. JobOps uses the `consumers` authority, PKCE, and an account-selection prompt. One registration serves both personal addresses: choose **Connect Outlook** again to select the second account. See [Microsoft's authorization-code flow](https://learn.microsoft.com/en-us/entra/identity-platform/v2-oauth2-auth-code-flow) and [delegated scopes/offline access](https://learn.microsoft.com/en-us/entra/identity-platform/scopes-oidc).
+
+Set the shared encryption key as described above and recreate the Docker app (`docker compose up -d`). Open **Mail → Accounts**, connect Gmail and connect Outlook once for each personal address. All connections and tokens remain server-side; the client receives only public status and read-only mail content.
+
+**Mail workspace.** `/mail` brings together all connected accounts. Choose Companies or Applications to narrow the same tracked results; company and application pages have direct mail links. Latest contains new matched hiring updates after the explicit monitoring baseline. History contains earlier, reviewed, linked and backfilled mail. Excluded contains minimal metadata and a reason for suppressed notifications. LinkedIn connection invitations, digests, requests asking you for a referral and unverified message notifications do not enter the application queue. Replies match recorded outgoing recipients; a contact entry alone does not establish outreach. Strong updates about your own application can appear without a company link for manual association, without creating companies or applications.
+
+**Check mail** searches the latest window in all provider-accessible mailbox folders. Gmail sets `includeSpamTrash=true`; Outlook uses the mailbox-wide Graph messages endpoint and recursively inventories folders including hidden folders. Account/folder provenance stays visible. Sent mail and drafts are context only. Separate online archive mailboxes and permanently deleted/expired spam or trash are outside provider coverage. Plain-text previews never load email HTML, attachments or remote images.
+
+**Find older mail** searches all available dates in resumable batches and keeps discoveries in History. One click processes up to four short, page-sized requests per account (25 Gmail messages or 50 Outlook messages per page), with an atomic checkpoint after each page. Accounts continue independently; a failed page preserves earlier page commits. Repeat the action when more pages remain. Completed historical scans can be repeated without creating fresh arrivals. The account-scoped immutable-ID ledger survives folder moves, overlap and rule changes. Existing mail IDs/application links are preserved; migration 0010 places legacy imports into history. Excluded body content is not retained by the scanner.
+
+Company mail patterns (aliases, exact senders, domains, optional subject terms and exclusions) are editable in the secondary rules panel. Defaults are labelled as coming from recorded company names/aliases/websites. Generic ATS domains are not auto-added. Ambiguous matches are held outside Latest. Manually linking a message to an application does not invent an application outcome. New-mail and history checkpoints are separate per account and scope.
+
+Settings → Mail connections removes local credentials and cursor only; mail/history remains. Also remove JobOps from your Google/Microsoft account permissions to revoke the provider grant. Live OAuth and actual inbox access require your credentials and have **not** been exercised in automated tests.
+
+## Resume storage and backup
+
+The master is an editable DOCX source pinned above the file timeline. Selecting it
+shows its complete content beside a dated ledger (approved master-only option A).
+Applied PDFs continue to use the existing PDF preview and job-fit inspector.
+Download the DOCX, edit it in Word or with an agent, then **Update master** to
+save it with a reason. An optional PDF export must come from that DOCX; JobOps
+stores it and does not run Office or generate documents. Master updates create
+immutable source revisions, never extra PDF timeline rows or replacements for
+submitted files. Earlier wording can be copied; removals recorded as corrected
+facts are labelled as excluded from reuse.
+
+Agent routes on the trusted LAN:
+
+- `GET /api/v1/resumes` lists application PDFs under `resumes` and source anchors
+  under `masters` (including their family `resumeId`, current revision id and DOCX download URL).
+  A master cannot be selected as a submitted PDF or retargeted as a tailored output.
+- `POST /api/v1/resumes` accepts multipart `file` (PDF up to 10 MiB), `resumeId`
+  (the active family ID), `versionLabel`, and optional `changeNotes` and `docxPath`.
+  The client reads the local PDF; the server never opens a client-supplied path.
+  The route uses the same validation and private storage as the upload drawer.
+  A new upload returns 201 with `versionId`, `sha256`, `parsingStatus`, and links.
+  Retrying the same bytes, label and family returns the existing version with 200.
+  Uploading through this API does not change the current/default PDF.
+- `GET /api/v1/resumes/{versionId}/master` returns the current revision and full
+  source history, including extracted blocks, reason, source date and actual
+  recording time. Start from the current DOCX; historical wording must be checked
+  for factual corrections before reuse.
+- `GET /api/v1/resumes/{versionId}/master/file` downloads the current DOCX;
+  `?revision=<id>` selects an exact historical DOCX. Add `format=pdf` for that
+  revision's supplied export (404 when absent).
+- `POST /api/v1/resumes/{versionId}/master` accepts multipart fields `file` (DOCX),
+  `reason`, `expectedRevisionId` (the current id; empty only on first import),
+  optional `pdf`, optional historical `sourceDate` (`YYYY-MM-DD`), and
+  `removedDisposition` (`retained` or `incorrect`). Stale edits return 409.
+  DOCX/PDF files are each limited to 10 MiB. The first import marks one unsubmitted,
+  untailored anchor per family as its master. Server code reads uploaded bytes,
+  never arbitrary local `docx_path` references.
+
+When creating an application résumé, record the exact master revision id in its
+change notes, keep unsupported claims out, and retain the exact submitted PDF.
+Existing fit assessments remain tied to their original PDF baseline; importing
+a master revision does not retarget or rescore them.
+
+Upload a PDF from a local path (choose the family `resumeId` from the list API):
+
+```sh
+pdf='/absolute/path/to/submitted-resume.pdf'
+curl --fail-with-body --silent --show-error \
+  --form "file=@$pdf;type=application/pdf" \
+  --form-string "resumeId=$resume_id" \
+  --form-string 'versionLabel=Company · Role · requisition' \
+  http://127.0.0.1:3210/api/v1/resumes
+```
+
+Original PDFs are limited to 10 MiB, validated by type/extension/signature, stored using opaque UUID filenames with private permissions, and served through protected routes. Names supplied by users never determine filesystem paths. Path traversal and symlinks are rejected. Parsing uses local `pdf-parse`, without OCR or network calls. Scanned/encrypted/corrupt PDFs may not yield usable text; originals remain available to view or download.
+
+Back up the database and storage together. A JSON/CSV export is useful for portability but does not contain original resume/evidence bytes, OAuth connections or every settings record.
+
+```bash
+mkdir -p backups
+docker compose exec -T postgres pg_dump -U jobops -d jobops -Fc > backups/jobops.dump
+tar -czf backups/jobops-uploads.tar.gz data/uploads
+```
+
+Run these commands from `jobops/`. The dump command targets the default Compose database; the archive command targets the default `STORAGE_ROOT`. If either location is customized, back up the configured database and actual storage directory instead. The Compose service must be running for `pg_dump`.
+
+Store backups outside Git and securely preserve your `.env` secrets separately. Keep the original encryption bytes (`MAIL_TOKEN_ENCRYPTION_KEY`, or legacy `GMAIL_TOKEN_ENCRYPTION_KEY`) to restore inbox connections. Test restoration into a **separate** database/storage root before relying on backups; do not restore over live data without an explicit decision.
+
+The original development fixtures were removed from the main local workspace after being backed up. The one-time `scripts/clean-demo.ts` utility recognizes only the initial development session, preserves later edits, checks references from retained records, and requires an exact preview digest before applying a transactional deletion. It saves private record/upload backups under ignored `data/backups/`. It does not reset the schema, run at startup, or touch `jobops_e2e`. It is not a general-purpose delete or reset command.
+
+## Production and security
+
+V1 is a single-user tool for your trusted LAN. The dev/start scripts listen on all IPv4 interfaces. Host checks validate the target address; they do not authenticate a client's source IP, and forwarded headers do not establish trust. Your firewall and router define the network boundary. There is no ingestion token. Requests to [supported local agent routes](api/automation.md) bypass the optional browser cookie on trusted local targets. Protected pages, files and exports respect a configured access token. Browser mutations require the actual target origin. The cookie is Lax to permit inbox OAuth return navigation, Secure on HTTPS, and expires after twelve hours. Rotating the token invalidates existing sessions. Provider-specific state/PKCE cookies are separate.
+
+For public deployment, set the exact HTTPS `APP_URL`, a strong access token, production database credentials and inbox callbacks, and place Next.js behind an HTTPS reverse proxy. Override the listener with `npm exec -- next start --hostname 127.0.0.1 --port 3210`, preserve the canonical Host/Origin, restrict database/file access, use persistent storage, encrypted backups, and process supervision. Public company API requests retain origin and access-cookie protection. A public service should replace the shared-token mechanism with mature authentication/authorization and rate limiting. No portal passwords, Google passwords, cookies from external websites or AI credentials are requested or stored.
+
+The local Compose password is development-only. Use a managed/private database or your own restricted PostgreSQL credentials for deployment. Filesystem storage assumes one persistent application instance; use the storage service boundary for R2/S3 before horizontal scaling. Do not publish Drizzle Studio, test servers, Compose PostgreSQL, uploads or backups.
+
+## Current limits
+
+- This is a single-user local app. Gmail and Outlook connections require your OAuth configuration and consent.
+- Research, resume writing, applications and messages happen through your external assistant or by you. Saving a record never performs an external action.
+- There is no closed-app push notification service or automatic background mail refresh.
+- The app stores application PDFs and editable DOCX master revisions; OCR and document generation are not included.
+- Record exports do not replace a database-plus-files backup.

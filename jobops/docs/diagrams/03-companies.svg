@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 292" role="img" aria-labelledby="title description">
+  <title id="title">Compare companies and find contacts</title>
+  <desc id="description">1. Companies. Open Compare or choose a company. 2. Check the evidence. Read sourced pay and interview information. 3. Open Contacts. Check the company and verify a referral contact. 4. Choose a route. Decide whether to apply directly or seek a referral. The company, role and any contact are verified before outreach.</desc>
+
+  <defs>
+    <marker id="filled" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto">
+      <path d="M0 0 L10 5 L0 10 Z" fill="#1F59AB"/>
+    </marker>
+    <marker id="open" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto">
+      <path d="M1 1 L9 5 L1 9" fill="none" stroke="#1F59AB" stroke-width="1.7"/>
+    </marker>
+  </defs>
+  <g font-family="system-ui, -apple-system, Segoe UI, sans-serif">
+    <rect x="1" y="1" width="1118" height="290" rx="22" fill="#F5F8FC" stroke="#CAD6E5" stroke-width="1.5"/>
+    <text x="32" y="35" fill="#1F59AB" font-size="15" font-weight="750" text-anchor="start" letter-spacing="2">WALKTHROUGH / 03</text>
+    <text x="32" y="70" fill="#142842" font-size="31" font-weight="750" text-anchor="start" letter-spacing="0">Compare companies and find contacts</text>
+    <text x="32" y="99" fill="#475B73" font-size="19" font-weight="500" text-anchor="start" letter-spacing="0">Company research adds context to the opening you are considering.</text>
+    <rect x="32" y="132" width="237" height="99" rx="12" fill="#FFFFFF" stroke="#CAD6E5" stroke-width="1.7"/><text x="150.5" y="161" fill="#142842" font-size="21" font-weight="720" text-anchor="middle" letter-spacing="0">Companies</text><text x="150.5" y="185" fill="#475B73" font-size="17" font-weight="500" text-anchor="middle" letter-spacing="0">Open Compare or</text><text x="150.5" y="206" fill="#475B73" font-size="17" font-weight="500" text-anchor="middle" letter-spacing="0">choose a company</text>
+    <circle cx="53" cy="130" r="13" fill="#143B78"/><text x="53" y="135" fill="#FFFFFF" font-size="14" font-weight="700" text-anchor="middle" letter-spacing="0">1</text>
+    <path d="M273 180 H300" fill="none" stroke="#1F59AB" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#filled)"/>
+    <rect x="305" y="132" width="237" height="99" rx="12" fill="#FFFFFF" stroke="#CAD6E5" stroke-width="1.7"/><text x="423.5" y="161" fill="#142842" font-size="21" font-weight="720" text-anchor="middle" letter-spacing="0">Check the evidence</text><text x="423.5" y="185" fill="#475B73" font-size="17" font-weight="500" text-anchor="middle" letter-spacing="0">Read sourced pay and</text><text x="423.5" y="206" fill="#475B73" font-size="17" font-weight="500" text-anchor="middle" letter-spacing="0">interview information</text>
+    <circle cx="326" cy="130" r="13" fill="#143B78"/><text x="326" y="135" fill="#FFFFFF" font-size="14" font-weight="700" text-anchor="middle" letter-spacing="0">2</text>
+    <path d="M546 180 H573" fill="none" stroke="#1F59AB" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#filled)"/>
+    <rect x="578" y="132" width="237" height="99" rx="12" fill="#FFFFFF" stroke="#CAD6E5" stroke-width="1.7"/><text x="696.5" y="161" fill="#142842" font-size="21" font-weight="720" text-anchor="middle" letter-spacing="0">Open Contacts</text><text x="696.5" y="185" fill="#475B73" font-size="17" font-weight="500" text-anchor="middle" letter-spacing="0">Check the company and</text><text x="696.5" y="206" fill="#475B73" font-size="17" font-weight="500" text-anchor="middle" letter-spacing="0">verify a referral contact</text>
+    <circle cx="599" cy="130" r="13" fill="#143B78"/><text x="599" y="135" fill="#FFFFFF" font-size="14" font-weight="700" text-anchor="middle" letter-spacing="0">3</text>
+    <path d="M819 180 H846" fill="none" stroke="#1F59AB" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#filled)"/>
+    <rect x="851" y="132" width="237" height="99" rx="12" fill="#EBF3FF" stroke="#1F59AB" stroke-width="1.7"/><text x="969.5" y="161" fill="#142842" font-size="21" font-weight="720" text-anchor="middle" letter-spacing="0">Choose a route</text><text x="969.5" y="185" fill="#475B73" font-size="17" font-weight="500" text-anchor="middle" letter-spacing="0">Decide whether to apply</text><text x="969.5" y="206" fill="#475B73" font-size="17" font-weight="500" text-anchor="middle" letter-spacing="0">directly or seek a referral</text>
+    <circle cx="872" cy="130" r="13" fill="#143B78"/><text x="872" y="135" fill="#FFFFFF" font-size="14" font-weight="700" text-anchor="middle" letter-spacing="0">4</text>
+    <text x="32" y="263" fill="#143B78" font-size="14" font-weight="750" text-anchor="start" letter-spacing="1.5">CHECKPOINT</text>
+    <text x="158" y="264" fill="#475B73" font-size="17" font-weight="500" text-anchor="start" letter-spacing="0">The company, role and any contact are verified before outreach.</text>
+  </g>
+</svg>
