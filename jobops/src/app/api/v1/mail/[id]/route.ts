@@ -2,9 +2,19 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { apiError, apiResponse, ApiError, readJson } from "@/features/agent-api/http";
 import { updateMail, updateSchema } from "@/features/mail/handle-service";
+import { readMailItem } from "@/features/mail/mail-list";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const { id } = await params;
+    return apiResponse({ item: await readMailItem(id) });
+  } catch (error) {
+    return apiError(error);
+  }
+}
 
 /** Retag (`tag`) or place (`company`, `application`) an email; attention never changes. */
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {

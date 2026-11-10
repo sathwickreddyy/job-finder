@@ -26,6 +26,7 @@ import {
   retagMail,
 } from "@/features/mail/workspace-actions";
 import { assertE2eDatabase, dbTests } from "./helpers/e2e-db";
+import { POST as transitionMail } from "@/app/api/v1/mail/[id]/handle/route";
 
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
@@ -216,6 +217,33 @@ describe.skipIf(!dbTests)("handling mail", () => {
       .where(inArray(applications.id, [other, chosen]));
     const statuses = Object.fromEntries(records.map(({ id, status }) => [id, status]));
     expect(statuses).toEqual({ [other]: "APPLIED", [chosen]: "ACKNOWLEDGED" });
+  });
+
+  it("handles, reopens, links and unlinks mail through the action API", async () => {
+    const row = await email({ companyKey: keys.double, classification: "FOLLOW_UP" });
+    const applicationId = apps.double[0];
+    const post = (body: object) =>
+      transitionMail(
+        new Request(`http://localhost/api/v1/mail/${row.id}/handle`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(body),
+        }),
+        { params: Promise.resolve({ id: row.id }) },
+      );
+    expect((await post({ action: "justInfo" })).status).toBe(200);
+    expect(await (await post({ action: "reopen" })).json()).toMatchObject({
+      item: { attention: "open", application: null },
+    });
+    expect(await (await post({ action: "link", applicationId })).json()).toMatchObject({
+      item: { attention: "handled", application: { id: applicationId } },
+    });
+    expect((await post({ action: "unlink", applicationId: apps.double[1] })).status).toBe(409);
+    expect(await (await post({ action: "unlink", applicationId })).json()).toMatchObject({
+      item: { attention: "open", application: null },
+    });
+    expect((await post({ action: "dismiss" })).status).toBe(200);
+    expect(await logs(row.id, "MAIL_DISMISSED")).toHaveLength(1);
   });
 
   it("refuses an application at another company", async () => {

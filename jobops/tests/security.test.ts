@@ -323,6 +323,7 @@ describe("trusted local-network access", () => {
       `/api/v1/mail/${id}`,
       `/api/v1/mail/${id}/handle`,
       "/api/v1/applications",
+      `/api/v1/applications/${id}/transitions`,
       "/api/v1/resumes",
       `/api/v1/resumes/${id}/fit`,
       `/api/v1/resumes/${id}/score`,
@@ -353,6 +354,8 @@ describe("trusted local-network access", () => {
     for (const path of [
       "/api/v1/mail/not-an-id/handle",
       "/api/v1/mail/check/extra",
+      "/api/v1/applications/not-an-id/transitions",
+      `/api/v1/applications/${id}/transitions/extra`,
       "/api/v1/resumes/not-an-id/fit",
       `/api/v1/resumes/${id}`,
       "/api/v1/resumes/not-an-id/score",

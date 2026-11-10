@@ -36,7 +36,7 @@ export function proxy(request: NextRequest) {
   // Local agent routes: companies, mail, application records, Naukri update records, resume files, résumé fit records,
   // in-app scoring, the reviewed term lists it uses and scoring pasted text.
   const agentApi =
-    /^\/api\/v1\/(?:companies(?:\/[^/]+)?|mail(?:\/check|\/dropped|\/company\/[^/]+\/(?:search|rule)|\/[0-9a-f-]{36}(?:\/handle|\/include)?)?|applications|naukri|resumes(?:\/[0-9a-f-]{36}\/(?:fit|score|score-text|openings|master(?:\/file)?))?|score-text\/terms|jobs\/snapshots\/[0-9a-f-]{36}\/terms(?:\/suggest)?)\/?$/.test(
+    /^\/api\/v1\/(?:companies(?:\/[^/]+)?|mail(?:\/check|\/dropped|\/company\/[^/]+\/(?:search|rule)|\/[0-9a-f-]{36}(?:\/handle|\/include)?)?|applications(?:\/[0-9a-f-]{36}\/transitions)?|naukri|resumes(?:\/[0-9a-f-]{36}\/(?:fit|score|score-text|openings|master(?:\/file)?))?|score-text\/terms|jobs\/snapshots\/[0-9a-f-]{36}\/terms(?:\/suggest)?)\/?$/.test(
       request.nextUrl.pathname,
     );
   if ((taskApi || agentApi) && request.headers.has("next-action"))

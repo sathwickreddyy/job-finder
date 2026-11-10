@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { eq, inArray, like, sql } from "drizzle-orm";
+import { POST as transitionMail } from "@/app/api/v1/mail/[id]/handle/route";
 import { closeDatabase, db } from "@/db";
 import {
   activityLogs,
@@ -211,7 +212,15 @@ describe.skipIf(!dbTests)("auto-applying mail", () => {
       applicationId: app.id,
       undoable: true,
     });
-    await run((tx) => undoAutoOutcome(tx, mail.id, NOW));
+    const response = await transitionMail(
+      new Request(`http://localhost/api/v1/mail/${mail.id}/handle`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "undoAutoOutcome" }),
+      }),
+      { params: Promise.resolve({ id: mail.id }) },
+    );
+    expect(response.status).toBe(200);
     expect(await record(app.id)).toMatchObject({ status: "APPLIED", closedReason: null });
     expect((await db.select().from(jobs).where(eq(jobs.id, job.id)))[0].status).toBe("APPLIED");
     expect(await eventsFor(mail.id)).toHaveLength(0);

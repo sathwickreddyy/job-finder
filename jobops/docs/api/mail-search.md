@@ -45,20 +45,33 @@ stands. Call it again while `more` is `true`.
 overlap) is recovered history: it is stored and shown, already handled, and never counts
 toward `newAttention`.
 
-## Link mail to an application
+## Handle mail
 
-`POST /api/v1/mail/{id}/handle` adds a kept email to a specific application timeline and
-marks it handled, just like **Add to timeline** in JobOps. Use the exact application ID
-after verifying the email refers to that opening.
+`GET /api/v1/mail/{id}` returns the kept email, its attention state, and its linked
+application. Use `POST /api/v1/mail/{id}/handle` with an explicit `action` to transition it.
 
 ```json
-{ "linkOnly": true, "applicationId": "6f1c3c2a-6a8a-4a57-9d1e-2b0a3f7c8d90" }
+{ "action": "link", "applicationId": "6f1c3c2a-6a8a-4a57-9d1e-2b0a3f7c8d90" }
 ```
 
-The response is `{ "item": ... }` with `attention: "handled"` and the linked application.
-An application acknowledgement records the email's received time on the timeline and moves
-an `APPLIED` record to `ACKNOWLEDGED`. Retrying the same link does not duplicate the event.
-An email handled elsewhere or placed at another company returns `409`.
+| Action            | Effect                                                                                                                                                                                                                      |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `justInfo`        | Clears attention as information.                                                                                                                                                                                            |
+| `dismiss`         | Clears attention as dismissed mail.                                                                                                                                                                                         |
+| `reopen`          | Returns information mail to Needs you, when allowed.                                                                                                                                                                        |
+| `link`            | Requires `applicationId`. Adds the email to that timeline and marks it handled.                                                                                                                                             |
+| `unlink`          | Requires `applicationId`. Unlinks the email and returns it to Needs you, with the same undo rules as the portal.                                                                                                            |
+| `undoAutoOutcome` | Undoes an automatic outcome if it is still eligible for undo. The email stays linked as information.                                                                                                                        |
+| `recordOutcome`   | Takes `outcome` and optional `details` from the [application transition API](application-transitions.md). Pass the exact `applicationId` when multiple records match. The email's receipt time is the default outcome time. |
+
+All actions return `{ "item": ... }` with the new mail state. Use the exact application
+ID after verifying the email refers to that opening. Linking an acknowledgement records
+the email's receipt time on the timeline and moves an `APPLIED` record to `ACKNOWLEDGED`.
+Repeating the same link does not duplicate the event. An action that conflicts with the
+current mail or application state returns `409`.
+
+Use `PATCH /api/v1/mail/{id}` to retag or place an email. Existing `justInfo`, `linkOnly`,
+and `outcome` payloads on `/handle` still work.
 
 ## What was dropped
 

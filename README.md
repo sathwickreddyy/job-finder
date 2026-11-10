@@ -10,6 +10,8 @@ included as the separate `resume-scoring` container. Its API documentation is at
 
 External browser agents: read the [Company research API and working curl examples](jobops/README.md#company-research-api--for-browser-agents-and-curl). JobOps listens on `0.0.0.0:3210`; company ingestion uses ordinary JSON REST calls on the trusted LAN with no ingestion token.
 
+The local API also exposes [application and outreach transitions](jobops/docs/api/application-transitions.md) and [mail actions](jobops/docs/api/mail-search.md#handle-mail).
+
 ## Installed assistant skills
 
 Keep this inventory updated when project-related assistant skills are installed, replaced or removed.

@@ -10,13 +10,19 @@ import {
   mailMessages,
 } from "@/db/schema";
 import { ApiError, refusal } from "@/features/agent-api/http";
+import { outcomeDetailsSchema, readOutcomeDetails } from "@/features/applications/outcome-input";
 import { applyOutcome } from "@/features/applications/outcome-service";
 import { outcomeIds } from "@/features/applications/phase";
-import { roundKinds } from "@/lib/round-kinds";
-import { autoApplySafely, lockRecords, resetAutoEffect } from "./auto-apply";
+import {
+  autoApplySafely,
+  lockRecords,
+  resetAutoEffect,
+  undoAutoOutcome,
+  unlinkMailWithUndo,
+} from "./auto-apply";
 import type { MailEffect } from "./auto-apply-rule";
 import { loadMailContext, type MailContext } from "./context";
-import { linkMailToRecord, lockMail, type MailTx } from "./handling-service";
+import { dismissMessages, linkMailToRecord, lockMail, type MailTx } from "./handling-service";
 import type { MailItem } from "./mail-item";
 import { readMailItem } from "./mail-list";
 import { mailIsOpen } from "./state";
@@ -30,29 +36,33 @@ import {
 
 if (typeof window !== "undefined") throw new Error("Mail writes run on the server.");
 
-const instant = z.iso.datetime({ offset: true });
+const outcomeFields = {
+  outcome: z.enum(outcomeIds),
+  applicationId: z.uuid().optional(),
+  details: outcomeDetailsSchema.optional(),
+};
 export const handleSchema = z.union([
+  z.discriminatedUnion("action", [
+    z.strictObject({ action: z.literal("justInfo") }),
+    z.strictObject({ action: z.literal("dismiss") }),
+    z.strictObject({ action: z.literal("reopen") }),
+    z.strictObject({ action: z.literal("link"), applicationId: z.uuid() }),
+    z.strictObject({ action: z.literal("unlink"), applicationId: z.uuid() }),
+    z.strictObject({ action: z.literal("undoAutoOutcome") }),
+    z.strictObject({ action: z.literal("recordOutcome"), ...outcomeFields }),
+  ]),
   z.strictObject({ justInfo: z.literal(true) }),
   z.strictObject({ linkOnly: z.literal(true), applicationId: z.uuid() }),
-  z.strictObject({
-    outcome: z.enum(outcomeIds),
-    applicationId: z.uuid().optional(),
-    details: z
-      .strictObject({
-        note: z.string().max(2000).optional(),
-        name: z.string().max(200).optional(),
-        kind: z.enum(roundKinds).optional(),
-        at: instant.optional(),
-        happenedAt: instant
-          .refine(
-            (value) => Date.parse(value) <= Date.now(),
-            "When it happened cannot be in the future.",
-          )
-          .optional(),
-      })
-      .optional(),
-  }),
+  z.strictObject(outcomeFields),
 ]);
+
+function mailCommand(input: unknown) {
+  const body = handleSchema.parse(input);
+  if ("action" in body) return body;
+  if ("justInfo" in body) return { action: "justInfo" } as const;
+  if ("linkOnly" in body) return { action: "link", applicationId: body.applicationId } as const;
+  return { action: "recordOutcome", ...body } as const;
+}
 export const updateSchema = z
   .strictObject({
     /** A legacy tag id is read as its first new tag. */
@@ -136,9 +146,10 @@ export async function handleMail(
   input: unknown,
   now = new Date(),
 ): Promise<MailItem> {
-  const body = handleSchema.parse(input);
+  const body = mailCommand(input);
+  if (body.action === "reopen") return updateMail(mailId, { attention: "open" }, now);
   const context = await loadMailContext();
-  if ("justInfo" in body) {
+  if (body.action === "justInfo") {
     await db.transaction(async (tx) => {
       const { message, events } = await lockVisibleMail(tx, mailId, context);
       if (!mailIsOpen(message)) return;
@@ -161,47 +172,48 @@ export async function handleMail(
     return readMailItem(mailId, context);
   }
   await readMailItem(mailId, context);
-  if ("linkOnly" in body) {
-    const { applicationId } = body;
-    if (!context.applications.some((app) => app.id === applicationId))
-      throw new ApiError("Application not found.", 404);
-    try {
-      await db.transaction((tx) => linkMailToRecord(tx, mailId, applicationId, now));
-    } catch (error) {
-      throw refusal(error);
-    }
-    return readMailItem(mailId, context);
-  }
-  const [message] = await db.select().from(mailMessages).where(eq(mailMessages.id, mailId));
-  if (!mailIsOpen(message)) throw new ApiError("This email has already been handled.", 409);
-  const app = await resolveApplication(message, body.applicationId, context);
-  const details = body.details ?? {};
   try {
-    // applyOutcome locks application → job → mail and rechecks that the email is still open.
-    await db.transaction(async (tx) => {
-      await applyOutcome(
-        tx,
-        {
-          applicationId: app.id,
-          outcome: body.outcome,
-          mailMessageId: mailId,
-          detail: {
-            kind: details.kind,
-            at: details.at ? new Date(details.at) : undefined,
-            name: details.name ?? "",
-            note: details.note ?? "",
-            happenedAt: details.happenedAt
-              ? new Date(details.happenedAt)
-              : new Date(Math.min(message.receivedAt.getTime(), now.getTime())),
-          },
-        },
-        now,
-      );
-      await tx
-        .update(mailMessages)
-        .set({ companyKey: app.company })
-        .where(eq(mailMessages.id, mailId));
-    });
+    switch (body.action) {
+      case "link":
+      case "unlink": {
+        const { applicationId } = body;
+        if (!context.applications.some((app) => app.id === applicationId))
+          throw new ApiError("Application not found.", 404);
+        const change = body.action === "link" ? linkMailToRecord : unlinkMailWithUndo;
+        await db.transaction((tx) => change(tx, mailId, applicationId, now));
+        break;
+      }
+      case "undoAutoOutcome":
+        await db.transaction((tx) => undoAutoOutcome(tx, mailId, now));
+        break;
+      case "dismiss":
+        await db.transaction((tx) => dismissMessages(tx, { ids: [mailId] }, now));
+        break;
+      case "recordOutcome": {
+        const [message] = await db.select().from(mailMessages).where(eq(mailMessages.id, mailId));
+        if (!mailIsOpen(message)) throw new ApiError("This email has already been handled.", 409);
+        const app = await resolveApplication(message, body.applicationId, context);
+        const happenedAt = new Date(Math.min(message.receivedAt.getTime(), now.getTime()));
+        // applyOutcome locks application → job → mail and rechecks that the email is still open.
+        await db.transaction(async (tx) => {
+          await applyOutcome(
+            tx,
+            {
+              applicationId: app.id,
+              outcome: body.outcome,
+              mailMessageId: mailId,
+              detail: readOutcomeDetails(body.details, happenedAt),
+            },
+            now,
+          );
+          await tx
+            .update(mailMessages)
+            .set({ companyKey: app.company })
+            .where(eq(mailMessages.id, mailId));
+        });
+        break;
+      }
+    }
   } catch (error) {
     throw refusal(error);
   }

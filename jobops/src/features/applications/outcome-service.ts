@@ -38,7 +38,7 @@ async function lockApplication(tx: Tx, id: string) {
   return app;
 }
 
-async function recordEvidence(tx: Tx, id: string) {
+export async function recordEvidence(tx: Tx, id: string) {
   const events = await tx
     .select()
     .from(applicationEvents)
@@ -52,6 +52,10 @@ async function recordEvidence(tx: Tx, id: string) {
     .from(mailMessages)
     .where(eq(mailMessages.linkedApplicationId, id));
   return { events, linkedMail };
+}
+
+export function isNotApplyingEvent(event: { payload: Record<string, unknown>; summary: string }) {
+  return event.payload.notApplying === true || event.summary === "Not applying";
 }
 
 /** All writers take application → job/round locks; planning uses current, real evidence. */
@@ -235,9 +239,13 @@ export async function reopenUnsentRecord(tx: Tx, data: { id: string }, now: Date
     )
     .orderBy(desc(applicationEvents.createdAt))
     .limit(1);
-  const notApplying =
-    closing && (closing.payload.notApplying === true || closing.summary === "Not applying");
-  if (app.status !== "CLOSED" || app.closedReason !== "WITHDREW" || state.sent || !notApplying)
+  if (
+    app.status !== "CLOSED" ||
+    app.closedReason !== "WITHDREW" ||
+    state.sent ||
+    !closing ||
+    !isNotApplyingEvent(closing)
+  )
     throw new Error("Only a record closed as Not applying can be reopened. Refresh the page.");
   const [job] = await tx.select().from(jobs).where(eq(jobs.id, app.jobId)).for("update");
   if (!job) throw new Error("The linked opening no longer exists.");
