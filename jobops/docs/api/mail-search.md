@@ -1,4 +1,4 @@
-# Fetch, company search and Include this API
+# Mail API
 
 Local agent routes, trusted on the local network like `/api/v1/companies`. Mailbox access is
 read-only. Every route answers JSON with `cache-control: private, no-store`; errors are
@@ -44,6 +44,21 @@ stands. Call it again while `more` is `true`.
 `counts` covers this call's page. Mail older than the normal window (last fetch minus the
 overlap) is recovered history: it is stored and shown, already handled, and never counts
 toward `newAttention`.
+
+## Link mail to an application
+
+`POST /api/v1/mail/{id}/handle` adds a kept email to a specific application timeline and
+marks it handled, just like **Add to timeline** in JobOps. Use the exact application ID
+after verifying the email refers to that opening.
+
+```json
+{ "linkOnly": true, "applicationId": "6f1c3c2a-6a8a-4a57-9d1e-2b0a3f7c8d90" }
+```
+
+The response is `{ "item": ... }` with `attention: "handled"` and the linked application.
+An application acknowledgement records the email's received time on the timeline and moves
+an `APPLIED` record to `ACKNOWLEDGED`. Retrying the same link does not duplicate the event.
+An email handled elsewhere or placed at another company returns `409`.
 
 ## What was dropped
 

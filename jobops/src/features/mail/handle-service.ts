@@ -16,7 +16,7 @@ import { roundKinds } from "@/lib/round-kinds";
 import { autoApplySafely, lockRecords, resetAutoEffect } from "./auto-apply";
 import type { MailEffect } from "./auto-apply-rule";
 import { loadMailContext, type MailContext } from "./context";
-import { lockMail, type MailTx } from "./handling-service";
+import { linkMailToRecord, lockMail, type MailTx } from "./handling-service";
 import type { MailItem } from "./mail-item";
 import { readMailItem } from "./mail-list";
 import { mailIsOpen } from "./state";
@@ -33,6 +33,7 @@ if (typeof window !== "undefined") throw new Error("Mail writes run on the serve
 const instant = z.iso.datetime({ offset: true });
 export const handleSchema = z.union([
   z.strictObject({ justInfo: z.literal(true) }),
+  z.strictObject({ linkOnly: z.literal(true), applicationId: z.uuid() }),
   z.strictObject({
     outcome: z.enum(outcomeIds),
     applicationId: z.uuid().optional(),
@@ -160,6 +161,17 @@ export async function handleMail(
     return readMailItem(mailId, context);
   }
   await readMailItem(mailId, context);
+  if ("linkOnly" in body) {
+    const { applicationId } = body;
+    if (!context.applications.some((app) => app.id === applicationId))
+      throw new ApiError("Application not found.", 404);
+    try {
+      await db.transaction((tx) => linkMailToRecord(tx, mailId, applicationId, now));
+    } catch (error) {
+      throw refusal(error);
+    }
+    return readMailItem(mailId, context);
+  }
   const [message] = await db.select().from(mailMessages).where(eq(mailMessages.id, mailId));
   if (!mailIsOpen(message)) throw new ApiError("This email has already been handled.", 409);
   const app = await resolveApplication(message, body.applicationId, context);

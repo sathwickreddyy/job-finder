@@ -6,7 +6,7 @@ import { handleMail, handleSchema } from "@/features/mail/handle-service";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-/** `{ justInfo: true }` clears attention; `{ outcome, applicationId?, details? }` records an outcome from the email. */
+/** Clear attention, link to an application timeline, or record an outcome from the email. */
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;

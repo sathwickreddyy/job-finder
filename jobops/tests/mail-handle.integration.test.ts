@@ -186,6 +186,38 @@ describe.skipIf(!dbTests)("handling mail", () => {
     expect((await message(row.id)).attentionState).toBe("OPEN");
   });
 
+  it("links an acknowledgement to the chosen application once", async () => {
+    const row = await email({
+      companyKey: keys.double,
+      classification: "APPLICATION_ACKNOWLEDGEMENT",
+    });
+    const [other, chosen] = apps.double;
+    const input = { linkOnly: true, applicationId: chosen };
+    await expect(
+      handleMail(row.id, { ...input, applicationId: apps.single[0] }),
+    ).rejects.toMatchObject({ status: 409 });
+    const item = await handleMail(row.id, input);
+    expect(item).toMatchObject({ attention: "handled", application: { id: chosen } });
+    expect(await handleMail(row.id, input)).toEqual(item);
+    await expect(handleMail(row.id, { ...input, applicationId: other })).rejects.toMatchObject({
+      status: 409,
+    });
+    expect(await outcomeEvents(row.id)).toEqual([
+      expect.objectContaining({
+        applicationId: chosen,
+        eventType: "ACKNOWLEDGEMENT_RECEIVED",
+        occurredAt: row.receivedAt,
+        payload: { mailMessageId: row.id },
+      }),
+    ]);
+    const records = await db
+      .select()
+      .from(applications)
+      .where(inArray(applications.id, [other, chosen]));
+    const statuses = Object.fromEntries(records.map(({ id, status }) => [id, status]));
+    expect(statuses).toEqual({ [other]: "APPLIED", [chosen]: "ACKNOWLEDGED" });
+  });
+
   it("refuses an application at another company", async () => {
     const row = await email();
     await expect(
