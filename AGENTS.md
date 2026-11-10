@@ -37,8 +37,8 @@ database, port 3211, and `data/e2e-uploads`; never point them at personal data.
 - Do not use another project's key or conventional-type prefixes such as `feat`,
   `fix`, or `docs`.
 - Finalize and record any project-key change here before using the new key.
-- Only commit when explicitly requested. Propose a commit after each logical unit
-  is complete and verified; keep unrelated changes in separate commits.
+- Commit each completed, verified logical unit without asking for confirmation.
+  Keep unrelated changes in separate commits and report the commit IDs.
 - Include `Co-Authored-By: Codex <noreply@openai.com>` for Codex-assisted commits.
 - Do not rewrite existing commits solely to change their prefixes.
 
