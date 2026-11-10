@@ -5,7 +5,24 @@
 Before operating JobOps, read the [API automation guide](jobops/docs/api/automation.md).
 Use the supported API for in-scope reads and updates. The guide lists the available actions,
 their access requirements, and which steps still require user confirmation or an external site.
-Update the guide in the same change whenever a supported endpoint or its authorization changes.
+
+## Documentation maintenance
+
+Review the affected documentation and agent instructions before committing each change. If the change
+affects how someone uses, operates, or automates JobOps, update the relevant material in the same commit.
+
+- **Product and UI.** Keep the root README walkthrough, button names, screenshots, feature diagrams, and
+  highlighted job-to-interview flow aligned with the actual product.
+- **Setup and operations.** Update the operator reference and service READMEs when commands, configuration,
+  dependencies, storage, integrations, or deployment steps change.
+- **APIs and agents.** Update the API automation guide, endpoint contracts, and examples when routes,
+  payloads, permissions, or retry behavior change. Update the applicable `AGENTS.md`, `CLAUDE.md`,
+  and skill instructions when workflows, tools, or approval requirements change. Keep the root README's
+  skill inventory current. Link to the canonical instructions from other entry points.
+
+Check affected links, examples, and diagrams against the current UI, code, or configuration. Remove
+obsolete instructions from active guides and mark historical plans or specs as superseded when needed.
+A change that leaves documented behavior intact only needs the review.
 
 ## Current State
 
@@ -18,7 +35,6 @@ FastAPI/Pydantic, pdfplumber, its own locked dependencies, tests and Docker imag
 implementation out of Next.js. The service accepts document contents over HTTP; it must not mount
 JobOps uploads or connect to its database. Scores must identify their method/version and evidence;
 lexical coverage is not an employer ATS score. Run service tests in its Docker test target.
-Keep the root README's installed assistant skill inventory updated when project-related skills change.
 
 Run the UI/API and PostgreSQL with `docker compose up -d --build` from the repository root or
 `jobops/`. Normal application use is Docker-only; do not start host UI/API/dev/test servers unless

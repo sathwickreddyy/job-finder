@@ -1,5 +1,6 @@
 # Job finder workspace
 
-Read `AGENTS.md` for the repository rules before working in this workspace.
+Read [AGENTS.md](AGENTS.md) before working in this workspace. Follow its
+[documentation maintenance rule](AGENTS.md#documentation-maintenance) before committing changes.
 
 @jobops/docs/api/automation.md

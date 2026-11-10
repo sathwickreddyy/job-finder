@@ -1,5 +1,8 @@
 # Repository Guidelines
 
+Follow the [repository documentation maintenance rule](../AGENTS.md#documentation-maintenance)
+when changing JobOps behavior, configuration, or agent workflows.
+
 ## Current State
 
 This directory contains the runnable JobOps application, a Next.js App Router modular monolith with
