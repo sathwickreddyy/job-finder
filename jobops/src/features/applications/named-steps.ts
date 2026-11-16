@@ -44,6 +44,14 @@ export function namedStepsOf(record: NamedStepSource, now: Date): NamedStep[] {
       tone: step.tone,
     }));
 
+  // The phase decides whether it was sent, as on the row's status pill; linked mail alone does not.
+  if (record.phase === "Preparing")
+    return [
+      { key: "applied", label: "Not sent", detail: "", state: "current", tone: "applied" },
+      { key: "acknowledged", label: "Acknowledged", detail: "", state: "ahead", tone: "applied" },
+      { key: "offer", label: "Offer", detail: "", state: "ahead", tone: "offer" },
+    ];
+
   const [sent, acknowledged, interviewing, offer] = journey.steps;
   const reached = (step: JourneyStep) => step.state === "reached";
   const stopped = journey.steps.find((step) => step.state === "stopped");

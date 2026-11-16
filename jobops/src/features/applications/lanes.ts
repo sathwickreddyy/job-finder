@@ -61,7 +61,8 @@ export type LaneSource = Pick<
   | "phase"
   | "typicalRounds"
   | "postedAt"
->;
+> &
+  Partial<Pick<ApplicationRecord, "requisition">>;
 export type StatusTone =
   "preparing" | "applied" | "quiet" | "interviewing" | "offer" | "rejected" | "closed";
 export type LaneStatus = { tone: StatusTone; label: string };
@@ -243,6 +244,7 @@ export type LaneNext = {
 export type LaneRole = {
   recordId: string;
   role: string;
+  requisition: string | null;
   city: string;
   source: string;
   phase: Phase;
@@ -396,6 +398,7 @@ export function buildLanes(input: {
       .map((record) => ({
         recordId: record.id,
         role: record.role,
+        requisition: record.requisition ?? null,
         city: record.city,
         source: record.source,
         phase: record.phase,

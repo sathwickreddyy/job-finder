@@ -139,6 +139,39 @@ describe("namedStepsOf", () => {
     ]);
   });
 
+  it("starts an unsent application at Not sent", () => {
+    const steps = namedStepsOf(
+      record({ phase: "Preparing", status: "PREPARING", sentAt: null }),
+      NOW,
+    );
+    expect(steps[0]).toMatchObject({ label: "Not sent", state: "current" });
+    expect(steps.slice(1).map((s) => s.state)).toEqual(["ahead", "ahead"]);
+  });
+
+  it("keeps Not sent for a preparing application with linked mail", () => {
+    const id = uid();
+    const steps = namedStepsOf(
+      record({
+        id,
+        phase: "Preparing",
+        status: "PREPARING",
+        sentAt: null,
+        events: [event(id, "MAIL_LINKED", at("2026-10-01T10:00:00"))],
+        linkedMail: [
+          {
+            id: uid(),
+            subject: "Your application",
+            classification: "APPLICATION_ACKNOWLEDGEMENT",
+            receivedAt: at("2026-10-01T10:00:00"),
+            attentionState: "DONE",
+          },
+        ],
+      }),
+      NOW,
+    );
+    expect(steps[0]).toMatchObject({ label: "Not sent", state: "current" });
+  });
+
   it("keeps outreach steps", () => {
     const steps = namedStepsOf(record({ source: "REFERRAL", status: "APPLIED" }), NOW);
     expect(labels(steps)).toEqual(["Sent", "Replied", "Referred"]);

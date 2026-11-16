@@ -27,6 +27,8 @@ import { notApplying, reopenRecord } from "../record-actions";
 import { NextAction } from "./application-list";
 import { FollowUp } from "./follow-up";
 import { JourneyTrack } from "./journey-track";
+import { NamedSteps } from "./named-steps";
+import type { NamedStep } from "../named-steps";
 import { OutcomeChips, PreparingControl } from "./outcome-chips";
 
 const postedKind: Record<string, string> = {
@@ -89,6 +91,7 @@ export function ApplicationExpanded({
   record,
   lane,
   journey,
+  steps,
   story,
   now,
   requested,
@@ -99,6 +102,8 @@ export function ApplicationExpanded({
   record: ApplicationRecord;
   lane: Lane;
   journey: Journey;
+  /** Named steps for an application; outreach keeps its journey track. */
+  steps?: NamedStep[];
   story: { days: TimelineDay[]; handling: Record<string, Handling> };
   now: Date;
   requested?: string;
@@ -130,7 +135,11 @@ export function ApplicationExpanded({
               </Link>
             </Button>
           )}
-          <JourneyTrack journey={journey} size="large" className="hidden max-w-md md:grid" />
+          {steps ? (
+            <NamedSteps steps={steps} size="page" className="hidden md:flex" />
+          ) : (
+            <JourneyTrack journey={journey} size="large" className="hidden max-w-md md:grid" />
+          )}
           {recorded && (
             <ActionForm
               action={undoAutoOutcomeAction}

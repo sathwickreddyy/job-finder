@@ -3,7 +3,9 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import { buildLanes, type LaneSource } from "@/features/applications/lanes";
 import { journeyOf } from "@/features/applications/journey";
-import { at, event, record, uid } from "./lane-fixtures";
+import { namedStepsOf } from "@/features/applications/named-steps";
+import { isOutreach } from "@/features/applications/phase";
+import { at, event, record, round, uid, type FixtureRecord } from "./lane-fixtures";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }) }));
 vi.mock("@/features/applications/record-actions", () => ({ notApplying: vi.fn() }));
@@ -11,13 +13,19 @@ const { ApplicationList, pinOpenRow } =
   await import("@/features/applications/views/application-list");
 
 const NOW = at("2026-10-31T10:30:00");
-function render(records: LaneSource[], openId: string | null = null) {
+function render(records: (LaneSource | FixtureRecord)[], openId: string | null = null) {
   const lanes = buildLanes({ records, items: [], pending: [], now: NOW, by: "application" });
   const journeys = Object.fromEntries(records.map((item) => [item.id, journeyOf(item)]));
+  const namedSteps = Object.fromEntries(
+    records
+      .filter((item) => !isOutreach(item.source))
+      .map((item) => [item.id, namedStepsOf({ typicalLoop: [], ...item }, NOW)]),
+  );
   return renderToStaticMarkup(
     createElement(ApplicationList, {
       lanes,
       journeys,
+      namedSteps,
       openId,
       detail: createElement("p", { "data-testid": "detail" }, "The open row"),
     }),
@@ -48,6 +56,31 @@ function northwind() {
 }
 
 describe("ApplicationList", () => {
+  it("names the booked round in the row's stepper", () => {
+    const id = uid();
+    const html = render([
+      record({
+        id,
+        ...company("ServiceNow"),
+        phase: "Interviewing",
+        status: "TECHNICAL_INTERVIEW",
+        typicalLoop: ["DSA", "LLD"],
+        rounds: [round(id, { kind: "DSA", scheduledAt: at("2026-11-02T12:00:00") })],
+      }),
+    ]);
+    const stepper =
+      html.match(/<ol[^>]*aria-label="Where this application stands"[\s\S]*?<\/ol>/)?.[0] ?? "";
+    expect(stepper).toContain("Round 1 · DSA");
+    expect(stepper).toContain("Round 2 · LLD");
+    expect(stepper).toContain('aria-current="step"');
+    expect(stepper).not.toContain("Interviewing");
+  });
+
+  it("shows the requisition beside the role so two openings stay apart", () => {
+    const html = render([record({ ...company("ServiceNow"), requisition: "JB0076252" })]);
+    expect(html).toMatch(/Senior Engineer[\s\S]*JB0076252/);
+  });
+
   it("groups rows as Needs you, Waiting on them, Closed with counts", () => {
     const html = render([northwind(), waiting(), unsent(at("2026-10-21T09:00:00"))]);
     const needs = html.indexOf("Needs you");
@@ -61,10 +94,12 @@ describe("ApplicationList", () => {
     expect(html.indexOf("Brightline")).toBeLessThan(html.indexOf("Northwind"));
   });
 
-  it("shows the journey dates and one next step per row", () => {
+  it("names each step, keeps its date in the title and shows one next step per row", () => {
     const html = render([northwind()]);
-    for (const text of ["Sent", "2 Oct", "Acknowledged", "3 Oct", "Rejected", "7 Oct", "Offer"])
+    for (const text of ["Applied", "Acknowledged", "Rejected", "Offer"])
       expect(html).toContain(text);
+    for (const title of ["Applied · 2 Oct", "Acknowledged · 3 Oct", "Rejected · 7 Oct"])
+      expect(html).toContain(`title="${title}"`);
     expect(html).toContain("Nothing to do");
   });
 

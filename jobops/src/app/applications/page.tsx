@@ -3,6 +3,8 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { Button, EmptyState, PageHeader } from "@/components/ui";
 import { journeyOf } from "@/features/applications/journey";
+import { namedStepsOf } from "@/features/applications/named-steps";
+import { isOutreach } from "@/features/applications/phase";
 import { buildLanes, pendingMailFrom } from "@/features/applications/lanes";
 import { resolveLanesView } from "@/features/applications/navigation";
 import { buildQueue } from "@/features/applications/queue";
@@ -52,6 +54,11 @@ export default async function Applications({
     by: "application",
   });
   const journeys = Object.fromEntries(records.map((record) => [record.id, journeyOf(record)]));
+  const namedSteps = Object.fromEntries(
+    records
+      .filter((record) => !isOutreach(record.source))
+      .map((record) => [record.id, namedStepsOf(record, now)]),
+  );
   const openRecord = view.open ? records.find((record) => record.id === view.open) : undefined;
   const openLane = openRecord ? lanes.find((lane) => lane.key === openRecord.id) : undefined;
   const companyName = new Map(all.map((record) => [record.id, record.companyName]));
@@ -107,6 +114,7 @@ export default async function Applications({
         <ApplicationList
           lanes={lanes}
           journeys={journeys}
+          namedSteps={namedSteps}
           openId={openLane ? openRecord!.id : null}
           detail={
             openLane && openRecord && story ? (
@@ -114,6 +122,7 @@ export default async function Applications({
                 record={openRecord}
                 lane={openLane}
                 journey={journeys[openRecord.id]}
+                steps={namedSteps[openRecord.id]}
                 story={story}
                 now={now}
                 requested={view.outcome}
