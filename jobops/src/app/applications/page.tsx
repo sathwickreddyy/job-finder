@@ -3,6 +3,8 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { Button, EmptyState, PageHeader } from "@/components/ui";
 import { journeyOf } from "@/features/applications/journey";
+import { namedStepsOf } from "@/features/applications/named-steps";
+import { isOutreach } from "@/features/applications/phase";
 import { buildLanes, pendingMailFrom } from "@/features/applications/lanes";
 import { resolveLanesView } from "@/features/applications/navigation";
 import { buildQueue } from "@/features/applications/queue";
@@ -52,6 +54,11 @@ export default async function Applications({
     by: "application",
   });
   const journeys = Object.fromEntries(records.map((record) => [record.id, journeyOf(record)]));
+  const namedSteps = Object.fromEntries(
+    records
+      .filter((record) => !isOutreach(record.source))
+      .map((record) => [record.id, namedStepsOf(record, now)]),
+  );
   const openRecord = view.open ? records.find((record) => record.id === view.open) : undefined;
   const openLane = openRecord ? lanes.find((lane) => lane.key === openRecord.id) : undefined;
   const companyName = new Map(all.map((record) => [record.id, record.companyName]));
@@ -78,13 +85,24 @@ export default async function Applications({
     ));
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="m-0 text-[28px] font-semibold tracking-tight md:hidden">Applications</h1>
+      <div className="flex items-center justify-between gap-3 md:hidden">
+        <h1 className="m-0 text-[28px] font-semibold tracking-tight">Applications</h1>
+        <Link
+          href="/applications/questions"
+          className="inline-flex h-9 items-center rounded-full px-3 text-sm font-medium text-link ring-1 ring-border hover:no-underline"
+        >
+          Question library
+        </Link>
+      </div>
       <div className="hidden md:block">
         <PageHeader
           title="Applications"
           description="How far each application got, and the one thing to do next."
           actions={
             <>
+              <Button variant="outline" asChild>
+                <Link href="/applications/questions">Question library</Link>
+              </Button>
               <Button variant="outline" asChild>
                 <Link href="/mail">Mail</Link>
               </Button>
@@ -107,6 +125,7 @@ export default async function Applications({
         <ApplicationList
           lanes={lanes}
           journeys={journeys}
+          namedSteps={namedSteps}
           openId={openLane ? openRecord!.id : null}
           detail={
             openLane && openRecord && story ? (
@@ -114,6 +133,7 @@ export default async function Applications({
                 record={openRecord}
                 lane={openLane}
                 journey={journeys[openRecord.id]}
+                steps={namedSteps[openRecord.id]}
                 story={story}
                 now={now}
                 requested={view.outcome}

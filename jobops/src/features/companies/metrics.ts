@@ -15,12 +15,13 @@ export const roundKindLabel: Record<RoundKind, string> = {
   HIRING_MANAGER: "HM",
   DOMAIN: "Domain",
   OTHER: "Other",
+  HR: "HR",
 };
 
 export function roundFamily(kind: RoundKind): RoundFamily {
   if (kind === "ONLINE_ASSESSMENT" || kind === "DSA") return "Coding";
   if (kind === "LLD" || kind === "HLD") return "Design";
-  if (kind === "BEHAVIORAL" || kind === "HIRING_MANAGER") return "People";
+  if (kind === "BEHAVIORAL" || kind === "HIRING_MANAGER" || kind === "HR") return "People";
   return "Other";
 }
 

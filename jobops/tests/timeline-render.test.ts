@@ -316,17 +316,28 @@ describe("CompanyTimeline", () => {
     expect(html).toContain("Undo");
   });
 
-  it("each row has a pencil outside its toggle", () => {
+  it("each row has a pencil outside the button that opens it", () => {
     const html = render();
     expect(html).toContain('aria-label="Edit tag"');
-    const toggles = html.match(/<button[^>]*aria-expanded[\s\S]*?<\/button>/g) ?? [];
+    const toggles = html.match(/<button[^>]*data-mail-row[\s\S]*?<\/button>/g) ?? [];
     expect(toggles.length).toBeGreaterThan(0);
     for (const toggle of toggles) expect(toggle).not.toContain('aria-label="Edit tag"');
   });
 
-  it("the toggle still names the tag for screen readers", () => {
-    const toggle = render().match(/<button[^>]*aria-expanded[\s\S]*?<\/button>/)?.[0];
+  it("the row button still names the tag for screen readers", () => {
+    const toggle = render().match(/<button[^>]*data-mail-row[\s\S]*?<\/button>/)?.[0];
     expect(toggle).toContain('<span class="sr-only">Interview call, </span>');
+  });
+
+  it("opens emails in a popup instead of expanding rows", () => {
+    const closed = render();
+    expect(closed).not.toMatch(/<button[^>]*aria-expanded[^>]*data-mail-row/);
+    expect(closed).not.toMatch(/data-mail-row[^>]*aria-expanded/);
+    expect(closed).not.toContain("<dialog");
+    const linked = render({ openMail: "m1" });
+    expect(linked).toMatch(
+      /<dialog[^>]*aria-labelledby="([^"]+)"[\s\S]*<h2 id="\1"[^>]*>Next round<\/h2>/,
+    );
   });
 
   it("never renders HTML", () => {

@@ -64,4 +64,6 @@ After real submission, confirm which PDF was attached. Upload only the used revi
 
 Refresh mail again, complete pagination, report account errors and refine company rules from real acknowledgement evidence. No acknowledgement yet → report pending; never infer submission failure or poll indefinitely.
 
+After an interview, record each question the user shares on its round, with their answer as written; see [recording interview questions](references/jobops-api.md#record-interview-questions-after-a-round).
+
 Finish with result, exact résumé and next action. Preserve a [private handoff](references/referrals-and-handoff.md) for held work. Never revise earlier submitted files or delete/archive records without authorization. Do not apply to Tracxn/Hirist. Cold email remains a separate strategy.

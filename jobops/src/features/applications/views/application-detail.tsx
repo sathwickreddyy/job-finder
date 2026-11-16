@@ -27,6 +27,9 @@ import { notApplying, reopenRecord } from "../record-actions";
 import { NextAction } from "./application-list";
 import { FollowUp } from "./follow-up";
 import { JourneyTrack } from "./journey-track";
+import { NamedSteps } from "./named-steps";
+import { MailDialogButton } from "@/features/mail/mail-dialog";
+import type { NamedStep } from "../named-steps";
 import { OutcomeChips, PreparingControl } from "./outcome-chips";
 
 const postedKind: Record<string, string> = {
@@ -89,6 +92,7 @@ export function ApplicationExpanded({
   record,
   lane,
   journey,
+  steps,
   story,
   now,
   requested,
@@ -99,6 +103,8 @@ export function ApplicationExpanded({
   record: ApplicationRecord;
   lane: Lane;
   journey: Journey;
+  /** Named steps for an application; outreach keeps its journey track. */
+  steps?: NamedStep[];
   story: { days: TimelineDay[]; handling: Record<string, Handling> };
   now: Date;
   requested?: string;
@@ -130,7 +136,11 @@ export function ApplicationExpanded({
               </Link>
             </Button>
           )}
-          <JourneyTrack journey={journey} size="large" className="hidden max-w-md md:grid" />
+          {steps ? (
+            <NamedSteps steps={steps} size="page" className="hidden md:flex" />
+          ) : (
+            <JourneyTrack journey={journey} size="large" className="hidden max-w-md md:grid" />
+          )}
           {recorded && (
             <ActionForm
               action={undoAutoOutcomeAction}
@@ -192,7 +202,15 @@ export function ApplicationExpanded({
         </div>
         {mail && (
           <div className="flex flex-col gap-2 rounded-2xl bg-selected px-4 py-3 text-sm text-selected-foreground [overflow-wrap:anywhere]">
-            <p className="m-0">From this email: {mail.subject}</p>
+            <p className="m-0">
+              From this email:{" "}
+              <MailDialogButton
+                mailId={mail.id}
+                className="text-left font-medium underline decoration-current/40 underline-offset-2 hover:decoration-current"
+              >
+                {mail.subject || "(no subject)"}
+              </MailDialogButton>
+            </p>
             <ActionForm action={linkMailOnly} feedback="inverse" pendingLabel="Linking">
               <input type="hidden" name="mailId" value={mail.id} />
               <input type="hidden" name="recordId" value={record.id} />

@@ -39,7 +39,7 @@ test("a saved job supports resume prompts, referral records and a separate direc
   await expect(page.getByRole("region", { name: "History" })).toContainText(
     "Referral recorded as sent",
   );
-  await expect(page.getByText("Sent", { exact: true })).toBeVisible();
+  await expect(page.getByTestId("phase-label")).toHaveText("Sent");
   await page.goto("/applications");
   await expect(
     page.getByRole("group", { name: company, exact: true }).getByTestId("lane-status"),
@@ -59,7 +59,7 @@ test("a saved job supports resume prompts, referral records and a separate direc
   await page.getByLabel("Time", { exact: true }).fill("11:00");
   await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.getByRole("region", { name: "History" })).toContainText("DSA round scheduled");
-  await expect(page.getByTestId("phase-label")).toHaveText(/Interviewing/);
+  await expect(page.getByTestId("phase-label")).toHaveText("Round 1 · DSA");
   await page.goto("/applications");
   // The referral and the direct application each get their own lane.
   const lanes = page.getByRole("group", { name: company, exact: true });
@@ -68,7 +68,7 @@ test("a saved job supports resume prompts, referral records and a separate direc
     lanes.getByTestId("lane-status").filter({ hasText: "Interviewing · round 1" }),
   ).toHaveCount(1);
   await page.goto(referralPath);
-  await expect(page.getByText("Sent", { exact: true })).toBeVisible();
+  await expect(page.getByTestId("phase-label")).toHaveText("Sent");
 });
 
 test("removed workflow routes redirect and old agent endpoints reject access", async ({
@@ -98,7 +98,7 @@ test("a prepared action becomes sent in the same record with its actual date", a
   await page.getByLabel("Date sent (India time)").fill(istDay(-3));
   await page.getByRole("button", { name: "Save outreach record" }).click();
   await expect(page).toHaveURL(new RegExp(plannedPath + "$"));
-  await expect(page.getByText("Sent", { exact: true })).toBeVisible();
+  await expect(page.getByTestId("phase-label")).toHaveText("Sent");
   await expect(page.getByRole("region", { name: "History" })).toContainText(
     formatDay(new Date(`${istDay(-3)}T12:00:00+05:30`)),
   );
@@ -117,6 +117,9 @@ test("a prepared action becomes sent in the same record with its actual date", a
   await expect(page.getByTestId("phase-label")).toHaveText("Applied");
   await expect(page.getByRole("status").filter({ hasText: "Recorded as sent." })).toBeVisible();
   await page.reload();
-  await expect(page.getByText(`Applied ${istDay(-3)}`, { exact: true })).toBeVisible();
+  // The header's Applied fact shows the actual sent date.
+  await expect(page.getByRole("definition").filter({ hasText: "Applied directly" })).toContainText(
+    formatDay(new Date(`${istDay(-3)}T12:00:00+05:30`)),
+  );
   await expect(page.getByLabel("Date sent (India time)")).toHaveCount(0);
 });

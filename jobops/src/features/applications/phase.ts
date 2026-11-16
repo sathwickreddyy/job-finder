@@ -364,7 +364,7 @@ export function planOutcome(state: RecordState, id: OutcomeId, detail: OutcomeDe
       const roundKind = detail.kind!;
       return {
         status:
-          roundKind === "BEHAVIORAL" || roundKind === "HIRING_MANAGER"
+          roundKind === "BEHAVIORAL" || roundKind === "HIRING_MANAGER" || roundKind === "HR"
             ? "MANAGER_INTERVIEW"
             : "TECHNICAL_INTERVIEW",
         closedReason: null,

@@ -11,7 +11,7 @@ import {
   queueSnoozes,
   resumeVersions,
 } from "@/db/schema";
-import { companyMetrics } from "@/features/companies/metrics";
+import { companyMetrics, type RoundKind } from "@/features/companies/metrics";
 import type { ResearchFact } from "@/features/companies/research-data";
 import { phaseOf, recordStateFrom, type CloseReason, type Phase } from "./phase";
 import { companyResolver, normalizeCompany } from "./lanes";
@@ -41,10 +41,14 @@ export type ApplicationRecord = Omit<QueueRecord, "events" | "rounds" | "linkedM
   notes: string;
   appliedAt: Date | null;
   resumeVersionId: string | null;
-  resume: { id: string; filename: string } | null;
+  resume: { id: string; filename: string; label: string } | null;
+  /** The employer's requisition id as saved on the opening; never guessed from a filename. */
+  requisition: string | null;
   closedReason: CloseReason | null;
   phase: Phase;
   typicalRounds: number | null;
+  /** The research loop closest to the typical round count, in order; empty without research. */
+  typicalLoop: RoundKind[];
   /** The sourced posting date; `postedAtKind` says whether it is the original or a repost. */
   postedAt: Date | null;
   postedAtKind: string | null;
@@ -66,6 +70,19 @@ export function typicalRoundsByName(
   return (name: string) => counts.get(normalizeCompany(name)) ?? null;
 }
 
+/** Research interview loop per company name and alias; empty when no research exists. */
+export function typicalLoopByName(
+  companies: { name: string; aliases: string[]; facts: ResearchFact[] }[],
+) {
+  const loops = new Map<string, RoundKind[]>();
+  for (const company of companies) {
+    const loop = companyMetrics(company.facts).typicalLoop;
+    if (!loop.length) continue;
+    for (const name of [company.name, ...company.aliases]) loops.set(normalizeCompany(name), loop);
+  }
+  return (name: string) => loops.get(normalizeCompany(name)) ?? [];
+}
+
 /** Records on the same opening point at each other (spec §1.1). */
 export function linkedRecordIds(rows: { id: string; jobId: string }[]) {
   const byJob = new Map<string, string[]>();
@@ -80,7 +97,11 @@ export async function readApplications() {
       .select({
         app: applications,
         job: jobs,
-        version: { id: resumeVersions.id, filename: resumeVersions.originalFilename },
+        version: {
+          id: resumeVersions.id,
+          filename: resumeVersions.originalFilename,
+          label: resumeVersions.versionLabel,
+        },
       })
       .from(applications)
       .innerJoin(jobs, eq(jobs.id, applications.jobId))
@@ -111,12 +132,12 @@ export async function readApplications() {
       .where(eq(companyRecords.status, "ACTIVE")),
     db.select().from(companyFacts).where(eq(companyFacts.category, "INTERVIEW")),
   ]);
-  const typical = typicalRoundsByName(
-    companies.map((company) => ({
-      ...company,
-      facts: facts.filter((fact) => fact.companyId === company.id),
-    })),
-  );
+  const researched = companies.map((company) => ({
+    ...company,
+    facts: facts.filter((fact) => fact.companyId === company.id),
+  }));
+  const typical = typicalRoundsByName(researched);
+  const loopOf = typicalLoopByName(researched);
   const linked = linkedRecordIds(rows.map(({ app }) => ({ id: app.id, jobId: app.jobId })));
   const resolve = companyResolver(companies);
   const companyLinks = new Map(
@@ -170,6 +191,8 @@ export async function readApplications() {
       closedReason: app.closedReason,
       phase: phaseOf(state),
       typicalRounds: typical(job.company),
+      typicalLoop: loopOf(job.company),
+      requisition: job.externalId?.trim() || null,
       postedAt: job.postedAt,
       postedAtKind: job.postedAtKind,
       linkedIds: linked(app),

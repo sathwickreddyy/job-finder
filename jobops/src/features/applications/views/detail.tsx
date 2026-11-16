@@ -1,46 +1,52 @@
+import type { ReactNode } from "react";
 import Link from "next/link";
-import { Building2, ExternalLink, FileText, Link2, NotebookPen } from "lucide-react";
-import { unlinkMail } from "@/features/mail/triage-actions";
+import { NotebookPen } from "lucide-react";
 import { ActionForm } from "@/components/action-form";
-import { Button, Field } from "@/components/ui";
-import { displayDate, type DisplayPreferences } from "@/features/candidate/preferences";
+import { MarkdownView } from "@/components/markdown/markdown-view";
+import { Button } from "@/components/ui";
 import { familyFill } from "@/features/companies/format";
 import { roundFamily, roundKindLabel } from "@/features/companies/metrics";
-import { mailHref } from "@/features/timeline/query";
 import { cn } from "@/lib/utils";
-import { addApplicationNote } from "../actions";
 import { formatDay, formatDayTime, indiaDate, istClock, istDaysBetween } from "../dates";
+import { RoundQuestions } from "@/features/interviews/views/round-questions";
+import type { RoundWithQuestions } from "@/features/interviews/types";
+import { namedStepsOf } from "../named-steps";
 import {
   availableOutcomes,
   canEditPlannedRecord,
   isOutreach,
   methodLabel,
-  phaseText,
   recordStateFrom,
 } from "../phase";
 import { clip, eventTone, type DotTone } from "../lanes";
 import type { ApplicationRecord } from "../read";
-import { updateApplicationDetails, updateRound } from "../record-actions";
+import { saveApplicationNotes, updateRound } from "../record-actions";
+import { roundLabels } from "../round-label";
 import { FollowUp } from "./follow-up";
-import { CompanyMark, PhaseBar, RoundLadder } from "./marks";
-import { NotesText } from "./notes-text";
+import { NamedSteps } from "./named-steps";
 import { OutcomeChips, PreparingControl } from "./outcome-chips";
-import { Timeline } from "./timeline";
+import { ApplicationHeader, type Sibling } from "./page/header";
+import { NotesEditor } from "./page/notes-editor";
+import { ApplicationRail, type HistoryEntry } from "./page/rail";
 
 type Choice = { id: string; label: string };
 
 export function ApplicationDetail({
   record,
   linked,
+  siblings,
+  questionRounds = [],
   versions,
-  preferences,
   now,
   notice,
 }: {
   record: ApplicationRecord;
   linked: ApplicationRecord[];
+  /** Applications at the same company, for the header's switcher. */
+  siblings: Sibling[];
+  /** Each round with its recorded interview questions. */
+  questionRounds?: RoundWithQuestions[];
   versions: Choice[];
-  preferences: DisplayPreferences;
   now: Date;
   notice?: string;
 }) {
@@ -52,7 +58,11 @@ export function ApplicationDetail({
   );
   const editable = canEditPlannedRecord(state);
   const available = availableOutcomes(state);
-  const history = [
+  const steps = namedStepsOf(record, now);
+  const rounds = [...record.rounds].sort((a, b) => a.position - b.position);
+  const labels = roundLabels(rounds);
+  const expected = steps.filter((step) => step.state === "expected");
+  const history: HistoryEntry[] = [
     ...record.events.map((event) => ({
       key: event.id,
       at: event.occurredAt,
@@ -84,107 +94,24 @@ export function ApplicationDetail({
       ),
   ];
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap justify-end gap-4">
-        <Link
-          className="text-sm text-link"
-          href={mailHref({ company: record.companyKey, role: record.id })}
-        >
-          Application mail
-        </Link>
-      </div>
+    <div className="@container flex min-w-0 flex-col gap-5">
+      <ApplicationHeader record={record} siblings={siblings} steps={steps} />
       {notice && (
         <p
           role="status"
-          className="rounded-2xl bg-foreground p-3 text-sm text-background shadow-surface"
+          className="m-0 rounded-2xl bg-foreground p-3 text-sm text-background shadow-surface"
         >
           {notice}
         </p>
       )}
-      <header className="flex flex-wrap items-start justify-between gap-4">
-        <div className="flex min-w-0 items-center gap-4">
-          <CompanyMark company={record.company} />
-          <div className="min-w-0 [overflow-wrap:anywhere]">
-            <h1 className="m-0 [overflow-wrap:anywhere] text-2xl font-semibold tracking-tight">
-              {record.company}
-            </h1>
-            <p className="m-0 [overflow-wrap:anywhere] text-muted-foreground">
-              {outreach
-                ? `${methodLabel[record.source]}${record.contact ? ` · ${record.contact}` : ""} · ${record.role}`
-                : `${record.role}${record.city ? ` · ${record.city}` : ""}`}
-            </p>
-            {record.sentAt && (
-              <p className="m-0 mt-1 text-sm text-muted-foreground">
-                {outreach ? "Sent" : "Applied"} {displayDate(record.sentAt, preferences)}
-              </p>
-            )}
-          </div>
-        </div>
-        <div className="flex min-w-0 max-w-full flex-wrap gap-2">
-          {record.companyHref && (
-            <Button variant="outline" size="sm" className="h-9 rounded-full px-4" asChild>
-              <Link href={record.companyHref}>
-                <Building2 size={14} aria-hidden />
-                Company page
-              </Link>
-            </Button>
-          )}
-          <Button variant="outline" size="sm" className="h-9 rounded-full px-4" asChild>
-            <a href={record.jobUrl} target="_blank" rel="noreferrer">
-              <ExternalLink size={14} aria-hidden />
-              Job post
-            </a>
-          </Button>
-          {record.applicationUrl && (
-            <Button variant="outline" size="sm" className="h-9 rounded-full px-4" asChild>
-              <a href={record.applicationUrl} target="_blank" rel="noreferrer">
-                <ExternalLink size={14} aria-hidden />
-                Application page
-              </a>
-            </Button>
-          )}
-          {record.resume && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-9 max-w-full rounded-full px-4"
-              asChild
-            >
-              <a href={`/api/resumes/${record.resume.id}/file?download=1`}>
-                <FileText size={14} aria-hidden />
-                <span className="truncate" title={record.resume.filename}>
-                  {record.resume.filename}
-                </span>
-              </a>
-            </Button>
-          )}
-        </div>
-      </header>
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
-        <div className="min-w-0 space-y-5">
+      <div className="grid min-w-0 grid-cols-1 gap-5 @[52rem]:grid-cols-[minmax(0,1fr)_300px] @[52rem]:items-start">
+        <div className="flex min-w-0 flex-col gap-5">
           <section
             aria-label="Progress"
             tabIndex={-1}
-            className="rounded-3xl bg-card p-5 ring-1 ring-border"
+            className="min-w-0 rounded-3xl bg-card p-5 ring-1 ring-border"
           >
-            <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
-              <PhaseBar
-                phase={record.phase}
-                won={record.closedReason === "ACCEPTED"}
-                label={phaseText({
-                  phase: record.phase,
-                  source: record.source,
-                  replied: state.replied,
-                  closedReason: record.closedReason,
-                  status: record.status,
-                  rounds: record.rounds.length,
-                  typical: record.typicalRounds,
-                })}
-              />
-              {!outreach && (
-                <RoundLadder rounds={record.rounds} typical={record.typicalRounds} wide />
-              )}
-            </div>
+            <NamedSteps steps={steps} size="page" />
             <div className="mt-5 space-y-4">
               {editable && outreach && (
                 <p className="m-0 text-sm text-muted-foreground">
@@ -222,180 +149,78 @@ export function ApplicationDetail({
               )}
             </div>
           </section>
-          {!outreach && (record.rounds.length > 0 || record.typicalRounds) && (
-            <section aria-labelledby="rounds-heading">
-              <h2 id="rounds-heading" className="m-0 mb-3 text-base font-semibold">
+          {!outreach && (rounds.length > 0 || expected.length > 0) && (
+            <section aria-labelledby="rounds-heading" className="flex min-w-0 flex-col gap-3">
+              <h2 id="rounds-heading" className="m-0 text-base font-semibold">
                 Rounds
               </h2>
-              <ol className="m-0 list-none space-y-2 p-0">
-                {record.rounds.map((round, index) => (
-                  <RoundRow key={round.id} round={round} index={index} now={now} />
+              <ol className="m-0 flex list-none flex-col gap-3 p-0">
+                {rounds.map((round, index) => {
+                  const withQuestions = questionRounds.find((item) => item.id === round.id);
+                  return (
+                    <RoundRow key={round.id} round={round} label={labels[index]} now={now}>
+                      {withQuestions && (
+                        <RoundQuestions applicationId={record.id} round={withQuestions} />
+                      )}
+                    </RoundRow>
+                  );
+                })}
+                {expected.map((step) => (
+                  <li
+                    key={step.key}
+                    className="flex min-w-0 items-center justify-between gap-3 rounded-2xl border border-dashed border-border px-4 py-3 text-sm"
+                  >
+                    <span className="truncate font-medium text-muted-foreground">{step.label}</span>
+                    <span className="shrink-0 text-xs text-muted-foreground">{step.detail}</span>
+                  </li>
                 ))}
-                {Array.from(
-                  { length: Math.max(0, (record.typicalRounds ?? 0) - record.rounds.length) },
-                  (_, index) => (
-                    <li
-                      key={`slot-${index}`}
-                      className="flex items-center gap-3 rounded-2xl border border-dashed border-border px-4 py-3 text-sm text-muted-foreground"
-                    >
-                      <span className="max-w-full w-6 tabular-nums">
-                        {record.rounds.length + index + 1}
-                      </span>
-                      Not scheduled yet
-                    </li>
-                  ),
-                )}
               </ol>
-              {record.typicalRounds ? (
-                <p className="m-0 mt-2 text-xs text-muted-foreground">
-                  Typical loop: {record.typicalRounds} rounds (company research)
-                </p>
-              ) : null}
             </section>
           )}
           <section
             aria-labelledby="notes-heading"
-            className="rounded-3xl bg-card p-4 ring-1 ring-border"
+            className="min-w-0 rounded-3xl bg-card p-5 ring-1 ring-border"
           >
             <h2
               id="notes-heading"
-              className="m-0 mb-2 flex items-center gap-2 text-base font-semibold"
+              className="m-0 mb-3 flex items-center gap-2 text-base font-semibold"
             >
               <NotebookPen size={15} aria-hidden />
               Notes
             </h2>
-            <NotesText text={record.notes} />
-            <details className="mt-3">
-              <summary className="text-sm">Edit details</summary>
-              <ActionForm
-                action={updateApplicationDetails}
-                feedback="inverse"
-                className="mt-3 space-y-4"
-              >
-                <input type="hidden" name="id" value={record.id} />
-                {editable ? (
-                  <Field label="Resume file used" name="resumeVersionId">
-                    <select
-                      id="resumeVersionId"
-                      name="resumeVersionId"
-                      defaultValue={record.resumeVersionId ?? ""}
-                    >
-                      <option value="">No file used / not selected</option>
-                      {versions.map((version) => (
-                        <option key={version.id} value={version.id}>
-                          {version.label}
-                        </option>
-                      ))}
-                    </select>
-                  </Field>
-                ) : (
-                  <>
-                    <input
-                      type="hidden"
-                      name="resumeVersionId"
-                      value={record.resumeVersionId ?? ""}
-                    />
-                    <p className="m-0 text-sm">
-                      Resume used: {record.resume?.filename ?? "No file recorded"}
-                    </p>
-                  </>
-                )}
-                <Field
-                  label="Application URL"
-                  name="applicationUrl"
-                  type="url"
-                  defaultValue={record.applicationUrl ?? ""}
-                />
-                <Field label="Notes" name="notes">
-                  <textarea id="notes" name="notes" defaultValue={record.notes} />
-                </Field>
-                <Button variant="outline">Save details</Button>
-              </ActionForm>
-            </details>
+            <NotesEditor recordId={record.id} notes={record.notes} save={saveApplicationNotes} />
           </section>
         </div>
-        <aside className="min-w-0 space-y-5">
-          {linked.length > 0 && (
-            <section aria-label="Linked records" className="space-y-2">
-              {linked.map((other) => (
-                <Link
-                  key={other.id}
-                  href={`/applications/${other.id}`}
-                  className="block rounded-3xl bg-selected/50 p-4 text-selected-foreground hover:no-underline"
-                >
-                  <span className="flex items-center gap-2 text-sm font-semibold [overflow-wrap:anywhere]">
-                    <Link2 size={14} aria-hidden />
-                    Linked: {methodLabel[other.source] ?? "Record"}
-                    {other.contact ? ` · ${other.contact}` : ""}
-                  </span>
-                  <span className="mt-1 block text-sm [overflow-wrap:anywhere]">
-                    {other.latest?.summary ?? "Nothing recorded yet"}
-                  </span>
-                </Link>
-              ))}
-            </section>
-          )}
-          {record.linkedMail.length > 0 && (
-            <section
-              aria-label="Linked mail"
-              className="space-y-3 rounded-3xl bg-card p-4 ring-1 ring-border"
-            >
-              <h2 className="m-0 text-base font-semibold">Linked mail</h2>
-              <p className="m-0 text-xs text-muted-foreground">
-                Unlink returns a message to Emails. Recorded outcomes and history stay.
-              </p>
-              {record.linkedMail.map((message) => (
-                <div key={message.id} className="space-y-1 [overflow-wrap:anywhere]">
-                  <Link href={`/mail/${message.id}`} className="text-sm">
-                    {message.subject}
-                  </Link>
-                  <ActionForm action={unlinkMail} feedback="inverse" pendingLabel="Unlinking">
-                    <input type="hidden" name="mailId" value={message.id} />
-                    <input type="hidden" name="recordId" value={record.id} />
-                    <Button variant="ghost" size="sm">
-                      Unlink mail
-                    </Button>
-                  </ActionForm>
-                </div>
-              ))}
-            </section>
-          )}
-          <section aria-labelledby="history-heading">
-            <h2 id="history-heading" className="m-0 mb-3 text-base font-semibold">
-              History
-            </h2>
-            <Timeline entries={history} now={now} />
-            <ActionForm action={addApplicationNote} feedback="inverse" className="mt-5 space-y-3">
-              <input type="hidden" name="id" value={record.id} />
-              <label className="block text-sm">
-                Add to history
-                <textarea
-                  name="summary"
-                  rows={2}
-                  required
-                  maxLength={20000}
-                  className="mt-1 !min-h-16"
-                />
-              </label>
-              <Button variant="outline" size="sm" className="h-9 px-4">
-                Add note
-              </Button>
-            </ActionForm>
-          </section>
+        <aside
+          aria-label="Application details"
+          className="flex min-w-0 flex-col gap-4 @[52rem]:sticky @[52rem]:top-4 @[52rem]:max-h-[calc(100vh-2rem)] @[52rem]:overflow-y-auto @[52rem]:pb-1"
+        >
+          <ApplicationRail
+            record={record}
+            linked={linked}
+            versions={versions}
+            history={history}
+            editable={editable}
+            now={now}
+          />
         </aside>
       </div>
     </div>
   );
 }
 
-function RoundRow({
+export function RoundRow({
   round,
-  index,
+  label,
   now,
+  children,
 }: {
   round: ApplicationRecord["rounds"][number];
-  index: number;
+  /** "Round 1 · DSA", "Managerial round" and so on. */
+  label: string;
   now: Date;
+  /** The round's questions, under its heading. */
+  children?: ReactNode;
 }) {
   const status =
     round.outcome === "PASSED"
@@ -411,27 +236,27 @@ function RoundRow({
               : istDaysBetween(now, round.scheduledAt) === 0
                 ? { text: "Today", tone: "bg-review text-review-foreground" }
                 : { text: "Upcoming", tone: "bg-selected text-selected-foreground" };
-  const label = roundKindLabel[round.kind];
+  const kind = roundKindLabel[round.kind];
   return (
     <li
+      id={`round-${round.id}`}
       className={cn(
-        "rounded-2xl px-4 py-3 ring-1",
+        "scroll-mt-4 rounded-2xl px-4 py-3 ring-1",
         round.outcome === "SCHEDULED" ? "bg-warning-soft/60 ring-review/50" : "bg-card ring-border",
       )}
     >
       <div className="flex items-center gap-3">
-        <span className="max-w-full w-6 text-sm text-muted-foreground tabular-nums">
-          {index + 1}
-        </span>
         <span
           aria-hidden
           className={cn("size-2.5 shrink-0 rounded-full", familyFill[roundFamily(round.kind)])}
         />
         <div className="min-w-0 flex-1">
-          <p className="m-0 font-medium [overflow-wrap:anywhere]">
+          <h3 className="m-0 text-base font-semibold [overflow-wrap:anywhere]">
             {label}
-            {round.name && round.name !== label ? ` · ${round.name}` : ""}
-          </p>
+            {round.name && round.name !== kind && !label.endsWith(round.name) ? (
+              <span className="font-normal text-muted-foreground"> · {round.name}</span>
+            ) : null}
+          </h3>
           <p className="m-0 text-sm text-muted-foreground">
             {round.scheduledAt ? formatDayTime(round.scheduledAt) : "No date recorded"}
           </p>
@@ -441,11 +266,12 @@ function RoundRow({
         </span>
       </div>
       {round.notes && (
-        <p className="m-0 mt-2 pl-9 text-sm text-muted-foreground [overflow-wrap:anywhere]">
-          {round.notes}
-        </p>
+        <div className="mt-2 pl-5.5 text-sm">
+          <MarkdownView source={round.notes} />
+        </div>
       )}
-      <details className="mt-2 pl-9">
+      {children}
+      <details className="mt-2 pl-5.5">
         <summary className="py-1 text-sm">Edit round</summary>
         <ActionForm action={updateRound} feedback="inverse" className="mt-2 space-y-3">
           <input type="hidden" name="id" value={round.id} />

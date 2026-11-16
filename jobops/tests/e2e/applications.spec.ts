@@ -51,7 +51,7 @@ test("recording outcomes walks an application from OA to an accepted offer", asy
   await expect(history).toContainText("11:59 pm");
   await expect(page.getByRole("status").filter({ hasText: "Saved: Got an OA." })).toBeVisible();
   await expect(page.getByLabel("Complete by (India time)")).toHaveCount(0);
-  await expect(phase).toHaveText(/Interviewing · round 1/);
+  await expect(phase).toHaveText("Round 1 · OA");
 
   await page.getByRole("button", { name: "Cleared the round", exact: true }).click();
   await save();
@@ -95,8 +95,13 @@ test("recording outcomes walks an application from OA to an accepted offer", asy
     .toBe(true);
   await page.reload();
   await expect(rounds).toContainText("Prepare idempotency examples");
+  // Notes are written in the Notes card as Markdown; Edit details holds the record's fields.
+  await page.getByRole("button", { name: "Write notes", exact: true }).click();
+  await page.getByRole("textbox", { name: "Notes, Markdown" }).click();
+  await page.keyboard.type("Ask about on-call");
+  await page.getByRole("button", { name: "Save notes", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Edit notes", exact: true })).toBeVisible();
   await page.getByText("Edit details", { exact: true }).click();
-  await page.getByRole("textbox", { name: "Notes", exact: true }).fill("Ask about on-call");
   await page.getByLabel("Application URL").fill("https://example.invalid/application/123");
   await page.getByRole("button", { name: "Save details", exact: true }).click();
   await expect(page.getByRole("region", { name: "Notes", exact: true })).toContainText(
@@ -115,10 +120,11 @@ test("recording outcomes walks an application from OA to an accepted offer", asy
   await save();
   await page.getByRole("button", { name: "Got an offer", exact: true }).click();
   await save();
-  await expect(phase).toHaveText("Decision");
+  await expect(phase).toHaveText("Offer");
   await page.getByRole("button", { name: "Accepted the offer", exact: true }).click();
   await save();
-  await expect(phase).toHaveText("Accepted");
+  await expect(phase).toHaveText("Offer");
+  await expect(page.getByRole("definition").filter({ has: phase })).toContainText("Accepted");
   await expect(
     page.getByRole("status").filter({ hasText: "Saved: Accepted the offer." }),
   ).toBeVisible();
@@ -341,17 +347,23 @@ test("a recruiter mail becomes a saved opening", async ({ page }) => {
   await expect(page.getByRole("link", { name: "Save as opening", exact: true })).toHaveCount(0);
 });
 
-test("record history uses readable India-time dates and long notes collapse", async ({ page }) => {
+test("record history uses readable India-time dates and long notes render in full", async ({
+  page,
+}) => {
   const company = `Readable Co ${Date.now()}`;
   const { applicationId } = await seedRecord({ company, source: "DIRECT", sentDaysAgo: 0 });
   await page.goto(`/applications/${applicationId}`);
   const history = page.getByRole("region", { name: "History" });
   await expect(history).toContainText(/Today, \d{1,2}:\d{2} (am|pm)/);
   await expect(history).not.toContainText("Asia/Kolkata");
-  await page.getByText("Edit details", { exact: true }).click();
-  await page.getByRole("textbox", { name: "Notes" }).fill("A long note line\n".repeat(10));
-  await page.getByRole("button", { name: "Save details", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Show all", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Write notes", exact: true }).click();
+  await page.getByRole("textbox", { name: "Notes, Markdown" }).click();
+  await page.keyboard.type(Array.from({ length: 10 }, (_, i) => `Note line ${i + 1}`).join("\n\n"));
+  await page.getByRole("button", { name: "Save notes", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Edit notes", exact: true })).toBeVisible();
+  const notes = page.getByRole("region", { name: "Notes", exact: true });
+  await expect(notes.getByText("Note line 1", { exact: true })).toBeVisible();
+  await expect(notes.getByText("Note line 10", { exact: true })).toBeVisible();
 });
 
 test("a row expands and collapses and a deep link opens it", async ({ page }) => {

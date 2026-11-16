@@ -114,6 +114,7 @@ describe("ApplicationExpanded", () => {
     const html = render(record({}), {
       id: "r1",
       filename: "Sathwick_Reddy_Yalla_Backend_Platform_Resume_2026_v3.pdf",
+      label: "Backend platform",
     });
     const link = html.match(/<a [^>]*href="\/resumes\?file=r1"[^>]*>/)?.[0];
     expect(link).toMatch(/class="[^"]*\bmax-w-full\b/);

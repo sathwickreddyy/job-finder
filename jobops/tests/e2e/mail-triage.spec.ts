@@ -407,8 +407,14 @@ test("mail outcome keeps success and focus after resolution; unlink reopens mail
   await expect(page.getByRole("status").filter({ hasText: "Saved: Replied." })).toHaveCount(0);
   // Unlinking stays on the record's own page.
   await page.goto(`/applications/${app.id}`);
-  await hydrated(page.getByRole("button", { name: "Unlink mail" }));
-  await page.getByRole("button", { name: "Unlink mail" }).click();
+  // The linked email opens in its popup from the rail; Unlink is in the popup's footer.
+  const opener = page.getByRole("button", { name: new RegExp(mail.subject) });
+  await hydrated(opener);
+  await opener.click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Unlink from this application", exact: true })
+    .click();
   await expect(
     page.getByRole("status").filter({ hasText: "Recorded outcomes and history were kept." }),
   ).toBeVisible();

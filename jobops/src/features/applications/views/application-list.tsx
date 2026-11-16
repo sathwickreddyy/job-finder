@@ -7,10 +7,12 @@ import { ActionForm } from "@/components/action-form";
 import { StatusPill } from "@/features/companies/status-pill";
 import { cn } from "@/lib/utils";
 import type { Journey } from "../journey";
+import type { NamedStep } from "../named-steps";
 import type { Lane, LaneGroup, LaneNext } from "../lanes";
 import { laneHref } from "../navigation";
 import { notApplying } from "../record-actions";
 import { JourneyTrack } from "./journey-track";
+import { NamedSteps } from "./named-steps";
 
 const groups: { id: LaneGroup; label: string }[] = [
   { id: "needs", label: "Needs you" },
@@ -91,12 +93,14 @@ export function NextStep({ next, returnTo }: { next: LaneNext | null; returnTo: 
 function Row({
   lane,
   journey,
+  steps,
   open,
   detail,
   mobile = false,
 }: {
   lane: Lane;
   journey: Journey | undefined;
+  steps: NamedStep[] | undefined;
   open: boolean;
   detail: ReactNode;
   mobile?: boolean;
@@ -127,15 +131,24 @@ function Row({
           <Monogram name={lane.company} />
           <span className="min-w-0 flex-1">
             <span className="flex min-w-0 items-center gap-2">
-              <span className="truncate font-semibold">{lane.company}</span>
+              <span className="max-w-[70%] shrink-0 truncate font-semibold" title={lane.company}>
+                {lane.company}
+              </span>
               <span data-testid="lane-status" className="contents">
                 <StatusPill
                   status={{ ...lane.status, detail: lane.status.label, previous: null }}
-                  className="max-w-[11rem] truncate"
+                  className="block max-w-[11rem] min-w-0 shrink truncate leading-6"
                 />
               </span>
             </span>
-            <span className="block truncate text-sm text-muted-foreground">{role?.role}</span>
+            <span className="flex min-w-0 items-baseline gap-1.5 text-sm text-muted-foreground">
+              <span className="truncate" title={role?.role}>
+                {role?.role}
+              </span>
+              {role?.requisition && (
+                <span className="shrink-0 text-xs tabular-nums">· {role.requisition}</span>
+              )}
+            </span>
           </span>
           <ChevronDown
             aria-hidden
@@ -146,7 +159,11 @@ function Row({
             )}
           />
         </Link>
-        {journey && <JourneyTrack journey={journey} size={mobile ? "mobile" : "row"} />}
+        {steps ? (
+          <NamedSteps steps={steps} size="row" className="relative z-10" />
+        ) : (
+          journey && <JourneyTrack journey={journey} size={mobile ? "mobile" : "row"} />
+        )}
         <div
           className={cn(
             mobile && "rounded-2xl px-3 py-2.5",
@@ -166,12 +183,20 @@ type Pin = { id: string; group: LaneGroup };
 type ListProps = {
   lanes: Lane[];
   journeys: Record<string, Journey>;
+  /** Named steps for applications; outreach rows keep their journey track. */
+  namedSteps?: Record<string, NamedStep[]>;
   openId: string | null;
   detail: ReactNode;
 };
 
 /** The focused row keeps its place while outcomes change, and every record stays visible. */
-export function MobileApplicationList({ lanes, journeys, openId, detail }: ListProps) {
+export function MobileApplicationList({
+  lanes,
+  journeys,
+  namedSteps = {},
+  openId,
+  detail,
+}: ListProps) {
   const [anchor, setAnchor] = useState(() => ({
     id: openId,
     index: lanes.findIndex((lane) => lane.leadId === openId),
@@ -194,6 +219,7 @@ export function MobileApplicationList({ lanes, journeys, openId, detail }: ListP
             key={lane.key}
             lane={lane}
             journey={journeys[lane.leadId]}
+            steps={namedSteps[lane.leadId]}
             open={lane.leadId === openId}
             detail={detail}
             mobile
@@ -224,17 +250,7 @@ export function pinOpenRow(lanes: Lane[], pin: Pin | null): Lane[] {
  * Applications as journeys (spec §4), one row per application in Needs you, Waiting on them
  * and Closed. The open row (`?open=<id>`) expands in place beneath itself (spec §5).
  */
-export function ApplicationList({
-  lanes,
-  journeys,
-  openId,
-  detail,
-}: {
-  lanes: Lane[];
-  journeys: Record<string, Journey>;
-  openId: string | null;
-  detail: ReactNode;
-}) {
+export function ApplicationList({ lanes, journeys, namedSteps = {}, openId, detail }: ListProps) {
   const pinFor = (id: string | null): Pin | null => {
     const group = id ? lanes.find((lane) => lane.leadId === id)?.group : undefined;
     return id && group ? { id, group } : null;
@@ -245,7 +261,13 @@ export function ApplicationList({
   const phone = useSyncExternalStore(subscribePhone, isPhone, () => false);
   if (phone)
     return (
-      <MobileApplicationList lanes={placed} journeys={journeys} openId={openId} detail={detail} />
+      <MobileApplicationList
+        lanes={placed}
+        journeys={journeys}
+        namedSteps={namedSteps}
+        openId={openId}
+        detail={detail}
+      />
     );
   return (
     <div className="flex flex-col gap-8">
@@ -265,6 +287,7 @@ export function ApplicationList({
                 key={lane.key}
                 lane={lane}
                 journey={journeys[lane.leadId]}
+                steps={namedSteps[lane.leadId]}
                 open={lane.leadId === openId}
                 detail={detail}
               />

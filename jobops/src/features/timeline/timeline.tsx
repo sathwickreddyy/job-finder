@@ -1,9 +1,10 @@
 "use client";
 
-import { Fragment, useEffect, useRef, useState } from "react";
+import { Fragment, useState } from "react";
 import Link from "next/link";
 import { CalendarClock, Circle, CircleCheck, CircleSlash, FileText, Send } from "lucide-react";
 import { formatTime, formatWeekday } from "@/features/applications/dates";
+import { MailDialog } from "@/features/mail/mail-dialog";
 import type { MailItem } from "@/features/mail/mail-item";
 import { inboxLabels, previewLine } from "@/features/mail/row-text";
 import { TagPill } from "@/features/mail/tag-pill";
@@ -91,36 +92,31 @@ function MailRow({
   entry,
   handling,
   role,
-  startOpen,
   placeOptions,
   showCompany,
   inbox,
+  onOpen,
 }: {
   entry: TimelineMail;
   handling?: Handling;
   role?: string;
-  startOpen: boolean;
   placeOptions?: PlaceOptions;
   /** All job mail names the company first; a company's own timeline leaves it out. */
   showCompany?: boolean;
   /** What tells this email's inbox apart from the others, such as "outlook.in". */
   inbox: string;
+  onOpen: () => void;
 }) {
   const { item } = entry;
   const needs = item.attention === "open";
-  const [open, setOpen] = useState(startOpen);
-  // Handling an email in place keeps it open, so what was recorded stays in view.
+  // Handling an email from its row keeps what was recorded (and its Undo) in view under it.
+  const [justHandled, setJustHandled] = useState(false);
   const [wasOpen, setWasOpen] = useState(needs);
   if (wasOpen !== needs) {
     setWasOpen(needs);
-    if (!needs) setOpen(true);
+    setJustHandled(!needs);
   }
-  const row = useRef<HTMLLIElement>(null);
-  useEffect(() => {
-    if (startOpen) row.current?.scrollIntoView({ block: "center" });
-  }, [startOpen]);
   const name = item.senderName || item.sender;
-  const note = folderNote(item);
   const preview = previewLine(item.text);
   const when = clock(item.receivedAt);
   const chip = (className: string) => (
@@ -130,16 +126,17 @@ function MailRow({
     <HandlingBar item={item} handling={handling} placeOptions={placeOptions} />
   );
   return (
-    <li ref={row} id={`mail-${item.id}`} className="relative scroll-mt-24">
+    <li id={`mail-${item.id}`} className="relative scroll-mt-24">
       {needs && (
         <span aria-hidden className="absolute inset-y-3 left-0 w-[3px] rounded-r-full bg-primary" />
       )}
-      {/* The toggle stretches over the whole row; the pencil beside the tag sits above it. */}
+      {/* The button stretches over the whole row and opens the email; the pencil sits above it. */}
       <div className="group relative grid w-full min-w-0 gap-x-4 gap-y-1 px-4 py-3 transition-colors hover:bg-muted/50 has-[:focus-visible]:bg-muted/50 @xl:grid-cols-[9rem_9rem_minmax(0,1fr)] @xl:items-start @4xl:grid-cols-[9.5rem_10rem_minmax(0,1fr)_auto]">
         <button
           type="button"
-          aria-expanded={open}
-          onClick={() => setOpen(!open)}
+          aria-haspopup="dialog"
+          data-mail-row={item.id}
+          onClick={onOpen}
           className="grid min-w-0 gap-x-4 gap-y-1 text-left after:absolute after:inset-0 after:rounded-[inherit] after:content-[''] focus-visible:outline-none focus-visible:after:outline-2 focus-visible:after:-outline-offset-2 focus-visible:after:outline-primary @xl:col-span-2 @xl:grid-cols-subgrid @4xl:col-span-3"
         >
           <span className="sr-only">{`${tagLabel[item.tag]}, `}</span>
@@ -172,7 +169,7 @@ function MailRow({
         </button>
         <div className="order-first flex min-w-0 items-center justify-between gap-2 @xl:grid @xl:justify-items-start @xl:gap-1">
           <span className="flex min-w-0 items-center gap-1">
-            {/* The toggle names the tag; reading it here again would say it twice. */}
+            {/* The row button names the tag; reading it here again would say it twice. */}
             <span aria-hidden className="flex">
               <TagPill tag={item.tag} />
             </span>
@@ -188,28 +185,39 @@ function MailRow({
           </span>
         </div>
       </div>
-      {open ? (
-        <div className="reveal mx-3 mb-3 min-w-0 rounded-2xl bg-muted/45 p-4 sm:mx-4">
-          <p className="m-0 flex min-w-0 flex-wrap items-baseline gap-x-2 text-sm">
-            <span className="min-w-0 truncate font-semibold">{name}</span>
-            <span className="min-w-0 truncate text-xs text-muted-foreground">{item.sender}</span>
-            {note && (
-              <span className="rounded-md bg-muted px-1.5 text-xs text-muted-foreground">
-                {note}
-              </span>
-            )}
-          </p>
-          <p className="m-0 mt-2 max-w-prose text-[15px] leading-relaxed break-words whitespace-pre-wrap">
-            {item.text}
-          </p>
-          <div className="mt-3">
-            {needs ? bar : <HandledLine item={item} recorded={entry.recorded} />}
-          </div>
+      {bar && <div className="px-4 pb-3">{bar}</div>}
+      {justHandled && !needs && (
+        <div className="reveal px-4 pb-3">
+          <HandledLine item={item} recorded={entry.recorded} />
         </div>
-      ) : (
-        bar && <div className="px-4 pb-3">{bar}</div>
       )}
     </li>
+  );
+}
+
+/** The open email's footer: the handling bar while it needs you, else what was recorded. */
+function MailFooter({
+  entry,
+  handling,
+  placeOptions,
+}: {
+  entry: TimelineMail;
+  handling?: Handling;
+  placeOptions?: PlaceOptions;
+}) {
+  const { item } = entry;
+  const note = folderNote(item);
+  return (
+    <div className="flex flex-col gap-2">
+      {note && <p className="m-0 text-xs text-muted-foreground">Found in {note}</p>}
+      {item.attention === "open" ? (
+        handling ? (
+          <HandlingBar item={item} handling={handling} placeOptions={placeOptions} />
+        ) : null
+      ) : (
+        <HandledLine item={item} recorded={entry.recorded} />
+      )}
+    </div>
   );
 }
 
@@ -248,8 +256,8 @@ function DateStamp({ day }: { day: TimelineDay }) {
 /**
  * Mail feed layout B, a ledger with a date column: one company's emails and steps (or all
  * job mail), newest first and grouped by India day, with booked rounds in "Coming up" and
- * a band where an older year starts. Rows open in place; open emails show their handling
- * bar without being opened.
+ * a band where an older year starts. Each email opens in a reading popup; open emails show
+ * their handling bar without being opened.
  */
 export function CompanyTimeline({
   days,
@@ -287,6 +295,20 @@ export function CompanyTimeline({
     labels[item.account] ?? (item.provider === "OUTLOOK" ? "Outlook" : "Gmail");
   const roleOf = (id: string | undefined) =>
     several && id ? roles.find((item) => item.id === id)?.role : undefined;
+  // Every email opens in the reading popup; previous and next walk the emails as listed.
+  const mails = days.flatMap((day) =>
+    day.entries.filter((entry): entry is TimelineMail => entry.type === "mail"),
+  );
+  const [openId, setOpenId] = useState<string | null>(openMail);
+  const [linked, setLinked] = useState(openMail);
+  if (linked !== openMail) {
+    setLinked(openMail);
+    setOpenId(openMail);
+  }
+  const openIndex = openId ? mails.findIndex((entry) => entry.item.id === openId) : -1;
+  const opened = openIndex >= 0 ? mails[openIndex] : null;
+  const rowButton = (id: string) =>
+    document.querySelector<HTMLElement>(`[data-mail-row="${CSS.escape(id)}"]`);
   return (
     <div className="min-w-0">
       {several && (
@@ -351,10 +373,10 @@ export function CompanyTimeline({
                           entry={entry}
                           handling={handling[entry.item.id]}
                           role={roleOf(entry.item.application?.id)}
-                          startOpen={openMail === entry.item.id}
                           placeOptions={placeOptions}
                           showCompany={showCompany}
                           inbox={inboxOf(entry.item)}
+                          onOpen={() => setOpenId(entry.item.id)}
                         />
                       ) : (
                         <StepRow key={entry.id} step={entry} role={roleOf(entry.applicationId)} />
@@ -368,6 +390,26 @@ export function CompanyTimeline({
         </div>
       ) : (
         <p className="m-0 text-sm text-muted-foreground">Nothing matches here yet.</p>
+      )}
+      {opened && (
+        <MailDialog
+          item={opened.item}
+          inbox={inboxOf(opened.item)}
+          position={mails.length > 1 ? `${openIndex + 1} of ${mails.length}` : undefined}
+          onPrev={openIndex > 0 ? () => setOpenId(mails[openIndex - 1].item.id) : undefined}
+          onNext={
+            openIndex < mails.length - 1 ? () => setOpenId(mails[openIndex + 1].item.id) : undefined
+          }
+          onClose={() => setOpenId(null)}
+          returnFocus={() => rowButton(opened.item.id)}
+          footer={
+            <MailFooter
+              entry={opened}
+              handling={handling[opened.item.id]}
+              placeOptions={placeOptions}
+            />
+          }
+        />
       )}
       {olderHref && (
         <Link
