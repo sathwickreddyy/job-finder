@@ -1,18 +1,28 @@
 import { notFound } from "next/navigation";
+import { z } from "zod";
 import { normalizeCompany } from "@/features/applications/lanes";
 import { getDisplayPreferences } from "@/features/candidate/preferences";
-import { CompanyDetail, detailTabs, type DetailTab } from "@/features/companies/detail";
+import { readCompanyApplications } from "@/features/companies/applications";
+import { CompanyDetail, detailTabs, tabAliases, type DetailTab } from "@/features/companies/detail";
 import { interviewReports } from "@/features/companies/metrics";
 import { readCompanies } from "@/features/companies/read";
 import { companySummaries, sharedPayScale } from "@/features/companies/summary";
-import { readCompanyPanel } from "@/features/timeline/company-panel";
+
+const uuid = (value: string | undefined) => (z.uuid().safeParse(value).success ? value : undefined);
 
 export default async function CompanyPage({
   params,
   searchParams,
 }: {
   params: Promise<{ slug: string }>;
-  searchParams: Promise<{ city?: string; tab?: string; role?: string; cursor?: string }>;
+  searchParams: Promise<{
+    city?: string;
+    tab?: string;
+    open?: string;
+    cursor?: string;
+    outcome?: string;
+    mail?: string;
+  }>;
 }) {
   const [{ slug }, query, data, preferences] = await Promise.all([
     params,
@@ -23,17 +33,11 @@ export default async function CompanyPage({
   const company = data.companies.find((row) => row.id === slug);
   if (!company) notFound();
   const summaries = companySummaries(data);
-  // "progress" is the old name of the Timeline tab.
-  const tab = detailTabs.includes(query.tab as DetailTab) ? (query.tab as DetailTab) : "timeline";
-  const timeline = await readCompanyPanel(normalizeCompany(company.name), query, (change) => {
-    const params = new URLSearchParams({
-      ...(query.city ? { city: query.city } : {}),
-      tab: "timeline",
-      ...(change.role ? { role: change.role } : {}),
-      ...(change.cursor ? { cursor: change.cursor } : {}),
-    });
-    return `/companies/${slug}?${params}`;
-  });
+  const named = query.tab ? (tabAliases[query.tab] ?? query.tab) : undefined;
+  const tab = detailTabs.includes(named as DetailTab) ? (named as DetailTab) : "applications";
+  const now = new Date();
+  const openId = uuid(query.open);
+  const applications = await readCompanyApplications(normalizeCompany(company.name), query, now);
   return (
     <CompanyDetail
       company={company}
@@ -44,7 +48,11 @@ export default async function CompanyPage({
       scaleMax={sharedPayScale(summaries)}
       city={query.city}
       tab={tab}
-      timeline={timeline}
+      applications={applications}
+      openId={openId}
+      requested={openId ? query.outcome : undefined}
+      mailIntent={uuid(query.mail)}
+      now={now}
     />
   );
 }

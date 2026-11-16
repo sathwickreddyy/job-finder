@@ -26,7 +26,9 @@ const day = z.union([z.literal(""), z.string().regex(/^\d{4}-\d{2}-\d{2}$/)]);
 function refresh(id?: string) {
   revalidatePath("/applications");
   if (id) revalidatePath(`/applications/${id}`);
+  // The company page holds each application's notes, rounds and details.
   revalidatePath("/companies");
+  revalidatePath("/companies/[slug]", "page");
   revalidatePath("/");
 }
 

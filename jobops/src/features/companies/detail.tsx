@@ -1,17 +1,12 @@
 import Link from "next/link";
 import { ArrowUpRight, ChevronDown } from "lucide-react";
 import { normalizeCompany } from "@/features/applications/lanes";
-import { laneHref } from "@/features/applications/navigation";
-import { methodLabel } from "@/features/applications/phase";
 import { displayDate, type DisplayPreferences } from "@/features/candidate/preferences";
-import type { CompanyTimelinePanel } from "@/features/timeline/company-panel";
-import { RulePanel } from "@/features/mail/search/rule-panel";
 import { mailHref } from "@/features/timeline/query";
-import { CompanyTimeline } from "@/features/timeline/timeline";
 import { cn } from "@/lib/utils";
 import type { Company } from "./catalog";
 import { DetailTabs, QuestionBank } from "./detail-client";
-import { companyActivity } from "./domain";
+import type { CompanyApplications } from "./applications";
 import { familyFill, money, payRange, reports as reportCount, stockLabel } from "./format";
 import { LoopStepper, MixBar, Monogram, RangeBar, StageChip } from "./marks";
 import {
@@ -28,6 +23,7 @@ import { CompanyResumeReference } from "./resume-reference";
 import { PreviousJobForm } from "./previous-job-form";
 import { PreviousBadge, StatusPill } from "./status-pill";
 import type { CompanySummary } from "./summary";
+import { ApplicationsTab } from "./views/applications-tab";
 
 export type DetailProps = {
   company: Company;
@@ -68,17 +64,11 @@ function Section({
 
 const box = "rounded-card border border-border bg-card p-5 shadow-surface sm:p-6";
 
+/** The applications are the page; the header only offers the step that creates one. */
 function nextAction(summary: CompanySummary) {
-  switch (summary.stage) {
-    case "Not started":
-      return { label: "Save an opening", href: "/jobs/new" };
-    case "Opening saved":
-      return { label: "Record application", href: "/applications/new" };
-    case "Interviewing":
-      return { label: "Practise questions", href: "?tab=interviews#questions" };
-    default:
-      return { label: "View applications", href: "/applications" };
-  }
+  return summary.stage === "Not started"
+    ? { label: "Save an opening", href: "/jobs/new" }
+    : { label: "Record application", href: "/applications/new" };
 }
 
 const dueTone = {
@@ -90,19 +80,13 @@ const dueTone = {
 export function DetailHeader({
   company,
   summary,
-  data,
   next,
   status,
-}: Pick<DetailProps, "company" | "summary" | "data"> & {
-  next?: CompanyTimelinePanel["next"];
-  status?: CompanyTimelinePanel["status"];
+}: Pick<DetailProps, "company" | "summary"> & {
+  next?: CompanyApplications["next"];
+  status?: CompanyApplications["status"];
 }) {
-  const records = companyActivity(company, "", data.records, data.openings).records;
-  const suggested = nextAction(summary);
-  const action =
-    suggested.label === "View applications" && records.length
-      ? { label: "View application", href: laneHref(records[0].id) }
-      : suggested;
+  const action = nextAction(summary);
   const modes = [...new Set(company.locations?.flatMap((row) => row.workModes) ?? [])];
   return (
     <header className="space-y-5">
@@ -145,14 +129,6 @@ export function DetailHeader({
           >
             {action.label}
           </Link>
-          {records.length > 0 && suggested.label !== "View applications" && (
-            <Link
-              href={laneHref(records[0].id)}
-              className="flex min-h-10 items-center rounded-full border border-input px-5 text-sm font-medium hover:bg-muted hover:no-underline"
-            >
-              View application
-            </Link>
-          )}
           <Link
             href={mailHref({ company: normalizeCompany(company.name) })}
             className="flex min-h-10 items-center rounded-full border border-input px-5 text-sm font-medium hover:bg-muted hover:no-underline"
@@ -615,175 +591,21 @@ export function QuestionsSection({ reports }: Pick<DetailProps, "reports">) {
   );
 }
 
-/* ───────── timeline and the facts beside it ───────── */
+/* ───────── about and sources ───────── */
 
-const asideHeading = "m-0 text-sm font-semibold text-muted-foreground";
-
-/** Gallery company page B: roles, pay and the interview loop stay in view beside the timeline. */
-export function TimelineAside({
-  company,
-  summary,
-  data,
-  preferences,
-  city,
-}: Pick<DetailProps, "company" | "summary" | "data" | "preferences" | "city">) {
-  const activity = companyActivity(company, "", data.records, data.openings);
-  const applied = new Set(activity.records.map((row) => row.jobId));
-  const saved = activity.allOpenings.filter((job) => !applied.has(job.id));
+/** The résumé the company's offices use, one block per city, the visitor's city first. */
+function ResumeReferences({ company, data, city }: Pick<DetailProps, "company" | "data" | "city">) {
   const cities = company.cities.length ? company.cities : ["Location not recorded"];
   const first = cities.includes(city ?? "") ? city! : cities[0];
-  const ordered = [first, ...cities.filter((row) => row !== first)];
-  const { metrics } = summary;
-  const pay = metrics.total ?? metrics.fixed;
   return (
-    <aside
-      aria-label="Company facts"
-      className="grid min-w-0 grid-cols-2 gap-x-4 gap-y-6 lg:grid-cols-1 [&>*]:min-w-0"
-    >
-      {/* On a phone: roles across the top, pay and the loop side by side, then the resume. */}
-      <div id="applications" className="col-span-2 space-y-2 lg:col-span-1">
-        <h2 className={asideHeading}>Your applications</h2>
-        <ul className="m-0 list-none space-y-3 p-0">
-          {activity.records.map((row) => (
-            <li key={row.id} className="text-sm">
-              <Link href={laneHref(row.id)} className="font-medium text-link">
-                {row.title}
-              </Link>
-              <span className="block text-xs text-muted-foreground">
-                {[
-                  methodLabel[row.source] ?? "Application",
-                  // Applied is already said by the method; later stages add something.
-                  row.status === "APPLIED" ? "" : row.status.toLowerCase().replaceAll("_", " "),
-                  row.appliedAt ? `sent ${displayDate(row.appliedAt, preferences)}` : "",
-                ]
-                  .filter(Boolean)
-                  .join(", ")}
-              </span>
-              {row.version ? (
-                <Link
-                  href={`/resumes?file=${row.version.id}`}
-                  className="mt-0.5 block text-xs break-all text-link"
-                >
-                  {row.appliedAt ? "Submitted" : "Selected"}: {row.version.filename} (
-                  {row.version.label})
-                </Link>
-              ) : (
-                <span className="mt-0.5 block text-xs text-muted-foreground">
-                  No resume file recorded
-                </span>
-              )}
-            </li>
-          ))}
-          {saved.map((job) => (
-            <li key={job.id} className="text-sm">
-              <Link href={`/jobs/${job.id}`} className="font-medium text-link">
-                {job.title}
-              </Link>
-              <span className="block text-xs text-muted-foreground">Saved, not applied yet</span>
-            </li>
-          ))}
-        </ul>
-        {!activity.records.length && !saved.length && (
-          <p className="m-0 text-sm text-muted-foreground">No roles recorded yet.</p>
-        )}
-        <Link href="/applications/new" className="inline-block text-sm text-link">
-          Record an application
-        </Link>
-      </div>
-      <div className="space-y-2">
-        <h2 className={asideHeading}>Pay</h2>
-        <p className="m-0 text-lg font-semibold tabular-nums">{payRange(pay) ?? "Not reported"}</p>
-        <p className="m-0 text-xs text-muted-foreground">
-          {pay
-            ? `${metrics.total ? "Total" : "Fixed"} pay, ${reportCount(pay.n)}`
-            : "No pay reports yet"}
-        </p>
-        <Link href="?tab=pay" className="inline-block text-sm text-link">
-          Compensation
-        </Link>
-      </div>
-      <div className="space-y-2">
-        <h2 className={asideHeading}>Interview loop</h2>
-        {metrics.typicalLoop.length ? (
-          <ol className="m-0 flex list-none flex-wrap gap-1.5 p-0">
-            {metrics.typicalLoop.map((kind, index) => (
-              <li
-                key={index}
-                className="inline-flex h-7 items-center gap-1.5 rounded-full bg-muted px-2.5 text-xs font-medium"
-              >
-                <span
-                  aria-hidden
-                  className={cn("size-2 rounded-full", familyFill[roundFamily(kind)])}
-                />
-                {roundKindLabel[kind]}
-              </li>
-            ))}
-          </ol>
-        ) : (
-          <p className="m-0 text-sm text-muted-foreground">No round details yet</p>
-        )}
-        <p className="m-0 text-xs text-muted-foreground">
-          From {reportCount(metrics.interviewReports)}
-        </p>
-        <Link href="?tab=interviews" className="inline-block text-sm text-link">
-          Interview loop
-        </Link>
-      </div>
-      <div id="resumes" className="col-span-2 space-y-4 lg:col-span-1">
-        <h2 className={asideHeading}>Resume</h2>
-        {ordered.map((row) => (
-          <CompanyResumeReference key={row} company={company} city={row} data={data} />
-        ))}
-      </div>
-    </aside>
-  );
-}
-
-function TimelineTab(props: DetailProps & { timeline: CompanyTimelinePanel }) {
-  const { timeline } = props;
-  return (
-    <div className="min-w-0 space-y-8">
-      {/* The facts stick within this grid only, so they stop before the search panel below. */}
-      <div className="grid min-w-0 gap-8 lg:grid-cols-[minmax(0,1fr)_17rem]">
-        <section aria-label="Timeline" className="order-2 min-w-0 lg:order-1">
-          {timeline.newestHref && (
-            <Link href={timeline.newestHref} className="mb-3 inline-block text-sm text-link">
-              Back to the newest
-            </Link>
-          )}
-          <CompanyTimeline
-            days={timeline.days}
-            handling={timeline.handling}
-            roles={timeline.roles}
-            allRolesHref={timeline.allRolesHref}
-            role={timeline.role}
-            openMail={null}
-            olderHref={timeline.olderHref}
-            inboxes={timeline.search?.inboxes.map((row) => row.account)}
-          />
-        </section>
-        {/* Sticky as one block, so the facts never slide over the link below them. */}
-        <div className="order-1 min-w-0 self-start lg:sticky lg:top-6 lg:order-2">
-          <TimelineAside {...props} />
-          {timeline.search && (
-            <a href="#mail-search" className="mt-6 inline-block text-sm text-link">
-              How we find {props.company.name}&apos;s mail
-            </a>
-          )}
-        </div>
-      </div>
-      {timeline.search && (
-        <RulePanel
-          data={timeline.search}
-          companyKey={normalizeCompany(props.company.name)}
-          companyName={props.company.name}
-        />
-      )}
+    <div id="resumes" className={cn(box, "space-y-4")}>
+      <h3 className="font-semibold">Résumé</h3>
+      {[first, ...cities.filter((row) => row !== first)].map((row) => (
+        <CompanyResumeReference key={row} company={company} city={row} data={data} />
+      ))}
     </div>
   );
 }
-
-/* ───────── about and sources ───────── */
 
 export function AboutCard({ company, preferences }: Pick<DetailProps, "company" | "preferences">) {
   return (
@@ -880,21 +702,49 @@ export function SourcesSection({
 
 /* ───────── page ───────── */
 
-export const detailTabs = ["timeline", "pay", "interviews", "about"] as const;
+export const detailTabs = ["applications", "pay", "interviews", "about"] as const;
 export type DetailTab = (typeof detailTabs)[number];
+/** Older links named the Applications tab "timeline" or "progress". */
+export const tabAliases: Record<string, DetailTab> = {
+  timeline: "applications",
+  progress: "applications",
+};
 
-/** The header stays put; Timeline opens first and research tabs carry the metric tiles. */
+/** The header stays put; Applications opens first and research tabs carry the metric tiles. */
 export function CompanyDetail(
-  props: DetailProps & { tab: DetailTab; timeline: CompanyTimelinePanel },
+  props: DetailProps & {
+    tab: DetailTab;
+    applications: CompanyApplications;
+    /** The application a link opened, and the outcome or email it asked for. */
+    openId?: string | null;
+    requested?: string;
+    mailIntent?: string;
+    now: Date;
+  },
 ) {
+  const { applications } = props;
   return (
     <div className="space-y-8">
-      <DetailHeader {...props} next={props.timeline.next} status={props.timeline.status} />
+      <DetailHeader {...props} next={applications.next} status={applications.status} />
       <DetailTabs
         key={props.tab}
         initial={props.tab}
         tabs={[
-          { id: "timeline", label: "Timeline", content: <TimelineTab {...props} /> },
+          {
+            id: "applications",
+            label: `Applications · ${applications.rows.length}`,
+            content: (
+              <ApplicationsTab
+                data={applications}
+                companyKey={normalizeCompany(props.company.name)}
+                companyName={props.company.name}
+                openId={props.openId}
+                requested={props.requested}
+                mailIntent={props.mailIntent}
+                now={props.now}
+              />
+            ),
+          },
           {
             id: "pay",
             label: "Compensation",
@@ -924,7 +774,10 @@ export function CompanyDetail(
                 <MetricTiles {...props} />
                 <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_320px] [&>*]:min-w-0">
                   <SourcesSection {...props} />
-                  <AboutCard {...props} />
+                  <div className="space-y-8">
+                    <AboutCard {...props} />
+                    <ResumeReferences {...props} />
+                  </div>
                 </div>
               </div>
             ),
