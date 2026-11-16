@@ -2,8 +2,8 @@
 
 import { Fragment, useState } from "react";
 import Link from "next/link";
-import { CalendarClock, Circle, CircleCheck, CircleSlash, FileText, Send } from "lucide-react";
-import { formatTime, formatWeekday } from "@/features/applications/dates";
+import { PenLine } from "lucide-react";
+import { formatTime } from "@/features/applications/dates";
 import { MailDialog } from "@/features/mail/mail-dialog";
 import type { MailItem } from "@/features/mail/mail-item";
 import { inboxLabels, previewLine } from "@/features/mail/row-text";
@@ -13,18 +13,10 @@ import { SourceChip } from "./source-chip";
 import { cn } from "@/lib/utils";
 import { EditTag } from "./edit-tag";
 import type { TimelineDay, TimelineMail, TimelineStep } from "./entries";
+import { RoundCard, type RoundCardData } from "./round-card";
 import { HandledLine, HandlingBar, type PlaceOptions } from "./handling";
 import type { Handling } from "./suggest";
 
-function StepIcon({ eventType }: { eventType: string }) {
-  const props = { "aria-hidden": true, size: 14, strokeWidth: 2 };
-  if (/^ROUND_BOOKED$|SCHEDULED/.test(eventType)) return <CalendarClock {...props} />;
-  if (/SUBMITTED|APPLIED/.test(eventType)) return <FileText {...props} />;
-  if (/OUTREACH|FOLLOW_UP|REFERRAL/.test(eventType)) return <Send {...props} />;
-  if (/REJECT|WITHDRAWN|CLOSED|FAILED/.test(eventType)) return <CircleSlash {...props} />;
-  if (/PASSED|OFFER|ACCEPT/.test(eventType)) return <CircleCheck {...props} />;
-  return <Circle {...props} />;
-}
 const clock = (at: string) => formatTime(new Date(at));
 
 /** "Outlook Junk" when the email was found outside the inbox. */
@@ -36,37 +28,46 @@ function folderNote(item: MailItem) {
 /** Longer than this, a step's stored summary (often notes) shows two lines until opened. */
 const LONG_STEP = 140;
 
-function StepRow({ step, role }: { step: TimelineStep; role?: string }) {
+function StepRow({
+  step,
+  role,
+  requisition,
+}: {
+  step: TimelineStep;
+  role?: string;
+  requisition?: string | null;
+}) {
   const [open, setOpen] = useState(false);
   const long = step.text.length > LONG_STEP;
   const cells = (
     <>
-      {/* An icon on a narrow feed; on a wider one a quiet pill in the tag column. */}
-      <span
-        className={cn(
-          "grid size-8 place-items-center rounded-full @xl:inline-flex @xl:h-6 @xl:w-auto @xl:gap-1 @xl:justify-self-start @xl:px-2",
-          step.upcoming ? "bg-selected text-selected-foreground" : "bg-muted text-muted-foreground",
-        )}
-      >
-        <StepIcon eventType={step.eventType} />
-        <span className="hidden text-xs font-medium @xl:inline">
-          {step.upcoming ? "Booked" : "Recorded"}
+      {/* One icon and "Recorded", with the time under it; a narrow feed shows the icon alone. */}
+      <span className="grid min-w-0 justify-items-start gap-0.5">
+        <span className="inline-flex h-6 items-center gap-1 rounded-full bg-muted px-2 text-muted-foreground">
+          <PenLine aria-hidden size={14} strokeWidth={2} />
+          <span className="hidden text-xs font-medium @xl:inline">Recorded</span>
+        </span>
+        <span className="text-xs whitespace-nowrap text-muted-foreground tabular-nums">
+          {clock(step.at)}
         </span>
       </span>
       <span className={cn("min-w-0 break-words", long && !open && "line-clamp-2")}>
         {step.text}
         {role && <span className="ml-2 text-sm text-muted-foreground">{role}</span>}
       </span>
-      <span className="text-xs whitespace-nowrap text-muted-foreground tabular-nums">
-        {step.upcoming ? `${formatWeekday(new Date(step.at))}, ${clock(step.at)}` : clock(step.at)}
+      <span
+        className="max-w-28 truncate text-xs text-muted-foreground"
+        title={requisition === undefined ? undefined : (requisition ?? "No requisition")}
+      >
+        {requisition === undefined ? "" : (requisition ?? "No requisition")}
       </span>
     </>
   );
   // The icon sits in the tag column and the text where the sender starts, like a mail row.
   const grid =
-    "grid w-full grid-cols-[2rem_minmax(0,1fr)_auto] items-center gap-3 px-4 py-2.5 @xl:grid-cols-[9rem_minmax(0,1fr)_auto] @xl:gap-x-4 @4xl:grid-cols-[9.5rem_minmax(0,1fr)_auto]";
+    "grid w-full grid-cols-[3.5rem_minmax(0,1fr)_auto] items-center gap-3 px-4 py-2.5 @xl:grid-cols-[9rem_minmax(0,1fr)_auto] @xl:gap-x-4 @4xl:grid-cols-[9.5rem_minmax(0,1fr)_auto]";
   return (
-    <li>
+    <li id={`entry-${step.id}`} className="scroll-mt-24">
       {long ? (
         <button
           type="button"
@@ -223,12 +224,6 @@ function MailFooter({
 
 /** The date column: weekday, day and month, kept in view while the day scrolls past. */
 function DateStamp({ day }: { day: TimelineDay }) {
-  if (!day.stamp)
-    return (
-      <div aria-hidden="true" className="sticky top-4 grid justify-items-center text-link">
-        <CalendarClock size={18} strokeWidth={2} />
-      </div>
-    );
   const { stamp } = day;
   return (
     <div aria-hidden="true" className="sticky top-4 grid">
@@ -255,8 +250,9 @@ function DateStamp({ day }: { day: TimelineDay }) {
 
 /**
  * Mail feed layout B, a ledger with a date column: one company's emails and steps (or all
- * job mail), newest first and grouped by India day, with booked rounds in "Coming up" and
- * a band where an older year starts. Each email opens in a reading popup; open emails show
+ * job mail), newest first and grouped by India day, with a band where an older year starts.
+ * Given a requisition it is one application's timeline, with round cards and All, Stages, Mail
+ * filters in place of the role chips. Each email opens in a reading popup; open emails show
  * their handling bar without being opened.
  */
 export function CompanyTimeline({
@@ -270,6 +266,8 @@ export function CompanyTimeline({
   placeOptions,
   showCompany,
   inboxes = [],
+  requisition,
+  roundCards = {},
 }: {
   days: TimelineDay[];
   handling: Record<string, Handling>;
@@ -283,7 +281,20 @@ export function CompanyTimeline({
   showCompany?: boolean;
   /** Connected inboxes, so each email's inbox is named by what tells it apart. */
   inboxes?: string[];
+  /** Set on one application's timeline (null reads "No requisition"). */
+  requisition?: string | null;
+  /** What each round card needs, by round id; a round without it is not shown. */
+  roundCards?: Record<string, RoundCardData>;
 }) {
+  const [filter, setFilter] = useState<"all" | "stages" | "mail">("all");
+  const perApplication = requisition !== undefined;
+  const shown = (entry: TimelineDay["entries"][number]) =>
+    entry.type === "round"
+      ? !!roundCards[entry.round.id] && (!perApplication || filter !== "mail")
+      : !perApplication || filter === "all" || (filter === "mail") === (entry.type === "mail");
+  const visible = days
+    .map((day) => ({ ...day, entries: day.entries.filter(shown) }))
+    .filter((day) => day.entries.length > 0);
   const several = roles.length > 1;
   const labels = inboxLabels([
     ...inboxes,
@@ -296,7 +307,7 @@ export function CompanyTimeline({
   const roleOf = (id: string | undefined) =>
     several && id ? roles.find((item) => item.id === id)?.role : undefined;
   // Every email opens in the reading popup; previous and next walk the emails as listed.
-  const mails = days.flatMap((day) =>
+  const mails = visible.flatMap((day) =>
     day.entries.filter((entry): entry is TimelineMail => entry.type === "mail"),
   );
   const [openId, setOpenId] = useState<string | null>(openMail);
@@ -311,7 +322,33 @@ export function CompanyTimeline({
     document.querySelector<HTMLElement>(`[data-mail-row="${CSS.escape(id)}"]`);
   return (
     <div className="min-w-0">
-      {several && (
+      {perApplication && (
+        <nav role="group" aria-label="Filter timeline" className="mb-5 flex flex-wrap gap-2">
+          {(
+            [
+              ["all", "All"],
+              ["stages", "Stages"],
+              ["mail", "Mail"],
+            ] as const
+          ).map(([id, text]) => (
+            <button
+              key={id}
+              type="button"
+              aria-pressed={filter === id}
+              onClick={() => setFilter(id)}
+              className={cn(
+                "pressable inline-flex h-8 items-center rounded-full px-3 text-sm",
+                filter === id
+                  ? "bg-foreground text-background"
+                  : "text-muted-foreground ring-1 ring-border hover:text-foreground",
+              )}
+            >
+              {text}
+            </button>
+          ))}
+        </nav>
+      )}
+      {several && !perApplication && (
         <nav role="group" aria-label="Filter by role" className="mb-5 flex flex-wrap gap-2">
           {[{ id: null, role: "All roles", href: allRolesHref }, ...roles].map((link) => (
             <Link
@@ -331,13 +368,12 @@ export function CompanyTimeline({
           ))}
         </nav>
       )}
-      {days.length ? (
+      {visible.length ? (
         <div className="min-w-0 overflow-hidden rounded-3xl bg-card ring-1 ring-border">
-          {days.map((day, index) => {
-            // A band opens Coming up, and each older year the first time it appears.
-            const band = !day.stamp
-              ? "Coming up"
-              : !day.stamp.thisYear && day.stamp.year !== days[index - 1]?.stamp?.year
+          {visible.map((day, index) => {
+            // A band opens each older year the first time it appears.
+            const band =
+              !day.stamp.thisYear && day.stamp.year !== visible[index - 1]?.stamp.year
                 ? String(day.stamp.year)
                 : null;
             return (
@@ -348,7 +384,6 @@ export function CompanyTimeline({
                     className={cn(
                       "bg-muted/40 px-4 py-2 text-sm font-semibold tabular-nums",
                       index > 0 && "border-t border-border",
-                      !day.stamp && "text-link",
                     )}
                   >
                     {band}
@@ -378,8 +413,20 @@ export function CompanyTimeline({
                           inbox={inboxOf(entry.item)}
                           onOpen={() => setOpenId(entry.item.id)}
                         />
+                      ) : entry.type === "round" ? (
+                        <RoundCard
+                          key={entry.round.id}
+                          entry={entry}
+                          data={roundCards[entry.round.id]}
+                          requisition={requisition}
+                        />
                       ) : (
-                        <StepRow key={entry.id} step={entry} role={roleOf(entry.applicationId)} />
+                        <StepRow
+                          key={entry.id}
+                          step={entry}
+                          role={roleOf(entry.applicationId)}
+                          requisition={requisition}
+                        />
                       ),
                     )}
                   </ul>

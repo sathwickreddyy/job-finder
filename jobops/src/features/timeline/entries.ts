@@ -1,6 +1,6 @@
 import type { applicationEvents, applicationRounds } from "@/db/schema";
-import { indiaDate } from "@/features/applications/dates";
-import { roundKindLabel } from "@/features/companies/metrics";
+import { indiaDate, noonIfDateOnly } from "@/features/applications/dates";
+import { roundLabels } from "@/features/applications/round-label";
 import type { MailItem } from "@/features/mail/mail-item";
 
 type EventRow = typeof applicationEvents.$inferSelect;
@@ -13,10 +13,10 @@ export type TimelineStep = {
   applicationId: string;
   eventType: string;
   text: string;
-  upcoming: boolean;
 };
 export type TimelineMail = { type: "mail"; at: string; item: MailItem; recorded: string | null };
-export type TimelineEntry = TimelineStep | TimelineMail;
+export type TimelineRound = { type: "round"; at: string; round: RoundRow; label: string };
+export type TimelineEntry = TimelineStep | TimelineMail | TimelineRound;
 /** What the date column shows for a day; the year is only spelled out when it isn't this one. */
 export type DayStamp = {
   weekday: string;
@@ -29,8 +29,7 @@ export type DayStamp = {
 export type TimelineDay = {
   key: string;
   label: string;
-  /** Null for Coming up, whose rows carry their own dates. */
-  stamp: DayStamp | null;
+  stamp: DayStamp;
   entries: TimelineEntry[];
 };
 
@@ -71,8 +70,8 @@ function dayLabel(key: string, stamp: DayStamp, now: Date) {
 }
 
 /**
- * One company's emails and steps, newest first and grouped by India date. Booked rounds
- * still ahead sit in "Coming up", soonest first. Steps older than the oldest loaded email
+ * One company's emails, steps and rounds, newest first and grouped by India date. A round
+ * sits at its scheduled time, else when it was created. Steps older than the oldest loaded email
  * wait for "Show older", and a tag or search shows emails only.
  */
 export function timelineEntries(input: {
@@ -98,29 +97,28 @@ export function timelineEntries(input: {
     steps.push({
       type: "step",
       id: event.id,
-      at: event.occurredAt.toISOString(),
+      at: noonIfDateOnly(event.occurredAt).toISOString(),
       applicationId: event.applicationId,
       eventType: event.eventType,
       text: event.summary,
-      upcoming: false,
     });
   }
-  const upcoming: TimelineStep[] = input.rounds
-    .filter(
-      (round) =>
-        round.outcome === "SCHEDULED" && round.scheduledAt && round.scheduledAt > input.now,
-    )
-    .map((round): TimelineStep => ({
-      type: "step",
-      id: `round:${round.id}`,
-      at: round.scheduledAt!.toISOString(),
-      applicationId: round.applicationId,
-      eventType: "ROUND_BOOKED",
-      text:
-        round.kind === "ONLINE_ASSESSMENT" ? "OA closes" : `${roundKindLabel[round.kind]} round`,
-      upcoming: true,
-    }))
-    .sort((a, b) => a.at.localeCompare(b.at));
+  // Labels number technical rounds among all of an application's rounds, in position order.
+  const labelOf = new Map<string, string>();
+  const byApplication = Map.groupBy(input.rounds, (round) => round.applicationId);
+  for (const group of byApplication.values()) {
+    const ordered = [...group].sort((a, b) => a.position - b.position);
+    const labels = roundLabels(ordered);
+    ordered.forEach((round, index) => labelOf.set(round.id, labels[index]));
+  }
+  const rounds: TimelineRound[] = input.rounds
+    .filter((round) => round.outcome !== "CANCELLED")
+    .map((round) => ({
+      type: "round",
+      at: noonIfDateOnly(round.scheduledAt ?? round.createdAt).toISOString(),
+      round,
+      label: labelOf.get(round.id) ?? "Round",
+    }));
   const oldest = input.mail.at(-1)?.receivedAt;
   const past: TimelineEntry[] = [
     ...input.mail.map((item): TimelineMail => ({
@@ -131,11 +129,9 @@ export function timelineEntries(input: {
     })),
     ...(input.filtered
       ? []
-      : steps.filter((step) => input.complete || !oldest || step.at >= oldest)),
+      : [...steps.filter((step) => input.complete || !oldest || step.at >= oldest), ...rounds]),
   ].sort((a, b) => b.at.localeCompare(a.at));
   const days: TimelineDay[] = [];
-  if (upcoming.length && !input.filtered)
-    days.push({ key: "upcoming", label: "Coming up", stamp: null, entries: upcoming });
   for (const entry of past) {
     const key = indiaDate(new Date(entry.at));
     const last = days.at(-1);
