@@ -173,7 +173,7 @@ export function NamedSteps({
                   )}
                 />
               )}
-              {reached && step.target ? (
+              {(reached || step.state === "stopped") && step.target ? (
                 <a href={`#${step.target}`} className={cn(inner, "no-underline")}>
                   {body}
                 </a>

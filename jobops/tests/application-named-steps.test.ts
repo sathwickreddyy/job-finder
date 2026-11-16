@@ -186,6 +186,7 @@ describe("namedStepsOf", () => {
       NOW,
     );
     expect(steps[3].state).toBe("stopped");
+    expect(currentNamedStep(steps).label).toBe("Rejected");
     expect(steps.at(-1)).toMatchObject({
       key: "final",
       label: "Rejected",
@@ -194,6 +195,18 @@ describe("namedStepsOf", () => {
       detail: "1 Oct",
       target: `entry-${rejection.id}`,
     });
+  });
+
+  it("fades a still-open round once the application closes", () => {
+    const open = interviewing([{ kind: "DSA", scheduledAt: at("2026-10-01T12:00:00") }]);
+    const steps = namedStepsOf(
+      { ...open, phase: "Closed", status: "REJECTED", closedReason: "REJECTED" },
+      NOW,
+    );
+    expect(steps.some((step) => step.state === "current")).toBe(false);
+    expect(steps[3]).toMatchObject({ state: "faded" });
+    expect(steps[3].due).toBeUndefined();
+    expect(currentNamedStep(steps).label).toBe("Rejected");
   });
 
   it("ends at Accepted or Declined with a settled offer", () => {
@@ -306,5 +319,21 @@ describe("NamedSteps", () => {
     expect(html.indexOf("Add")).toBeGreaterThan(html.indexOf("Applied"));
     expect(html.indexOf("Add")).toBeLessThan(html.indexOf("Offer / Rejected"));
     expect(html.match(/<a /g)).toHaveLength(1);
+    const closed = renderToStaticMarkup(
+      createElement(NamedSteps, {
+        size: "page",
+        steps: [
+          {
+            key: "final",
+            label: "Rejected",
+            detail: "",
+            state: "stopped",
+            tone: "bad",
+            target: "entry-x",
+          },
+        ],
+      }),
+    );
+    expect(closed).toContain('href="#entry-x"');
   });
 });

@@ -223,6 +223,13 @@ export function namedStepsOf(record: StepSource, now: Date): NamedStep[] {
   // Rounds after a failed one were never reached; the outcome step is the end of the line.
   const stopIndex = steps.findIndex((step) => step.state === "stopped");
   if (stopIndex !== -1) for (const step of steps.slice(stopIndex + 1)) step.state = "faded";
+  // A close (rejection, withdrawal, no reply) leaves unfinished rounds unsettled; they were not reached.
+  if (closed)
+    for (const step of steps)
+      if (step.key.startsWith("round-") && step.state === "current") {
+        step.state = "faded";
+        delete step.due;
+      }
   steps.push(final);
 
   if (!closed && !steps.some((step) => step.state === "current")) {
@@ -236,6 +243,7 @@ export function namedStepsOf(record: StepSource, now: Date): NamedStep[] {
 export function currentNamedStep(steps: NamedStep[]): NamedStep {
   return (
     steps.find((step) => step.state === "current") ??
+    steps.find((step) => step.key === "final" && step.state === "stopped") ??
     steps.find((step) => step.state === "stopped") ??
     steps.findLast((step) => step.state === "done") ??
     steps[0]
