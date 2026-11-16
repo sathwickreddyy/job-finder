@@ -40,6 +40,9 @@ export function Modal({
   useEffect(() => {
     const element = dialog.current;
     if (!open || !element) return;
+    // A layout hidden at this width (the desktop pane on a phone) must not open its copy: an
+    // unpainted modal would still make the visible page inert.
+    if (!element.parentElement?.getClientRects().length) return;
     const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const root = document.documentElement;
     const overflow = root.style.overflow;
