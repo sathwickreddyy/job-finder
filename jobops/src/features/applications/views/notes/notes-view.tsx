@@ -87,7 +87,7 @@ function Heading({ children }: { children: ReactNode }) {
 
 /**
  * The application's notes, read top to bottom: Summary, the stored résumé scores, On the form
- * and Proof for a template note; any other Markdown renders as written.
+ * and Proof for a template note; any other Markdown renders as written. Stored scores show above any note, including a free or empty one.
  */
 export function NotesView({
   notes,
@@ -98,9 +98,19 @@ export function NotesView({
   scores: Record<ToolSource, ToolSummary> | null;
   resumesHref?: string;
 }) {
-  if (!notes.trim()) return <p className="m-0 text-sm text-muted-foreground">Nothing yet.</p>;
-  const sections = parseNoteSections(notes);
-  if (!sections) return <MarkdownView source={notes} />;
+  const dials = scores ? <ScoreDials tools={scores} href={resumesHref} /> : null;
+  const sections = notes.trim() ? parseNoteSections(notes) : null;
+  if (!sections)
+    return (
+      <div className="flex min-w-0 flex-col gap-4">
+        {dials}
+        {notes.trim() ? (
+          <MarkdownView source={notes} />
+        ) : (
+          <p className="m-0 text-sm text-muted-foreground">Nothing yet.</p>
+        )}
+      </div>
+    );
   return (
     <div className="flex min-w-0 flex-col gap-4">
       {sections.summary && (
@@ -110,7 +120,7 @@ export function NotesView({
           className="text-muted-foreground [&_p]:text-[15px]"
         />
       )}
-      {scores && <ScoreDials tools={scores} href={resumesHref} />}
+      {dials}
       {sections.onTheForm && (
         <section aria-label="On the form">
           <Heading>On the form</Heading>

@@ -94,6 +94,21 @@ describe("NotesView", () => {
     expect(view(SERVICENOW, scores)).toContain("Open in Résumés");
     expect(view(SERVICENOW, null)).not.toContain("Open in Résumés");
   });
+
+  it("shows stored scores beside a free note and an empty note", () => {
+    const scores = {
+      "jobops-lexical": { score: 80, baseScore: 70, delta: 10, breakdown: [] },
+      resumenext: { notChecked: true },
+      "resume-ats-optimizer": { notChecked: true },
+    } as Record<ToolSource, ToolSummary>;
+    const free = view("Talked to **Priya**.", scores);
+    expect(free).toContain("Open in Résumés");
+    expect(free.indexOf("Open in Résumés")).toBeLessThan(free.indexOf("Priya"));
+    const empty = view("", scores);
+    expect(empty).toContain("Open in Résumés");
+    expect(empty).toContain("Nothing yet.");
+    expect(view("Talked to Priya.", null)).not.toContain("Open in Résumés");
+  });
 });
 
 describe("NotesFold", () => {
