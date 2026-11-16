@@ -8,6 +8,8 @@ import { familyFill } from "@/features/companies/format";
 import { roundFamily, roundKindLabel } from "@/features/companies/metrics";
 import { cn } from "@/lib/utils";
 import { formatDay, formatDayTime, indiaDate, istClock, istDaysBetween } from "../dates";
+import { RoundQuestions } from "@/features/interviews/views/round-questions";
+import type { RoundWithQuestions } from "@/features/interviews/types";
 import { namedStepsOf } from "../named-steps";
 import {
   availableOutcomes,
@@ -33,6 +35,7 @@ export function ApplicationDetail({
   record,
   linked,
   siblings,
+  questionRounds = [],
   versions,
   now,
   notice,
@@ -41,6 +44,8 @@ export function ApplicationDetail({
   linked: ApplicationRecord[];
   /** Applications at the same company, for the header's switcher. */
   siblings: Sibling[];
+  /** Each round with its recorded interview questions. */
+  questionRounds?: RoundWithQuestions[];
   versions: Choice[];
   now: Date;
   notice?: string;
@@ -150,9 +155,16 @@ export function ApplicationDetail({
                 Rounds
               </h2>
               <ol className="m-0 flex list-none flex-col gap-3 p-0">
-                {rounds.map((round, index) => (
-                  <RoundRow key={round.id} round={round} label={labels[index]} now={now} />
-                ))}
+                {rounds.map((round, index) => {
+                  const withQuestions = questionRounds.find((item) => item.id === round.id);
+                  return (
+                    <RoundRow key={round.id} round={round} label={labels[index]} now={now}>
+                      {withQuestions && (
+                        <RoundQuestions applicationId={record.id} round={withQuestions} />
+                      )}
+                    </RoundRow>
+                  );
+                })}
                 {expected.map((step) => (
                   <li
                     key={step.key}

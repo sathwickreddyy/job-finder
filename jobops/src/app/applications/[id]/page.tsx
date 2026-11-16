@@ -8,6 +8,8 @@ import { resumes, resumeVersions } from "@/db/schema";
 import { laneHref } from "@/features/applications/navigation";
 import { currentNamedStep, namedStepsOf } from "@/features/applications/named-steps";
 import { readApplications } from "@/features/applications/read";
+import { ApiError } from "@/features/agent-api/http";
+import { listRoundQuestions } from "@/features/interviews/questions";
 import { ApplicationDetail } from "@/features/applications/views/detail";
 
 export const dynamic = "force-dynamic";
@@ -25,13 +27,18 @@ export default async function ApplicationPage({
   // Outcome and mail links open the row in place on Applications, with the form ready.
   if (query.outcome !== undefined || query.mail !== undefined)
     redirect(laneHref(id, { mail: query.mail, outcome: query.outcome }));
-  const [{ records }, versions] = await Promise.all([
+  const [{ records }, versions, questionRounds] = await Promise.all([
     readApplications(),
     db
       .select({ version: resumeVersions, family: resumes })
       .from(resumeVersions)
       .innerJoin(resumes, eq(resumeVersions.resumeId, resumes.id))
       .where(eq(resumeVersions.isMaster, false)),
+    // An unknown id is a 404 below; any other failure should surface.
+    listRoundQuestions(id).catch((error: unknown) => {
+      if (error instanceof ApiError && error.status === 404) return [];
+      throw error;
+    }),
   ]);
   const record = records.find((row) => row.id === id);
   if (!record) notFound();
@@ -57,6 +64,7 @@ export default async function ApplicationPage({
         record={record}
         linked={records.filter((row) => record.linkedIds.includes(row.id))}
         siblings={siblings}
+        questionRounds={questionRounds}
         versions={versions.map(({ version, family }) => ({
           id: version.id,
           label: `${family.name} / ${version.versionLabel} / ${version.originalFilename}`,

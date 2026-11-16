@@ -11,6 +11,7 @@ import {
   updateQuestion,
 } from "@/features/interviews/questions";
 import { ApiError } from "@/features/agent-api/http";
+import { removeQuestion, saveQuestion } from "@/features/interviews/actions";
 import { GET as getApplicationQuestions } from "@/app/api/v1/applications/[id]/questions/route";
 import { POST as postRoundQuestions } from "@/app/api/v1/applications/[id]/rounds/[roundId]/questions/route";
 import { GET as getLibrary } from "@/app/api/v1/questions/route";
@@ -239,6 +240,59 @@ describe.skipIf(!dbTests)("interview questions", () => {
       new Request("http://127.0.0.1:3210/api/v1/questions?outcome=SOLVED"),
     );
     expect(badOutcome.status).toBe(400);
+  });
+
+  it("saves from the editor once, then updates the same question", async () => {
+    const form = (fields: Record<string, string>) => {
+      const data = new FormData();
+      for (const [key, value] of Object.entries(fields)) data.set(key, value);
+      return data;
+    };
+    const base = { applicationId: other.app.id, roundId: other.rounds[0].id };
+    const created = await saveQuestion(
+      {},
+      form({
+        ...base,
+        title: "Editor question",
+        patterns: JSON.stringify(["Two pointers"]),
+        outcome: "solved_aloud",
+        answer: "first draft",
+        review: "sneaky",
+        reviewSource: "Me",
+      }),
+    );
+    expect(created.error).toBeUndefined();
+    expect(created.id).toBeTruthy();
+    const again = await saveQuestion(
+      {},
+      form({
+        ...base,
+        id: created.id!,
+        title: "Editor question",
+        answer: "second draft",
+        outcome: "",
+      }),
+    );
+    expect(again.error).toBeUndefined();
+    expect(again.id).toBe(created.id);
+    const rows = await db
+      .select()
+      .from(interviewQuestions)
+      .where(eq(interviewQuestions.title, "Editor question"));
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      answer: "second draft",
+      outcome: null,
+      review: "",
+      reviewSource: null,
+    });
+    expect(rows[0].patterns).toEqual(["Two pointers"]);
+
+    const removed = await removeQuestion({}, form({ id: created.id! }));
+    expect(removed.error).toBeUndefined();
+    expect(
+      await db.select().from(interviewQuestions).where(eq(interviewQuestions.id, created.id!)),
+    ).toEqual([]);
   });
 
   it("deletes questions one by one and with their round", async () => {
