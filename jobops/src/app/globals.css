@@ -883,3 +883,150 @@
     animation: none;
   }
 }
+
+/* Rendered Markdown notes (interview answers, application notes). */
+.md-view {
+  min-width: 0;
+  font-size: 14px;
+  line-height: 1.65;
+  color: var(--foreground);
+  overflow-wrap: anywhere;
+  & > :first-child {
+    margin-top: 0;
+  }
+  & > :last-child {
+    margin-bottom: 0;
+  }
+  & h1,
+  & h2,
+  & h3,
+  & h4 {
+    margin: 1.25em 0 0.5em;
+    line-height: 1.3;
+    font-weight: 650;
+  }
+  & h1 {
+    font-size: 1.25rem;
+  }
+  & h2 {
+    font-size: 1.075rem;
+  }
+  & h3,
+  & h4 {
+    font-size: 0.95rem;
+  }
+  & p,
+  & ul,
+  & ol,
+  & table,
+  & pre,
+  & blockquote {
+    margin: 0.6em 0;
+  }
+  & ul,
+  & ol {
+    padding-left: 1.3em;
+  }
+  /* Tailwind's reset removes list markers; notes need them back. */
+  & ul {
+    list-style: disc;
+  }
+  & ol {
+    list-style: decimal;
+  }
+  & ul ul {
+    list-style: circle;
+  }
+  & li:has(> input[type="checkbox"]) {
+    list-style: none;
+    margin-left: -1.3em;
+  }
+  & li + li {
+    margin-top: 0.2em;
+  }
+  & li::marker {
+    color: var(--muted-foreground);
+  }
+  & a {
+    color: var(--link);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+  & blockquote {
+    border-left: 3px solid var(--border);
+    padding: 0.1em 0 0.1em 0.9em;
+    color: var(--muted-foreground);
+  }
+  & hr {
+    border: 0;
+    border-top: 1px solid var(--border);
+    margin: 1.2em 0;
+  }
+  & :not(pre) > code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.86em;
+    padding: 0.1em 0.38em;
+    border-radius: 6px;
+    background: var(--muted);
+  }
+  /* Code keeps its own lines and scrolls sideways instead of widening the page. */
+  & pre {
+    max-width: 100%;
+    overflow-x: auto;
+    padding: 12px 14px;
+    border-radius: 14px;
+    background: var(--surface-container);
+    border: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+    font-size: 12.5px;
+    line-height: 1.6;
+    overflow-wrap: normal;
+    tab-size: 4;
+  }
+  & pre code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    white-space: pre;
+  }
+  & table {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  & th,
+  & td {
+    border: 1px solid var(--border);
+    padding: 5px 9px;
+    text-align: left;
+    white-space: nowrap;
+  }
+  & th {
+    background: var(--surface-container);
+    font-weight: 600;
+  }
+  & input[type="checkbox"] {
+    margin: 0 0.4em 0 0;
+    vertical-align: -1px;
+  }
+  & .hljs-keyword,
+  & .hljs-built_in,
+  & .hljs-selector-tag {
+    color: var(--purple);
+  }
+  & .hljs-string,
+  & .hljs-attr {
+    color: var(--teal);
+  }
+  & .hljs-number,
+  & .hljs-literal {
+    color: var(--amber);
+  }
+  & .hljs-comment {
+    color: var(--muted-foreground);
+    font-style: italic;
+  }
+  & .hljs-title,
+  & .hljs-function {
+    color: var(--link);
+  }
+}
