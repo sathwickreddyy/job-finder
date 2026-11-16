@@ -320,7 +320,7 @@ export function ApplicationsTab({
         </p>
       )}
       {data.unplaced.length > 0 && (
-        <section aria-labelledby="unplaced-title" className="space-y-3">
+        <section id="unplaced" aria-labelledby="unplaced-title" className="scroll-mt-24 space-y-3">
           <div>
             <h2 id="unplaced-title" className="m-0 text-base font-semibold">
               {companyName}, not on an application
@@ -336,7 +336,7 @@ export function ApplicationsTab({
             allRolesHref=""
             role={null}
             openMail={mailIntent ?? null}
-            olderHref={null}
+            olderHref={data.unplacedOlderHref}
             inboxes={inboxes}
           />
         </section>

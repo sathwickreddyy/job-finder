@@ -206,4 +206,24 @@ describe.skipIf(!dbTests)("company applications", () => {
     expect(data.rows.every((row) => row.olderHref === null)).toBe(true);
     expect(data.versions.some((version) => version.id === made.version)).toBe(true);
   });
+
+  it("finds unlinked company mail older than the newest 50 emails", async () => {
+    const old = await email({ subject: `Ancient ${prefix}`, receivedAt: new Date("2025-01-01Z") });
+    await db.insert(mailMessages).values(
+      Array.from({ length: 52 }, (_, index) => ({
+        externalId: `${prefix}-bulk-${index}`,
+        provider: "GMAIL" as const,
+        accountEmail: account,
+        sender: "talent@fixture.invalid",
+        subject: `Bulk ${index}`,
+        receivedAt: new Date(Date.UTC(2026, 10, 12, 0, index)),
+        classification: "FOLLOW_UP" as const,
+        companyKey: key,
+        linkedApplicationId: made.newer,
+      })),
+    );
+    const { unplaced, unplacedOlderHref } = await readCompanyApplications(key, {}, now);
+    expect(mailIds(unplaced)).toEqual([made.loose, old]);
+    expect(unplacedOlderHref).toBeNull();
+  });
 });

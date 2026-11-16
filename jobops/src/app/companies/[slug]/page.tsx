@@ -20,6 +20,7 @@ export default async function CompanyPage({
     tab?: string;
     open?: string;
     cursor?: string;
+    unplacedCursor?: string;
     outcome?: string;
     mail?: string;
   }>;

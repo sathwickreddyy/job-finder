@@ -141,6 +141,7 @@ function data(rows: CompanyApplicationRow[], patch: Partial<CompanyApplications>
     rows,
     unplaced: [],
     unplacedHandling: {},
+    unplacedOlderHref: null,
     next: null,
     status: null,
     search: null,

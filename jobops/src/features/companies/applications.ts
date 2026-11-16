@@ -1,7 +1,7 @@
-import { eq } from "drizzle-orm";
+import { eq, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
-import { resumes, resumeVersions } from "@/db/schema";
+import { mailMessages, resumes, resumeVersions } from "@/db/schema";
 import { ApiError } from "@/features/agent-api/http";
 import { indiaDate } from "@/features/applications/dates";
 import { namedStepsOf, type NamedStep } from "@/features/applications/named-steps";
@@ -14,7 +14,14 @@ import { readCompanySearch } from "@/features/mail/company-search";
 import type { TimelineDay } from "@/features/timeline/entries";
 import type { RailDue } from "@/features/timeline/index-rows";
 import { mailCursor } from "@/features/timeline/query";
-import { readCompanyIndex, readCompanyTimeline } from "@/features/timeline/read";
+import { listMail } from "@/features/mail/mail-list";
+import { timelineEntries } from "@/features/timeline/entries";
+import {
+  markSavedOpenings,
+  readCompanyIndex,
+  readCompanyTimeline,
+  timelineRole,
+} from "@/features/timeline/read";
 import type { RoundCardData } from "@/features/timeline/round-card";
 import { suggestHandling, type Handling } from "@/features/timeline/suggest";
 import { summarizeTool, type ToolSummary } from "@/features/resumes/fit/derive";
@@ -35,6 +42,8 @@ export type CompanyApplications = {
   rows: CompanyApplicationRow[];
   unplaced: TimelineDay[];
   unplacedHandling: Record<string, Handling>;
+  /** Shows the next page of mail that is on no application. */
+  unplacedOlderHref: string | null;
   next: { text: string; due: RailDue | null } | null;
   status: CompanyStatus | null;
   search: Awaited<ReturnType<typeof readCompanySearch>> | null;
@@ -122,11 +131,14 @@ async function versionChoices() {
  */
 export async function readCompanyApplications(
   companyKey: string,
-  query: { open?: string; cursor?: string },
+  query: { open?: string; cursor?: string; unplacedCursor?: string },
   now = new Date(),
 ): Promise<CompanyApplications> {
   const open = z.uuid().safeParse(query.open).success ? query.open! : null;
   const cursor = mailCursor.safeParse(query.cursor).success ? query.cursor! : null;
+  const unplacedCursor = mailCursor.safeParse(query.unplacedCursor).success
+    ? query.unplacedCursor!
+    : null;
   const { records } = await readApplications();
   const own = records
     .filter((record) => record.companyKey === companyKey && record.source !== PREVIOUS_JOB)
@@ -136,7 +148,7 @@ export async function readCompanyApplications(
         (b.sentAt?.getTime() ?? Infinity) - (a.sentAt?.getTime() ?? Infinity) ||
         a.id.localeCompare(b.id),
     );
-  const [rows, company, index, search, versions] = await Promise.all([
+  const [rows, loose, index, search, versions] = await Promise.all([
     Promise.all(
       own.map(async (record): Promise<CompanyApplicationRow> => {
         const [timeline, questions, scores] = await Promise.all([
@@ -169,7 +181,16 @@ export async function readCompanyApplications(
         };
       }),
     ),
-    readCompanyTimeline(companyKey, {}, now),
+    // Mail on no application is paged on its own, so older mail is never cut off.
+    listMail(
+      {
+        company: companyKey,
+        attention: "all",
+        ...(unplacedCursor ? { cursor: unplacedCursor } : {}),
+      },
+      undefined,
+      [isNull(mailMessages.linkedApplicationId)],
+    ),
     readCompanyIndex({}, now),
     readCompanySearch(companyKey).catch((error: unknown) => {
       if (error instanceof ApiError && error.status === 404) return null;
@@ -177,19 +198,24 @@ export async function readCompanyApplications(
     }),
     versionChoices(),
   ]);
-  const unplaced = company.days
-    .map((day) => ({
-      ...day,
-      entries: day.entries.filter(
-        (entry) => entry.type === "mail" && entry.item.application === null,
-      ),
-    }))
-    .filter((day) => day.entries.length > 0);
+  const unplaced = await markSavedOpenings(
+    timelineEntries({
+      mail: loose.items,
+      events: [],
+      rounds: [],
+      complete: loose.nextCursor === null,
+      filtered: false,
+      now,
+    }),
+  );
   const row = index.rows.find((item) => item.key === companyKey);
   return {
     rows,
     unplaced,
-    unplacedHandling: handlingOf(unplaced, company.roles),
+    unplacedHandling: handlingOf(unplaced, own.map(timelineRole)),
+    unplacedOlderHref: loose.nextCursor
+      ? `?${new URLSearchParams({ unplacedCursor: loose.nextCursor })}#unplaced`
+      : null,
     next: row?.next ? { text: row.next, due: row.due } : null,
     status: index.statuses[companyKey] ?? null,
     search,
