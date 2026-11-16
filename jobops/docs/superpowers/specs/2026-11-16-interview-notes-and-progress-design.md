@@ -1,6 +1,6 @@
 # Interview notes, named rounds and mail reader
 
-Date: 2026-11-16. Status: awaiting user approval.
+Date: 2026-11-16. Status: approved and built (gallery removed after the build).
 Gallery: `/gallery/interview-notes` (picks: stage A named steps, header B facts and a switcher,
 questions A rows that open in place, editor A side by side, library B sortable table, page A two
 columns). Mail reader requested in conversation on the same day.

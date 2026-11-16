@@ -68,12 +68,15 @@ Start with the highlighted box. JobOps keeps the exact job description and résu
 2. Choose **Fetch new mail** and check each inbox's result. Search a company if you need to recover an earlier message.
 3. Match the reply to the exact role. Check whether JobOps already applied an outcome. Link a confirmed match or record the outcome from the email. Leave ambiguous mail open for review.
 
-### 7. Track the interview and the next action
+### 7. Track interview rounds and what was asked
 
-![Open the application → record the assessment or interview → record its result → check the next action.](jobops/docs/diagrams/07-interviews.svg)
+![Applications show named rounds → record the round or its result → record the questions → revise in the question library.](jobops/docs/diagrams/07-interviews.svg)
 
-1. In **Applications**, expand the correct role. Under **What happened?**, record an assessment or scheduled round with its deadline or date and time.
-2. Reopen the same record when the round is rescheduled or you get a result. Record what happened and check the updated timeline and next action.
+1. In **Applications**, each row names where it stands: **Applied**, **Acknowledged**, **Round 1 · DSA**, **Managerial round**, **HR round**, **Offer**. Rounds that company research still expects are marked **Expected · from company research**. The requisition shows beside the role, so two openings at one company stay apart.
+2. Expand the role and, under **What happened?**, record an assessment or scheduled round with its date and time. Record the result or a reschedule the same way.
+3. Open the application page for the full picture: the opening and requisition, when you applied, the **Résumé sent** and where it stands, with a switcher between applications at the same company. Every email in its **Mail** card, and anywhere else in JobOps, opens in a reading popup.
+4. Under the round, choose **Add a question**. Write what they asked, how you answered and what the interviewer said in Markdown, with code blocks and tables, and mark how it went. Save with **Save question** or ⌘S. Keep longer prep notes in **Notes**.
+5. Before the next round, open **Question library** from Applications to search and sort every question across companies. An agent can add a review to a question through the [interview questions API](jobops/docs/api/interview-questions.md); it shows with its source and never replaces your answer.
 
 ## Show the supporting workflows
 
@@ -95,7 +98,7 @@ Start with the highlighted box. JobOps keeps the exact job description and résu
 
 | Skill | Location | Use |
 | --- | --- | --- |
-| `job-apply` | [Shared playbook](.claude/skills/job-apply/SKILL.md), also available under `.agents/skills/` | Work on one opening, prepare the résumé, check mail, and record the outcome. |
+| `job-apply` | [Shared playbook](.claude/skills/job-apply/SKILL.md), also available under `.agents/skills/` | Work on one opening, prepare the résumé, check mail, record the outcome and the interview questions. |
 | `resume-ats-optimizer` | User-level `~/.agents/skills/resume-ats-optimizer/SKILL.md` · [source](https://github.com/paramchoudhary/ResumeSkills/tree/main/skills/resume-ats-optimizer) | Review résumé formatting and keyword coverage against a job description. |
 
 Say **Apply for this job** and provide the link, or invoke `$job-apply` in Codex or `/job-apply` in Claude Code. Keep this inventory current when project-related skills change. For deeper details, see the [operator reference](jobops/docs/operator-reference.md), [API guide](jobops/docs/api/automation.md) or [scoring service](services/resume-scoring/README.md).

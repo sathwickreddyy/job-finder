@@ -77,4 +77,40 @@ Body shape (replace all example values; omit unknown optional dates):
 
 `humanConfirmed` means a real user-confirmed submission/sent message, not permission to send. Current `DIRECT` represents a submitted application, including a final application via a referral link; retain referral provenance in notes. `REFERRAL` represents the **sent request**, with recipient/evidence, and is recorded separately. Confirm the exact `resumeVersionId` first: sent records lock it. Verify returned application/company links/warnings. Never repair submitted records directly in the DB without explicit approval.
 
+## Record interview questions after a round
+
+When the user shares what an interview asked, record it on that round so they can revise later.
+Find the round with `GET "$JOBOPS_URL/api/v1/applications/{id}/questions"`; if it is missing,
+record it first with the [transition API](../../../../jobops/docs/api/application-transitions.md).
+Then append the questions in one request, keeping the user's own working exactly as written:
+
+```sh
+curl --fail-with-body --silent --show-error -H 'Content-Type: application/json' \
+  --data-binary @jobops/data/job-apply/questions.json \
+  "$JOBOPS_URL/api/v1/applications/{id}/rounds/{roundId}/questions"
+```
+
+```json
+{
+  "questions": [
+    {
+      "title": "Longest substring without repeating characters",
+      "patterns": ["Sliding window", "Hash map"],
+      "prompt": "The problem as asked, in Markdown.",
+      "answer": "The user's own approach and code, unedited.",
+      "outcome": "solved_code",
+      "time": "O(n)",
+      "space": "O(k)",
+      "interviewer": "What the interviewer said."
+    }
+  ]
+}
+```
+
+Outcomes are `solved_code`, `solved_aloud`, `partial` or `stuck`; ask the user rather than guess.
+A review you write for revisiting goes in a separate `PATCH /api/v1/questions/{id}` with
+`review` and `reviewSource` (for example `"Claude Code"`); never rewrite the user's `answer`.
+Read the questions back and confirm them on the application page. See the
+[interview questions contract](../../../../jobops/docs/api/interview-questions.md).
+
 Candidate answers use `/settings` → Standard answers and the profile UI. There is no active `/api/v1/candidate` route; do not use retired task/mission endpoints. [Résumé/answer handling](resumes-and-answers.md) and [mail operations](mail.md) complete this reference.
