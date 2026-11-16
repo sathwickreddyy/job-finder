@@ -122,12 +122,6 @@ test("recording outcomes walks an application from OA to an accepted offer", asy
     .toBe(true);
   await page.reload();
   await expect(rounds.filter({ hasText: "LLD" })).toBeVisible();
-  await page.waitForLoadState("networkidle");
-  await hydrated(row.getByRole("button", { name: "Add note", exact: true }));
-  await row.getByLabel("Add to history").fill("Discussed system design preparation");
-  await row.getByRole("button", { name: "Add note", exact: true }).click();
-  await expect(page.getByRole("status").filter({ hasText: "Timeline note added." })).toBeVisible();
-  await expect(row).toContainText("Discussed system design preparation");
   // Notes are written in the Notes fold as Markdown; Edit details holds the record's fields.
   const notes = row.getByRole("region", { name: "Notes", exact: true });
   await notes.getByRole("button", { name: /^Notes/ }).click();
@@ -143,6 +137,14 @@ test("recording outcomes walks an application from OA to an accepted offer", asy
   await expect(
     row.getByRole("link", { name: "https://example.invalid/application/123" }),
   ).toHaveAttribute("href", "https://example.invalid/application/123");
+  // The saving overlay keeps the page inert for a moment after Edit details; typing into an
+  // inert field is silently dropped, so wait for it to lift.
+  await page.waitForFunction(() => !document.querySelector("[inert]"));
+  await hydrated(row.getByRole("button", { name: "Add note", exact: true }));
+  await row.getByLabel("Add to history").fill("Discussed system design preparation");
+  await row.getByRole("button", { name: "Add note", exact: true }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Timeline note added." })).toBeVisible();
+  await expect(row).toContainText("Discussed system design preparation");
   await expect(row.getByRole("button", { name: "Got an offer", exact: true })).toHaveCount(0);
 
   await roundResult(rounds.filter({ hasText: "LLD" }), "Cleared the round");
@@ -262,11 +264,7 @@ for (const outcome of ["Sent a follow-up", "Rejected"]) {
     await page.keyboard.press("Enter");
     await page.getByRole("button", { name: "Save", exact: true }).focus();
     await page.keyboard.press("Enter");
-    // Rejecting closes the add-step panel with its confirmation; the other chip stays to show it.
-    if (outcome !== "Rejected")
-      await expect(
-        page.getByRole("status").filter({ hasText: `Saved: ${outcome}.` }),
-      ).toBeVisible();
+    await expect(page.getByRole("status").filter({ hasText: `Saved: ${outcome}.` })).toBeVisible();
     await expect(page.getByLabel("Note (optional)")).toHaveCount(0);
     if (outcome === "Rejected") {
       await expect(chip).toHaveCount(0);
