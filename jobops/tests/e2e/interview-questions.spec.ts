@@ -1,3 +1,4 @@
+import { eq } from "drizzle-orm";
 import { expect, test } from "@playwright/test";
 import { closeDatabase, db } from "../../src/db";
 import { applicationRounds, interviewQuestions } from "../../src/db/schema";
@@ -145,4 +146,44 @@ test("the question library sorts, searches and opens a question in a sheet", asy
 
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
+test("unsaved question edits ask before in-app navigation, and a double save adds one question", async ({
+  page,
+}) => {
+  const { applicationId } = await seedRecord({
+    company: `Guard Co ${Date.now()}`,
+    source: "DIRECT",
+    sentDaysAgo: 5,
+    status: "TECHNICAL_INTERVIEW",
+  });
+  await db.insert(applicationRounds).values({ applicationId, kind: "DSA", position: 1 });
+  await page.goto(`/applications/${applicationId}`);
+  const add = page.getByRole("button", { name: "Add a question" });
+  await hydrated(add);
+  await add.click();
+  await page.getByRole("textbox", { name: "Question title" }).fill("Unsaved title");
+
+  let asked = 0;
+  page.on("dialog", async (dialog) => {
+    asked += 1;
+    await dialog.dismiss();
+  });
+  await page.getByRole("link", { name: "Back to Applications" }).click();
+  await expect.poll(() => asked).toBe(1);
+  await expect(page).toHaveURL(new RegExp(`/applications/${applicationId}$`));
+  await expect(page.getByRole("textbox", { name: "Question title" })).toHaveValue("Unsaved title");
+
+  await page.getByRole("button", { name: "Save question" }).dblclick();
+  await expect(page.getByText("Question saved.")).toBeVisible();
+  await page.keyboard.press("ControlOrMeta+s");
+  await page.keyboard.press("ControlOrMeta+s");
+  await page.getByRole("button", { name: "Done" }).click();
+  await expect(page.getByText("Unsaved title", { exact: true })).toHaveCount(1);
+  const saved = await db
+    .select()
+    .from(interviewQuestions)
+    .innerJoin(applicationRounds, eq(applicationRounds.id, interviewQuestions.roundId))
+    .where(eq(applicationRounds.applicationId, applicationId));
+  expect(saved).toHaveLength(1);
 });

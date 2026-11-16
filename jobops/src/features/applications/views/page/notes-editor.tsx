@@ -17,15 +17,41 @@ export function PaneLabel({ children }: { children: ReactNode }) {
   );
 }
 
-/** Asks before leaving the page while there are unsaved edits. */
+/**
+ * Asks before leaving the page while there are unsaved edits: on reload or tab close, and on
+ * in-app links, which navigate without unloading the page.
+ */
 export function useLeaveGuard(dirty: boolean) {
   useEffect(() => {
     if (!dirty) return;
     const warn = (event: BeforeUnloadEvent) => {
       event.preventDefault();
     };
+    const guardLinks = (event: MouseEvent) => {
+      if (event.defaultPrevented || event.button !== 0) return;
+      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      const link = event.target instanceof Element ? event.target.closest("a[href]") : null;
+      if (
+        !(link instanceof HTMLAnchorElement) ||
+        link.target === "_blank" ||
+        link.hasAttribute("download")
+      )
+        return;
+      const to = new URL(link.href, window.location.href);
+      const here = window.location;
+      if (to.origin !== here.origin || (to.pathname === here.pathname && to.search === here.search))
+        return;
+      if (!window.confirm("Leave this page? Your unsaved changes will be lost.")) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+    };
     window.addEventListener("beforeunload", warn);
-    return () => window.removeEventListener("beforeunload", warn);
+    document.addEventListener("click", guardLinks, true);
+    return () => {
+      window.removeEventListener("beforeunload", warn);
+      document.removeEventListener("click", guardLinks, true);
+    };
   }, [dirty]);
 }
 
