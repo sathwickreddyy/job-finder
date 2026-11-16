@@ -113,10 +113,17 @@ export function namedStepsOf(record: NamedStepSource, now: Date): NamedStep[] {
     });
   }
 
+  // A settled offer keeps the Offer step; its detail says how it was settled.
+  const settled =
+    record.closedReason === "ACCEPTED"
+      ? "Accepted"
+      : record.closedReason === "DECLINED"
+        ? "Declined"
+        : null;
   steps.push({
     key: "offer",
     label: "Offer",
-    detail: day(offer.at),
+    detail: [settled, day(offer.at)].filter(Boolean).join(" · "),
     state: reached(offer) ? "done" : "ahead",
     tone: "offer",
   });

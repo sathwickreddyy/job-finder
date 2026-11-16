@@ -139,6 +139,29 @@ describe("namedStepsOf", () => {
     ]);
   });
 
+  it("says whether a settled offer was accepted or declined", () => {
+    for (const [closedReason, word] of [
+      ["ACCEPTED", "Accepted"],
+      ["DECLINED", "Declined"],
+    ] as const) {
+      const id = uid();
+      const steps = namedStepsOf(
+        record({
+          id,
+          phase: "Closed",
+          status: "CLOSED",
+          closedReason,
+          typicalLoop: ["DSA"],
+          events: [event(id, "OFFER_RECEIVED", at("2026-10-20T10:00:00"))],
+        }),
+        NOW,
+      );
+      const current = currentNamedStep(steps);
+      expect(current.label).toBe("Offer");
+      expect(current.detail).toBe(`${word} · 20 Oct`);
+    }
+  });
+
   it("starts an unsent application at Not sent", () => {
     const steps = namedStepsOf(
       record({ phase: "Preparing", status: "PREPARING", sentAt: null }),
