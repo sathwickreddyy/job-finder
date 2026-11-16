@@ -230,6 +230,30 @@ describe("company page applications", () => {
     expect(body).not.toContain("Applied for Staff Engineer");
   });
 
+  it("names the submitted résumé on the open row, or says none is recorded", () => {
+    const sent = application({
+      resume: {
+        id: resume.id,
+        filename: "servicenow-jb0076231_2026-11-03.pdf",
+        label: "ServiceNow tailored",
+      },
+    } as Partial<ApplicationRecord>);
+    const bare = application({ resume: null, resumeVersionId: null } as Partial<ApplicationRecord>);
+    const facts = (value: ApplicationRecord) => {
+      const html = render(data([rowFor(value)]), { openId: value.id });
+      const body = html.slice(html.indexOf(`id="application-${value.id}"`));
+      return body.slice(body.indexOf("Résumé used"), body.indexOf("Where it stands"));
+    };
+    const withResume = facts(sent);
+    expect(withResume).toContain("ServiceNow tailored");
+    expect(withResume).toContain("servicenow-jb0076231_2026-11-03.pdf");
+    expect(withResume).toContain(
+      'title="ServiceNow tailored · servicenow-jb0076231_2026-11-03.pdf"',
+    );
+    expect(withResume).not.toContain("None recorded");
+    expect(facts(bare)).toContain("None recorded");
+  });
+
   it("shows no Practise questions or View application button and no Your applications aside", () => {
     const html = render(data(rows));
     expect(html).not.toContain("Your applications");
