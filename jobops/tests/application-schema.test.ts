@@ -56,7 +56,12 @@ describe("application tracking schema", () => {
   });
   it("adds HR as the last round kind and the question outcome enum", () => {
     expect(roundKinds.at(-1)).toBe("HR");
-    expect(questionOutcomeEnum.enumValues).toEqual(["SOLVED_CODE", "SOLVED_ALOUD", "PARTIAL", "STUCK"]);
+    expect(questionOutcomeEnum.enumValues).toEqual([
+      "SOLVED_CODE",
+      "SOLVED_ALOUD",
+      "PARTIAL",
+      "STUCK",
+    ]);
   });
 
   it("keeps interview questions under their round", () => {
