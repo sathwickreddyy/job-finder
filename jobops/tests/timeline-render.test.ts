@@ -21,7 +21,8 @@ vi.mock("@/features/mail/workspace-actions", () => ({
 }));
 type RoundRow = typeof applicationRounds.$inferSelect;
 const { CompanyTimeline } = await import("@/features/timeline/timeline");
-const { RoundCard } = await import("@/features/timeline/round-card");
+const { isShown } = await import("@/features/timeline/timeline");
+const { RoundCard, notesSummary } = await import("@/features/timeline/round-card");
 
 const item = (id: string, patch: Partial<MailItem> = {}): MailItem => ({
   id,
@@ -505,6 +506,37 @@ describe("CompanyTimeline", () => {
       expect(text({ scheduledAt: new Date("2999-01-01T00:00:00Z") })).toContain(">Booked<");
       expect(text({ outcome: "PASSED" })).toContain(">Cleared<");
       expect(text({ outcome: "FAILED" })).toContain("Didn&#x27;t clear");
+    });
+
+    it("tags emails, steps and rounds with the requisition, or No requisition", () => {
+      expect(one().match(/>JB0076231</g)).toHaveLength(3);
+      expect(one({ requisition: null }).match(/>No requisition</g)).toHaveLength(3);
+      expect(render()).not.toContain("No requisition");
+    });
+
+    it("filters: Stages keeps steps and rounds, Mail keeps emails only", () => {
+      const m = days[0].entries[0];
+      const step = stepDay.entries[1];
+      const r = stepDay.entries[0];
+      const result = (filter: "all" | "stages" | "mail") =>
+        [m, step, r].map((entry) => isShown(entry, filter, true));
+      expect(result("all")).toEqual([true, true, true]);
+      expect(result("stages")).toEqual([false, true, true]);
+      expect(result("mail")).toEqual([true, false, false]);
+      expect(isShown(r, "all", false)).toBe(false);
+    });
+
+    it("shows the first line of the round notes as a summary", () => {
+      expect(notesSummary("\n## **Went** well with [graphs](http://x)\nmore")).toBe(
+        "Went well with graphs",
+      );
+      const html = renderToStaticMarkup(createElement(RoundCard, { entry: entry(), data }));
+      expect(html).toContain("Panel liked the graph answer");
+      const none = renderToStaticMarkup(
+        createElement(RoundCard, { entry: entry({ notes: "" }), data }),
+      );
+      expect(none).not.toContain("Panel liked");
+      expect(none).not.toMatch(/1 question<\/span><span/);
     });
 
     it("hides a round without card data", () => {

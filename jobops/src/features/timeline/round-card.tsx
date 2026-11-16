@@ -33,10 +33,20 @@ function resultOf(round: TimelineRound["round"], now: Date) {
   return { text: "Booked", tone: "bg-selected text-selected-foreground" };
 }
 
+/** The first line of the notes as plain text, for the card's one-line summary. */
+export function notesSummary(notes: string) {
+  const line = notes.split("\n").find((text) => text.trim()) ?? "";
+  return line
+    .replace(/^\s*(#{1,6}|[-*+]|\d+\.|>|- \[[ xX]\])\s+/, "")
+    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1")
+    .replace(/[*_`~]/g, "")
+    .trim();
+}
+
 /** The round's edit form: name, date, time, interviewer and notes. */
-function EditRound({ round }: { round: TimelineRound["round"] }) {
+function EditRound({ round, onSaved }: { round: TimelineRound["round"]; onSaved: () => void }) {
   return (
-    <ActionForm action={updateRound} feedback="inverse" className="space-y-3">
+    <ActionForm action={updateRound} feedback="inverse" className="space-y-3" onSuccess={onSaved}>
       <input type="hidden" name="id" value={round.id} />
       <div className="flex flex-wrap gap-3">
         <label className="max-w-full w-48 text-sm">
@@ -118,6 +128,7 @@ export function RoundCard({
   }, [domId]);
   const result = resultOf(round, new Date());
   const count = data.questions.length;
+  const summary = notesSummary(round.notes);
   const counted = `${count} ${count === 1 ? "question" : "questions"}`;
   const outcomes = data.outcomes.filter((id) => roundOutcomes.includes(id));
   const tabs = [
@@ -149,9 +160,18 @@ export function RoundCard({
           >
             {round.interviewer || "Interviewer not recorded"}
           </span>
-          <span className="truncate text-sm font-medium" title={`${label} · ${counted}`}>
+          <span
+            className="truncate text-sm font-medium"
+            title={summary ? `${label} · ${counted} · ${summary}` : `${label} · ${counted}`}
+          >
             {label}
             <span className="font-normal text-muted-foreground"> · {counted}</span>
+            {summary && (
+              <span className="font-normal text-muted-foreground" title={summary}>
+                {" "}
+                · {summary}
+              </span>
+            )}
           </span>
         </span>
         <span className="flex min-w-0 flex-col items-end gap-1">
@@ -191,7 +211,7 @@ export function RoundCard({
           </div>
           {editing ? (
             <div className="space-y-3">
-              <EditRound round={round} />
+              <EditRound round={round} onSaved={() => setEditing(false)} />
               <Button type="button" variant="ghost" onClick={() => setEditing(false)}>
                 Cancel
               </Button>

@@ -97,6 +97,7 @@ function MailRow({
   showCompany,
   inbox,
   onOpen,
+  requisition,
 }: {
   entry: TimelineMail;
   handling?: Handling;
@@ -107,6 +108,8 @@ function MailRow({
   /** What tells this email's inbox apart from the others, such as "outlook.in". */
   inbox: string;
   onOpen: () => void;
+  /** Set on one application's timeline; null reads "No requisition". */
+  requisition?: string | null;
 }) {
   const { item } = entry;
   const needs = item.attention === "open";
@@ -185,6 +188,14 @@ function MailRow({
             <span className="whitespace-nowrap @xl:order-1">{when}</span>
           </span>
         </div>
+        {requisition !== undefined && (
+          <span
+            className="pointer-events-none max-w-full justify-self-end truncate text-xs text-muted-foreground @xl:col-span-full"
+            title={requisition ?? "No requisition"}
+          >
+            {requisition ?? "No requisition"}
+          </span>
+        )}
       </div>
       {bar && <div className="px-4 pb-3">{bar}</div>}
       {justHandled && !needs && (
@@ -248,6 +259,17 @@ function DateStamp({ day }: { day: TimelineDay }) {
   );
 }
 
+export type TimelineFilter = "all" | "stages" | "mail";
+/** Stages shows steps and round cards, Mail shows emails; a round without card data is hidden. */
+export function isShown(
+  entry: TimelineDay["entries"][number],
+  filter: TimelineFilter,
+  hasCard: boolean,
+) {
+  if (entry.type === "round") return hasCard && filter !== "mail";
+  return filter === "all" || (filter === "mail") === (entry.type === "mail");
+}
+
 /**
  * Mail feed layout B, a ledger with a date column: one company's emails and steps (or all
  * job mail), newest first and grouped by India day, with a band where an older year starts.
@@ -286,12 +308,14 @@ export function CompanyTimeline({
   /** What each round card needs, by round id; a round without it is not shown. */
   roundCards?: Record<string, RoundCardData>;
 }) {
-  const [filter, setFilter] = useState<"all" | "stages" | "mail">("all");
+  const [filter, setFilter] = useState<TimelineFilter>("all");
   const perApplication = requisition !== undefined;
   const shown = (entry: TimelineDay["entries"][number]) =>
-    entry.type === "round"
-      ? !!roundCards[entry.round.id] && (!perApplication || filter !== "mail")
-      : !perApplication || filter === "all" || (filter === "mail") === (entry.type === "mail");
+    isShown(
+      entry,
+      perApplication ? filter : "all",
+      !!roundCards[entry.type === "round" ? entry.round.id : ""],
+    );
   const visible = days
     .map((day) => ({ ...day, entries: day.entries.filter(shown) }))
     .filter((day) => day.entries.length > 0);
@@ -412,6 +436,7 @@ export function CompanyTimeline({
                           showCompany={showCompany}
                           inbox={inboxOf(entry.item)}
                           onOpen={() => setOpenId(entry.item.id)}
+                          requisition={requisition}
                         />
                       ) : entry.type === "round" ? (
                         <RoundCard
