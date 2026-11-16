@@ -108,9 +108,12 @@ export function NotesEditor({
   recordId,
   notes,
   save,
+  view,
 }: {
   recordId: string;
   notes: string;
+  /** Replaces the plain Markdown rendering shown while not editing. */
+  view?: ReactNode;
   save: (state: ActionState, form: FormData) => Promise<ActionState>;
 }) {
   const [editing, setEditing] = useState(false);
@@ -145,7 +148,9 @@ export function NotesEditor({
   if (!editing)
     return (
       <div className="flex min-w-0 flex-col gap-3">
-        {notes.trim() ? (
+        {view ? (
+          view
+        ) : notes.trim() ? (
           <MarkdownView source={notes} />
         ) : (
           <p className="m-0 text-sm text-muted-foreground">

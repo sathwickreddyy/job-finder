@@ -4,7 +4,7 @@ import type { ToolSummary } from "./derive";
 import { TOOL_META, TOOL_SOURCES, type ToolSource } from "./tools";
 
 // Display bands only; no tool calls a score good or bad.
-const band = (v: number) => (v < 50 ? "danger-action" : v < 80 ? "warning" : "success");
+export const band = (v: number) => (v < 50 ? "danger-action" : v < 80 ? "warning" : "success");
 const stroke = {
   "danger-action": "stroke-danger-action",
   warning: "stroke-warning",
@@ -22,7 +22,7 @@ const CAPTIONS: Record<ToolSource, string> = {
   "resume-ats-optimizer": "Must-haves found",
 };
 
-function Ring({ value, base }: { value: number | null; base: number | null }) {
+export function Ring({ value, base }: { value: number | null; base: number | null }) {
   const r = 34;
   const c = 2 * Math.PI * r;
   const a = base != null ? ((base / 100) * 360 - 90) * (Math.PI / 180) : null;

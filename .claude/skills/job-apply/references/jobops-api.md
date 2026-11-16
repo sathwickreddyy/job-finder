@@ -77,6 +77,25 @@ Body shape (replace all example values; omit unknown optional dates):
 
 `humanConfirmed` means a real user-confirmed submission/sent message, not permission to send. Current `DIRECT` represents a submitted application, including a final application via a referral link; retain referral provenance in notes. `REFERRAL` represents the **sent request**, with recipient/evidence, and is recorded separately. Confirm the exact `resumeVersionId` first: sent records lock it. Verify returned application/company links/warnings. Never repair submitted records directly in the DB without explicit approval.
 
+## Write the application notes
+
+Right after recording the submission, replace the application's notes with `PUT "$JOBOPS_URL/api/v1/applications/{id}/notes"` and body `{ "notes": "<markdown>" }` (up to 100 000 characters; it replaces, so read the current notes first and merge anything the user wrote). Use the template so the company page can style it; the contract and an example are in the [notes API](../../../../jobops/docs/api/application-notes.md):
+
+```md
+## Summary
+One or two sentences: date, portal, requisition.
+
+## On the form
+- [x] Something answered or ticked
+- [ ] Something declined or left open
+
+## Proof
+- Résumé SHA-256: `<64 hex characters>`
+- Confirmation screenshot: `/absolute/path/to/file.png`
+```
+
+Keep scores out of the note; JobOps shows the stored tool results beside it.
+
 ## Record interview questions after a round
 
 When the user shares what an interview asked, record it on that round so they can revise later.

@@ -6,6 +6,7 @@ import { db } from "@/db";
 import { applications } from "@/db/schema";
 import { actionError, formString, type ActionState } from "@/lib/actions";
 import { istDateTime } from "./dates";
+import { NOTES_MAX, writeApplicationNotes } from "./notes";
 import {
   closeUnsentRecord,
   markRecordSent,
@@ -83,25 +84,15 @@ export async function updateApplicationDetails(
   }
 }
 
-/** Longest application note the Markdown editor saves. */
-const NOTES_MAX = 100_000;
-
 /** Saves the application's Markdown notes from the notes editor. */
 export async function saveApplicationNotes(
   _state: ActionState,
   form: FormData,
 ): Promise<ActionState> {
   try {
-    const data = z
-      .object({ id: z.uuid(), notes: z.string().max(NOTES_MAX, "Notes are too long to save.") })
-      .parse({ id: formString(form, "id"), notes: String(form.get("notes") ?? "") });
-    const saved = await db
-      .update(applications)
-      .set({ notes: data.notes, updatedAt: new Date() })
-      .where(eq(applications.id, data.id))
-      .returning({ id: applications.id });
-    if (!saved.length) throw new Error("This application no longer exists.");
-    refresh(data.id);
+    const id = z.uuid().parse(formString(form, "id"));
+    await writeApplicationNotes(id, String(form.get("notes") ?? ""));
+    refresh(id);
     return { success: "Notes saved." };
   } catch (error) {
     return actionError(error);
