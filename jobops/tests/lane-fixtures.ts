@@ -1,13 +1,12 @@
 import { buildLanes, type LaneSource, type PendingMail } from "@/features/applications/lanes";
 import { buildQueue, type QueueMail } from "@/features/applications/queue";
-import type { RoundKind } from "@/lib/round-kinds";
 
 export const NOW = new Date("2026-10-03T10:30:00+05:30");
 export const at = (value: string) => new Date(`${value}+05:30`);
 let sequence = 0;
 export const uid = () => `00000000-0000-4000-8000-${String(++sequence).padStart(12, "0")}`;
 
-export type FixtureRecord = LaneSource & { typicalLoop: RoundKind[] };
+export type FixtureRecord = LaneSource;
 export const record = (patch: Partial<FixtureRecord> = {}): FixtureRecord => ({
   id: uid(),
   jobId: uid(),
@@ -28,7 +27,6 @@ export const record = (patch: Partial<FixtureRecord> = {}): FixtureRecord => ({
   closedReason: null,
   phase: "Applied",
   typicalRounds: null,
-  typicalLoop: [],
   postedAt: null,
   ...patch,
 });

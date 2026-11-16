@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { Fragment, useEffect, type ReactNode } from "react";
 import { Check, X } from "lucide-react";
 import { useEdgeFade } from "@/lib/use-edge-fade";
 import { cn } from "@/lib/utils";
@@ -9,7 +9,6 @@ import type { NamedStep } from "../named-steps";
 const said: Record<NamedStep["state"], string> = {
   done: "reached",
   current: "current step",
-  expected: "expected from company research",
   ahead: "not yet",
   stopped: "ended here",
   faded: "not reached",
@@ -57,7 +56,6 @@ function Dot({ step, small }: { step: NamedStep; small: boolean }) {
       className={cn(
         "block shrink-0 rounded-full border-2 border-border",
         size,
-        step.state === "expected" && "border-dashed",
         step.state === "faded" && "opacity-50",
       )}
     />
@@ -72,10 +70,13 @@ export function NamedSteps({
   steps,
   size,
   className,
+  add,
 }: {
   steps: NamedStep[];
   size: "row" | "page";
   className?: string;
+  /** A control shown as a step just before the final outcome step. */
+  add?: ReactNode;
 }) {
   const compact = size === "row";
   const { ref, style, update } = useEdgeFade<HTMLOListElement>("x");
@@ -102,28 +103,9 @@ export function NamedSteps({
       {steps.map((step, index) => {
         const reached = step.state === "done" || step.state === "current";
         const title = step.detail ? `${step.label} · ${step.detail}` : step.label;
-        return (
-          <li
-            key={step.key}
-            data-state={step.state}
-            aria-current={step.state === "current" ? "step" : undefined}
-            title={title}
-            className={cn(
-              "relative flex shrink-0 flex-col items-center text-center",
-              compact ? "w-[84px]" : "w-[112px]",
-              step.state === "faded" && "opacity-60",
-            )}
-          >
-            {index > 0 && (
-              <span
-                aria-hidden
-                className={cn(
-                  "absolute right-1/2 w-full border-t-2",
-                  compact ? "top-[9px]" : "top-[11px]",
-                  reached ? "border-primary" : "border-dashed border-border",
-                )}
-              />
-            )}
+        const width = compact ? "w-[84px]" : "w-[112px]";
+        const body = (
+          <>
             <span className="relative z-10 rounded-full bg-card px-1">
               <Dot step={step} small={compact} />
             </span>
@@ -151,7 +133,55 @@ export function NamedSteps({
                 {step.detail}
               </span>
             )}
-          </li>
+          </>
+        );
+        const inner = "flex w-full flex-col items-center text-center";
+        return (
+          <Fragment key={step.key}>
+            {add && step.key === "final" && (
+              <li
+                data-add
+                className={cn("relative flex shrink-0 flex-col items-center text-center", width)}
+              >
+                <span
+                  aria-hidden
+                  className={cn(
+                    "absolute right-1/2 w-full border-t-2 border-dashed border-border",
+                    compact ? "top-[9px]" : "top-[11px]",
+                  )}
+                />
+                <span className="relative z-10 rounded-full bg-card px-1">{add}</span>
+              </li>
+            )}
+            <li
+              data-state={step.state}
+              aria-current={step.state === "current" ? "step" : undefined}
+              title={title}
+              className={cn(
+                "relative flex shrink-0 flex-col items-center text-center",
+                width,
+                step.state === "faded" && "opacity-60",
+              )}
+            >
+              {index > 0 && (
+                <span
+                  aria-hidden
+                  className={cn(
+                    "absolute right-1/2 w-full border-t-2",
+                    compact ? "top-[9px]" : "top-[11px]",
+                    reached ? "border-primary" : "border-dashed border-border",
+                  )}
+                />
+              )}
+              {reached && step.target ? (
+                <a href={`#${step.target}`} className={cn(inner, "no-underline")}>
+                  {body}
+                </a>
+              ) : (
+                <div className={inner}>{body}</div>
+              )}
+            </li>
+          </Fragment>
         );
       })}
     </ol>

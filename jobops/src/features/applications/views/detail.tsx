@@ -61,7 +61,6 @@ export function ApplicationDetail({
   const steps = namedStepsOf(record, now);
   const rounds = [...record.rounds].sort((a, b) => a.position - b.position);
   const labels = roundLabels(rounds);
-  const expected = steps.filter((step) => step.state === "expected");
   const history: HistoryEntry[] = [
     ...record.events.map((event) => ({
       key: event.id,
@@ -149,7 +148,7 @@ export function ApplicationDetail({
               )}
             </div>
           </section>
-          {!outreach && (rounds.length > 0 || expected.length > 0) && (
+          {!outreach && rounds.length > 0 && (
             <section aria-labelledby="rounds-heading" className="flex min-w-0 flex-col gap-3">
               <h2 id="rounds-heading" className="m-0 text-base font-semibold">
                 Rounds
@@ -165,15 +164,6 @@ export function ApplicationDetail({
                     </RoundRow>
                   );
                 })}
-                {expected.map((step) => (
-                  <li
-                    key={step.key}
-                    className="flex min-w-0 items-center justify-between gap-3 rounded-2xl border border-dashed border-border px-4 py-3 text-sm"
-                  >
-                    <span className="truncate font-medium text-muted-foreground">{step.label}</span>
-                    <span className="shrink-0 text-xs text-muted-foreground">{step.detail}</span>
-                  </li>
-                ))}
               </ol>
             </section>
           )}

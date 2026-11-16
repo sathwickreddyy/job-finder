@@ -19,7 +19,7 @@ function render(records: (LaneSource | FixtureRecord)[], openId: string | null =
   const namedSteps = Object.fromEntries(
     records
       .filter((item) => !isOutreach(item.source))
-      .map((item) => [item.id, namedStepsOf({ typicalLoop: [], ...item }, NOW)]),
+      .map((item) => [item.id, namedStepsOf(item, NOW)]),
   );
   return renderToStaticMarkup(
     createElement(ApplicationList, {
@@ -64,14 +64,14 @@ describe("ApplicationList", () => {
         ...company("ServiceNow"),
         phase: "Interviewing",
         status: "TECHNICAL_INTERVIEW",
-        typicalLoop: ["DSA", "LLD"],
         rounds: [round(id, { kind: "DSA", scheduledAt: at("2026-11-02T12:00:00") })],
       }),
     ]);
     const stepper =
       html.match(/<ol[^>]*aria-label="Where this application stands"[\s\S]*?<\/ol>/)?.[0] ?? "";
+    expect(stepper).toContain("Interview scheduled");
     expect(stepper).toContain("Round 1 · DSA");
-    expect(stepper).toContain("Round 2 · LLD");
+    expect(stepper).not.toContain("Round 2 · LLD");
     expect(stepper).toContain('aria-current="step"');
     expect(stepper).not.toContain("Interviewing");
   });
@@ -96,7 +96,7 @@ describe("ApplicationList", () => {
 
   it("names each step, keeps its date in the title and shows one next step per row", () => {
     const html = render([northwind()]);
-    for (const text of ["Applied", "Acknowledged", "Rejected", "Offer"])
+    for (const text of ["Applied", "Acknowledged", "Rejected"])
       expect(html).toContain(text);
     for (const title of ["Applied · 2 Oct", "Acknowledged · 3 Oct", "Rejected · 7 Oct"])
       expect(html).toContain(`title="${title}"`);
