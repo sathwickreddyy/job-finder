@@ -36,6 +36,8 @@ vi.mock("@/features/mail/workspace-actions", () => ({
 }));
 const { ApplicationsTab } = await import("@/features/companies/views/applications-tab");
 const { DetailHeader, detailTabs, tabAliases } = await import("@/features/companies/detail");
+const { MinimalCompanyPage } = await import("@/features/companies/views/minimal-company");
+const { companyPageHref } = await import("@/features/applications/navigation");
 
 const NOW = at("2026-11-16T10:30:00");
 const resume = { id: "00000000-0000-4000-8000-0000000000aa", filename: "cv.pdf", label: "v3" };
@@ -312,5 +314,50 @@ describe("company page applications", () => {
   it("explains an empty company", () => {
     const html = render(data([]));
     expect(html).toContain("No applications recorded for Oracle yet");
+  });
+});
+
+describe("company page for a company with no record", () => {
+  const rows = [rowFor(application({ role: "Staff Engineer" }))];
+  const html = renderToStaticMarkup(
+    createElement(MinimalCompanyPage, {
+      name: "Level AI",
+      companyKey: "level ai",
+      data: data(rows),
+      now: NOW,
+    }),
+  );
+
+  it("builds the page link from the company key, escaped", () => {
+    expect(companyPageHref({ companyKey: "level ai" })).toBe("/companies/level%20ai");
+    expect(companyPageHref({ companyKey: "société générale" })).toBe(
+      `/companies/${encodeURIComponent("société générale")}`,
+    );
+    expect(companyPageHref({ companyKey: "x", companyHref: "/companies/oracle" })).toBe(
+      "/companies/oracle",
+    );
+    for (const key of ["level ai", "société générale"])
+      expect(decodeURIComponent(companyPageHref({ companyKey: key }).split("/")[2])).toBe(key);
+  });
+
+  it("explains that the company is not listed, with no add button", () => {
+    expect(html).toContain(
+      "Not in your Companies list yet. Ask Claude Code or Codex to add it; pay, interview loop and sources appear then.",
+    );
+    expect(html).not.toMatch(/Add company/i);
+    expect(html).toContain("Level AI");
+  });
+
+  it("keeps Applications as the one active tab and greys the research tabs", () => {
+    expect(html).toContain("Applications · 1");
+    expect(html.match(/role="tab"/g)).toHaveLength(4);
+    expect(html.match(/aria-selected="true"/g)).toHaveLength(1);
+    for (const label of ["Compensation", "Interview loop", "About &amp; sources"])
+      expect(html).toMatch(new RegExp(`<[^>]*aria-disabled="true"[^>]*>${label}<`));
+    expect(html).not.toMatch(/<a [^>]*>(Compensation|Interview loop)/);
+  });
+
+  it("shows the application rows", () => {
+    expect(html).toContain("Staff Engineer");
   });
 });

@@ -14,6 +14,7 @@ import {
   resumeVersions,
   resumes,
 } from "@/db/schema";
+import { resolveCompanySlug } from "@/features/companies/resolve-slug";
 import { readCompanyApplications } from "@/features/companies/applications";
 import type { TimelineDay } from "@/features/timeline/entries";
 import { assertE2eDatabase, dbTests } from "./helpers/e2e-db";
@@ -225,5 +226,25 @@ describe.skipIf(!dbTests)("company applications", () => {
     const { unplaced, unplacedOlderHref } = await readCompanyApplications(key, {}, now);
     expect(mailIds(unplaced)).toEqual([made.loose, old]);
     expect(unplacedOlderHref).toBeNull();
+  });
+
+  describe("company page slug", () => {
+    it("resolves a company with applications but no record to the minimal page", async () => {
+      expect(await resolveCompanySlug(encodeURIComponent(key), [])).toEqual({
+        kind: "minimal",
+        key,
+        name,
+      });
+    });
+
+    it("prefers a company record whose id matches", async () => {
+      const company = { id: key };
+      expect(await resolveCompanySlug(key, [company])).toEqual({ kind: "company", company });
+    });
+
+    it("is not found without records, or on a malformed escape", async () => {
+      expect(await resolveCompanySlug("nobody-" + prefix, [])).toEqual({ kind: "missing" });
+      expect(await resolveCompanySlug("%E0%A4%A", [])).toEqual({ kind: "missing" });
+    });
   });
 });

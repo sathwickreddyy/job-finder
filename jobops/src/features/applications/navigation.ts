@@ -1,5 +1,10 @@
 import { z } from "zod";
 
+/** A company's page: its own link when it has a company record, else the page for its key. */
+export function companyPageHref(record: { companyKey: string; companyHref?: string | null }) {
+  return record.companyHref ?? `/companies/${encodeURIComponent(record.companyKey)}`;
+}
+
 /** The Applications page with the lane holding this record expanded (spec §1). */
 export function laneHref(
   recordId: string,

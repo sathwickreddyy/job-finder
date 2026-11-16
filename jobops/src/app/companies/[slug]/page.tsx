@@ -5,6 +5,8 @@ import { getDisplayPreferences } from "@/features/candidate/preferences";
 import { readCompanyApplications } from "@/features/companies/applications";
 import { CompanyDetail, detailTabs, tabAliases, type DetailTab } from "@/features/companies/detail";
 import { interviewReports } from "@/features/companies/metrics";
+import { resolveCompanySlug } from "@/features/companies/resolve-slug";
+import { MinimalCompanyPage } from "@/features/companies/views/minimal-company";
 import { readCompanies } from "@/features/companies/read";
 import { companySummaries, sharedPayScale } from "@/features/companies/summary";
 
@@ -31,13 +33,26 @@ export default async function CompanyPage({
     readCompanies(),
     getDisplayPreferences(),
   ]);
-  const company = data.companies.find((row) => row.id === slug);
-  if (!company) notFound();
+  const resolved = await resolveCompanySlug(slug, data.companies);
+  if (resolved.kind === "missing") notFound();
+  const now = new Date();
+  const openId = uuid(query.open);
+  if (resolved.kind === "minimal")
+    return (
+      <MinimalCompanyPage
+        name={resolved.name}
+        companyKey={resolved.key}
+        data={await readCompanyApplications(resolved.key, query, now)}
+        openId={openId}
+        requested={openId ? query.outcome : undefined}
+        mailIntent={uuid(query.mail)}
+        now={now}
+      />
+    );
+  const { company } = resolved;
   const summaries = companySummaries(data);
   const named = query.tab ? (tabAliases[query.tab] ?? query.tab) : undefined;
   const tab = detailTabs.includes(named as DetailTab) ? (named as DetailTab) : "applications";
-  const now = new Date();
-  const openId = uuid(query.open);
   const applications = await readCompanyApplications(normalizeCompany(company.name), query, now);
   return (
     <CompanyDetail
