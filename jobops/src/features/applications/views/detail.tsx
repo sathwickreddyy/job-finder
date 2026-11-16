@@ -239,8 +239,9 @@ export function RoundRow({
   const kind = roundKindLabel[round.kind];
   return (
     <li
+      id={`round-${round.id}`}
       className={cn(
-        "rounded-2xl px-4 py-3 ring-1",
+        "scroll-mt-4 rounded-2xl px-4 py-3 ring-1",
         round.outcome === "SCHEDULED" ? "bg-warning-soft/60 ring-review/50" : "bg-card ring-border",
       )}
     >

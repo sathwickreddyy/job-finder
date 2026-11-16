@@ -85,13 +85,24 @@ export default async function Applications({
     ));
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="m-0 text-[28px] font-semibold tracking-tight md:hidden">Applications</h1>
+      <div className="flex items-center justify-between gap-3 md:hidden">
+        <h1 className="m-0 text-[28px] font-semibold tracking-tight">Applications</h1>
+        <Link
+          href="/applications/questions"
+          className="inline-flex h-9 items-center rounded-full px-3 text-sm font-medium text-link ring-1 ring-border hover:no-underline"
+        >
+          Question library
+        </Link>
+      </div>
       <div className="hidden md:block">
         <PageHeader
           title="Applications"
           description="How far each application got, and the one thing to do next."
           actions={
             <>
+              <Button variant="outline" asChild>
+                <Link href="/applications/questions">Question library</Link>
+              </Button>
               <Button variant="outline" asChild>
                 <Link href="/mail">Mail</Link>
               </Button>
