@@ -153,7 +153,7 @@ export async function notApplying(_state: ActionState, form: FormData): Promise<
     refresh(data.id);
     return {
       success: "Closed as not applying.",
-      redirect: safeReturnTo(formString(form, "returnTo")) ?? `/applications?open=${data.id}`,
+      redirect: safeReturnTo(formString(form, "returnTo")) ?? `/applications/${data.id}`,
     };
   } catch (error) {
     return actionError(error);
@@ -168,7 +168,7 @@ export async function reopenRecord(_state: ActionState, form: FormData): Promise
     refresh(data.id);
     return {
       success: "Reopened. It is back in Needs you.",
-      redirect: safeReturnTo(formString(form, "returnTo")) ?? `/applications?open=${data.id}`,
+      redirect: safeReturnTo(formString(form, "returnTo")) ?? `/applications/${data.id}`,
     };
   } catch (error) {
     return actionError(error);

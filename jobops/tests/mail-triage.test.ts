@@ -75,13 +75,13 @@ describe("triage buckets", () => {
 
   it("links mail to its record with the suggested outcome", () => {
     expect(linkHref({ id, classification: "ASSESSMENT" }, record)).toBe(
-      `/applications?open=${record}&mail=${id}&outcome=oa`,
+      `/applications/${record}?mail=${id}&outcome=oa`,
     );
     expect(linkHref({ id, classification: "UNKNOWN" }, record)).toBe(
-      `/applications?open=${record}&mail=${id}`,
+      `/applications/${record}?mail=${id}`,
     );
     expect(linkHref({ id, classification: "APPLICATION_ACKNOWLEDGEMENT" }, record)).toBe(
-      `/applications?open=${record}&mail=${id}`,
+      `/applications/${record}?mail=${id}`,
     );
   });
 
@@ -136,7 +136,7 @@ describe("triage buckets", () => {
       receivedAt,
       primary: {
         label: "Link and update",
-        href: `/applications?open=${record}&mail=${id}&outcome=scheduled`,
+        href: `/applications/${record}?mail=${id}&outcome=scheduled`,
       },
     });
     expect(items[1]).toMatchObject({

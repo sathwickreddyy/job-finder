@@ -335,7 +335,7 @@ export function ApplicationsTab({
             roles={[]}
             allRolesHref=""
             role={null}
-            openMail={mailIntent ?? null}
+            openMail={requested ? null : (mailIntent ?? null)}
             olderHref={data.unplacedOlderHref}
             inboxes={inboxes}
           />

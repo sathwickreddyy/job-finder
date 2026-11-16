@@ -1,6 +1,8 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
+import { autoOutcomeOf } from "@/features/applications/journey";
+import { MarkdownView } from "@/components/markdown/markdown-view";
 import { namedStepsOf } from "@/features/applications/named-steps";
 import { availableOutcomes, recordStateFrom, type OutcomeId } from "@/features/applications/phase";
 import type { ApplicationRecord } from "@/features/applications/read";
@@ -301,6 +303,81 @@ describe("company page applications", () => {
     expect(html).toContain("Record as sent");
     expect(html).toContain("Not applying");
     expect(html).not.toContain("+ Add step");
+  });
+
+  it("leaves the unplaced mail popup shut when an outcome is requested", () => {
+    const mailId = "00000000-0000-4000-8000-0000000000ee";
+    const loose = mailItem(mailId, "Loose hello", null);
+    const value = data(rows, { unplaced: mailDay(loose) });
+    expect(render(value, { mailIntent: mailId })).toContain("<dialog");
+    const html = render(value, { openId: older.id, requested: "heard", mailIntent: mailId });
+    expect(html).not.toContain("<dialog");
+  });
+
+  describe("recorded from an email", () => {
+    const mailId = "00000000-0000-4000-8000-00000000abcd";
+    function rejectedByMail(newer = false) {
+      const id = uid();
+      const rejection = event(id, "REJECTION_RECEIVED", at("2026-11-10T09:00:00"), {
+        payload: { outcome: "rejected", auto: true, mailMessageId: mailId },
+      });
+      const later = event(id, "OFFER_DECLINED", at("2026-11-10T12:00:00"), {
+        payload: { outcome: "declined" },
+      });
+      return application({
+        id,
+        phase: "Closed",
+        status: "REJECTED",
+        closedReason: "REJECTED",
+        events: newer ? [rejection, later] : [rejection],
+      } as Partial<ApplicationRecord>);
+    }
+
+    it("names the outcome the mail rule recorded while it is still the latest", () => {
+      expect(autoOutcomeOf(rejectedByMail())).toEqual({
+        mailMessageId: mailId,
+        outcome: "rejected",
+        at: at("2026-11-10T09:00:00"),
+      });
+      expect(autoOutcomeOf(rejectedByMail(true))).toBeNull();
+      expect(autoOutcomeOf(record())).toBeNull();
+    });
+
+    it("offers Undo for it, and only while it is the latest", () => {
+      const app = rejectedByMail();
+      const html = render(data([rowFor(app)]), { openId: app.id });
+      expect(html).toContain("Recorded from an email: Rejected");
+      expect(html).toMatch(new RegExp(`name="id" value="${mailId}"[\\s\\S]*?Undo</button>`));
+      const newer = rejectedByMail(true);
+      expect(render(data([rowFor(newer)]), { openId: newer.id })).not.toContain(
+        "Recorded from an email",
+      );
+    });
+  });
+
+  it("offers Reopen for a record closed as Not applying, and only then", () => {
+    const closed = application({
+      phase: "Closed",
+      status: "CLOSED",
+      closedReason: "WITHDREW",
+      sentAt: null,
+      events: [],
+    } as Partial<ApplicationRecord>);
+    expect(render(data([rowFor(closed)]), { openId: closed.id })).toMatch(
+      /<button[^>]*>Reopen<\/button>/,
+    );
+    expect(render(data([rowFor(newer)]), { openId: newer.id })).not.toMatch(/>Reopen</);
+  });
+
+  it("renders round notes as Markdown and keeps a long code line in its scrolling pre", () => {
+    expect(renderToStaticMarkup(createElement(MarkdownView, { source: "**bold**" }))).toContain(
+      "<strong>bold</strong>",
+    );
+    const line = `x = ${"a".repeat(400)}`;
+    const html = renderToStaticMarkup(
+      createElement(MarkdownView, { source: "```python\n" + line + "\n```" }),
+    );
+    expect(html).toMatch(/<pre>[\s\S]*a{400}[\s\S]*<\/pre>/);
   });
 
   it("keeps company mail on no application in its own section, hidden when empty", () => {

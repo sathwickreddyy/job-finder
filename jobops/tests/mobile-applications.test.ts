@@ -8,7 +8,7 @@ vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn(), push: 
 vi.mock("@/features/applications/record-actions", () => ({ notApplying: vi.fn() }));
 const { MobileApplicationList } = await import("@/features/applications/views/application-list");
 
-it("keeps active and closed applications in one expanded list with the exact selected detail", () => {
+it("keeps active and closed applications in one list of links", () => {
   const active = record({ company: "Cedar", companyKey: "cedar", companyName: "Cedar" });
   const ended = record({
     company: "Fable",
@@ -31,8 +31,6 @@ it("keeps active and closed applications in one expanded list with the exact sel
     createElement(MobileApplicationList, {
       lanes,
       journeys: Object.fromEntries(records.map((row) => [row.id, journeyOf(row)])),
-      openId: ended.id,
-      detail: createElement("p", { "data-testid": "exact-detail" }, "Fable details"),
     }),
   );
   expect(html).toContain("Cedar");
@@ -40,7 +38,8 @@ it("keeps active and closed applications in one expanded list with the exact sel
   expect(html).not.toContain("<details");
   expect(html).not.toContain('aria-label="Closed"');
   expect(html).not.toContain('aria-label="Needs you"');
-  expect(html.match(/data-testid="exact-detail"/g)).toHaveLength(1);
+  expect(html).toContain(`href="/applications/${ended.id}"`);
+  expect(html).not.toContain("aria-expanded");
   expect(html).toContain("Rejected");
   expect(html).toContain("4 Oct");
 });

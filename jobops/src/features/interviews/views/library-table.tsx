@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ArrowDown, ArrowUp, ExternalLink, Pencil, Search, X } from "lucide-react";
 import { Modal } from "@/components/ui/modal";
 import { formatDay } from "@/features/applications/dates";
+import { laneHref } from "@/features/applications/navigation";
 import { useEdgeFade } from "@/lib/use-edge-fade";
 import { cn } from "@/lib/utils";
 import { questionOutcomeValues, type LibraryRow, type QuestionOutcome } from "../types";
@@ -22,8 +23,7 @@ const compare: Record<SortKey, (a: LibraryRow, b: LibraryRow) => number> = {
   company: (a, b) => a.company.localeCompare(b.company) || a.roundLabel.localeCompare(b.roundLabel),
   date: (a, b) => (a.date ?? "").localeCompare(b.date ?? ""),
 };
-const applicationLink = (row: LibraryRow) =>
-  `/applications/${row.applicationId}#round-${row.roundId}`;
+const applicationLink = (row: LibraryRow) => laneHref(row.applicationId, { round: row.roundId });
 
 /**
  * Library B: every recorded question in one sortable table. Search and chips filter the loaded
