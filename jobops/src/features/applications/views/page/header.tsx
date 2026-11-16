@@ -136,7 +136,7 @@ export function ApplicationHeader({
           )}
         </Fact>
         <Fact label="Where it stands">
-          <span className="truncate" title={current.label}>
+          <span data-testid="phase-label" className="truncate" title={current.label}>
             {current.label}
           </span>
           {current.detail && (
