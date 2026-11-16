@@ -173,8 +173,8 @@ export async function addQuestions(
 ): Promise<string[]> {
   await requireApplication(applicationId);
   if (!uuidPattern.test(roundId)) throw new ApiError("Round not found.", 404);
-  if (!Array.isArray(inputs) || inputs.length === 0 || inputs.length > 50)
-    throw new ApiError("Send between 1 and 50 questions.", 400);
+  if (!Array.isArray(inputs) || inputs.length === 0 || inputs.length > 20)
+    throw new ApiError("Send between 1 and 20 questions.", 400);
   const parsed = inputs.map((input) => parse(questionInput, input));
   return db.transaction(async (tx) => {
     const [round] = await tx

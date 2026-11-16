@@ -68,6 +68,19 @@ or applying. Use the [record payload example](../../../.claude/skills/job-apply/
 and [transition contract](application-transitions.md). When an email supplies the evidence, use
 the mail action to keep the email and outcome linked.
 
+### Interview questions
+
+| Method and path | Use |
+| --- | --- |
+| `GET /api/v1/applications/{id}/questions` | Read the application's rounds in order with their recorded questions. |
+| `POST /api/v1/applications/{id}/rounds/{roundId}/questions` | Append 1 to 20 questions to an existing round. Keep the user's own answer as written. |
+| `PATCH /api/v1/questions/{id}` | Update named fields, or add a `review` with its `reviewSource`. |
+| `GET /api/v1/questions` | Search the question library with `q`, `company`, `pattern`, `outcome`, `limit` and `cursor`. |
+
+Record the round through the transition API first. Outcome values are lowercase. Label every
+review with its source; a review is a diagnostic for revisiting, never the user's answer.
+Deleting a question is UI-only. See the [interview questions contract](interview-questions.md).
+
 ### Recruiting mail
 
 | Method and path | Use |

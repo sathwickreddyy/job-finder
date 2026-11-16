@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { eq, inArray } from "drizzle-orm";
 import { closeDatabase, db } from "@/db";
 import { applicationRounds, applications, interviewQuestions, jobs } from "@/db/schema";
@@ -11,7 +11,20 @@ import {
   updateQuestion,
 } from "@/features/interviews/questions";
 import { ApiError } from "@/features/agent-api/http";
+import { GET as getApplicationQuestions } from "@/app/api/v1/applications/[id]/questions/route";
+import { POST as postRoundQuestions } from "@/app/api/v1/applications/[id]/rounds/[roundId]/questions/route";
+import { GET as getLibrary } from "@/app/api/v1/questions/route";
+import { PATCH as patchQuestion } from "@/app/api/v1/questions/[id]/route";
 import { assertE2eDatabase, dbTests } from "./helpers/e2e-db";
+
+vi.mock("next/cache", () => ({ revalidatePath: () => undefined }));
+
+const json = (body: unknown, method = "POST") =>
+  new Request("http://127.0.0.1:3210/api", {
+    method,
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
 
 const prefix = `questions-${randomUUID()}`;
 const company = `Questions ${prefix}`;
@@ -167,6 +180,65 @@ describe.skipIf(!dbTests)("interview questions", () => {
     expect(page.rows).toHaveLength(2);
     const next = await readLibrary({ company: prefix, limit: 10, cursor: page.nextCursor! });
     expect([...page.rows, ...next.rows].map((r) => r.id)).toEqual(all.rows.map((r) => r.id));
+  });
+
+  it("round-trips questions through the agent routes", async () => {
+    const app = other.app.id;
+    const roundId = other.rounds[1].id;
+    const params = Promise.resolve({ id: app, roundId });
+    const created = await postRoundQuestions(
+      json({ questions: [{ title: "Route question", patterns: ["Graphs"], outcome: "partial" }] }),
+      { params },
+    );
+    expect(created.status).toBe(201);
+    const { ids } = (await created.json()) as { ids: string[] };
+    expect(ids).toHaveLength(1);
+
+    const read = await getApplicationQuestions(new Request("http://127.0.0.1:3210/api"), {
+      params: Promise.resolve({ id: app }),
+    });
+    const { rounds } = (await read.json()) as {
+      rounds: { id: string; questions: { id: string; outcome: string }[] }[];
+    };
+    const round = rounds.find((r) => r.id === roundId)!;
+    expect(round.questions.find((q) => q.id === ids[0])?.outcome).toBe("partial");
+
+    const patched = await patchQuestion(json({ answer: "BFS from each node" }, "PATCH"), {
+      params: Promise.resolve({ id: ids[0] }),
+    });
+    expect(patched.status).toBe(200);
+    expect(((await patched.json()) as { question: { answer: string } }).question.answer).toBe(
+      "BFS from each node",
+    );
+
+    const library = await getLibrary(
+      new Request(
+        `http://127.0.0.1:3210/api/v1/questions?company=${encodeURIComponent(prefix)}&pattern=graphs`,
+      ),
+    );
+    expect(((await library.json()) as { rows: { id: string }[] }).rows.map((r) => r.id)).toEqual(
+      ids,
+    );
+  });
+
+  it("returns 404 and 400 from the agent routes", async () => {
+    const missing = await patchQuestion(json({ title: "x" }, "PATCH"), {
+      params: Promise.resolve({ id: randomUUID() }),
+    });
+    expect(missing.status).toBe(404);
+    const empty = await postRoundQuestions(json({ questions: [] }), {
+      params: Promise.resolve({ id: other.app.id, roundId: other.rounds[1].id }),
+    });
+    expect(empty.status).toBe(400);
+    const tooMany = await postRoundQuestions(
+      json({ questions: Array.from({ length: 21 }, (_, i) => ({ title: `Q${i}` })) }),
+      { params: Promise.resolve({ id: other.app.id, roundId: other.rounds[1].id }) },
+    );
+    expect(tooMany.status).toBe(400);
+    const badOutcome = await getLibrary(
+      new Request("http://127.0.0.1:3210/api/v1/questions?outcome=SOLVED"),
+    );
+    expect(badOutcome.status).toBe(400);
   });
 
   it("deletes questions one by one and with their round", async () => {

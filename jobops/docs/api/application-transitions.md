@@ -31,7 +31,7 @@ The available outcomes cover replies, follow-ups, assessments, interview schedul
 rescheduling and results, offers, rejections, withdrawal, closure after no reply, and
 referral results. `details.at` is an ISO 8601 timestamp with a time zone for an OA
 deadline or round. Scheduling a round also requires its `kind` (`ONLINE_ASSESSMENT`,
-`DSA`, `LLD`, `HLD`, `BEHAVIORAL`, `HIRING_MANAGER`, `DOMAIN`, or `OTHER`). `details.happenedAt`
+`DSA`, `LLD`, `HLD`, `BEHAVIORAL`, `HIRING_MANAGER`, `DOMAIN`, `OTHER`, or `HR`). `details.happenedAt`
 defaults to the time the record was updated. Use it to record when an earlier outcome
 actually happened.
 
