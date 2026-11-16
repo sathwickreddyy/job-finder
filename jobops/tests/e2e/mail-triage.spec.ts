@@ -388,6 +388,7 @@ test("mail outcome keeps success and focus after resolution; unlink reopens mail
   await page.goto(`/applications/${app.id}?mail=${mail.id}&outcome=heard#what-happened`);
   await expect(page).toHaveURL(new RegExp(`${row}&mail=${mail.id}&outcome=heard`));
   await expect(page.locator('#what-happened input[name="outcome"]')).toHaveValue("replied");
+  await expect(page.getByText(`From this email: ${mail.subject}`)).toBeVisible();
   await hydrated(page.getByRole("button", { name: "Save", exact: true }));
   await page.getByRole("button", { name: "Save", exact: true }).click();
   // Assert after the successful operation's actual cleanup navigation, not transient feedback.
@@ -398,15 +399,17 @@ test("mail outcome keeps success and focus after resolution; unlink reopens mail
   await expect(page.getByText(`From this email: ${mail.subject}`, { exact: true })).toHaveCount(0);
   await page.goBack();
   await expect(page).toHaveURL(new RegExp(`${row}&mail=${mail.id}&outcome=heard`));
-  // The old link finds Replied already recorded, so no form opens and nothing can be saved twice.
+  await expect(
+    page.getByRole("alert").filter({ hasText: "source message has already been handled" }),
+  ).toBeVisible();
   await expect(page.getByRole("status").filter({ hasText: "Saved: Replied." })).toHaveCount(0);
   await expect(page.locator('#what-happened input[name="outcome"]')).toHaveCount(0);
   await page.goForward();
   await expect(page).toHaveURL(new RegExp(`${row}$`));
   await expect(page.getByRole("status").filter({ hasText: "Saved: Replied." })).toHaveCount(0);
-  // Unlinking stays on the record's own page.
+  // Unlinking returns to the application's row on its company page.
   await page.goto(`/applications/${app.id}`);
-  // The linked email opens in its popup from the rail; Unlink is in the popup's footer.
+  // The linked email opens in its popup from the timeline; Unlink is in the popup's footer.
   const opener = page.getByRole("button", { name: new RegExp(mail.subject) });
   await hydrated(opener);
   await opener.click();
@@ -414,6 +417,7 @@ test("mail outcome keeps success and focus after resolution; unlink reopens mail
     .getByRole("dialog")
     .getByRole("button", { name: "Unlink from this application", exact: true })
     .click();
+  await expect(page).toHaveURL(new RegExp(`${row}&notice=`));
   await expect(
     page.getByRole("status").filter({ hasText: "Recorded outcomes and history were kept." }),
   ).toBeVisible();
@@ -434,11 +438,12 @@ test("mail placed at another company cannot become record progress", async ({ pa
     db.transaction((tx) => applyOutcome(tx, outcome(app.id, mail.id), new Date())),
   ).rejects.toThrow(/placed at another fixture company/);
   expect(await state(app.id, mail.id)).toEqual(before);
-  // The row opens the form; saving is refused by the same placement rule and writes nothing.
-  await page.goto(`/applications/${app.id}?mail=${mail.id}&outcome=heard`);
-  await hydrated(page.getByRole("button", { name: "Save", exact: true }).first());
-  await page.getByRole("button", { name: "Save", exact: true }).first().click();
+  await page.goto(`/applications/${app.id}?mail=${mail.id}&outcome=scheduled#what-happened`);
+  expect(await page.locator('#what-happened input[name="outcome"]').count()).toBe(0);
   await expect(page.getByRole("alert").filter({ hasText: /placed at/ })).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "Record an outcome manually", exact: true }),
+  ).toHaveAttribute("href", `/applications/${app.id}#what-happened`);
   expect(await state(app.id, mail.id)).toEqual(before);
 });
 
@@ -473,18 +478,15 @@ for (const kind of ["malformed", "missing", "dismissed", "linked elsewhere"] as 
     }
     const before = await state(app.id, mail.id);
     const otherBefore = await state(other.id, mail.id);
-    await page.goto(`/applications/${app.id}?mail=${requestedMail}&outcome=heard`);
-    if (kind === "malformed") {
-      // A link that names no real message opens the row with no form to save a manual outcome.
-      await expect(page).toHaveURL(new RegExp(`/companies/[^?#]+\\?open=${app.id}`));
-      await expect(page.locator(`#application-${app.id}`)).toBeVisible();
-      expect(await page.locator('#what-happened input[name="outcome"]').count()).toBe(0);
-    } else {
-      // The form opens with the named email, and saving it is refused without recording anything.
-      await hydrated(page.getByRole("button", { name: "Save", exact: true }).first());
-      await page.getByRole("button", { name: "Save", exact: true }).first().click();
-      await expect(page.getByRole("alert").filter({ hasText: /source|message/ })).toBeVisible();
-    }
+    await page.goto(
+      `/applications/${app.id}?mail=${requestedMail}&outcome=scheduled#what-happened`,
+    );
+    expect(await page.locator('#what-happened input[name="outcome"]').count()).toBe(0);
+    await expect(page.getByRole("alert").filter({ hasText: /source|message/ })).toBeVisible();
+    await page.getByRole("link", { name: "Record an outcome manually", exact: true }).click();
+    await expect(page).toHaveURL(new RegExp(`/companies/[^?#]+\\?open=${app.id}`));
+    await expect(page.locator(`#application-${app.id}`)).toBeVisible();
+    await expect(page.getByRole("button", { name: "+ Add step", exact: true })).toBeVisible();
     expect(await state(app.id, mail.id)).toEqual(before);
     expect(await state(other.id, mail.id)).toEqual(otherBefore);
   });

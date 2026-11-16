@@ -24,13 +24,12 @@ export default async function ApplicationPage({
   if (!record) notFound();
   // A previous job is history, not an application: its company page has no row to open.
   if (record.source === PREVIOUS_JOB) redirect(companyPageHref(record));
-  // A mail link that names no real message must not leave an outcome form open for a manual save.
-  const mail = uuid(query.mail);
-  const unreadableMail = query.mail !== undefined && mail === null;
+  // A mail link that names no real message is kept, so the row can say so instead of opening a form.
+  const mail = query.mail?.slice(0, 80);
   redirect(
     applicationHref(record, {
       mail,
-      outcome: unreadableMail ? undefined : query.outcome?.slice(0, 40),
+      outcome: query.outcome?.slice(0, 40),
       round: uuid(query.round),
       notice: query.notice?.slice(0, 200),
     }),

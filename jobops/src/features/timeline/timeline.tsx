@@ -215,10 +215,12 @@ function MailFooter({
   entry,
   handling,
   placeOptions,
+  unlinkFrom,
 }: {
   entry: TimelineMail;
   handling?: Handling;
   placeOptions?: PlaceOptions;
+  unlinkFrom?: string;
 }) {
   const { item } = entry;
   const note = folderNote(item);
@@ -232,10 +234,15 @@ function MailFooter({
       ) : (
         <HandledLine item={item} recorded={entry.recorded} />
       )}
-      {item.application && (
+      {unlinkFrom && item.application && (
         <ActionForm action={unlinkMail} feedback="inverse" pendingLabel="Unlinking">
           <input type="hidden" name="mailId" value={item.id} />
           <input type="hidden" name="recordId" value={item.application.id} />
+          <input
+            type="hidden"
+            name="returnTo"
+            value={`${unlinkFrom}?${new URLSearchParams({ open: item.application.id })}`}
+          />
           <div className="flex flex-wrap items-center gap-3">
             <Button variant="ghost" size="sm">
               Unlink from this application
@@ -307,6 +314,7 @@ export function CompanyTimeline({
   inboxes = [],
   requisition,
   roundCards = {},
+  unlinkFrom,
 }: {
   days: TimelineDay[];
   handling: Record<string, Handling>;
@@ -324,6 +332,8 @@ export function CompanyTimeline({
   requisition?: string | null;
   /** What each round card needs, by round id; a round without it is not shown. */
   roundCards?: Record<string, RoundCardData>;
+  /** A company page path; set where an email's popup may unlink it and return to that page. */
+  unlinkFrom?: string;
 }) {
   const [filter, setFilter] = useState<TimelineFilter>("all");
   const perApplication = requisition !== undefined;
@@ -496,6 +506,7 @@ export function CompanyTimeline({
               entry={opened}
               handling={handling[opened.item.id]}
               placeOptions={placeOptions}
+              unlinkFrom={unlinkFrom}
             />
           }
         />

@@ -94,8 +94,7 @@ test("a prepared action becomes sent in the same record with its actual date", a
   await page.getByRole("button", { name: "Save outreach record" }).click();
   await expect(page).toHaveURL(rowUrl, { timeout: 20_000 });
   const plannedId = openedId(page);
-  // The row has no link back to the prompt, so reopen the prepared record's outreach form by URL.
-  await page.goto(`/outreach?job=${jobId}&record=${plannedId}`);
+  await page.getByRole("link", { name: "Open outreach prompt", exact: true }).click();
   await expect(page).toHaveURL(/record=[a-f0-9-]+/);
   await expect(page.getByLabel("Resume file used")).not.toHaveValue("");
   await page.getByLabel("What happened?").selectOption("sent");
@@ -122,6 +121,7 @@ test("a prepared action becomes sent in the same record with its actual date", a
     .check();
   await page.getByRole("button", { name: "Record as sent", exact: true }).click();
   await expect(page.getByTestId("phase-label")).toHaveText("Applied");
+  await expect(page.getByRole("status").filter({ hasText: "Recorded as sent." })).toBeVisible();
   await page.reload();
   // The header's Applied fact shows the actual sent date.
   await expect(page.getByRole("definition").filter({ hasText: "Applied directly" })).toContainText(

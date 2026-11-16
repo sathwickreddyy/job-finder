@@ -8,12 +8,14 @@ import { currentNamedStep } from "@/features/applications/named-steps";
 import {
   canEditPlannedRecord,
   initialOutcome,
+  isOutreach,
   methodLabel,
   outcomeMeta,
   recordStateFrom,
   type OutcomeId,
 } from "@/features/applications/phase";
 import { companyPageHref } from "@/features/applications/navigation";
+import { addApplicationNote } from "@/features/applications/actions";
 import { notApplying, reopenRecord } from "@/features/applications/record-actions";
 import { FollowUp } from "@/features/applications/views/follow-up";
 import { NotesFold } from "@/features/applications/views/notes/notes-fold";
@@ -196,7 +198,19 @@ function RowBody({
           today={today}
           booked={booked}
           returnTo={returnTo}
+          source={data.source?.recordId === record.id ? data.source : undefined}
         />
+        {editable && isOutreach(record.source) && (
+          <p className="m-0 text-sm text-muted-foreground">
+            <Link href={`/outreach?record=${record.id}`} className="text-link">
+              Open outreach prompt
+            </Link>
+            {" · "}
+            <Link href={`/applications/new?jobId=${record.jobId}`} className="text-link">
+              Record a direct application
+            </Link>
+          </p>
+        )}
         <PreparingControl
           key={`sent-${record.id}`}
           recordId={record.id}
@@ -241,7 +255,18 @@ function RowBody({
           </button>
         </ActionForm>
       )}
+      <ActionForm action={addApplicationNote} feedback="inverse" className="space-y-2">
+        <input type="hidden" name="id" value={record.id} />
+        <label className="block text-sm">
+          Add to history
+          <textarea name="summary" rows={2} required maxLength={20000} className="mt-1 !min-h-16" />
+        </label>
+        <Button variant="outline" size="sm" className="h-9 px-4">
+          Add note
+        </Button>
+      </ActionForm>
       <CompanyTimeline
+        unlinkFrom={companyPageHref(record)}
         days={row.days}
         handling={row.handling}
         roles={[]}

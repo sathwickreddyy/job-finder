@@ -3,7 +3,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { db } from "@/db";
-import { safeReturnTo, withNotice } from "@/features/applications/return-to";
+import { safeReturnTo, safeRowReturnTo, withNotice } from "@/features/applications/return-to";
 import { actionError, formString, type ActionState } from "@/lib/actions";
 import { unlinkMailWithUndo } from "./auto-apply";
 import { dismissMessages, linkMailToRecord } from "./handling-service";
@@ -72,7 +72,13 @@ export async function unlinkMail(_state: ActionState, form: FormData): Promise<A
       unlinkMailWithUndo(tx, mailId, recordId, new Date()),
     );
     refresh(recordId);
-    destination = `/applications/${recordId}?notice=${encodeURIComponent(unlinked ? "Mail unlinked and returned to Emails. Recorded outcomes and history were kept." : "Mail already unlinked.")}`;
+    const notice = unlinked
+      ? "Mail unlinked and returned to Emails. Recorded outcomes and history were kept."
+      : "Mail already unlinked.";
+    const row = safeRowReturnTo(formString(form, "returnTo"));
+    destination = row
+      ? withNotice(row, notice)
+      : `/applications/${recordId}?notice=${encodeURIComponent(notice)}`;
   } catch (error) {
     return actionError(error);
   }

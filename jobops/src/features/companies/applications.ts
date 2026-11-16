@@ -14,6 +14,7 @@ import { readCompanySearch } from "@/features/mail/company-search";
 import type { TimelineDay } from "@/features/timeline/entries";
 import type { RailDue } from "@/features/timeline/index-rows";
 import { mailCursor } from "@/features/timeline/query";
+import { readOpenMail } from "@/features/mail/read";
 import { listMail } from "@/features/mail/mail-list";
 import { timelineEntries } from "@/features/timeline/entries";
 import {
@@ -49,7 +50,30 @@ export type CompanyApplications = {
   search: Awaited<ReturnType<typeof readCompanySearch>> | null;
   /** The résumé files an unsent application can still be pointed at. */
   versions: { id: string; label: string }[];
+  /** The email an outcome link names for the open row: its summary, or why it cannot be used. */
+  source?: { recordId: string; id?: string; subject?: string; error?: string } | null;
 };
+
+async function sourceOf(
+  open: string | null,
+  query: { mail?: string; outcome?: string },
+): Promise<CompanyApplications["source"]> {
+  if (!open || !query.outcome || query.mail === undefined) return null;
+  if (!z.uuid().safeParse(query.mail).success)
+    return {
+      recordId: open,
+      error: "The source message link is invalid. Open Mail to choose a message.",
+    };
+  try {
+    const message = await readOpenMail(query.mail, open);
+    return { recordId: open, id: message.id, subject: message.subject };
+  } catch (error) {
+    return {
+      recordId: open,
+      error: error instanceof Error ? error.message : "The source message could not be loaded.",
+    };
+  }
+}
 
 /** A round's result chips; only the round the outcome service settles may offer them. */
 const roundResults: OutcomeId[] = ["passed", "failed", "rescheduled"];
@@ -131,7 +155,13 @@ async function versionChoices() {
  */
 export async function readCompanyApplications(
   companyKey: string,
-  query: { open?: string; cursor?: string; unplacedCursor?: string },
+  query: {
+    open?: string;
+    cursor?: string;
+    unplacedCursor?: string;
+    mail?: string;
+    outcome?: string;
+  },
   now = new Date(),
 ): Promise<CompanyApplications> {
   const open = z.uuid().safeParse(query.open).success ? query.open! : null;
@@ -220,5 +250,6 @@ export async function readCompanyApplications(
     status: index.statuses[companyKey] ?? null,
     search,
     versions,
+    source: await sourceOf(open, query),
   };
 }

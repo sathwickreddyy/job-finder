@@ -40,11 +40,9 @@ test("recording outcomes walks an application from OA to an accepted offer", asy
     const toggle = row.getByRole("button", { name: "+ Add step", exact: true });
     const chip = row.getByRole("button", { name, exact: true });
     await hydrated(toggle);
-    // A refresh after the previous save can close the panel again, so open it until the chip shows.
-    await expect(async () => {
-      if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
-      await expect(chip).toBeVisible({ timeout: 1500 });
-    }).toPass();
+    // Saving leaves the panel open with its confirmation, so the toggle is only pressed once.
+    if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
+    await expect(chip).toBeVisible();
     await chip.click();
   };
   const rounds = row.locator('li[id^="round-"]');
@@ -73,6 +71,7 @@ test("recording outcomes walks an application from OA to an accepted offer", asy
   await page.getByLabel("Complete by (India time)").fill(istDay(3));
   await page.getByLabel("Name (optional)").fill("HackerRank");
   await save();
+  await expect(page.getByRole("status").filter({ hasText: "Saved: Got an OA." })).toBeVisible();
   await expect(row).toContainText("OA received");
   await expect(row).toContainText("11:59 pm");
   await expect(page.getByLabel("Complete by (India time)")).toHaveCount(0);
@@ -123,6 +122,12 @@ test("recording outcomes walks an application from OA to an accepted offer", asy
     .toBe(true);
   await page.reload();
   await expect(rounds.filter({ hasText: "LLD" })).toBeVisible();
+  await page.waitForLoadState("networkidle");
+  await hydrated(row.getByRole("button", { name: "Add note", exact: true }));
+  await row.getByLabel("Add to history").fill("Discussed system design preparation");
+  await row.getByRole("button", { name: "Add note", exact: true }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Timeline note added." })).toBeVisible();
+  await expect(row).toContainText("Discussed system design preparation");
   // Notes are written in the Notes fold as Markdown; Edit details holds the record's fields.
   const notes = row.getByRole("region", { name: "Notes", exact: true });
   await notes.getByRole("button", { name: /^Notes/ }).click();
@@ -146,10 +151,10 @@ test("recording outcomes walks an application from OA to an accepted offer", asy
   await expect(phase).toHaveText("Offer");
   await addStep("Accepted the offer");
   await save();
-  await expect(phase).toHaveText("Offer");
   await expect(
-    row.getByRole("definition").filter({ has: page.getByTestId("phase-label") }),
-  ).toContainText("Accepted");
+    page.getByRole("status").filter({ hasText: "Saved: Accepted the offer." }),
+  ).toBeVisible();
+  await expect(phase).toHaveText("Accepted");
   await expect(rounds.getByText("Cleared", { exact: true })).toHaveCount(2);
   await expect(row.getByRole("button", { name: "Rejected", exact: true })).toHaveCount(0);
 });
@@ -347,6 +352,7 @@ test("an assessment email asks on its row and records with a date", async ({ pag
     .getByRole("link", { name: /^Link it/ })
     .click();
   const row = page.locator(`#application-${applicationId}`);
+  await expect(page.getByText(`From this email: ${subject}`)).toBeVisible();
   await expect(row.getByRole("button", { name: "Got an OA", exact: true })).toHaveAttribute(
     "aria-expanded",
     "true",

@@ -5,6 +5,7 @@ import { ChevronRight } from "lucide-react";
 import { initialOutcome, type OutcomeId } from "@/features/applications/phase";
 import type { NamedStep } from "@/features/applications/named-steps";
 import { NamedSteps } from "@/features/applications/views/named-steps";
+import { MailDialogButton } from "@/features/mail/mail-dialog";
 import { OutcomeChips } from "@/features/applications/views/outcome-chips";
 import { cn } from "@/lib/utils";
 
@@ -133,6 +134,7 @@ export function Tracker({
   today,
   booked,
   returnTo,
+  source,
 }: {
   steps: NamedStep[];
   recordId: string;
@@ -146,9 +148,13 @@ export function Tracker({
   booked?: { name: string; scheduledAt: Date | null };
   /** Where a saved outcome returns to, so an email or outcome query leaves the URL. */
   returnTo?: string;
+  /** The email the outcome link came from, or why it cannot be used. */
+  source?: { id?: string; subject?: string; error?: string };
 }) {
   const initial = initialOutcome(addable, requested);
-  const [adding, setAdding] = useState(requested !== undefined && initial !== null);
+  const [adding, setAdding] = useState(
+    requested !== undefined && (initial !== null || !!source?.error),
+  );
   const [seenRequest, setSeenRequest] = useState(requested);
   // A link to this page that names an outcome opens the panel even when the row is already mounted.
   if (requested !== seenRequest) {
@@ -178,11 +184,23 @@ export function Tracker({
           id={panel}
           className="rounded-2xl p-4 ring-1 ring-border has-[>[hidden]:only-child]:hidden"
         >
+          {source?.id && (
+            <p className="m-0 mb-3 text-sm [overflow-wrap:anywhere]">
+              From this email:{" "}
+              <MailDialogButton
+                mailId={source.id}
+                className="text-left font-medium underline decoration-current/40 underline-offset-2 hover:decoration-current"
+              >
+                {source.subject || "(no subject)"}
+              </MailDialogButton>
+            </p>
+          )}
           <OutcomeChips
             key={`add-${recordId}`}
             recordId={recordId}
             outcomes={addable}
-            initial={initial}
+            mailError={source?.error}
+            initial={source?.error ? null : initial}
             requested={requested}
             mailId={mailId}
             selectionKey={mailId}
