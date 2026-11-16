@@ -2,7 +2,7 @@
 
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { ChevronRight } from "lucide-react";
-import type { OutcomeId } from "@/features/applications/phase";
+import { initialOutcome, type OutcomeId } from "@/features/applications/phase";
 import type { NamedStep } from "@/features/applications/named-steps";
 import { NamedSteps } from "@/features/applications/views/named-steps";
 import { OutcomeChips } from "@/features/applications/views/outcome-chips";
@@ -132,6 +132,7 @@ export function Tracker({
   mailId,
   today,
   booked,
+  returnTo,
 }: {
   steps: NamedStep[];
   recordId: string;
@@ -143,9 +144,17 @@ export function Tracker({
   mailId?: string;
   today: string;
   booked?: { name: string; scheduledAt: Date | null };
+  /** Where a saved outcome returns to, so an email or outcome query leaves the URL. */
+  returnTo?: string;
 }) {
-  const initial = addable.find((id) => id === requested) ?? null;
+  const initial = initialOutcome(addable, requested);
   const [adding, setAdding] = useState(requested !== undefined && initial !== null);
+  const [seenRequest, setSeenRequest] = useState(requested);
+  // A link to this page that names an outcome opens the panel even when the row is already mounted.
+  if (requested !== seenRequest) {
+    setSeenRequest(requested);
+    if (initial !== null) setAdding(true);
+  }
   const panel = useId();
   const toggle = addable.length > 0 && (
     <button
@@ -163,21 +172,24 @@ export function Tracker({
     <div className="min-w-0 space-y-4">
       <NamedSteps steps={steps} size="page" add={inline ? toggle : undefined} />
       {!inline && toggle}
-      {adding && addable.length > 0 && (
-        <div id={panel} className="rounded-2xl ring-1 ring-border">
-          <div className="p-4">
-            <OutcomeChips
-              key={`add-${recordId}`}
-              recordId={recordId}
-              outcomes={addable}
-              initial={initial}
-              requested={requested}
-              mailId={mailId}
-              selectionKey={mailId}
-              today={today}
-              booked={booked}
-            />
-          </div>
+      {/* Stays mounted after a save so the chips can restore focus; the box hides itself. */}
+      {adding && (
+        <div
+          id={panel}
+          className="rounded-2xl p-4 ring-1 ring-border has-[>[hidden]:only-child]:hidden"
+        >
+          <OutcomeChips
+            key={`add-${recordId}`}
+            recordId={recordId}
+            outcomes={addable}
+            initial={initial}
+            requested={requested}
+            mailId={mailId}
+            selectionKey={mailId}
+            today={today}
+            booked={booked}
+            returnTo={returnTo}
+          />
         </div>
       )}
     </div>

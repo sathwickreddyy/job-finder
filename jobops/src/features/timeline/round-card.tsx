@@ -252,6 +252,7 @@ export function RoundCard({
             outcomes={outcomes}
             initial={null}
             today={data.today}
+            booked={{ name: round.name, scheduledAt: round.scheduledAt }}
           />
         </div>
       )}

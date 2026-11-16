@@ -3,10 +3,13 @@
 import { Fragment, useState } from "react";
 import Link from "next/link";
 import { PenLine } from "lucide-react";
+import { ActionForm } from "@/components/action-form";
+import { Button } from "@/components/ui";
 import { formatTime } from "@/features/applications/dates";
 import { MailDialog } from "@/features/mail/mail-dialog";
 import type { MailItem } from "@/features/mail/mail-item";
 import { inboxLabels, previewLine } from "@/features/mail/row-text";
+import { unlinkMail } from "@/features/mail/triage-actions";
 import { TagPill } from "@/features/mail/tag-pill";
 import { tagLabel } from "@/features/mail/tags";
 import { SourceChip } from "./source-chip";
@@ -228,6 +231,20 @@ function MailFooter({
         ) : null
       ) : (
         <HandledLine item={item} recorded={entry.recorded} />
+      )}
+      {item.application && (
+        <ActionForm action={unlinkMail} feedback="inverse" pendingLabel="Unlinking">
+          <input type="hidden" name="mailId" value={item.id} />
+          <input type="hidden" name="recordId" value={item.application.id} />
+          <div className="flex flex-wrap items-center gap-3">
+            <Button variant="ghost" size="sm">
+              Unlink from this application
+            </Button>
+            <span className="text-xs text-muted-foreground">
+              Returns it to Mail. Recorded outcomes stay.
+            </span>
+          </div>
+        </ActionForm>
       )}
     </div>
   );

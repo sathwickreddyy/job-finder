@@ -128,6 +128,12 @@ export async function updateRound(_state: ActionState, form: FormData): Promise<
   }
 }
 
+/** Only an explicit return path navigates; otherwise the company page the action ran on stays mounted. */
+function redirectTo(form: FormData) {
+  const returnTo = safeReturnTo(formString(form, "returnTo"));
+  return returnTo ? { redirect: returnTo } : {};
+}
+
 export async function recordAsSent(_state: ActionState, form: FormData): Promise<ActionState> {
   try {
     const data = z.object({ id: z.uuid(), sentDate: day, humanConfirmed: z.boolean() }).parse({
@@ -139,7 +145,7 @@ export async function recordAsSent(_state: ActionState, form: FormData): Promise
     refresh(data.id);
     return {
       success: "Recorded as sent.",
-      redirect: safeReturnTo(formString(form, "returnTo")) ?? `/applications/${data.id}`,
+      ...redirectTo(form),
     };
   } catch (error) {
     return actionError(error);
@@ -153,7 +159,7 @@ export async function notApplying(_state: ActionState, form: FormData): Promise<
     refresh(data.id);
     return {
       success: "Closed as not applying.",
-      redirect: safeReturnTo(formString(form, "returnTo")) ?? `/applications/${data.id}`,
+      ...redirectTo(form),
     };
   } catch (error) {
     return actionError(error);
@@ -168,7 +174,7 @@ export async function reopenRecord(_state: ActionState, form: FormData): Promise
     refresh(data.id);
     return {
       success: "Reopened. It is back in Needs you.",
-      redirect: safeReturnTo(formString(form, "returnTo")) ?? `/applications/${data.id}`,
+      ...redirectTo(form),
     };
   } catch (error) {
     return actionError(error);

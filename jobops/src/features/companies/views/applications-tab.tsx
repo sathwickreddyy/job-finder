@@ -13,6 +13,7 @@ import {
   recordStateFrom,
   type OutcomeId,
 } from "@/features/applications/phase";
+import { companyPageHref } from "@/features/applications/navigation";
 import { notApplying, reopenRecord } from "@/features/applications/record-actions";
 import { FollowUp } from "@/features/applications/views/follow-up";
 import { NotesFold } from "@/features/applications/views/notes/notes-fold";
@@ -76,7 +77,7 @@ function Facts({ row }: { row: CompanyApplicationRow }) {
         )}
       </Fact>
       <Fact term="Where it stands">
-        <span className="truncate font-medium" title={step.label}>
+        <span data-testid="phase-label" className="truncate font-medium" title={step.label}>
           {step.label}
         </span>
         {step.detail && (
@@ -116,11 +117,14 @@ function RowBody({
   const booked = [...record.rounds]
     .sort((a, b) => a.position - b.position)
     .find((round) => round.outcome === "SCHEDULED");
+  // A selection carried in the URL (an email, an outcome link) is dropped once it is saved.
+  const returnTo = requested
+    ? `${companyPageHref(record)}?${new URLSearchParams({ open: record.id })}`
+    : undefined;
   const followUpChip: OutcomeId[] = row.outcomes.includes("followup") ? ["followup"] : [];
   const recorded = autoOutcomeOf(record);
   // Only an outcome asked for in the URL carries the email it came from.
   const sourceMail = requested ? mailIntent : undefined;
-  const returnTo = `/applications/${record.id}`;
   const notApplyingClosed =
     record.phase === "Closed" && record.closedReason === "WITHDREW" && !record.sentAt;
   return (
@@ -145,6 +149,7 @@ function RowBody({
           mailId={sourceMail}
           selectionKey={sourceMail}
           today={today}
+          returnTo={returnTo}
         />
       </div>
       <NotesFold
@@ -153,7 +158,7 @@ function RowBody({
         scores={row.scores}
         resumesHref={record.resume ? resumeFileHref(record.resume.id) : undefined}
       />
-      <p className="m-0 flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+      <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1 text-sm">
         <span className="flex min-w-0 items-center gap-1.5">
           <span className="shrink-0 text-muted-foreground">Application page</span>
           {record.applicationUrl ? (
@@ -178,35 +183,38 @@ function RowBody({
           editable={editable}
           versions={data.versions}
         />
-      </p>
-      <Tracker
-        key={`tracker-${record.id}`}
-        steps={row.steps}
-        recordId={record.id}
-        addable={row.outcomes.filter((id) => !notAdded.includes(id))}
-        requested={requested}
-        mailId={sourceMail}
-        today={today}
-        booked={booked}
-      />
-      {editable && (
-        <div className="space-y-3">
-          <PreparingControl key={`sent-${record.id}`} recordId={record.id} active today={today} />
-          {record.phase === "Preparing" && (
-            <ActionForm action={notApplying} feedback="inverse" pendingLabel="Closing">
-              <input type="hidden" name="id" value={record.id} />
-              <input type="hidden" name="returnTo" value={returnTo} />
-              <Button variant="outline" size="sm" className="rounded-full">
-                Not applying
-              </Button>
-            </ActionForm>
-          )}
-        </div>
-      )}
+      </div>
+      {/* Focus lands here when a saved step removes the control that held it. */}
+      <section aria-label="Progress" tabIndex={-1} className="min-w-0 space-y-5 outline-none">
+        <Tracker
+          key={`tracker-${record.id}`}
+          steps={row.steps}
+          recordId={record.id}
+          addable={row.outcomes.filter((id) => !notAdded.includes(id))}
+          requested={requested}
+          mailId={sourceMail}
+          today={today}
+          booked={booked}
+          returnTo={returnTo}
+        />
+        <PreparingControl
+          key={`sent-${record.id}`}
+          recordId={record.id}
+          active={editable}
+          today={today}
+        />
+        {editable && record.phase === "Preparing" && (
+          <ActionForm action={notApplying} feedback="inverse" pendingLabel="Closing">
+            <input type="hidden" name="id" value={record.id} />
+            <Button variant="outline" size="sm" className="rounded-full">
+              Not applying
+            </Button>
+          </ActionForm>
+        )}
+      </section>
       {notApplyingClosed && (
         <ActionForm action={reopenRecord} feedback="inverse" pendingLabel="Reopening">
           <input type="hidden" name="id" value={record.id} />
-          <input type="hidden" name="returnTo" value={returnTo} />
           <Button variant="outline" size="sm" className="rounded-full">
             Reopen
           </Button>
@@ -261,6 +269,7 @@ export function ApplicationsTab({
   openId,
   requested,
   mailIntent,
+  notice,
   now,
 }: {
   data: CompanyApplications;
@@ -269,6 +278,8 @@ export function ApplicationsTab({
   openId?: string | null;
   requested?: string;
   mailIntent?: string;
+  /** The result of an action that navigated here, such as unlinking an email. */
+  notice?: string;
   now: Date;
 }) {
   const inboxes = data.search?.inboxes.map((row) => row.account);
@@ -283,6 +294,14 @@ export function ApplicationsTab({
     target ?? mailRow ?? data.rows.find((row) => row.record.phase !== "Closed")?.record.id;
   return (
     <div className="min-w-0 space-y-8">
+      {notice && (
+        <p
+          role="status"
+          className="m-0 rounded-2xl bg-foreground px-4 py-3 text-sm text-background shadow-surface"
+        >
+          {notice}
+        </p>
+      )}
       {data.rows.length ? (
         <ol aria-label="Applications" className="m-0 flex list-none flex-col gap-3 p-0">
           {data.rows.map((row) => {

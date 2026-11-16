@@ -63,8 +63,6 @@ test("agent record appears on Applications and the company page", async ({ page,
   await expect(page.getByText(name).first()).toBeVisible();
   await page.goto(result.links.company);
   await expect(
-    page
-      .getByRole("complementary", { name: "Company facts" })
-      .getByRole("link", { name: `Platform Engineer ${key}` }),
+    page.locator(`#application-${result.id}`).getByText(`Platform Engineer ${key}`).first(),
   ).toBeVisible();
 });

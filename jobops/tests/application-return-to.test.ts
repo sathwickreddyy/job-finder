@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { safeReturnTo, withNotice } from "@/features/applications/return-to";
+import { safeReturnTo, safeRowReturnTo, withNotice } from "@/features/applications/return-to";
 
 describe("return paths", () => {
   it("keeps Applications paths with their query", () => {
@@ -21,6 +21,22 @@ describe("return paths", () => {
     "/applications/../settings",
   ])("rejects %j", (value) => {
     expect(safeReturnTo(value)).toBeNull();
+  });
+
+  it("keeps only an application's open row on a company page", () => {
+    const row = "/companies/acme%20corp?open=00000000-0000-4000-8000-000000000001";
+    expect(safeRowReturnTo(row)).toBe(row);
+    expect(safeRowReturnTo(`${row}#application-x`)).toBe(row);
+    for (const value of [
+      "",
+      "/companies/acme",
+      "/companies/acme?open=x",
+      `${row}&mail=1`,
+      "/companies/a/b?open=00000000-0000-4000-8000-000000000001",
+      "//evil.example/companies/a?open=00000000-0000-4000-8000-000000000001",
+      "/settings?open=00000000-0000-4000-8000-000000000001",
+    ])
+      expect(safeRowReturnTo(value)).toBeNull();
   });
 
   it("adds a notice without losing the lane", () => {

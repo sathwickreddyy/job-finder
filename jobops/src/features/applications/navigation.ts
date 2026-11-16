@@ -5,7 +5,13 @@ export function companyPageHref(record: { companyKey: string; companyHref?: stri
   return record.companyHref ?? `/companies/${encodeURIComponent(record.companyKey)}`;
 }
 
-type LinkExtra = { mail?: string | null; outcome?: string | null; round?: string | null };
+type LinkExtra = {
+  mail?: string | null;
+  outcome?: string | null;
+  round?: string | null;
+  /** A one-line result shown on the company page, such as after unlinking an email. */
+  notice?: string | null;
+};
 
 /**
  * The one link to an application. `/applications/<id>` redirects to its row on the company
@@ -23,11 +29,12 @@ export function laneHref(recordId: string, extra: LinkExtra = {}) {
 /** The application's row, open, on its company page; a round link scrolls to that round card. */
 export function applicationHref(
   record: { id: string; companyKey: string; companyHref?: string | null },
-  extra: { mail?: string | null; outcome?: string | null; round?: string | null } = {},
+  extra: LinkExtra = {},
 ) {
   const query = new URLSearchParams({ open: record.id });
   if (extra.mail) query.set("mail", extra.mail);
   if (extra.outcome) query.set("outcome", extra.outcome);
+  if (extra.notice) query.set("notice", extra.notice);
   const anchor = extra.round ? `round-${extra.round}` : `application-${record.id}`;
   return `${companyPageHref(record)}?${query}#${anchor}`;
 }

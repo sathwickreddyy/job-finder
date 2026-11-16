@@ -719,6 +719,7 @@ export function CompanyDetail(
     openId?: string | null;
     requested?: string;
     mailIntent?: string;
+    notice?: string;
     now: Date;
   },
 ) {
@@ -741,6 +742,7 @@ export function CompanyDetail(
                 openId={props.openId}
                 requested={props.requested}
                 mailIntent={props.mailIntent}
+                notice={props.notice}
                 now={props.now}
               />
             ),

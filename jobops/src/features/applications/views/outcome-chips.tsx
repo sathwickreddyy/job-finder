@@ -110,7 +110,8 @@ export function OutcomeChips({
         </div>
       </div>
     );
-  if (!outcomes.length && !confirmation && !open) return null;
+  // An empty element keeps the container ref, so focus can still return to the Progress region.
+  if (!outcomes.length && !confirmation && !open) return <div ref={container} hidden />;
   const needs = open ? outcomeMeta[open].needs : undefined;
   return (
     <div ref={container} id="what-happened" className="scroll-mt-24">

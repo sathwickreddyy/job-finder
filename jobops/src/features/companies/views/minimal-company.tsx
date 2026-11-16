@@ -16,6 +16,7 @@ export function MinimalCompanyPage({
   openId,
   requested,
   mailIntent,
+  notice,
   now,
 }: {
   name: string;
@@ -24,6 +25,7 @@ export function MinimalCompanyPage({
   openId?: string | null;
   requested?: string;
   mailIntent?: string;
+  notice?: string;
   now: Date;
 }) {
   return (
@@ -85,6 +87,7 @@ export function MinimalCompanyPage({
             openId={openId}
             requested={requested}
             mailIntent={mailIntent}
+            notice={notice}
             now={now}
           />
         </div>

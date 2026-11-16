@@ -53,7 +53,7 @@ it("returns to the lane after recording a record as sent, and to the record othe
       {},
       form({ id: recordId, sentDate: "", humanConfirmed: "on", returnTo: "//evil.example" }),
     ),
-  ).toEqual({ success: "Recorded as sent.", redirect: `/applications/${recordId}` });
+  ).toEqual({ success: "Recorded as sent." });
 });
 
 it("links mail and returns to the lane with the notice", async () => {

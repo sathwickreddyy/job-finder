@@ -25,6 +25,7 @@ export default async function CompanyPage({
     unplacedCursor?: string;
     outcome?: string;
     mail?: string;
+    notice?: string;
   }>;
 }) {
   const [{ slug }, query, data, preferences] = await Promise.all([
@@ -46,6 +47,7 @@ export default async function CompanyPage({
         openId={openId}
         requested={openId ? query.outcome : undefined}
         mailIntent={uuid(query.mail)}
+        notice={query.notice?.slice(0, 200)}
         now={now}
       />
     );
@@ -68,6 +70,7 @@ export default async function CompanyPage({
       openId={openId}
       requested={openId ? query.outcome : undefined}
       mailIntent={uuid(query.mail)}
+      notice={query.notice?.slice(0, 200)}
       now={now}
     />
   );
