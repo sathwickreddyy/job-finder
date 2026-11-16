@@ -70,12 +70,12 @@ Start with the highlighted box. JobOps keeps the exact job description and résu
 
 ### 7. Track interview rounds and what was asked
 
-![Applications show named rounds → record the round or its result → record the questions → revise in the question library.](jobops/docs/diagrams/07-interviews.svg)
+![Company page → application row → round card → question library.](jobops/docs/diagrams/07-interviews.svg)
 
-1. In **Applications**, each row names where it stands: **Applied**, **Acknowledged**, **Round 1 · DSA**, **Managerial round**, **HR round**, **Offer**. Rounds that company research still expects are marked **Expected · from company research**. The requisition shows beside the role, so two openings at one company stay apart.
-2. Expand the role and, under **What happened?**, record an assessment or scheduled round with its date and time. Record the result or a reschedule the same way.
-3. Open the application page for the full picture: the opening and requisition, when you applied, the **Résumé sent** and where it stands, with a switcher between applications at the same company. Every email in its **Mail** card, and anywhere else in JobOps, opens in a reading popup.
-4. Under the round, choose **Add a question**. Write what they asked, how you answered and what the interviewer said in Markdown, with code blocks and tables, and mark how it went. Save with **Save question** or ⌘S. Keep longer prep notes in **Notes**.
+1. Open the company from **Companies** or any application link (they all land on the company page). Its first tab, **Applications**, has one row per application: date, requisition, role and city, and where it stands. The tracker shows only what happened: **Applied**, **Acknowledged**, **Interview scheduled**, **Round 1 · DSA** and so on, then **Offer** or **Rejected**. Companies that are not in your list get a minimal page with a banner.
+2. Open the row. Under it, record an assessment or scheduled round with **+ Add step** or **Add to history**, with its date and time. Record the result or a reschedule the same way. Mail filed under the wrong application is fixed with the email's link and unlink actions.
+3. The row shows the opening and requisition, when you applied, the **Résumé used** and where it stands, with Notes, follow-ups and a timeline of every email, recorded step and round. Every email opens in a reading popup.
+4. In the round card, choose **Questions**, then **Add a question**. Write what they asked, how you answered and what the interviewer said in Markdown, with code blocks and tables, and mark how it went. Save with **Save question** or ⌘S. Keep longer prep notes in the application's **Notes** or the round's **Round notes**.
 5. Before the next round, open **Question library** from Applications to search and sort every question across companies. An agent can add a review to a question through the [interview questions API](jobops/docs/api/interview-questions.md); it shows with its source and never replaces your answer.
 
 ## Show the supporting workflows

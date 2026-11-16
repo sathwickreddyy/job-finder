@@ -1,6 +1,6 @@
 # Track each application on its company page
 
-Date: 2026-11-16. Status: ready for approval.
+Date: 2026-11-16. Status: implemented on branch company-application-tracking.
 Mockups (visual companion): `company-page-v8.html` (company page, today beside the proposal),
 `notes-and-fallback-v9.html` (Notes fold, Edit details, a company without a page) and
 `notes-format-v11.html` (readable notes). Follows [interview notes and progress](2026-11-16-interview-notes-and-progress-design.md),
@@ -218,7 +218,7 @@ split editor.
 About 3 of 28 applications (DoorDash, Level AI, APEXX Global) are at companies with no company
 record, so `/companies/<slug>` does not exist for them. They get a minimal company page for any
 company key: the Applications tab only (rows, facts, Notes, tracker, timeline), a banner "Not in
-your Companies list yet" with **Add company**, and the research tabs greyed until the company is
+your Companies list yet" (as built there is no Add company button; an agent adds the company), and the research tabs greyed until the company is
 added.
 
 ## Data follow-through after the build

@@ -130,7 +130,7 @@ curl --fail-with-body --silent --show-error -H 'Content-Type: application/json' 
 Outcomes are `solved_code`, `solved_aloud`, `partial` or `stuck`; ask the user rather than guess.
 A review you write for revisiting goes in a separate `PATCH /api/v1/questions/{id}` with
 `review` and `reviewSource` (for example `"Claude Code"`); never rewrite the user's `answer`.
-Read the questions back and confirm them on the application page. See the
+Read the questions back and confirm them in the round card on the company page. See the
 [interview questions contract](../../../../jobops/docs/api/interview-questions.md).
 
 Candidate answers use `/settings` → Standard answers and the profile UI. There is no active `/api/v1/candidate` route; do not use retired task/mission endpoints. [Résumé/answer handling](resumes-and-answers.md) and [mail operations](mail.md) complete this reference.
