@@ -288,6 +288,15 @@ export function RoundRow({
                 defaultValue={round.scheduledAt ? istClock(round.scheduledAt) : ""}
               />
             </label>
+            <label className="max-w-full w-56 text-sm">
+              Interviewer (optional)
+              <input
+                className="mt-1"
+                name="interviewer"
+                maxLength={200}
+                defaultValue={round.interviewer}
+              />
+            </label>
           </div>
           <label className="block text-sm">
             Round notes

@@ -82,6 +82,7 @@ Body shape (replace all example values; omit unknown optional dates):
 When the user shares what an interview asked, record it on that round so they can revise later.
 Find the round with `GET "$JOBOPS_URL/api/v1/applications/{id}/questions"`; if it is missing,
 record it first with the [transition API](../../../../jobops/docs/api/application-transitions.md).
+When scheduling it, pass the interviewer's name as `details.interviewer` (optional, up to 200 characters).
 Then append the questions in one request, keeping the user's own working exactly as written:
 
 ```sh

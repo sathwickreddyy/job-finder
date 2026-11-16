@@ -63,6 +63,7 @@ export function round(
     outcome: "SCHEDULED",
     position: 1,
     notes: "",
+    interviewer: "",
     createdAt: NOW,
     updatedAt: NOW,
     ...patch,

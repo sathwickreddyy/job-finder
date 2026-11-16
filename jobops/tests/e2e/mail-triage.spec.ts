@@ -141,6 +141,7 @@ const outcome = (applicationId: string, mailMessageId: string) => ({
     at: new Date(Date.now() + 86400000),
     happenedAt: new Date(),
     name: "Interview",
+    interviewer: "",
     note: "Confirmed",
   },
 });
@@ -301,7 +302,7 @@ test("linked inbound drives outreach state and unlink preserves later outcomes",
       {
         applicationId: app.id,
         outcome: "referred",
-        detail: { happenedAt: new Date(), name: "", note: "" },
+        detail: { happenedAt: new Date(), name: "", interviewer: "", note: "" },
       },
       new Date(),
     ),

@@ -465,6 +465,7 @@ export const applicationRounds = pgTable(
     outcome: roundOutcomeEnum("outcome").notNull().default("SCHEDULED"),
     position: integer("position").notNull(),
     notes: text("notes").notNull().default(""),
+    interviewer: text("interviewer").notNull().default(""),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -475,6 +476,7 @@ export const applicationRounds = pgTable(
       .on(t.applicationId)
       .where(sql`${t.outcome} = 'SCHEDULED'`),
     check("application_rounds_position", sql`${t.position} >= 1`),
+    check("application_rounds_interviewer_length", sql`char_length(${t.interviewer}) <= 200`),
   ],
 );
 
@@ -513,7 +515,10 @@ export const interviewQuestions = pgTable(
       "interview_questions_text_size",
       sql`char_length(${t.prompt}) <= 100000 and char_length(${t.answer}) <= 100000 and char_length(${t.interviewer}) <= 100000 and char_length(${t.review}) <= 100000 and char_length(${t.timeComplexity}) <= 100000 and char_length(${t.spaceComplexity}) <= 100000`,
     ),
-    check("interview_questions_review_source", sql`${t.review} = '' OR ${t.reviewSource} IS NOT NULL`),
+    check(
+      "interview_questions_review_source",
+      sql`${t.review} = '' OR ${t.reviewSource} IS NOT NULL`,
+    ),
   ],
 );
 

@@ -39,7 +39,14 @@ it("records a simple outcome when optional controls submit empty strings", async
     {
       applicationId: id,
       outcome: "heard",
-      detail: { kind: undefined, at: undefined, name: "", note: "", happenedAt: new Date() },
+      detail: {
+        kind: undefined,
+        at: undefined,
+        name: "",
+        interviewer: "",
+        note: "",
+        happenedAt: new Date(),
+      },
     },
     new Date(),
   );

@@ -240,6 +240,12 @@ export function OutcomeChips({
                 />
               </label>
             )}
+            {needs === "round" && (
+              <label className="max-w-full w-56 text-sm">
+                Interviewer (optional)
+                <input className="mt-1" name="interviewer" maxLength={200} />
+              </label>
+            )}
             <label className="max-w-full w-44 text-sm">
               When it happened
               <input

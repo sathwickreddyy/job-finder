@@ -51,6 +51,7 @@ const round = (id: string, scheduledAt: string, extra: Partial<RoundRow> = {}): 
   outcome: "SCHEDULED",
   position: 1,
   notes: "",
+  interviewer: "",
   createdAt: now,
   updatedAt: now,
   ...extra,

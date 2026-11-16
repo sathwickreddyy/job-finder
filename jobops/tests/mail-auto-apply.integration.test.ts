@@ -254,7 +254,7 @@ describe.skipIf(!dbTests)("auto-applying mail", () => {
         {
           applicationId: app.id,
           outcome: "accepted",
-          detail: { name: "", note: "", happenedAt: NOW },
+          detail: { name: "", interviewer: "", note: "", happenedAt: NOW },
         },
         NOW,
       ),
@@ -381,7 +381,7 @@ describe.skipIf(!dbTests)("auto-applying mail", () => {
         {
           applicationId: app.id,
           outcome: "accepted",
-          detail: { name: "", note: "", happenedAt: NOW },
+          detail: { name: "", interviewer: "", note: "", happenedAt: NOW },
         },
         NOW,
       ),
@@ -550,7 +550,7 @@ describe.skipIf(!dbTests)("auto-applying mail", () => {
         {
           applicationId: app.id,
           outcome: "accepted",
-          detail: { name: "", note: "", happenedAt: NOW },
+          detail: { name: "", interviewer: "", note: "", happenedAt: NOW },
         },
         NOW,
       ),

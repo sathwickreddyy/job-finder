@@ -25,6 +25,7 @@ export async function recordOutcome(_state: ActionState, form: FormData): Promis
         day: optional("day"),
         time: optional("time"),
         name: formString(form, "name"),
+        interviewer: formString(form, "interviewer"),
         note: formString(form, "note"),
         happenedOn: optional("happenedOn"),
       },

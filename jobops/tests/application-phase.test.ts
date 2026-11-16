@@ -31,6 +31,7 @@ const booked = {
 };
 const detail = (patch: Partial<OutcomeDetail> = {}): OutcomeDetail => ({
   name: "",
+  interviewer: "",
   note: "",
   happenedAt: NOW,
   ...patch,
@@ -185,7 +186,13 @@ describe("planning an outcome", () => {
     expect(planOutcome(state(), "oa", detail({ at, name: "HackerRank" }))).toEqual({
       status: "ASSESSMENT",
       closedReason: null,
-      round: { action: "insert", kind: "ONLINE_ASSESSMENT", name: "HackerRank", scheduledAt: at },
+      round: {
+        action: "insert",
+        kind: "ONLINE_ASSESSMENT",
+        name: "HackerRank",
+        interviewer: "",
+        scheduledAt: at,
+      },
       eventType: "ASSESSMENT_RECEIVED",
       summary: `OA received, complete by ${formatDayTime(at)}`,
     });

@@ -10,6 +10,7 @@ import {
   roundKindEnum,
   roundOutcomeEnum,
 } from "@/db/schema";
+import { outcomeDetailsSchema } from "@/features/applications/outcome-input";
 import { roundKinds as researchKinds } from "@/features/companies/metrics";
 import { roundKinds } from "@/lib/round-kinds";
 
@@ -69,5 +70,15 @@ describe("application tracking schema", () => {
     expect(config.foreignKeys[0].reference().foreignTable).toBe(applicationRounds);
     expect(config.foreignKeys[0].onDelete).toBe("cascade");
     expect(config.columns.map((c) => c.name)).toContain("review_source");
+  });
+
+  it("stores who interviewed in a round, up to 200 characters", () => {
+    expect(getTableConfig(applicationRounds).columns.map((column) => column.name)).toContain(
+      "interviewer",
+    );
+    expect(outcomeDetailsSchema.parse({ interviewer: "Mohammad Zabi" })).toEqual({
+      interviewer: "Mohammad Zabi",
+    });
+    expect(outcomeDetailsSchema.safeParse({ interviewer: "x".repeat(201) }).success).toBe(false);
   });
 });

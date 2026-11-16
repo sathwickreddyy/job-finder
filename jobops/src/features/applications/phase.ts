@@ -243,6 +243,7 @@ export type OutcomeDetail = {
   kind?: RoundKind;
   at?: Date;
   name: string;
+  interviewer: string;
   note: string;
   happenedAt: Date;
 };
@@ -256,6 +257,7 @@ const outcomeInput = z.object({
     .regex(/^\d{2}:\d{2}$/)
     .optional(),
   name: z.string().trim().max(200).default(""),
+  interviewer: z.string().trim().max(200).default(""),
   note: z.string().trim().max(2000).default(""),
   happenedOn: z.string().regex(dayPattern).optional(),
 });
@@ -291,6 +293,7 @@ export function outcomeDetail(input: z.input<typeof outcomeInput>, now: Date) {
     kind: data.kind,
     at,
     name: data.name,
+    interviewer: data.interviewer,
     note: data.note,
     happenedAt,
   };
@@ -301,7 +304,7 @@ export type OutcomePlan = {
   status: Stage;
   closedReason: CloseReason | null;
   round?:
-    | { action: "insert"; kind: RoundKind; name: string; scheduledAt: Date }
+    | { action: "insert"; kind: RoundKind; name: string; interviewer: string; scheduledAt: Date }
     | { action: "settle"; outcome: "PASSED" | "FAILED" }
     | { action: "move"; scheduledAt: Date };
   eventType: string;
@@ -355,6 +358,7 @@ export function planOutcome(state: RecordState, id: OutcomeId, detail: OutcomeDe
           action: "insert",
           kind: "ONLINE_ASSESSMENT",
           name: detail.name || "Online assessment",
+          interviewer: detail.interviewer,
           scheduledAt: detail.at!,
         },
         eventType: "ASSESSMENT_RECEIVED",
@@ -372,6 +376,7 @@ export function planOutcome(state: RecordState, id: OutcomeId, detail: OutcomeDe
           action: "insert",
           kind: roundKind,
           name: detail.name || roundKindLabel[roundKind],
+          interviewer: detail.interviewer,
           scheduledAt: detail.at!,
         },
         eventType: "INTERVIEW_SCHEDULED",

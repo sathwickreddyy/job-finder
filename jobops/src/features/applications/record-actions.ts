@@ -117,6 +117,7 @@ export async function updateRound(_state: ActionState, form: FormData): Promise<
         day,
         time: z.union([z.literal(""), z.string().regex(/^\d{2}:\d{2}$/)]),
         notes: z.string().trim().max(5000),
+        interviewer: z.string().trim().max(200),
       })
       .parse({
         id: formString(form, "id"),
@@ -124,6 +125,7 @@ export async function updateRound(_state: ActionState, form: FormData): Promise<
         day: formString(form, "day"),
         time: formString(form, "time"),
         notes: formString(form, "notes"),
+        interviewer: formString(form, "interviewer"),
       });
     const id = await db.transaction((tx) => updateRecordRound(tx, data, new Date()));
     refresh(id);

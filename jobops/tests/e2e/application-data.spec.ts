@@ -112,6 +112,7 @@ async function seedRecord(values: Partial<typeof applications.$inferInsert> = {}
 const detail = (now: Date, values: Partial<OutcomeDetail> = {}): OutcomeDetail => ({
   happenedAt: now,
   name: "",
+  interviewer: "",
   note: "",
   ...values,
 });
@@ -315,6 +316,7 @@ test("round correction waits for its parent lock and requires a real interview t
     day: "2026-10-10",
     time: "10:30",
     notes: "Confirmed",
+    interviewer: "",
   };
   try {
     await locked;

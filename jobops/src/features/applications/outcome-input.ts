@@ -7,6 +7,7 @@ const instant = z.iso.datetime({ offset: true });
 export const outcomeDetailsSchema = z.strictObject({
   note: z.string().max(2000).optional(),
   name: z.string().max(200).optional(),
+  interviewer: z.string().max(200).optional(),
   kind: z.enum(roundKinds).optional(),
   at: instant.optional(),
   happenedAt: instant
@@ -22,6 +23,7 @@ export function readOutcomeDetails(
     kind: details?.kind,
     at: details?.at ? new Date(details.at) : undefined,
     name: details?.name ?? "",
+    interviewer: details?.interviewer ?? "",
     note: details?.note ?? "",
     happenedAt: details?.happenedAt ? new Date(details.happenedAt) : defaultHappenedAt,
   };
