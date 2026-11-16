@@ -184,9 +184,22 @@ export function MailDialog({
   );
 }
 
-function Skeleton({ onClose, error }: { onClose: () => void; error?: string }) {
+function Skeleton({
+  onClose,
+  error,
+  returnFocus,
+}: {
+  onClose: () => void;
+  error?: string;
+  returnFocus?: () => HTMLElement | null;
+}) {
   return (
-    <Modal open onClose={onClose} label={error ? "Email could not be loaded" : "Loading email"}>
+    <Modal
+      open
+      onClose={onClose}
+      label={error ? "Email could not be loaded" : "Loading email"}
+      returnFocus={returnFocus}
+    >
       <div className="flex justify-end px-5 pt-4">
         <button
           type="button"
@@ -228,13 +241,16 @@ export function MailDialogButton({
   mailId: string;
   children: ReactNode;
   className?: string;
-  footer?: (item: MailItem) => ReactNode;
+  /** Actions for this email, such as Unlink; rendered by the page, so a plain node. */
+  footer?: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const [item, setItem] = useState<MailItem | null>(null);
   const [error, setError] = useState<string>();
   const [, start] = useTransition();
+  const button = useRef<HTMLButtonElement>(null);
   const close = () => setOpen(false);
+  const returnFocus = () => button.current;
   const load = () => {
     setOpen(true);
     setError(undefined);
@@ -248,14 +264,25 @@ export function MailDialogButton({
   };
   return (
     <>
-      <button type="button" aria-haspopup="dialog" onClick={load} className={className}>
+      <button
+        ref={button}
+        type="button"
+        aria-haspopup="dialog"
+        onClick={load}
+        className={className}
+      >
         {children}
       </button>
       {open &&
         (item && item.id === mailId ? (
-          <MailDialog item={item} onClose={close} footer={footer?.(item) ?? null} />
+          <MailDialog
+            item={item}
+            onClose={close}
+            footer={footer ?? null}
+            returnFocus={returnFocus}
+          />
         ) : (
-          <Skeleton onClose={close} error={error} />
+          <Skeleton onClose={close} error={error} returnFocus={returnFocus} />
         ))}
     </>
   );

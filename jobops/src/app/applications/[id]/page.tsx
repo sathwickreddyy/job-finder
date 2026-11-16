@@ -5,8 +5,8 @@ import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
 import { resumes, resumeVersions } from "@/db/schema";
-import { getDisplayPreferences } from "@/features/candidate/preferences";
 import { laneHref } from "@/features/applications/navigation";
+import { currentNamedStep, namedStepsOf } from "@/features/applications/named-steps";
 import { readApplications } from "@/features/applications/read";
 import { ApplicationDetail } from "@/features/applications/views/detail";
 
@@ -25,17 +25,25 @@ export default async function ApplicationPage({
   // Outcome and mail links open the row in place on Applications, with the form ready.
   if (query.outcome !== undefined || query.mail !== undefined)
     redirect(laneHref(id, { mail: query.mail, outcome: query.outcome }));
-  const [{ records }, versions, preferences] = await Promise.all([
+  const [{ records }, versions] = await Promise.all([
     readApplications(),
     db
       .select({ version: resumeVersions, family: resumes })
       .from(resumeVersions)
       .innerJoin(resumes, eq(resumeVersions.resumeId, resumes.id))
       .where(eq(resumeVersions.isMaster, false)),
-    getDisplayPreferences(),
   ]);
   const record = records.find((row) => row.id === id);
   if (!record) notFound();
+  const now = new Date();
+  const siblings = records
+    .filter((row) => row.companyKey === record.companyKey && row.source !== "PREVIOUS_JOB")
+    .sort((a, b) => (a.sentAt?.getTime() ?? Infinity) - (b.sentAt?.getTime() ?? Infinity))
+    .map((row) => ({
+      id: row.id,
+      requisition: row.requisition,
+      label: currentNamedStep(namedStepsOf(row, now)).label,
+    }));
   return (
     <div className="flex flex-col gap-4">
       <Link
@@ -48,12 +56,12 @@ export default async function ApplicationPage({
       <ApplicationDetail
         record={record}
         linked={records.filter((row) => record.linkedIds.includes(row.id))}
+        siblings={siblings}
         versions={versions.map(({ version, family }) => ({
           id: version.id,
           label: `${family.name} / ${version.versionLabel} / ${version.originalFilename}`,
         }))}
-        preferences={preferences}
-        now={new Date()}
+        now={now}
         notice={query.notice?.slice(0, 300)}
       />
     </div>

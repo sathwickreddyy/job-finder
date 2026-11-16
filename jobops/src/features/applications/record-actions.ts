@@ -66,17 +66,43 @@ export async function updateApplicationDetails(
         id: z.uuid(),
         applicationUrl: httpUrl,
         resumeVersionId: z.union([z.literal(""), z.uuid()]),
-        notes: z.string().max(20000),
+        // Notes are edited in their own Markdown editor; this form leaves them alone.
+        notes: z.string().max(NOTES_MAX).optional(),
       })
       .parse({
         id: formString(form, "id"),
         applicationUrl: formString(form, "applicationUrl"),
         resumeVersionId: formString(form, "resumeVersionId"),
-        notes: formString(form, "notes"),
+        notes: form.has("notes") ? formString(form, "notes") : undefined,
       });
     await db.transaction((tx) => updateRecordDetails(tx, data, new Date()));
     refresh(data.id);
     return { success: "Details saved." };
+  } catch (error) {
+    return actionError(error);
+  }
+}
+
+/** Longest application note the Markdown editor saves. */
+const NOTES_MAX = 100_000;
+
+/** Saves the application's Markdown notes from the notes editor. */
+export async function saveApplicationNotes(
+  _state: ActionState,
+  form: FormData,
+): Promise<ActionState> {
+  try {
+    const data = z
+      .object({ id: z.uuid(), notes: z.string().max(NOTES_MAX, "Notes are too long to save.") })
+      .parse({ id: formString(form, "id"), notes: String(form.get("notes") ?? "") });
+    const saved = await db
+      .update(applications)
+      .set({ notes: data.notes, updatedAt: new Date() })
+      .where(eq(applications.id, data.id))
+      .returning({ id: applications.id });
+    if (!saved.length) throw new Error("This application no longer exists.");
+    refresh(data.id);
+    return { success: "Notes saved." };
   } catch (error) {
     return actionError(error);
   }

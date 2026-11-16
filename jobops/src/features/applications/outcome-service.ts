@@ -277,7 +277,7 @@ export async function reopenUnsentRecord(tx: Tx, data: { id: string }, now: Date
 /** Sent records retain the exact submitted file, including legacy rows without sent dates. */
 export async function updateRecordDetails(
   tx: Tx,
-  data: { id: string; applicationUrl: string; resumeVersionId: string; notes: string },
+  data: { id: string; applicationUrl: string; resumeVersionId: string; notes?: string },
   now: Date,
 ) {
   const previous = await lockApplication(tx, data.id);
@@ -304,7 +304,7 @@ export async function updateRecordDetails(
     .set({
       applicationUrl: data.applicationUrl || null,
       resumeVersionId,
-      notes: data.notes,
+      ...(data.notes === undefined ? {} : { notes: data.notes }),
       updatedAt: now,
     })
     .where(eq(applications.id, previous.id));
