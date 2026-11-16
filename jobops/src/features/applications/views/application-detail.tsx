@@ -28,6 +28,7 @@ import { NextAction } from "./application-list";
 import { FollowUp } from "./follow-up";
 import { JourneyTrack } from "./journey-track";
 import { NamedSteps } from "./named-steps";
+import { MailDialogButton } from "@/features/mail/mail-dialog";
 import type { NamedStep } from "../named-steps";
 import { OutcomeChips, PreparingControl } from "./outcome-chips";
 
@@ -201,7 +202,15 @@ export function ApplicationExpanded({
         </div>
         {mail && (
           <div className="flex flex-col gap-2 rounded-2xl bg-selected px-4 py-3 text-sm text-selected-foreground [overflow-wrap:anywhere]">
-            <p className="m-0">From this email: {mail.subject}</p>
+            <p className="m-0">
+              From this email:{" "}
+              <MailDialogButton
+                mailId={mail.id}
+                className="text-left font-medium underline decoration-current/40 underline-offset-2 hover:decoration-current"
+              >
+                {mail.subject || "(no subject)"}
+              </MailDialogButton>
+            </p>
             <ActionForm action={linkMailOnly} feedback="inverse" pendingLabel="Linking">
               <input type="hidden" name="mailId" value={mail.id} />
               <input type="hidden" name="recordId" value={record.id} />
