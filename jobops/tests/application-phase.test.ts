@@ -199,6 +199,12 @@ describe("planning an outcome", () => {
       "TECHNICAL_INTERVIEW",
     );
   });
+  it("treats an HR round as a people round", () => {
+    const at = istDateTime("2026-10-06", "11:00")!;
+    expect(planOutcome(state(), "scheduled", detail({ at, kind: "HR" })).status).toBe(
+      "MANAGER_INTERVIEW",
+    );
+  });
   it("settles the booked round", () => {
     const interviewing = state({ status: "TECHNICAL_INTERVIEW", rounds: [booked] });
     expect(planOutcome(interviewing, "passed", detail())).toMatchObject({

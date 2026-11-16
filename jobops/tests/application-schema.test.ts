@@ -4,6 +4,8 @@ import {
   applicationRounds,
   applications,
   closeReasonEnum,
+  interviewQuestions,
+  questionOutcomeEnum,
   queueSnoozes,
   roundKindEnum,
   roundOutcomeEnum,
@@ -51,5 +53,16 @@ describe("application tracking schema", () => {
       "until",
       "created_at",
     ]);
+  });
+  it("adds HR as the last round kind and the question outcome enum", () => {
+    expect(roundKinds.at(-1)).toBe("HR");
+    expect(questionOutcomeEnum.enumValues).toEqual(["SOLVED_CODE", "SOLVED_ALOUD", "PARTIAL", "STUCK"]);
+  });
+
+  it("keeps interview questions under their round", () => {
+    const config = getTableConfig(interviewQuestions);
+    expect(config.foreignKeys[0].reference().foreignTable).toBe(applicationRounds);
+    expect(config.foreignKeys[0].onDelete).toBe("cascade");
+    expect(config.columns.map((c) => c.name)).toContain("review_source");
   });
 });

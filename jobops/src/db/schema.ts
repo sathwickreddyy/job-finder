@@ -101,6 +101,9 @@ export const contactVerificationStatuses = [
   "MANUAL_VERIFIED",
 ] as const;
 
+/** How the user's answer to one interview question went. */
+export const questionOutcomes = ["SOLVED_CODE", "SOLVED_ALOUD", "PARTIAL", "STUCK"] as const;
+
 export const jobStatusEnum = pgEnum("job_status", jobStatuses);
 export const applicationStageEnum = pgEnum("application_stage", applicationStages);
 export const missionStatusEnum = pgEnum("mission_status", missionStatuses);
@@ -112,6 +115,7 @@ export const contactVerificationEnum = pgEnum("contact_verification", contactVer
 export const roundKindEnum = pgEnum("round_kind", roundKinds);
 export const roundOutcomeEnum = pgEnum("round_outcome", roundOutcomes);
 export const closeReasonEnum = pgEnum("application_close_reason", closeReasons);
+export const questionOutcomeEnum = pgEnum("question_outcome", questionOutcomes);
 
 const id = () => uuid("id").primaryKey().defaultRandom();
 const createdAt = () => timestamp("created_at", { withTimezone: true }).notNull().defaultNow();
@@ -471,6 +475,45 @@ export const applicationRounds = pgTable(
       .on(t.applicationId)
       .where(sql`${t.outcome} = 'SCHEDULED'`),
     check("application_rounds_position", sql`${t.position} >= 1`),
+  ],
+);
+
+/** Longest Markdown field an interview question accepts. */
+export const QUESTION_TEXT_MAX = 100_000;
+
+/** One interview question, the user's own answer and an optional agent review, under its round. */
+export const interviewQuestions = pgTable(
+  "interview_questions",
+  {
+    id: id(),
+    roundId: uuid("round_id")
+      .notNull()
+      .references(() => applicationRounds.id, { onDelete: "cascade" }),
+    position: integer("position").notNull(),
+    title: text("title").notNull(),
+    patterns: strings("patterns"),
+    prompt: text("prompt").notNull().default(""),
+    answer: text("answer").notNull().default(""),
+    outcome: questionOutcomeEnum("outcome"),
+    timeComplexity: text("time_complexity").notNull().default(""),
+    spaceComplexity: text("space_complexity").notNull().default(""),
+    interviewer: text("interviewer").notNull().default(""),
+    review: text("review").notNull().default(""),
+    reviewSource: text("review_source"),
+    reviewedAt: date("reviewed_at"),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    index("interview_questions_round_idx").on(t.roundId, t.position),
+    index("interview_questions_updated_idx").on(t.updatedAt),
+    check("interview_questions_position", sql`${t.position} >= 1`),
+    check("interview_questions_title", sql`char_length(${t.title}) between 1 and 200`),
+    check(
+      "interview_questions_text_size",
+      sql`char_length(${t.prompt}) <= 100000 and char_length(${t.answer}) <= 100000 and char_length(${t.interviewer}) <= 100000 and char_length(${t.review}) <= 100000 and char_length(${t.timeComplexity}) <= 100000 and char_length(${t.spaceComplexity}) <= 100000`,
+    ),
+    check("interview_questions_review_source", sql`${t.review} = '' OR ${t.reviewSource} IS NOT NULL`),
   ],
 );
 

@@ -8,5 +8,6 @@ export const roundKinds = [
   "HIRING_MANAGER",
   "DOMAIN",
   "OTHER",
+  "HR",
 ] as const;
 export type RoundKind = (typeof roundKinds)[number];

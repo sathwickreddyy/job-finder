@@ -1,9 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { ChevronDown, FileText } from "lucide-react";
+import type { ReactNode } from "react";
+import { FileText } from "lucide-react";
+import { Expand, ExpandButton } from "@/components/ui/expand";
+import { MiddleTruncate } from "@/components/ui/middle-truncate";
+import { useEdgeFade } from "@/lib/use-edge-fade";
 import { cn } from "@/lib/utils";
 import type { GalleryApplication, HowItWent } from "./types";
+
+export { Expand, ExpandButton, MiddleTruncate, useEdgeFade };
 
 const dayFormat = new Intl.DateTimeFormat("en-IN", {
   day: "numeric",
@@ -89,17 +94,6 @@ export function CompanyMark({ name, size = "md" }: { name: string; size?: "sm" |
   );
 }
 
-/** Long file names keep their distinguishing end ("…jb0076231_2026-11-03.pdf") visible. */
-export function MiddleTruncate({ text, tail = 22, className }: { text: string; tail?: number; className?: string }) {
-  const cut = Math.max(0, text.length - tail);
-  return (
-    <span className={cn("flex min-w-0", className)} title={text}>
-      <span className="truncate">{text.slice(0, cut)}</span>
-      <span className="shrink-0 whitespace-nowrap">{text.slice(cut)}</span>
-    </span>
-  );
-}
-
 export function ResumeChip({ app, className }: { app: GalleryApplication; className?: string }) {
   return (
     <a
@@ -114,90 +108,6 @@ export function ResumeChip({ app, className }: { app: GalleryApplication; classN
       <MiddleTruncate text={app.resume.filename} />
     </a>
   );
-}
-
-/** Height animates from 0 to content; collapsed content is inert so Tab skips it. */
-export function Expand({ open, id, children }: { open: boolean; id?: string; children: ReactNode }) {
-  return (
-    <div
-      id={id}
-      className="grid transition-[grid-template-rows] duration-300 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none"
-      style={{ gridTemplateRows: open ? "1fr" : "0fr" }}
-    >
-      <div className="min-h-0 overflow-hidden" inert={!open}>
-        {children}
-      </div>
-    </div>
-  );
-}
-
-export function ExpandButton({
-  open,
-  onClick,
-  controls,
-  label,
-}: {
-  open: boolean;
-  onClick: () => void;
-  controls: string;
-  label: string;
-}) {
-  return (
-    <button
-      type="button"
-      aria-expanded={open}
-      aria-controls={controls}
-      aria-label={label}
-      onClick={onClick}
-      className="grid size-8 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-muted"
-    >
-      <ChevronDown
-        aria-hidden
-        size={17}
-        className={cn("transition-transform duration-300 motion-reduce:transition-none", open && "rotate-180")}
-      />
-    </button>
-  );
-}
-
-/** Fades only the edges of a scroll area that hide more content. */
-export function useEdgeFade<T extends HTMLElement>(axis: "x" | "y") {
-  const ref = useRef<T>(null);
-  const [edges, setEdges] = useState({ start: false, end: false });
-  const update = useCallback(() => {
-    const el = ref.current;
-    if (!el) return;
-    const pos = axis === "x" ? el.scrollLeft : el.scrollTop;
-    const size = axis === "x" ? el.clientWidth : el.clientHeight;
-    const total = axis === "x" ? el.scrollWidth : el.scrollHeight;
-    const start = pos > 1;
-    const end = pos + size < total - 1;
-    setEdges((prev) => (prev.start === start && prev.end === end ? prev : { start, end }));
-  }, [axis]);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    update();
-    el.addEventListener("scroll", update, { passive: true });
-    const observer = new ResizeObserver(update);
-    observer.observe(el);
-    for (const child of el.children) observer.observe(child);
-    return () => {
-      el.removeEventListener("scroll", update);
-      observer.disconnect();
-    };
-  }, [update]);
-  const direction = axis === "x" ? "to right" : "to bottom";
-  const fade = "24px";
-  const style: CSSProperties | undefined =
-    edges.start || edges.end
-      ? {
-          maskImage: `linear-gradient(${direction}, ${edges.start ? "transparent" : "#000"}, #000 ${
-            edges.start ? fade : "0px"
-          }, #000 calc(100% - ${edges.end ? fade : "0px"}), ${edges.end ? "transparent" : "#000"})`,
-        }
-      : undefined;
-  return { ref, style, update };
 }
 
 /* ------------------------------------------------------------------ */
