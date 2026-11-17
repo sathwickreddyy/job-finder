@@ -1,4 +1,4 @@
-import { and, desc, eq, or, sql } from "drizzle-orm";
+import { and, desc, eq, ne, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
 import { applications, companyRecords, jobs, resumes, resumeVersions } from "@/db/schema";
@@ -113,23 +113,59 @@ export async function recordAgentApplication(
   warnings: string[];
 }> {
   const { opening, application } = agentRecordSchema.parse(input);
-  const result = await recordConfirmed(opening, application, now).catch((error: unknown) => {
-    throw refusal(error);
-  });
+  const { notices, ...result } = await recordConfirmed(opening, application, now).catch(
+    (error: unknown) => {
+      throw refusal(error);
+    },
+  );
   return {
     ...result,
     links: {
       application: `/applications/${result.id}`,
       company: await companyLink(opening.company),
     },
-    warnings: recordWarnings(
-      { postedAt: opening.postedAt, resumeVersionId: application.resumeVersionId },
-      now,
-    ),
+    warnings: [
+      ...notices,
+      ...recordWarnings(
+        { postedAt: opening.postedAt, resumeVersionId: application.resumeVersionId },
+        now,
+      ),
+    ],
   };
 }
 
 type AgentRecord = z.infer<typeof agentRecordSchema>;
+type RecordTx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+/**
+ * An opening saved before submission (jobs editor, import, planned record) often has no
+ * requisition. Fill it from the confirmed record; never replace one already saved.
+ */
+async function fillRequisition(tx: RecordTx, jobId: string, reqId: string | undefined) {
+  if (!reqId) return [];
+  const [stored] = await tx.select().from(jobs).where(eq(jobs.id, jobId));
+  const saved = stored.externalId?.trim();
+  if (saved)
+    return saved === reqId
+      ? []
+      : [`The saved opening has requisition ${saved}, not ${reqId}. Kept ${saved}.`];
+  // The requisition is part of the dedupe key, so both change together.
+  const dedupeKey = jobDedupeKey({ ...stored, externalId: reqId });
+  const [clash] = await tx
+    .select({ id: jobs.id })
+    .from(jobs)
+    .where(and(eq(jobs.dedupeKey, dedupeKey), ne(jobs.id, jobId)))
+    .limit(1);
+  if (clash)
+    return [
+      `Another saved opening already uses requisition ${reqId}. This opening was left blank.`,
+    ];
+  await tx
+    .update(jobs)
+    .set({ externalId: reqId, dedupeKey, updatedAt: new Date() })
+    .where(eq(jobs.id, jobId));
+  return [];
+}
 async function recordConfirmed(
   opening: AgentRecord["opening"],
   application: AgentRecord["application"],
@@ -165,7 +201,12 @@ async function recordConfirmed(
       )[0];
     const prior = found ? await existing(found.id) : undefined;
     // A planned record is upgraded to sent; a record already sent or closed is a duplicate.
-    if (prior && !(await isPlannedRecord(tx, prior))) return { id: prior.id, duplicate: true };
+    if (found && prior && !(await isPlannedRecord(tx, prior)))
+      return {
+        id: prior.id,
+        duplicate: true,
+        notices: await fillRequisition(tx, found.id, opening.reqId),
+      };
     const summary = await importJobRows([job], "skip", tx);
     const jobId =
       summary.ids[0] ??
@@ -182,6 +223,7 @@ async function recordConfirmed(
           .limit(2),
       );
     if (!jobId) throw new Error("The opening could not be saved or found. Retry.");
+    const notices = await fillRequisition(tx, jobId, opening.reqId);
     const [stored] = await tx.select().from(jobs).where(eq(jobs.id, jobId));
     if (
       opening.postedAt &&
@@ -208,7 +250,7 @@ async function recordConfirmed(
       url: application.confirmationUrl ?? "",
       sentAt,
     });
-    return { id, duplicate: false };
+    return { id, duplicate: false, notices };
   });
 }
 

@@ -75,7 +75,7 @@ Body shape (replace all example values; omit unknown optional dates):
 }
 ```
 
-`humanConfirmed` means a real user-confirmed submission/sent message, not permission to send. Current `DIRECT` represents a submitted application, including a final application via a referral link; retain referral provenance in notes. `REFERRAL` represents the **sent request**, with recipient/evidence, and is recorded separately. Confirm the exact `resumeVersionId` first: sent records lock it. Verify returned application/company links/warnings. Never repair submitted records directly in the DB without explicit approval.
+`humanConfirmed` means a real user-confirmed submission/sent message, not permission to send. Current `DIRECT` represents a submitted application, including a final application via a referral link; retain referral provenance in notes. `REFERRAL` represents the **sent request**, with recipient/evidence, and is recorded separately. Confirm the exact `resumeVersionId` first: sent records lock it. Always send `opening.reqId` when the posting shows one: it fills a blank requisition on an opening saved earlier (jobs editor, import or planned record), even on a duplicate post. A different saved requisition is kept and returned as a warning. Verify returned application/company links/warnings. Never repair submitted records directly in the DB without explicit approval.
 
 ## Write the application notes
 

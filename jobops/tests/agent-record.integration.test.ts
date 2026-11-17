@@ -5,7 +5,7 @@ import { closeDatabase, db } from "@/db";
 import { activityLogs, applicationEvents, applications, jobs } from "@/db/schema";
 import { findApplications, recordAgentApplication } from "@/features/applications/agent-record";
 import { recordApplication } from "@/features/applications/record-service";
-import { normalizeJobUrl } from "@/features/jobs/import";
+import { jobDedupeKey, normalizeJobUrl } from "@/features/jobs/import";
 import { assertE2eDatabase, dbTests } from "./helpers/e2e-db";
 
 const prefix = `agent-record-${randomUUID()}`;
@@ -181,6 +181,67 @@ describe.skipIf(!dbTests)("agent application records", () => {
     const [app] = await db.select().from(applications).where(eq(applications.id, planned));
     expect(app.status).toBe("APPLIED");
     expect(await appsFor(open.url)).toHaveLength(1);
+  });
+
+  const savedOpening = async (open: ReturnType<typeof opening>, externalId?: string) =>
+    (
+      await db
+        .insert(jobs)
+        .values({
+          company,
+          title: open.title,
+          canonicalUrl: normalizeJobUrl(open.url),
+          dedupeKey: `${prefix}-saved-${counter}`,
+          source: "COMPANY_CAREERS",
+          externalId,
+        })
+        .returning()
+    )[0];
+  const planFor = (jobId: string) =>
+    db.transaction((tx) =>
+      recordApplication(tx, {
+        recordId: null,
+        jobId,
+        versionId: null,
+        method: "DIRECT",
+        state: "planned",
+        notes: "",
+        recipient: "",
+        url: "",
+        sentAt: null,
+      }),
+    );
+
+  it("fills a blank requisition on a saved opening when the submission is recorded", async () => {
+    const open = opening({ reqId: "10603992" });
+    const stored = await savedOpening(open);
+    await planFor(stored.id);
+    const result = await post(open);
+    expect(result.duplicate).toBe(false);
+    const saved = await job(normalizeJobUrl(open.url as string));
+    expect(saved.externalId).toBe("10603992");
+    expect(saved.dedupeKey).toBe(
+      jobDedupeKey({ company, title: open.title as string, location: "", externalId: "10603992" }),
+    );
+  });
+
+  it("fills a blank requisition even when the record was already sent", async () => {
+    const open = opening();
+    await post(open);
+    const repeat = await post({ ...open, reqId: "R-LATE" });
+    expect(repeat.duplicate).toBe(true);
+    expect((await job(normalizeJobUrl(open.url as string))).externalId).toBe("R-LATE");
+  });
+
+  it("keeps a different saved requisition and warns", async () => {
+    const open = opening({ reqId: "R-NEW" });
+    const stored = await savedOpening(open, "R-OLD");
+    await planFor(stored.id);
+    const result = await post(open);
+    expect((await job(normalizeJobUrl(open.url as string))).externalId).toBe("R-OLD");
+    expect(result.warnings).toContain(
+      "The saved opening has requisition R-OLD, not R-NEW. Kept R-OLD.",
+    );
   });
 
   it("refuses a missing resume file or future date with 409, not a server error", async () => {
