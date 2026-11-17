@@ -407,16 +407,18 @@ export function ApplicationsTab({
               inboxes={inboxes}
             />
           )}
-          <CompanyTimeline
-            days={data.unplaced}
-            handling={data.unplacedHandling}
-            roles={[]}
-            allRolesHref=""
-            role={null}
-            openMail={unplacedOpen}
-            olderHref={data.unplacedOlderHref}
-            inboxes={inboxes}
-          />
+          {(data.unplaced.length > 0 || data.unplacedOlderHref) && (
+            <CompanyTimeline
+              days={data.unplaced}
+              handling={data.unplacedHandling}
+              roles={[]}
+              allRolesHref=""
+              role={null}
+              openMail={unplacedOpen}
+              olderHref={data.unplacedOlderHref}
+              inboxes={inboxes}
+            />
+          )}
         </section>
       )}
       {data.search && (

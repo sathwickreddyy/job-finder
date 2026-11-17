@@ -250,6 +250,22 @@ export async function readCompanyApplications(
     );
   const [newDays, unplaced] = await Promise.all([placeLoose(fresh), placeLoose(loose)]);
   const roles = own.map(timelineRole);
+  // Last activity never depends on the page being read: a cursor swaps in the first page.
+  const [firstRow, firstUnplaced] = await Promise.all([
+    cursor && open && own.some((record) => record.id === open)
+      ? readCompanyTimeline(companyKey, { application: open }, now).then((item) => item.days)
+      : null,
+    unplacedCursor
+      ? listMail({ company: companyKey, attention: "handled" }, undefined, noApplication).then(
+          placeLoose,
+        )
+      : null,
+  ]);
+  const activityDays = [
+    ...rows.map((item) => (firstRow && item.record.id === open ? firstRow : item.days)),
+    newDays,
+    firstUnplaced ?? unplaced,
+  ];
   const row = index.rows.find((item) => item.key === companyKey);
   return {
     rows,
@@ -263,7 +279,7 @@ export async function readCompanyApplications(
     unplacedOlderHref: loose.nextCursor
       ? `?${new URLSearchParams({ unplacedCursor: loose.nextCursor })}#unplaced`
       : null,
-    lastActivity: lastActivityOf([...rows.map((item) => item.days), newDays, unplaced], now),
+    lastActivity: lastActivityOf(activityDays, now),
     next: row?.next ? { text: row.next, due: row.due } : null,
     status: index.statuses[companyKey] ?? null,
     search,

@@ -240,6 +240,35 @@ describe.skipIf(!dbTests)("company applications", () => {
     expect(unplacedOlderHref).toBeNull();
   });
 
+  it("keeps last activity the same on older pages of a row and of handled mail", async () => {
+    await db.insert(mailMessages).values(
+      Array.from({ length: 52 }, (_, index) => ({
+        externalId: `${prefix}-done-${index}`,
+        provider: "GMAIL" as const,
+        accountEmail: account,
+        sender: "talent@fixture.invalid",
+        subject: `Done ${index}`,
+        receivedAt: new Date(Date.UTC(2026, 10, 13, 0, index)),
+        classification: "FOLLOW_UP" as const,
+        companyKey: key,
+        attentionState: "DONE" as const,
+      })),
+    );
+    const first = await readCompanyApplications(key, {}, now);
+    const rowHref = first.rows.find((row) => row.record.id === made.newer)?.olderHref;
+    expect(rowHref).toBeTruthy();
+    expect(first.unplacedOlderHref).toBeTruthy();
+    const rowCursor = new URLSearchParams(rowHref!.split("#")[0]).get("cursor")!;
+    const unplacedCursor = new URLSearchParams(first.unplacedOlderHref!.split("#")[0]).get(
+      "unplacedCursor",
+    )!;
+    expect(first.lastActivity).not.toBeNull();
+    const paged = await readCompanyApplications(key, { open: made.newer, cursor: rowCursor }, now);
+    expect(paged.lastActivity).toEqual(first.lastActivity);
+    const older = await readCompanyApplications(key, { unplacedCursor }, now);
+    expect(older.lastActivity).toEqual(first.lastActivity);
+  });
+
   describe("company page slug", () => {
     it("resolves a company with applications but no record to the minimal page", async () => {
       expect(await resolveCompanySlug(encodeURIComponent(key), [])).toEqual({

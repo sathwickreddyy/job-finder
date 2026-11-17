@@ -477,6 +477,7 @@ describe("company page applications", () => {
       data(rows, { newMail: { days: mailDay(fresh), handling: {}, more: false } }),
     );
     expect(only).toContain("Fresh hello");
+    expect(only).not.toContain("Nothing matches here yet");
   });
 
   it("explains an empty company", () => {
