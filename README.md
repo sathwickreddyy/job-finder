@@ -67,6 +67,7 @@ Start with the highlighted box. JobOps keeps the exact job description and résu
 1. In **Mail**, open **Inboxes** and connect Gmail or Outlook with read-only access. See the [inbox setup instructions](jobops/docs/operator-reference.md#inbox-read-only-setup) if credentials are missing.
 2. Choose **Fetch new mail** and check each inbox's result. Search a company if you need to recover an earlier message.
 3. Match the reply to the exact role. Check whether JobOps already applied an outcome. Link a confirmed match or record the outcome from the email. Leave ambiguous mail open for review.
+4. **Coming up** at the top of All job mail lists only dated steps for the next 7 days (rounds, deadlines, follow-ups), one row each. With more than three roles, a company's role filters fold into one **Role** menu. The company list stays in view while the mail scrolls.
 
 ### 7. Track interview rounds and what was asked
 

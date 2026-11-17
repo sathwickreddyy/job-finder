@@ -196,6 +196,15 @@ describe("CompanyTimeline", () => {
     expect(html).toContain('href="/mail?role=b"');
   });
 
+  it("folds more than three roles into one Role menu of the same links", () => {
+    const roles = ["Backend", "Platform", "Data", "Mobile"].map((name, i) => role(`r${i}`, name));
+    const html = render({ roles, role: "r1" });
+    expect(html).toContain('aria-label="Filter by role"');
+    expect(html).toMatch(/Role:<\/span>[\s\S]*?>Platform</);
+    for (const r of roles) expect(html).toContain(`href="${r.href}"`);
+    expect(html).not.toContain("bg-foreground text-background");
+  });
+
   it("handled row shows what was recorded", () => {
     const handled = item("m2", { attention: "handled", handledAt: "2026-10-31T05:00:00.000Z" });
     const html = render({

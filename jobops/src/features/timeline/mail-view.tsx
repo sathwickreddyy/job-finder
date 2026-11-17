@@ -136,7 +136,7 @@ function Rail({ data, selected }: { data: MailViewData; selected: string | null 
   return (
     <nav
       aria-label="Companies"
-      className="min-w-0 rounded-3xl bg-card p-2 ring-1 ring-border md:sticky md:top-4 md:max-h-[calc(100dvh-2rem)] md:overflow-y-auto"
+      className="min-w-0 rounded-3xl bg-card p-2 ring-1 ring-border md:max-h-[calc(100dvh-2rem)] md:overflow-y-auto"
     >
       <div className="flex items-center justify-between gap-2 px-2 pt-2">
         <h1 className="m-0 text-xl font-semibold tracking-tight">Mail</h1>
@@ -446,7 +446,8 @@ export function MailView({ data }: { data: MailViewData }) {
         </p>
       )}
       <div className="grid min-w-0 gap-4 md:grid-cols-[18.5rem_minmax(0,1fr)] md:items-start">
-        <div className={cn("min-w-0", chosen && "hidden md:block")}>
+        {/* The grid cell is only as tall as the rail, so it is the cell that sticks. */}
+        <div className={cn("min-w-0 md:sticky md:top-4", chosen && "hidden md:block")}>
           <Rail data={data} selected={selected} />
         </div>
         <div className={cn("min-w-0", !chosen && "hidden md:block")}>
