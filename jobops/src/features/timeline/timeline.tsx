@@ -187,6 +187,13 @@ function MailRow({
             <span aria-hidden className="flex">
               <TagPill tag={item.tag} />
             </span>
+            {needs && (
+              <span
+                role="img"
+                aria-label="New"
+                className="size-2 shrink-0 rounded-full bg-primary"
+              />
+            )}
             <EditTag
               item={item}
               className="relative z-10 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100"
@@ -313,6 +320,8 @@ export function CompanyTimeline({
   requisition,
   roundCards = {},
   unlinkFrom,
+  toolbarEnd,
+  children,
 }: {
   days: TimelineDay[];
   handling: Record<string, Handling>;
@@ -332,6 +341,10 @@ export function CompanyTimeline({
   roundCards?: Record<string, RoundCardData>;
   /** A company page path; set where an email's popup may unlink it and return to that page. */
   unlinkFrom?: string;
+  /** One application's timeline: shown at the right of the filter. */
+  toolbarEnd?: React.ReactNode;
+  /** One application's timeline: shown between the filter and the feed (the note composer). */
+  children?: React.ReactNode;
 }) {
   const [filter, setFilter] = useState<TimelineFilter>("all");
   const perApplication = requisition !== undefined;
@@ -403,30 +416,40 @@ export function CompanyTimeline({
   return (
     <div className="min-w-0">
       {perApplication && (
-        <nav role="group" aria-label="Filter timeline" className="mb-5 flex flex-wrap gap-2">
-          {(
-            [
-              ["all", "All"],
-              ["stages", "Stages"],
-              ["mail", "Mail"],
-            ] as const
-          ).map(([id, text]) => (
-            <button
-              key={id}
-              type="button"
-              aria-pressed={filter === id}
-              onClick={() => setFilter(id)}
-              className={cn(
-                "pressable inline-flex h-8 items-center rounded-full px-3 text-sm",
-                filter === id
-                  ? "bg-foreground text-background"
-                  : "text-muted-foreground ring-1 ring-border hover:text-foreground",
-              )}
+        <>
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+            <nav
+              role="group"
+              aria-label="Filter timeline"
+              className="inline-flex rounded-full bg-muted/60 p-[3px] ring-1 ring-border"
             >
-              {text}
-            </button>
-          ))}
-        </nav>
+              {(
+                [
+                  ["all", "All"],
+                  ["stages", "Stages"],
+                  ["mail", "Mail"],
+                ] as const
+              ).map(([id, text]) => (
+                <button
+                  key={id}
+                  type="button"
+                  aria-pressed={filter === id}
+                  onClick={() => setFilter(id)}
+                  className={cn(
+                    "pressable inline-flex h-7 items-center rounded-full px-3 text-[12.5px]",
+                    filter === id
+                      ? "bg-card font-medium text-foreground shadow-sm ring-1 ring-border"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  {text}
+                </button>
+              ))}
+            </nav>
+            {toolbarEnd}
+          </div>
+          {children && <div className="mb-4">{children}</div>}
+        </>
       )}
       {several && !perApplication && (
         <nav role="group" aria-label="Filter by role" className="mb-5 flex flex-wrap gap-2">

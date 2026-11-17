@@ -33,6 +33,7 @@ export function EditDetails({
   resumeLabel,
   editable,
   versions,
+  addLink,
 }: {
   recordId: string;
   applicationUrl: string | null;
@@ -41,11 +42,22 @@ export function EditDetails({
   resumeLabel: string | null;
   editable: boolean;
   versions: { id: string; label: string }[];
+  /** Offers "Add link" beside Edit details, for an application with no page saved. */
+  addLink?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const title = useId();
   return (
     <>
+      {addLink && (
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="rounded-full text-sm font-medium text-link"
+        >
+          Add link
+        </button>
+      )}
       <button
         type="button"
         onClick={() => setOpen(true)}

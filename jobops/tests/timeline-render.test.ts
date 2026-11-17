@@ -459,6 +459,39 @@ describe("CompanyTimeline", () => {
       expect(html).toMatch(/aria-label="Filter timeline"[\s\S]*>All<[\s\S]*>Stages<[\s\S]*>Mail</);
     });
 
+    it("marks the filter pressed state and puts New on open mail only", () => {
+      const html = one({
+        days: [
+          {
+            ...mailDay,
+            entries: [
+              ...mailDay.entries,
+              {
+                type: "mail",
+                at: "2026-10-31T03:00:00.000Z",
+                item: item("m2", { attention: "handled" }),
+                recorded: null,
+              },
+            ],
+          },
+          stepDay,
+        ],
+      });
+      expect(html).toMatch(/aria-label="Filter timeline"[\s\S]*aria-pressed="true"[^>]*>All</);
+      expect(html.match(/aria-label="New"/g)).toHaveLength(1);
+      expect(html.indexOf('aria-label="New"')).toBeLessThan(html.indexOf('id="mail-m2"'));
+    });
+
+    it("renders the toolbar and composer slots around the feed", () => {
+      const html = one({
+        toolbarEnd: createElement("i", { id: "tb" }),
+        children: createElement("i", { id: "cmp" }),
+      });
+      expect(html.indexOf('id="tb"')).toBeGreaterThan(html.indexOf("Filter timeline"));
+      expect(html.indexOf('id="cmp"')).toBeGreaterThan(html.indexOf('id="tb"'));
+      expect(html.indexOf('id="cmp"')).toBeLessThan(html.indexOf('id="mail-m1"'));
+    });
+
     it("shows steps with Recorded once, the time under it, and the requisition", () => {
       const html = one();
       expect(html).toContain('id="entry-e2"');

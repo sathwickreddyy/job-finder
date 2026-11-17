@@ -1,93 +1,27 @@
-import { ArrowUpRight, Undo2 } from "lucide-react";
+import { Undo2 } from "lucide-react";
 import { ActionForm } from "@/components/action-form";
-import { Button } from "@/components/ui";
 import { formatDay, indiaDate } from "@/features/applications/dates";
 import { autoOutcomeOf } from "@/features/applications/journey";
-import { currentNamedStep } from "@/features/applications/named-steps";
 import {
   canEditPlannedRecord,
   initialOutcome,
-  methodLabel,
   outcomeMeta,
   recordStateFrom,
   type OutcomeId,
 } from "@/features/applications/phase";
 import { companyPageHref } from "@/features/applications/navigation";
-import { addApplicationNote } from "@/features/applications/actions";
-import { FollowUp } from "@/features/applications/views/follow-up";
-import { NotesFold } from "@/features/applications/views/notes/notes-fold";
 import { OutcomeChips } from "@/features/applications/views/outcome-chips";
 import { undoAutoOutcomeAction } from "@/features/mail/workspace-actions";
-import { resumeFileHref } from "@/features/resumes/links";
 import { CompanyTimeline } from "@/features/timeline/timeline";
 import type { CompanyApplicationRow, CompanyApplications } from "../applications";
 import { Tracker } from "./application-row";
 import { CurrentStep } from "./current-step";
-import { EditDetails, ResumePreview } from "./row-dialogs";
+import { DetailsAside } from "./details-aside";
+import { NoteComposer } from "./note-composer";
 
 export const withYear = (date: Date) => `${formatDay(date)} ${indiaDate(date).slice(0, 4)}`;
 /** What the Add step panel leaves to the follow-up chip and to the current step's round result. */
 const notAdded: OutcomeId[] = ["followup", "passed", "failed", "rescheduled"];
-
-function Fact({ term, children }: { term: string; children: React.ReactNode }) {
-  return (
-    <div className="min-w-0">
-      <dt className="text-xs text-muted-foreground">{term}</dt>
-      <dd className="m-0 mt-0.5 grid min-w-0 text-sm [&>*]:min-w-0">{children}</dd>
-    </div>
-  );
-}
-
-function Facts({ row }: { row: CompanyApplicationRow }) {
-  const { record } = row;
-  const step = currentNamedStep(row.steps);
-  return (
-    <dl className="m-0 grid grid-cols-2 gap-x-4 gap-y-4 @3xl:grid-cols-4">
-      <Fact term="Opening">
-        <a
-          href={record.jobUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          title={record.requisition ?? "No requisition"}
-          className="inline-flex min-w-0 items-center gap-1 text-link"
-        >
-          <span className="truncate">{record.requisition ?? "No requisition"}</span>
-          <ArrowUpRight aria-hidden size={13} className="shrink-0" />
-        </a>
-        <span className="truncate text-xs text-muted-foreground" title={record.city}>
-          {record.city || "Location not recorded"}
-        </span>
-      </Fact>
-      <Fact term="Applied on">
-        <span className="truncate">{record.sentAt ? withYear(record.sentAt) : "Not sent"}</span>
-        <span className="truncate text-xs text-muted-foreground">
-          {methodLabel[record.source] ?? "Applied directly"}
-        </span>
-      </Fact>
-      <Fact term="Résumé used">
-        {record.resume ? (
-          <ResumePreview
-            versionId={record.resume.id}
-            label={record.resume.label}
-            filename={record.resume.filename}
-          />
-        ) : (
-          <span className="text-muted-foreground">None recorded</span>
-        )}
-      </Fact>
-      <Fact term="Where it stands">
-        <span data-testid="phase-label" className="truncate font-medium" title={step.label}>
-          {step.label}
-        </span>
-        {step.detail && (
-          <span className="truncate text-xs text-muted-foreground" title={step.detail}>
-            {step.detail}
-          </span>
-        )}
-      </Fact>
-    </dl>
-  );
-}
 
 export const addableOf = (row: CompanyApplicationRow) =>
   row.outcomes.filter((id) => !notAdded.includes(id));
@@ -134,8 +68,8 @@ export function RowBody({
     record.phase === "Closed" && record.closedReason === "WITHDREW" && !record.sentAt;
   return (
     <div className="@container">
-      <div className="grid gap-6 @3xl:grid-cols-[minmax(0,1fr)_290px]">
-        <div className="min-w-0 space-y-4">
+      <div className="grid gap-6 @3xl:grid-cols-[minmax(0,1fr)_290px] @3xl:items-start">
+        <div className="min-w-0 space-y-4 @3xl:col-start-1 @3xl:row-start-1">
           {/* Focus lands here when a saved step removes the control that held it. */}
           <section aria-label="Progress" tabIndex={-1} className="min-w-0 space-y-5 outline-none">
             <CurrentStep
@@ -183,77 +117,11 @@ export function RowBody({
               </button>
             </ActionForm>
           )}
-          <Facts row={row} />
-          <div className="flex flex-wrap items-start gap-3 empty:hidden">
-            {record.phase !== "Closed" && (
-              <FollowUp
-                key={`follow-up-${record.id}`}
-                recordId={record.id}
-                day={record.nextActionAt ? indiaDate(record.nextActionAt) : null}
-                label={record.nextActionAt ? formatDay(record.nextActionAt) : null}
-                note={record.nextActionNote}
-              />
-            )}
-            <OutcomeChips
-              key={`follow-chip-${record.id}`}
-              recordId={record.id}
-              outcomes={followUpChip}
-              initial={initialOutcome(followUpChip, requested)}
-              requested={requested}
-              mailId={sourceMail}
-              selectionKey={sourceMail}
-              today={today}
-              returnTo={returnTo}
-            />
-          </div>
-          <NotesFold
-            recordId={record.id}
-            notes={record.notes}
-            scores={row.scores}
-            resumesHref={record.resume ? resumeFileHref(record.resume.id) : undefined}
-          />
-          <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1 text-sm">
-            <span className="flex min-w-0 items-center gap-1.5">
-              <span className="shrink-0 text-muted-foreground">Application page</span>
-              {record.applicationUrl ? (
-                <a
-                  href={record.applicationUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  title={record.applicationUrl}
-                  className="min-w-0 truncate text-link"
-                >
-                  {record.applicationUrl}
-                </a>
-              ) : (
-                <span className="text-muted-foreground">not saved</span>
-              )}
-            </span>
-            <EditDetails
-              recordId={record.id}
-              applicationUrl={record.applicationUrl}
-              resumeVersionId={record.resumeVersionId}
-              resumeLabel={record.resume?.filename ?? null}
-              editable={editable}
-              versions={data.versions}
-            />
-          </div>
-          <ActionForm action={addApplicationNote} feedback="inverse" className="space-y-2">
-            <input type="hidden" name="id" value={record.id} />
-            <label className="block text-sm">
-              Add to history
-              <textarea
-                name="summary"
-                rows={2}
-                required
-                maxLength={20000}
-                className="mt-1 !min-h-16"
-              />
-            </label>
-            <Button variant="outline" size="sm" className="h-9 px-4">
-              Add note
-            </Button>
-          </ActionForm>
+        </div>
+        <div className="min-w-0 @3xl:col-start-2 @3xl:row-span-2 @3xl:row-start-1">
+          <DetailsAside row={row} versions={data.versions} editable={editable} />
+        </div>
+        <div className="min-w-0 @3xl:col-start-1 @3xl:row-start-2">
           <CompanyTimeline
             unlinkFrom={companyPageHref(record)}
             days={row.days}
@@ -266,9 +134,23 @@ export function RowBody({
             inboxes={inboxes}
             requisition={record.requisition}
             roundCards={row.roundCards}
-          />
+            toolbarEnd={
+              <OutcomeChips
+                key={`follow-chip-${record.id}`}
+                recordId={record.id}
+                outcomes={followUpChip}
+                initial={initialOutcome(followUpChip, requested)}
+                requested={requested}
+                mailId={sourceMail}
+                selectionKey={sourceMail}
+                today={today}
+                returnTo={returnTo}
+              />
+            }
+          >
+            <NoteComposer recordId={record.id} />
+          </CompanyTimeline>
         </div>
-        <aside data-testid="row-aside" className="min-w-0 space-y-4" />
       </div>
     </div>
   );

@@ -79,7 +79,13 @@ export function CurrentStep({
               ? `${label} ${when <= now ? "was" : "is"} on ${formatDay(when)}`
               : `${label} · Date not set`
           }
-          detail="How did it go? Recording it moves the tracker on."
+          detail={
+            when
+              ? when <= now
+                ? "How did it go? Recording it moves the tracker on."
+                : "Record the result after the round."
+              : undefined
+          }
         />
       )}
       {preparing && <Heading icon={Send} title="Not sent yet" />}

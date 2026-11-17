@@ -124,12 +124,16 @@ test("recording outcomes walks an application from OA to an accepted offer", asy
   await expect(rounds.filter({ hasText: "LLD" })).toBeVisible();
   // Notes are written in the Notes fold as Markdown; Edit details holds the record's fields.
   const notes = row.getByRole("region", { name: "Notes", exact: true });
-  await notes.getByRole("button", { name: /^Notes/ }).click();
-  await notes.getByRole("button", { name: "Write notes", exact: true }).click();
+  await hydrated(notes.getByRole("button", { name: "Open notes", exact: true }));
+  await notes.getByRole("button", { name: "Open notes", exact: true }).click();
+  const notesDialog = page.getByRole("dialog", { name: "Notes", exact: true });
+  await notesDialog.getByRole("button", { name: "Write notes", exact: true }).click();
   await page.getByRole("textbox", { name: "Notes, Markdown" }).click();
   await page.keyboard.type("Ask about on-call");
   await page.getByRole("button", { name: "Save notes", exact: true }).click();
-  await expect(notes.getByRole("button", { name: "Edit notes", exact: true })).toBeVisible();
+  await expect(notesDialog.getByRole("button", { name: "Edit notes", exact: true })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(notesDialog).toHaveCount(0);
   await row.getByRole("button", { name: "Edit details", exact: true }).click();
   await page.getByLabel("Application page URL").fill("https://example.invalid/application/123");
   await page.getByRole("button", { name: "Save details", exact: true }).click();
@@ -140,9 +144,10 @@ test("recording outcomes walks an application from OA to an accepted offer", asy
   // The saving overlay keeps the page inert for a moment after Edit details; typing into an
   // inert field is silently dropped, so wait for it to lift.
   await page.waitForFunction(() => !document.querySelector("[inert]"));
-  await hydrated(row.getByRole("button", { name: "Add note", exact: true }));
-  await row.getByLabel("Add to history").fill("Discussed system design preparation");
-  await row.getByRole("button", { name: "Add note", exact: true }).click();
+  const composer = row.getByRole("textbox", { name: "Add a note to this application's history…" });
+  await hydrated(row.getByRole("button", { name: "Add", exact: true }));
+  await composer.fill("Discussed system design preparation");
+  await row.getByRole("button", { name: "Add", exact: true }).click();
   await expect(page.getByRole("status").filter({ hasText: "Timeline note added." })).toBeVisible();
   await expect(row).toContainText("Discussed system design preparation");
   await expect(row.getByRole("button", { name: "Got an offer", exact: true })).toHaveCount(0);
@@ -396,14 +401,15 @@ test("record history uses readable India-time dates and long notes render in ful
   await expect(row).not.toContainText("Asia/Kolkata");
   const notes = row.getByRole("region", { name: "Notes", exact: true });
   await hydrated(notes.getByRole("button").first());
-  await notes.getByRole("button", { name: /^Notes/ }).click();
-  await notes.getByRole("button", { name: "Write notes", exact: true }).click();
+  await notes.getByRole("button", { name: "Open notes", exact: true }).click();
+  const notesDialog = page.getByRole("dialog", { name: "Notes", exact: true });
+  await notesDialog.getByRole("button", { name: "Write notes", exact: true }).click();
   await page.getByRole("textbox", { name: "Notes, Markdown" }).click();
   await page.keyboard.type(Array.from({ length: 10 }, (_, i) => `Note line ${i + 1}`).join("\n\n"));
   await page.getByRole("button", { name: "Save notes", exact: true }).click();
-  await expect(notes.getByRole("button", { name: "Edit notes", exact: true })).toBeVisible();
-  await expect(notes.getByText("Note line 1", { exact: true })).toBeVisible();
-  await expect(notes.getByText("Note line 10", { exact: true })).toBeVisible();
+  await expect(notesDialog.getByRole("button", { name: "Edit notes", exact: true })).toBeVisible();
+  await expect(notesDialog.getByText("Note line 1", { exact: true })).toBeVisible();
+  await expect(notesDialog.getByText("Note line 10", { exact: true })).toBeVisible();
 });
 
 test("an application row links to its open row and an old outcome link keeps its outcome", async ({

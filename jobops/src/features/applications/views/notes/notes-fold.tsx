@@ -1,7 +1,8 @@
 "use client";
 
 import { useId, useState } from "react";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, X } from "lucide-react";
+import { Modal } from "@/components/ui/modal";
 import { saveApplicationNotes } from "@/features/applications/record-actions";
 import { NotesEditor } from "@/features/applications/views/page/notes-editor";
 import type { ToolSummary } from "@/features/resumes/fit/derive";
@@ -28,21 +29,73 @@ function closedLine(notes: string): string {
   return first ?? "No notes yet";
 }
 
-/** Notes closed to one line, opening to the readable note with Edit notes. */
+/**
+ * Notes closed to one line, opening to the readable note with Edit notes. The "dialog" variant
+ * is a card with the section names and an Open notes button; the same note opens in a dialog.
+ */
 export function NotesFold({
   recordId,
   notes,
   scores,
   resumesHref,
+  variant = "fold",
 }: {
   recordId: string;
   notes: string;
   scores: Record<ToolSource, ToolSummary> | null;
   resumesHref?: string;
+  variant?: "fold" | "dialog";
 }) {
   const [open, setOpen] = useState(false);
   const panel = useId();
   const line = closedLine(notes);
+  const editor = (
+    <NotesEditor
+      recordId={recordId}
+      notes={notes}
+      save={saveApplicationNotes}
+      view={<NotesView notes={notes} scores={scores} resumesHref={resumesHref} />}
+    />
+  );
+  if (variant === "dialog")
+    return (
+      <section aria-label="Notes" className="min-w-0 rounded-2xl bg-card p-4 ring-1 ring-border">
+        <div className="flex items-center justify-between gap-3">
+          <h3 className="m-0 text-sm font-semibold">Notes</h3>
+          <button
+            type="button"
+            aria-haspopup="dialog"
+            onClick={() => setOpen(true)}
+            className="rounded-full text-sm font-medium text-link"
+          >
+            Open notes
+          </button>
+        </div>
+        <p title={line} className="m-0 mt-1.5 truncate text-sm text-muted-foreground">
+          {line}
+        </p>
+        {open && (
+          <Modal open onClose={() => setOpen(false)} labelledBy={panel} size="lg">
+            <header className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-5 py-3 sm:px-6">
+              <h2 id={panel} className="m-0 text-base font-semibold">
+                Notes
+              </h2>
+              <button
+                type="button"
+                aria-label="Close"
+                onClick={() => setOpen(false)}
+                className="grid size-9 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-muted"
+              >
+                <X aria-hidden size={18} />
+              </button>
+            </header>
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-5 sm:px-6">
+              {editor}
+            </div>
+          </Modal>
+        )}
+      </section>
+    );
   return (
     <section aria-label="Notes" className="min-w-0">
       <button
@@ -66,12 +119,7 @@ export function NotesFold({
       </button>
       {open && (
         <div id={panel} className="mt-2 pl-6">
-          <NotesEditor
-            recordId={recordId}
-            notes={notes}
-            save={saveApplicationNotes}
-            view={<NotesView notes={notes} scores={scores} resumesHref={resumesHref} />}
-          />
+          {editor}
         </div>
       )}
     </section>

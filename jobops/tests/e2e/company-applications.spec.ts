@@ -117,12 +117,15 @@ test("notes, details and the résumé preview open from the row", async ({ page 
   const row = page.locator(`#application-${applicationId}`);
   const notes = row.getByRole("region", { name: "Notes", exact: true });
   await hydrated(notes.getByRole("button").first());
-  await notes.getByRole("button", { name: /^Notes/ }).click();
-  await expect(notes.getByText("Why this role.")).toBeVisible();
+  await expect(notes).toContainText("Summary · On the form · Proof");
+  await notes.getByRole("button", { name: "Open notes", exact: true }).click();
+  const notesDialog = page.getByRole("dialog", { name: "Notes", exact: true });
+  await expect(notesDialog.getByText("Why this role.")).toBeVisible();
   for (const name of ["On the form", "Proof"])
-    await expect(notes.getByRole("heading", { name })).toBeVisible();
-  await notes.getByRole("button", { name: "Edit notes", exact: true }).click();
-  await expect(notes.getByRole("textbox", { name: "Notes, Markdown" })).toBeVisible();
+    await expect(notesDialog.getByRole("heading", { name })).toBeVisible();
+  await notesDialog.getByRole("button", { name: "Edit notes", exact: true }).click();
+  await expect(notesDialog.getByRole("textbox", { name: "Notes, Markdown" })).toBeVisible();
+  await page.keyboard.press("Escape");
 
   await row.getByRole("button", { name: /^Tracking tailored/ }).click();
   const preview = page.getByRole("dialog", { name: /Tracking tailored/ });

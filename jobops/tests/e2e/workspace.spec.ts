@@ -1,6 +1,7 @@
 import { stubExternalSites } from "./helpers/external-sites";
 import { expect, test } from "@playwright/test";
 import { closeDatabase } from "../../src/db";
+import { hydrated } from "./helpers/hydration";
 import { cleanupRecords, seedRecord } from "./helpers/records";
 import { captureImportedMail, cleanupMailFixtures, guardMailFixtures } from "./helpers/task13-mail";
 test.beforeEach(guardMailFixtures);
@@ -121,4 +122,38 @@ test("linking imported mail appends history without changing the application pha
   await expect(page.getByTestId("phase-label")).toHaveText(previousPhase);
   // The placed message shows on the application's own timeline on its company-page row.
   await expect(page.locator(`#application-${applicationId}`)).toContainText(subject);
+});
+
+test("a note added from the composer with Enter appears in the timeline, and notes edit in a dialog", async ({
+  page,
+}) => {
+  const { applicationId } = await seedRecord({
+    company: `Composer Co ${Date.now()}`,
+    source: "DIRECT",
+    sentDaysAgo: 1,
+  });
+  await page.goto(`/applications/${applicationId}`);
+  const row = page.locator(`#application-${applicationId}`);
+  const composer = row.getByRole("textbox", { name: "Add a note to this application's history…" });
+  await hydrated(composer);
+  await composer.fill("Spoke with the recruiter");
+  await composer.press("Shift+Enter");
+  await composer.pressSequentially("about the panel");
+  await expect(composer).toHaveValue("Spoke with the recruiter\nabout the panel");
+  await composer.press("Enter");
+  await expect(row.getByRole("status").filter({ hasText: "Timeline note added." })).toBeVisible();
+  await expect(composer).toHaveValue("");
+  await expect(row).toContainText("Spoke with the recruiter");
+
+  const notes = row.getByRole("region", { name: "Notes", exact: true });
+  await hydrated(notes.getByRole("button", { name: "Open notes", exact: true }));
+  await notes.getByRole("button", { name: "Open notes", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Notes", exact: true });
+  await dialog.getByRole("button", { name: "Write notes", exact: true }).click();
+  await page.getByRole("textbox", { name: "Notes, Markdown" }).click();
+  await page.keyboard.type("Ask about the team");
+  await page.getByRole("button", { name: "Save notes", exact: true }).click();
+  await expect(dialog.getByRole("button", { name: "Edit notes", exact: true })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(notes).toContainText("Ask about the team");
 });

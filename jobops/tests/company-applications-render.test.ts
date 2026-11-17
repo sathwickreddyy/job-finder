@@ -293,7 +293,6 @@ describe("company page applications", () => {
     const html = render(data(rows));
     expect(html).toContain('aria-expanded="true"');
     expect(html.match(/aria-expanded="true"/g)).toHaveLength(1);
-    expect(html).toContain("Where it stands");
     expect(html).toContain("Applied for Staff Engineer");
   });
 
@@ -302,12 +301,11 @@ describe("company page applications", () => {
     const body = html.slice(html.indexOf(`id="application-${older.id}"`));
     for (const text of [
       "Opening",
-      "Applied on",
+      "Applied",
       "Résumé used",
-      "Where it stands",
       "Notes",
       "Application page",
-      "not saved",
+      "Add link",
       "Edit details",
       "+ Add step",
       "Set a follow-up",
@@ -331,7 +329,7 @@ describe("company page applications", () => {
     const facts = (value: ApplicationRecord) => {
       const html = render(data([rowFor(value)]), { openId: value.id });
       const body = html.slice(html.indexOf(`id="application-${value.id}"`));
-      return body.slice(body.indexOf("Résumé used"), body.indexOf("Where it stands"));
+      return body.slice(body.indexOf("Résumé used"), body.indexOf("Notes"));
     };
     const withResume = facts(sent);
     expect(withResume).toContain("ServiceNow tailored");
@@ -440,6 +438,7 @@ describe("company page applications", () => {
     it("says a past round was on its day, with each result button once on the page", () => {
       const html = open(booked(at("2026-11-16T09:00:00")));
       expect(html).toContain("Round 1 · DSA was on 16 Nov");
+      expect(html).toContain("How did it go? Recording it moves the tracker on.");
       for (const label of ["Cleared the round", "Didn&#x27;t clear it", "Rescheduled"])
         expect(html.match(new RegExp(`>${label}<`, "g"))).toHaveLength(1);
       expect(html.indexOf("was on 16 Nov")).toBeLessThan(html.indexOf("Cleared the round"));
@@ -447,8 +446,14 @@ describe("company page applications", () => {
     });
 
     it("says a future round is on its day, and a round without a time has no date", () => {
-      expect(open(booked(at("2026-11-20T11:00:00")))).toContain("Round 1 · DSA is on 20 Nov");
-      expect(open(booked(null))).toContain("Round 1 · DSA · Date not set");
+      const future = open(booked(at("2026-11-20T11:00:00")));
+      expect(future).toContain("Round 1 · DSA is on 20 Nov");
+      expect(future).toContain("Record the result after the round.");
+      expect(future).not.toContain("How did it go?");
+      const undated = open(booked(null));
+      expect(undated).toContain("Round 1 · DSA · Date not set");
+      expect(undated).not.toContain("How did it go?");
+      expect(undated).not.toContain("Record the result after the round.");
     });
 
     it("shows nothing when no round is booked", () => {
@@ -491,6 +496,88 @@ describe("company page applications", () => {
       } as Partial<ApplicationRecord>);
       const html = open(closed);
       expect(html.indexOf("Reopen")).toBeGreaterThan(html.indexOf('data-testid="current-step"'));
+    });
+  });
+
+  describe("details aside and note composer", () => {
+    const scores = {
+      "jobops-lexical": { score: 100, baseScore: null, delta: null, breakdown: [] },
+      "resume-ats-optimizer": { score: 74, baseScore: null, delta: null, breakdown: [] },
+      resumenext: { score: 91, baseScore: null, delta: null, breakdown: [] },
+    };
+    const open = (full: ApplicationRecord, patch: Partial<CompanyApplicationRow> = {}) =>
+      render(data([rowFor(full, [], patch)]), { openId: full.id });
+    const asideOf = (html: string) =>
+      html.slice(html.indexOf('data-testid="row-aside"'), html.indexOf("Add a note to this"));
+
+    it("lists the opening, applied date and method, follow-up, page and résumé in the aside", () => {
+      const aside = asideOf(open(application({ applicationUrl: "https://apply.example/1" })));
+      expect(aside).toMatch(/<a[^>]*href="https:\/\/example.com\/job"[^>]*target="_blank"[^>]*>/);
+      expect(aside).toContain("REQ-0001");
+      expect(aside).toContain("Applied");
+      expect(aside).toContain("4 Nov 2026");
+      expect(aside).toContain("Set a follow-up");
+      expect(aside).toContain('href="https://apply.example/1"');
+      expect(aside).not.toContain("Add link");
+      expect(aside).toContain("Edit details");
+      expect(aside).toContain("Résumé used");
+      expect(aside).toContain("v3");
+      expect(aside).toContain("cv.pdf");
+    });
+
+    it("offers Add link when no application page is saved", () => {
+      const aside = asideOf(open(application()));
+      expect(aside).toContain("Add link");
+      expect(aside).not.toContain("not saved");
+    });
+
+    it("shows the three score values only when scores are stored", () => {
+      const withScores = asideOf(open(application(), { scores }));
+      for (const value of ["100", "74", "91"]) expect(withScores).toContain(`>${value}<`);
+      for (const name of ["Keyword check", "ResumeNext"]) expect(withScores).toContain(name);
+      expect(asideOf(open(application()))).not.toContain("Keyword check");
+    });
+
+    it("shows the note sections and an Open notes button in the aside", () => {
+      const notes = "## Summary\nWhy.\n\n## On the form\nNotice.\n\n## Proof\nDone.";
+      const aside = asideOf(open(application({ notes } as Partial<ApplicationRecord>)));
+      expect(aside).toContain("Summary · On the form · Proof");
+      expect(aside).toContain("Open notes");
+      expect(aside).not.toContain('aria-expanded="true"');
+    });
+
+    it("replaces Add to history with a one-row composer", () => {
+      const html = open(application());
+      expect(html).not.toContain("Add to history");
+      expect(html).toMatch(
+        /<textarea[^>]*rows="1"[^>]*>|<textarea[^>]*aria-label="Add a note to this application&#x27;s history…"/,
+      );
+      expect(html).toContain('placeholder="Add a note to this application&#x27;s history…"');
+      expect(html).toContain('aria-label="Add a note to this application&#x27;s history…"');
+      expect(html).toContain('name="summary"');
+      expect(html).toContain('maxLength="20000"');
+    });
+
+    it("puts the follow-up chip in the activity toolbar after the filter", () => {
+      const html = open(application());
+      const group = html.indexOf('aria-label="Filter timeline"');
+      expect(html.indexOf("Sent a follow-up")).toBeGreaterThan(group);
+      expect(html.indexOf("Sent a follow-up")).toBeLessThan(html.indexOf("Add a note to this"));
+    });
+  });
+
+  describe("current step with several rounds", () => {
+    it("belongs to the first scheduled round when an earlier one is passed", () => {
+      const full = application({
+        rounds: [
+          round("a", { position: 1, kind: "DSA", outcome: "PASSED" }),
+          round("a", { position: 2, kind: "LLD", scheduledAt: at("2026-11-20T11:00:00") }),
+        ],
+      });
+      const html = render(data([rowFor(full)]), { openId: full.id });
+      expect(html).toContain("Round 2 · LLD is on 20 Nov");
+      expect(html).not.toContain("Round 1 · DSA is on");
+      expect(html.match(/>Cleared the round</g)).toHaveLength(1);
     });
   });
 
