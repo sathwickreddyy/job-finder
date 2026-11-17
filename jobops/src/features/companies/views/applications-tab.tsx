@@ -92,6 +92,15 @@ function Facts({ row }: { row: CompanyApplicationRow }) {
   );
 }
 
+/** Mail on this application still waiting for attention. */
+const newMailOf = (row: CompanyApplicationRow) =>
+  row.days.reduce(
+    (total, day) =>
+      total +
+      day.entries.filter((entry) => entry.type === "mail" && entry.item.attention === "open")
+        .length,
+    0,
+  );
 const addableOf = (row: CompanyApplicationRow) =>
   row.outcomes.filter((id) => !notAdded.includes(id));
 /** Whether a requested outcome opens + Add step (so the email popup stays shut) for this row. */
@@ -358,11 +367,20 @@ export function ApplicationsTab({
               <ApplicationRow
                 key={record.id}
                 id={record.id}
-                date={record.sentAt ? withYear(record.sentAt) : "Not sent"}
-                requisition={record.requisition}
-                title={[record.role, record.city].filter(Boolean).join(" · ")}
-                pill={step.detail ? `${step.label} · ${step.detail}` : step.label}
+                role={record.role}
+                meta={[
+                  record.sentAt ? `Applied ${withYear(record.sentAt)}` : "Not sent",
+                  record.requisition ?? "No requisition",
+                  record.city,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
+                steps={row.steps}
+                pill={step.label}
+                detail={step.detail}
+                due={step.due}
                 tone={step.tone}
+                newCount={newMailOf(row)}
                 defaultOpen={record.id === first || record.id === mailRow}
               >
                 <RowBody

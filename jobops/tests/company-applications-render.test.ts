@@ -37,6 +37,7 @@ vi.mock("@/features/mail/workspace-actions", () => ({
 }));
 const { ApplicationsTab } = await import("@/features/companies/views/applications-tab");
 const { detailTabs, tabAliases } = await import("@/features/companies/detail");
+const { StepProgress } = await import("@/features/companies/views/step-progress");
 const { CompanyHeader } = await import("@/features/companies/views/company-header");
 const { MinimalCompanyPage } = await import("@/features/companies/views/minimal-company");
 const { companyPageHref } = await import("@/features/applications/navigation");
@@ -216,15 +217,68 @@ describe("company page applications", () => {
     const html = render(data(rows));
     expect(html).toContain(`id="application-${newer.id}"`);
     expect(html).toContain(`id="application-${older.id}"`);
-    expect(html).toContain("4 Nov 2026");
-    expect(html).toContain("2 Oct 2026");
-    expect(html).toContain("REQ-0001");
-    expect(html).toContain("No requisition");
-    expect(html).toContain("Staff Engineer · Hyderabad");
-    expect(html).toContain("Senior Engineer · Pune");
-    expect(html.indexOf("Staff Engineer · Hyderabad")).toBeLessThan(
-      html.indexOf("Senior Engineer · Pune"),
-    );
+    expect(html).toContain("Applied 4 Nov 2026 · REQ-0001 · Hyderabad");
+    expect(html).toContain("Applied 2 Oct 2026 · No requisition · Pune");
+    expect(html.indexOf("Staff Engineer")).toBeLessThan(html.indexOf("Senior Engineer"));
+  });
+
+  describe("closed row cards", () => {
+    const step = (state: string, tone = "interviewing") =>
+      ({ key: state, label: state, detail: "", state, tone, target: null }) as never;
+    const buttonOf = (html: string, id: string) => {
+      const from = html.indexOf(`id="application-${id}"`);
+      return html.slice(from, html.indexOf("</button>", from));
+    };
+
+    it("starts the row button with the role and puts the meta line under it", () => {
+      const html = render(data(rows));
+      const button = buttonOf(html, older.id);
+      const text = button.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
+      expect(text).toMatch(/Senior Engineer Applied 2 Oct 2026 · No requisition · Pune/);
+      expect(button.indexOf("Senior Engineer")).toBeLessThan(button.indexOf("Applied 2 Oct"));
+    });
+
+    it("draws one segment per step labelled n of total counting done and current", () => {
+      const html = renderToStaticMarkup(
+        createElement(StepProgress, {
+          steps: [step("done"), step("done"), step("done"), step("current"), step("ahead")],
+        }),
+      );
+      expect(html).toContain('aria-label="4 of 5 steps"');
+      expect(html.match(/data-state=/g)).toHaveLength(5);
+      expect(html).toContain("bg-primary");
+      expect(html).toContain("bg-review");
+    });
+
+    it("colours a stopped step as danger", () => {
+      const html = renderToStaticMarkup(
+        createElement(StepProgress, { steps: [step("done"), step("stopped", "bad")] }),
+      );
+      expect(html).toContain("bg-destructive");
+      expect(html).toContain('aria-label="1 of 2 steps"');
+    });
+
+    it("tints the rail by tone and shows the pill with its detail beneath", () => {
+      const html = render(data(rows));
+      expect(buttonOf(html, newer.id)).toContain("bg-review");
+      expect(buttonOf(html, newer.id)).toContain("Booked 20 Nov");
+    });
+
+    it("counts open mail as new and shows nothing for none", () => {
+      const open = { ...mailItem("m-new", "Update", newer.id), attention: "open" as const };
+      const handled = mailItem("m-old", "Old", older.id);
+      const days = [...mailDay(open), ...mailDay({ ...open, id: "m-new2" })];
+      const html = render(data([rowFor(newer, days), rowFor(older, mailDay(handled))]));
+      expect(buttonOf(html, newer.id)).toContain("2 new");
+      expect(buttonOf(html, older.id)).not.toContain(" new");
+    });
+
+    it("truncates a long role and keeps it in the title", () => {
+      const long = application({ role: "Principal Staff Engineer, Distributed Systems" });
+      const html = render(data([rowFor(long)]));
+      expect(html).toContain('title="Principal Staff Engineer, Distributed Systems"');
+      expect(buttonOf(html, long.id)).toContain("truncate");
+    });
   });
 
   it("opens the newest active application when no link names one", () => {

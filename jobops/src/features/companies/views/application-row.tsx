@@ -11,6 +11,7 @@ import { linkMailOnly } from "@/features/mail/triage-actions";
 import { MailDialogButton } from "@/features/mail/mail-dialog";
 import { OutcomeChips } from "@/features/applications/views/outcome-chips";
 import { cn } from "@/lib/utils";
+import { StepProgress } from "./step-progress";
 
 const tones = {
   applied: "bg-selected text-selected-foreground",
@@ -19,30 +20,46 @@ const tones = {
   bad: "bg-danger-soft text-destructive",
   muted: "bg-muted text-muted-foreground",
 } satisfies Record<NamedStep["tone"], string>;
+const rails = {
+  applied: "bg-selected-foreground",
+  interviewing: "bg-review",
+  offer: "bg-success",
+  bad: "bg-destructive",
+  muted: "bg-border",
+} satisfies Record<NamedStep["tone"], string>;
 
 /**
- * One application as an accordion row: date applied, requisition, role and city, and the state
- * pill. A link to `#application-<id>` opens it, scrolls to it and rings it for a moment. Several
- * rows may be open; a closed row renders none of its body.
+ * One application as an accordion card: the role first, a meta line, segmented progress, the state
+ * pill with what is due under it, and a count of new mail. A link to `#application-<id>` opens it,
+ * scrolls to it and rings it for a moment. Several rows may be open; a closed row renders none of
+ * its body.
  */
 export function ApplicationRow({
   id,
-  date,
-  requisition,
-  title,
+  role,
+  meta,
+  steps,
   pill,
+  detail,
+  due,
   tone,
+  newCount,
   defaultOpen,
   children,
 }: {
   id: string;
-  /** "4 Nov 2026", or "Not sent". */
-  date: string;
-  requisition: string | null;
-  /** Role and city. */
-  title: string;
+  role: string;
+  /** "Applied 4 Nov 2026 · No requisition · Hyderabad". */
+  meta: string;
+  steps: NamedStep[];
   pill: string;
+  /** What is due or when, under the pill. */
+  detail: string;
+  /** Whether the detail is overdue and so shown in the warning colour. */
+  due?: boolean;
   tone: NamedStep["tone"];
+  /** Open mail on this application. */
+  newCount: number;
   defaultOpen: boolean;
   children: ReactNode;
 }) {
@@ -82,35 +99,46 @@ export function ApplicationRow({
         aria-expanded={open}
         aria-controls={panel}
         onClick={() => setOpen(!open)}
-        className="flex w-full min-w-0 flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3.5 text-left hover:bg-muted/40 sm:px-5"
+        className="relative flex w-full min-w-0 flex-wrap items-center gap-x-4 gap-y-2 py-3.5 pr-4 pl-5 text-left hover:bg-muted/40 sm:pr-5 sm:pl-6"
       >
+        <span aria-hidden className={cn("absolute inset-y-0 left-0 w-1.5", rails[tone])} />
+        <span className="min-w-0 basis-48 flex-1">
+          <span className="flex min-w-0 items-center gap-2">
+            <span className="min-w-0 truncate text-sm font-semibold" title={role}>
+              {role}
+            </span>
+            {newCount > 0 && (
+              <span className="shrink-0 rounded-full bg-primary px-2 py-0.5 text-xs font-medium text-primary-foreground">
+                {newCount} new
+              </span>
+            )}
+          </span>
+          <span className="block truncate text-xs text-muted-foreground" title={meta}>
+            {meta}
+          </span>
+        </span>
+        <StepProgress steps={steps} />
+        <span className="flex min-w-0 max-w-full flex-col items-start gap-0.5 sm:items-end">
+          <span
+            className={cn(
+              "max-w-full min-w-0 truncate rounded-full px-2.5 py-0.5 text-xs",
+              tones[tone],
+            )}
+            title={pill}
+          >
+            {pill}
+          </span>
+          {detail && (
+            <small className={cn("text-xs", due ? "text-warning" : "text-muted-foreground")}>
+              {detail}
+            </small>
+          )}
+        </span>
         <ChevronRight
           aria-hidden
           size={16}
           className={cn("shrink-0 text-muted-foreground transition-transform", open && "rotate-90")}
         />
-        <span className="w-24 shrink-0 text-sm font-medium tabular-nums">{date}</span>
-        <span
-          className="w-28 shrink-0 truncate text-sm text-muted-foreground tabular-nums"
-          title={requisition ?? "No requisition"}
-        >
-          {requisition ?? "No requisition"}
-        </span>
-        <span
-          className="min-w-0 basis-48 flex-1 truncate text-sm font-medium max-sm:basis-full"
-          title={title}
-        >
-          {title}
-        </span>
-        <span
-          className={cn(
-            "max-w-full min-w-0 truncate rounded-full px-2.5 py-0.5 text-xs",
-            tones[tone],
-          )}
-          title={pill}
-        >
-          {pill}
-        </span>
       </button>
       {open && (
         <div
