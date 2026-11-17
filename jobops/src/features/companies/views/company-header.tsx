@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, Mail } from "lucide-react";
 import { formatDay } from "@/features/applications/dates";
 import { normalizeCompany } from "@/features/applications/lanes";
 import { mailHref } from "@/features/timeline/query";
@@ -22,16 +22,17 @@ function Cell({
   children,
 }: {
   label: string;
-  tone?: "warning";
+  tone?: "warning" | "link";
   children: React.ReactNode;
 }) {
   return (
-    <div className={cn("min-w-0 bg-card px-4 py-3")}>
+    <div data-tone={tone} className="min-w-0 bg-card px-4 py-3">
       <dt className="text-xs text-muted-foreground">{label}</dt>
       <dd
         className={cn(
           "m-0 mt-1 flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5 text-[15px] font-semibold",
           tone === "warning" && "text-warning",
+          tone === "link" && "text-link",
         )}
       >
         {children}
@@ -91,11 +92,12 @@ export function CompanyHeader({
             )}
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Link
             href={mailHref({ company: normalizeCompany(name) })}
             className="flex min-h-10 items-center rounded-full border border-input px-4 text-sm font-medium hover:bg-muted hover:no-underline"
           >
+            <Mail aria-hidden size={16} className="mr-1.5 shrink-0" />
             Company mail
           </Link>
           <Link
@@ -122,22 +124,34 @@ export function CompanyHeader({
             </span>
           </Cell>
           <Cell label="Applications">
-            <span>{rows.length}</span>
-            <span className={small}>
+            <span className="truncate" title={String(rows.length)}>
+              {rows.length}
+            </span>
+            <span
+              className={cn(small, "truncate")}
+              title={`${rows.length - closed} active · ${closed} closed`}
+            >
               {rows.length - closed} active · {closed} closed
             </span>
           </Cell>
           <Cell label="Last activity">
             {lastActivity ? (
               <>
-                <span>{formatDay(new Date(lastActivity.at))}</span>
-                <span className={small}>{lastActivity.kind}</span>
+                <span className="truncate" title={formatDay(new Date(lastActivity.at))}>
+                  {formatDay(new Date(lastActivity.at))}
+                </span>
+                <span className={cn(small, "truncate")} title={lastActivity.kind}>
+                  {lastActivity.kind}
+                </span>
               </>
             ) : (
               <span className={small}>No activity yet</span>
             )}
           </Cell>
-          <Cell label="Next" tone={late ? "warning" : undefined}>
+          <Cell
+            label="Next"
+            tone={late ? "warning" : next?.due?.tone === "now" ? "link" : undefined}
+          >
             {next ? (
               <>
                 {late && <AlertTriangle aria-hidden size={14} className="shrink-0 self-center" />}

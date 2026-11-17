@@ -171,3 +171,11 @@ test("on a phone the row does not scroll sideways and its facts stack", async ({
   // Two columns on a phone: the fourth fact sits below the first.
   expect(last!.y).toBeGreaterThan(first!.y + first!.height - 1);
 });
+
+test("the header fits a 375 px screen without sideways scroll", async ({ page }) => {
+  const { applicationId } = await seedWithRound();
+  await page.setViewportSize({ width: 375, height: 800 });
+  await page.goto(`/applications/${applicationId}`);
+  await expect(page.getByRole("link", { name: "Record application" })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375);
+});

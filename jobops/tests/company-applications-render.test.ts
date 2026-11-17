@@ -317,6 +317,16 @@ describe("company page applications", () => {
       expect(html).toContain("text-warning");
     });
 
+    it("tones the next cell by how due it is", () => {
+      const toneOf = (tone: "now" | "late" | "calm") =>
+        headerHtml({ next: { text: "Reply", due: { label: "soon", tone } } }).match(
+          /data-tone="(\w+)"/,
+        )?.[1];
+      expect(toneOf("late")).toBe("warning");
+      expect(toneOf("now")).toBe("link");
+      expect(toneOf("calm")).toBeUndefined();
+    });
+
     it("says so when there is nothing yet", () => {
       const html = headerHtml({ status: null, lastActivity: null, next: null });
       for (const text of ["No activity yet", "Nothing due"]) expect(html).toContain(text);
