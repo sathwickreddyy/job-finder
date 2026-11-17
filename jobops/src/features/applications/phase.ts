@@ -68,7 +68,9 @@ export function recordStateFrom(
   eventTypes: string[],
 ): RecordState {
   // Older records can predate OUTREACH_SENT. A submitted/advanced stage or a
-  // real response still establishes sending; acknowledgement alone is not a reply.
+  // recorded response still establishes sending; acknowledgement alone is not a reply.
+  // Linked mail never does: portals mail drafts ("keep track of your application"), and
+  // a planned record must keep recordSent/notApplying until a send is actually recorded.
   const advanced = [
     "ASSESSMENT",
     "RECRUITER_SCREEN",
@@ -78,9 +80,19 @@ export function recordStateFrom(
     "OFFER",
   ].includes(app.status);
   const types = new Set([...eventTypes, ...(app.events ?? []).map((event) => event.eventType)]);
-  const linkedInbound = (app.linkedMail ?? []).filter(isLinkedReply);
-  const hasResponse =
-    [...types].some((type) => inboundEvents.has(type)) || linkedInbound.length > 0 || advanced;
+  const recordedResponse = [...types].some((type) => inboundEvents.has(type)) || advanced;
+  const sent =
+    app.appliedAt !== null ||
+    types.has("OUTREACH_SENT") ||
+    types.has("APPLICATION_SUBMITTED") ||
+    // Follow-ups are only recordable after sending, so they also settle legacy records.
+    types.has("FOLLOW_UP_SENT") ||
+    recordedResponse ||
+    app.status === "APPLIED" ||
+    app.status === "ACKNOWLEDGED";
+  // A linked reply answers something that was sent, so it counts only once sending is known.
+  const linkedInbound = sent ? (app.linkedMail ?? []).filter(isLinkedReply) : [];
+  const hasResponse = recordedResponse || linkedInbound.length > 0;
   const latestAt = (dates: Date[]) =>
     dates.reduce<number | null>((latest, date) => {
       const at = date.getTime();
@@ -110,13 +122,7 @@ export function recordStateFrom(
   return {
     source: app.source,
     status: app.status,
-    sent:
-      app.appliedAt !== null ||
-      types.has("OUTREACH_SENT") ||
-      types.has("APPLICATION_SUBMITTED") ||
-      hasResponse ||
-      app.status === "APPLIED" ||
-      app.status === "ACKNOWLEDGED",
+    sent,
     replied,
     referred: types.has("REFERRAL_SUBMITTED"),
     rounds,

@@ -87,6 +87,46 @@ describe("journeyOf", () => {
     ]);
   });
 
+  it("keeps an unsent record Not sent when mail is linked to it", () => {
+    const linked = (classification: string) => ({
+      id: uid(),
+      subject: "Keep track of your application",
+      classification,
+      receivedAt: at("2026-10-02T20:00:00"),
+      attentionState: "DONE",
+    });
+    const mail = [linked("FOLLOW_UP"), linked("APPLICATION_ACKNOWLEDGEMENT")];
+    expect(
+      steps(
+        journeyOf(
+          record({ phase: "Preparing", status: "PREPARING", sentAt: null, linkedMail: mail }),
+        ),
+      ),
+    ).toEqual([
+      ["Not sent", "ahead", "applied", null],
+      ["Acknowledged", "ahead", "applied", null],
+      ["Interviewing", "ahead", "interviewing", null],
+      ["Offer", "ahead", "offer", null],
+    ]);
+    expect(
+      steps(
+        journeyOf(
+          record({
+            source: "REFERRAL",
+            phase: "Preparing",
+            status: "PREPARING",
+            sentAt: null,
+            linkedMail: [linked("RECRUITER_OUTREACH")],
+          }),
+        ),
+      ),
+    ).toEqual([
+      ["Not sent", "ahead", "applied", null],
+      ["Replied", "ahead", "applied", null],
+      ["Referred", "ahead", "offer", null],
+    ]);
+  });
+
   it("journey shows a muted Closed for Not applying", () => {
     const id = uid();
     const journey = journeyOf(

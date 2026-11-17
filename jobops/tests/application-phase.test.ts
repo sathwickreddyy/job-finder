@@ -368,10 +368,10 @@ it("preserves legacy direct MANUAL records by their recorded stage", () => {
   expect(availableOutcomes(interviewing)).toContain("offer");
 });
 
-it("uses linked real inbound mail but ignores automatic acknowledgements", () => {
+it("uses linked real inbound mail as a reply once sent but ignores automatic acknowledgements", () => {
   const app = { source: "REFERRAL", status: "PREPARING" as const, appliedAt: null };
   const reply = { classification: "RECRUITER_OUTREACH", receivedAt: NOW };
-  expect(recordStateFrom({ ...app, linkedMail: [reply] }, [], [])).toMatchObject({
+  expect(recordStateFrom({ ...app, linkedMail: [reply] }, [], ["OUTREACH_SENT"])).toMatchObject({
     sent: true,
     replied: true,
   });
@@ -379,12 +379,44 @@ it("uses linked real inbound mail but ignores automatic acknowledgements", () =>
     recordStateFrom(
       { ...app, linkedMail: [{ ...reply, classification: "APPLICATION_ACKNOWLEDGEMENT" }] },
       [],
-      [],
+      ["OUTREACH_SENT"],
     ),
   ).toMatchObject({
-    sent: false,
+    sent: true,
     replied: false,
   });
+});
+
+it("never treats linked mail alone as proof that a planned record was sent", () => {
+  // A portal "keep track of your application" notice arrives while the form is still a draft.
+  const draftNotice = { classification: "FOLLOW_UP", receivedAt: NOW, attentionState: "DONE" };
+  const kinds = ["FOLLOW_UP", "RECRUITER_OUTREACH", "INTERVIEW", "APPLICATION_ACKNOWLEDGEMENT"];
+  for (const source of ["DIRECT", "REFERRAL", "COLD_EMAIL", "LINKEDIN_MESSAGE"])
+    for (const status of ["DRAFT", "PREPARING", "READY_FOR_REVIEW"] as const)
+      for (const classification of kinds) {
+        const planned = recordStateFrom(
+          { source, status, appliedAt: null, linkedMail: [{ ...draftNotice, classification }] },
+          [],
+          ["ACTION_PLANNED"],
+        );
+        expect(planned).toMatchObject({ sent: false, replied: false });
+        expect(phaseOf(planned)).toBe("Preparing");
+        // The transition API offers recordSent/notApplying exactly when this holds.
+        expect(canEditPlannedRecord(planned)).toBe(true);
+      }
+});
+
+it("counts the linked reply as soon as a planned record is recorded as sent", () => {
+  const app = {
+    source: "DIRECT",
+    status: "APPLIED" as const,
+    appliedAt: NOW,
+    linkedMail: [{ classification: "FOLLOW_UP", receivedAt: NOW, attentionState: "DONE" }],
+  };
+  const sent = recordStateFrom(app, [], ["APPLICATION_SUBMITTED"]);
+  expect(sent).toMatchObject({ sent: true, replied: true });
+  expect(phaseOf(sent)).toBe("Applied");
+  expect(canEditPlannedRecord(sent)).toBe(false);
 });
 
 it("counts linked mail as a reply only once it is handled", () => {
@@ -555,7 +587,9 @@ it("keeps genuinely unsent plans editable but excludes submitted, advanced and c
             [],
           ),
         ),
-      ).toBe(false);
+      ).toBe(true);
+      expect(canEditPlannedRecord(recordStateFrom(app, [], ["REPLY_RECEIVED"]))).toBe(false);
+      expect(canEditPlannedRecord(recordStateFrom(app, [], ["FOLLOW_UP_SENT"]))).toBe(false);
     }
     for (const status of [
       "APPLIED",
