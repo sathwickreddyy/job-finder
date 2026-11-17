@@ -11,7 +11,7 @@ import { classificationsFor, kindLabel, parseTagParam, type MailTag } from "./ta
 
 const pageSize = 50;
 export const mailListSchema = z.object({
-  attention: z.enum(["open", "all"]).default("all"),
+  attention: z.enum(["open", "handled", "all"]).default("all"),
   /** A tag id, or a legacy id from an older link that covers several tags. */
   tag: z
     .string()
@@ -83,7 +83,11 @@ export async function listMail(
   const context = loaded ?? (await loadMailContext());
   const scope = [...mailScope(query, context), ...extra];
   const open = ne(mailMessages.attentionState, "DONE");
-  const page = [...scope, ...(query.attention === "open" ? [open] : [])];
+  const handled = eq(mailMessages.attentionState, "DONE");
+  const page = [
+    ...scope,
+    ...(query.attention === "open" ? [open] : query.attention === "handled" ? [handled] : []),
+  ];
   if (query.cursor) {
     const [at, id] = query.cursor.split("|");
     page.push(

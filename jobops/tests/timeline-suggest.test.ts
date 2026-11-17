@@ -34,10 +34,15 @@ const state = (patch: Partial<RecordState> = {}): RecordState => ({
 const role = (id: string, patch: Partial<RecordState> = {}) => ({
   id,
   role: `Role ${id}`,
+  requisition: `REQ-${id}` as string | null,
   state: state(patch),
 });
 
 describe("suggestHandling", () => {
+  it("carries each role's requisition", () => {
+    expect(suggestHandling(item(), [role("a")]).applications[0].requisition).toBe("REQ-a");
+  });
+
   it("suggests the classification's outcome when allowed", () => {
     expect(suggestHandling(item(), [role("a")])).toMatchObject({
       chosen: "a",

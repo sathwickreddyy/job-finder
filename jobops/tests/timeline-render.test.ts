@@ -53,7 +53,9 @@ const stamp = (weekday: string, day: number, month: string, year = 2026) => ({
 });
 const today = stamp("Sat", 31, "Oct");
 const handling: Handling = {
-  applications: [{ id: "a", role: "Backend", outcomes: ["heard", "scheduled", "rejected"] }],
+  applications: [
+    { id: "a", role: "Backend", requisition: null, outcomes: ["heard", "scheduled", "rejected"] },
+  ],
   chosen: "a",
   suggested: "scheduled",
   reason: "Suggested for an interview email.",

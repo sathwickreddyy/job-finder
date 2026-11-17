@@ -3,12 +3,22 @@ const invisible = /[­͏؜ᅟᅠ឴឵᠎​-‏‪-‮⁠-⁯﻿]/g;
 const greeting =
   /^(hi|hello|hey|dear|greetings|good (morning|afternoon|evening))\b[^.!?]{0,40}[,!:]?$/i;
 
-/** The first line that says something: no greetings, no invisible preheader padding. */
+/** Links add noise to a one-line preview: keep a link's words, drop the address and any bare-domain label. */
+function withoutLinks(line: string) {
+  return line
+    .replace(/\[([^\]]*)\]<https?:[^>]*>/g, (_, label: string) =>
+      /^\S+\.\S+$/.test(label.trim()) ? "" : label,
+    )
+    .replace(/<https?:[^>]*>/g, "")
+    .replace(/https?:\/\/\S+/g, "");
+}
+
+/** The first line that says something: no greetings, links or invisible preheader padding. */
 export function previewLine(text: string) {
   return (
     text
       .split("\n")
-      .map((line) => line.replace(invisible, "").replace(/\s+/g, " ").trim())
+      .map((line) => withoutLinks(line.replace(invisible, "")).replace(/\s+/g, " ").trim())
       .find((line) => line && !greeting.test(line)) ?? ""
   );
 }
