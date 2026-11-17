@@ -26,6 +26,7 @@ vi.mock("@/features/applications/outcomes", () => ({ recordOutcome: vi.fn() }));
 vi.mock("@/features/mail/triage-actions", () => ({ linkMailOnly: vi.fn(), unlinkMail: vi.fn() }));
 vi.mock("@/features/mail/workspace-actions", () => ({
   handleMailAction: vi.fn(),
+  markAllJustInfoAction: vi.fn(),
   reopenMailAction: vi.fn(),
   placeMailAction: vi.fn(),
   retagMail: vi.fn(),
@@ -748,31 +749,153 @@ describe("company page applications", () => {
     expect(html).toMatch(/<pre>[\s\S]*a{400}[\s\S]*<\/pre>/);
   });
 
-  it("keeps company mail on no application in its own section, hidden when empty", () => {
-    const loose = mailItem("00000000-0000-4000-8000-0000000000dd", "Loose hello", null);
-    const html = render(data(rows, { unplaced: mailDay(loose) }));
-    expect(html).toContain("Oracle, not on an application");
-    expect(html).toContain("Loose hello");
-    expect(render(data(rows))).not.toContain("not on an application");
-  });
+  describe("new-mail tray and the Other company mail fold", () => {
+    const openMail = (id: string, subject: string, patch: Partial<MailItem> = {}): MailItem => ({
+      ...mailItem(id, subject, null),
+      attention: "open",
+      ...patch,
+    });
+    const app = (id: string, role: string, requisition: string | null = null) => ({
+      id,
+      role,
+      requisition,
+      outcomes: ["heard", "scheduled", "oa"] as OutcomeId[],
+    });
+    const two = [app("a1", "SDE II, 3P Pricing", "REQ-77"), app("a2", "SDE, CS ARIA")];
+    const handlingOf = (
+      applications: ReturnType<typeof app>[],
+      patch: Record<string, unknown> = {},
+    ) => ({
+      applications,
+      chosen: applications.length === 1 ? applications[0].id : null,
+      suggested: "info" as const,
+      reason: "Nothing to record from this email.",
+      ...patch,
+    });
+    const tray = (items: [MailItem, ReturnType<typeof handlingOf>][], more = false) => ({
+      newMail: {
+        days: mailDay(items[0][0]).map((day) => ({
+          ...day,
+          entries: items.map(([item]) => ({
+            type: "mail" as const,
+            at: item.receivedAt,
+            item,
+            recorded: null,
+          })),
+        })),
+        handling: Object.fromEntries(items.map(([item, handling]) => [item.id, handling])),
+        more,
+      },
+    });
+    const ids = [1, 2, 3].map((n) => `00000000-0000-4000-8000-00000000f00${n}`);
 
-  it("shows new mail on no application above the handled mail", () => {
-    const fresh = mailItem("00000000-0000-4000-8000-0000000000d1", "Fresh hello", null);
-    const done = mailItem("00000000-0000-4000-8000-0000000000d2", "Done hello", null);
-    const html = render(
-      data(rows, {
-        newMail: { days: mailDay(fresh), handling: {}, more: false },
-        unplaced: mailDay(done),
-      }),
-    );
-    expect(html).toContain("Oracle, not on an application");
-    expect(html.indexOf("Fresh hello")).toBeGreaterThan(-1);
-    expect(html.indexOf("Fresh hello")).toBeLessThan(html.indexOf("Done hello"));
-    const only = render(
-      data(rows, { newMail: { days: mailDay(fresh), handling: {}, more: false } }),
-    );
-    expect(only).toContain("Fresh hello");
-    expect(only).not.toContain("Nothing matches here yet");
+    it("heads the tray with the count and 'need a role' when two or more applications are open", () => {
+      const items = ids.map(
+        (id) => [openMail(id, "Thank you for applying"), handlingOf(two)] as [MailItem, never],
+      );
+      const html = render(data(rows, tray(items)));
+      expect(html).toContain("3 new emails need a role");
+      expect(html).toContain("arrived 5 Nov, 9:00 am");
+      expect(html).toContain("Mark all just info");
+      expect(html.match(/aria-label="New"/g)).toHaveLength(3);
+      expect(html).toContain("Choose role");
+    });
+
+    it("says 'need a look' with fewer than two open applications", () => {
+      const html = render(
+        data(rows, tray([[openMail(ids[0], "Hello"), handlingOf([app("a1", "SDE")])]])),
+      );
+      expect(html).toContain("1 new email needs a look");
+    });
+
+    it("names the role found in the email, else the sender and a link-free preview", () => {
+      const hit = openMail(ids[0], "Thank you for applying", {
+        text: "Your application for REQ-77 was received.",
+      });
+      const miss = openMail(ids[1], "Thank you for applying", {
+        text: "Hello\nWe got it [Apply]<https://x.test/track?a=1> now",
+      });
+      const bare = openMail(ids[2], "Thank you for applying", { text: "" });
+      const html = render(
+        data(rows, tray([hit, miss, bare].map((i) => [i, handlingOf(two)]) as never)),
+      );
+      expect(html).toMatch(/Role in the email:[\s\S]*?SDE II, 3P Pricing/);
+      expect(html).toContain("talent@example.com · We got it Apply now");
+      expect(html).not.toContain("x.test/track");
+      expect(html).toMatch(/>talent@example\.com<\/p>/);
+    });
+
+    it("confirms an acknowledgement with Link to this application, an interview with its outcome", () => {
+      const ack = openMail(ids[0], "Thank you for applying");
+      const interview = openMail(ids[1], "Interview invite", { kind: "Interview" });
+      const one = [app("a1", "SDE")];
+      const html = render(
+        data(
+          rows,
+          tray([
+            [ack, handlingOf(one)],
+            [
+              interview,
+              handlingOf(one, {
+                suggested: "scheduled",
+                reason: "Suggested for an interview email.",
+              }),
+            ],
+          ]),
+        ),
+      );
+      expect(html).toContain("Link to this application");
+      expect(html).toContain("Record round scheduled");
+      expect(html).toContain('name="returnTo" value="/companies/oracle?open=a1"');
+    });
+
+    it("renders a link to Mail when more new emails exist", () => {
+      const html = render(data(rows, tray([[openMail(ids[0], "Hello"), handlingOf(two)]], true)));
+      expect(html).toContain('href="/mail?company=oracle"');
+      expect(
+        render(data(rows, tray([[openMail(ids[0], "Hello"), handlingOf(two)]]))),
+      ).not.toContain("/mail?company=oracle");
+    });
+
+    it("orders the notice, tray, rows, fold and rules line, and hides the empty ones", () => {
+      const done = mailItem("00000000-0000-4000-8000-0000000000d2", "Done hello", null);
+      const html = render(
+        data(rows, {
+          ...tray([[openMail(ids[0], "Fresh hello"), handlingOf(two)]]),
+          unplaced: mailDay(done),
+          search: {
+            inboxes: [],
+            rule: { aliases: [], domains: [], senders: [], keywords: [], excludedTerms: [] },
+          } as never,
+        }),
+      );
+      const at = (text: string) => html.indexOf(text);
+      expect(at("1 new email")).toBeGreaterThan(-1);
+      expect(at("1 new email")).toBeLessThan(at('aria-label="Applications"'));
+      expect(at('aria-label="Applications"')).toBeLessThan(at("Other company mail · 1"));
+      expect(html).toMatch(/<details[^>]*id="unplaced"(?![^>]* open)/);
+      expect(html).not.toContain("not on an application");
+      const bare = render(data(rows));
+      expect(bare).not.toContain("new email");
+      expect(bare).not.toContain("Other company mail");
+    });
+
+    it("keeps the fold shut until a ?mail= link targets one of its emails", () => {
+      const done = mailItem("00000000-0000-4000-8000-0000000000d2", "Done hello", null);
+      const value = data(rows, { unplaced: mailDay(done) });
+      expect(render(value)).not.toMatch(/<details[^>]*id="unplaced"[^>]* open/);
+      const html = render(value, { mailIntent: done.id });
+      expect(html).toMatch(/<details[^>]*id="unplaced"[^>]* open/);
+      expect(html).toContain("<dialog");
+    });
+
+    it("opens the tray email's dialog for a ?mail= link and leaves the fold shut", () => {
+      const html = render(data(rows, tray([[openMail(ids[0], "Fresh hello"), handlingOf(two)]])), {
+        mailIntent: ids[0],
+      });
+      expect(html).toContain("<dialog");
+      expect(html).not.toMatch(/<details[^>]*id="unplaced"/);
+    });
   });
 
   it("explains an empty company", () => {

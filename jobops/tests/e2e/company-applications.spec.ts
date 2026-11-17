@@ -5,10 +5,13 @@ import { applicationRounds, applications, resumes, resumeVersions } from "../../
 import { stubExternalSites } from "./helpers/external-sites";
 import { hydrated, openDetails } from "./helpers/hydration";
 import { cleanupRecords, seedRecord } from "./helpers/records";
+import { cleanupMailFixtures, guardMailFixtures, seedMail } from "./helpers/task13-mail";
 
+test.beforeEach(guardMailFixtures);
 test.beforeEach(async ({ page }) => stubExternalSites(page));
 const resumeFamilies: string[] = [];
 test.afterEach(async () => {
+  await cleanupMailFixtures();
   await cleanupRecords();
   if (!resumeFamilies.length) return;
   await db.delete(resumeVersions).where(inArray(resumeVersions.resumeId, resumeFamilies));
@@ -204,4 +207,131 @@ test("the header fits a 375 px screen without sideways scroll", async ({ page })
   await page.goto(`/applications/${applicationId}`);
   await expect(page.getByRole("link", { name: "Record application" })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375);
+});
+
+/** A company with two open applications and two open emails on no application. */
+async function seedTray() {
+  const company = `Tray Co ${Date.now()}`;
+  const backend = await seedRecord({
+    company,
+    source: "DIRECT",
+    sentDaysAgo: 3,
+    title: "Backend Engineer",
+  });
+  const platform = await seedRecord({
+    company,
+    source: "DIRECT",
+    sentDaysAgo: 2,
+    title: "Platform Engineer",
+  });
+  const key = company.toLowerCase();
+  const named = `Thanks for applying ${Date.now()}`;
+  const unnamed = `Thanks again ${Date.now()}`;
+  await seedMail({
+    subject: named,
+    classification: "APPLICATION_ACKNOWLEDGEMENT",
+    companyKey: key,
+    bodyText: "We received your application for Platform Engineer.",
+    receivedAt: new Date(Date.now() - 60_000),
+  });
+  await seedMail({
+    subject: unnamed,
+    classification: "APPLICATION_ACKNOWLEDGEMENT",
+    companyKey: key,
+    bodyText: "We received your application.",
+    receivedAt: new Date(Date.now() - 120_000),
+  });
+  return {
+    company,
+    key,
+    backend: backend.applicationId,
+    platform: platform.applicationId,
+    named,
+    unnamed,
+  };
+}
+
+test("new mail waits in a tray until a role is picked and confirmed", async ({ page }) => {
+  const { backend, platform, named, unnamed } = await seedTray();
+  await page.setViewportSize({ width: 375, height: 900 });
+  await page.goto(`/applications/${platform}`);
+  const tray = page.locator("#new-mail");
+  await expect(tray.getByRole("heading", { name: "2 new emails need a role" })).toBeVisible();
+  await expect(tray.getByRole("img", { name: "New" })).toHaveCount(2);
+  const line = tray.getByRole("listitem").filter({ hasText: named });
+  await expect(line).toContainText("Role in the email: Platform Engineer");
+  await expect(tray.getByRole("listitem").filter({ hasText: unnamed })).toContainText(
+    "talent@example.invalid",
+  );
+  // The menu lists the matching application first, then the two other ways out.
+  const choose = line.getByRole("button", { name: /^Choose role/ });
+  await hydrated(choose);
+  await choose.click();
+  await expect(choose).toHaveAttribute("aria-expanded", "true");
+  const menu = page.locator(`#${await choose.getAttribute("aria-controls")}`);
+  await expect(menu.getByRole("button").first()).toContainText("matchPlatform Engineer");
+  await expect(menu.getByRole("button", { name: "Just info, no application" })).toBeVisible();
+  await expect(menu.getByRole("button", { name: "Place at a date…" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(choose).toBeFocused();
+  await expect(menu).toHaveCount(0);
+  // Picking a role only selects it: the line shows it and still waits for the button.
+  await choose.click();
+  await menu.getByRole("button", { name: /Platform Engineer/ }).click();
+  await expect(line).toContainText("Role: Platform Engineer");
+  await expect(tray.getByRole("img", { name: "New" })).toHaveCount(2);
+  await expect(page.locator(`#application-${platform}`)).not.toContainText(named);
+  // An acknowledgement suggests no outcome, so the button links it.
+  await line.getByRole("button", { name: "Link to this application" }).click();
+  await expect(
+    page.getByRole("status").filter({ hasText: "Message linked to your record." }),
+  ).toBeVisible();
+  await expect(tray.getByRole("heading", { name: "1 new email needs a role" })).toBeVisible();
+  await expect(tray.getByText(named)).toHaveCount(0);
+  await expect(page.locator(`#application-${platform}`)).toContainText(named);
+  await expect(page.locator(`#application-${backend}`)).not.toContainText(named);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
+test("Mark all just info empties the tray into the folded Other company mail", async ({ page }) => {
+  const { platform, named, unnamed } = await seedTray();
+  await page.goto(`/applications/${platform}`);
+  const markAll = page.getByRole("button", { name: "Mark all just info" });
+  await hydrated(markAll);
+  await markAll.click();
+  await expect(page.locator("#new-mail")).toHaveCount(0);
+  const fold = page.locator("#unplaced");
+  await expect(fold.locator("summary")).toContainText("Other company mail · 2");
+  await expect(fold).not.toHaveAttribute("open", "");
+  await fold.locator("summary").click();
+  await expect(fold.getByText(named)).toBeVisible();
+  await expect(fold.getByText(unnamed)).toBeVisible();
+  await fold.getByText(named).click();
+  const undo = page.getByRole("dialog").getByRole("button", { name: "Undo" });
+  await expect(undo).toBeVisible();
+  await undo.click();
+  await expect(page.getByRole("dialog")).toBeHidden();
+  await expect(page.locator("#new-mail").getByRole("heading")).toContainText("1 new email");
+  await expect(fold.locator("summary")).toContainText("Other company mail · 1");
+});
+
+test("blocks keep at least 32 px between them", async ({ page }) => {
+  const { platform, key } = await seedTray();
+  await seedMail({
+    subject: `Old note ${Date.now()}`,
+    classification: "FOLLOW_UP",
+    companyKey: key,
+    attentionState: "DONE",
+  });
+  await page.goto(`/applications/${platform}`);
+  const rows = page.getByRole("list", { name: "Applications" });
+  const below = async (selector: string) => {
+    const a = (await rows.locator("> li").last().boundingBox())!;
+    const b = (await page.locator(selector).boundingBox())!;
+    return b.y - (a.y + a.height);
+  };
+  expect(await below("#unplaced")).toBeGreaterThanOrEqual(32);
+  const tray = (await page.locator("#new-mail").boundingBox())!;
+  const first = (await rows.locator("> li").first().boundingBox())!;
+  expect(first.y - (tray.y + tray.height)).toBeGreaterThanOrEqual(32);
 });

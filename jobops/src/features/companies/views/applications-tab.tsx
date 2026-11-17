@@ -1,10 +1,14 @@
 import Link from "next/link";
+import { ChevronRight } from "lucide-react";
 import { currentNamedStep } from "@/features/applications/named-steps";
 import { initialOutcome } from "@/features/applications/phase";
+import { companyPageHref } from "@/features/applications/navigation";
 import { RulePanel } from "@/features/mail/search/rule-panel";
 import { CompanyTimeline } from "@/features/timeline/timeline";
+import type { TimelineDay } from "@/features/timeline/entries";
 import type { CompanyApplicationRow, CompanyApplications } from "../applications";
 import { ApplicationRow } from "./application-row";
+import { NewMailTray } from "./new-mail-tray";
 import { RowBody, addableOf, withYear } from "./row-body";
 
 /** Mail on this application still waiting for attention. */
@@ -64,10 +68,23 @@ export function ApplicationsTab({
     targetRow && panelOpensFor(targetRow, requested, data.source ?? undefined)
       ? null
       : (mailIntent ?? null);
+  const mailEntries = (days: TimelineDay[]) =>
+    days.flatMap((day) => day.entries.filter((entry) => entry.type === "mail"));
+  const handled = mailEntries(data.unplaced).length;
+  const holdsUnplaced =
+    !!mailIntent && mailEntries(data.unplaced).some((entry) => entry.item.id === mailIntent);
+  const pageHref = companyPageHref({
+    companyKey,
+    companyHref: data.rows[0]?.record.companyHref,
+  });
+  const placeOptions = {
+    companies: [{ key: companyKey, name: companyName }],
+    applications: data.rows.map(({ record }) => ({ id: record.id, label: record.role })),
+  };
   const first =
     target ?? mailRow ?? data.rows.find((row) => row.record.phase !== "Closed")?.record.id;
   return (
-    <div className="min-w-0 space-y-8">
+    <div className="flex min-w-0 flex-col gap-8">
       {notice && (
         <p
           role="status"
@@ -76,6 +93,14 @@ export function ApplicationsTab({
           {notice}
         </p>
       )}
+      <NewMailTray
+        companyKey={companyKey}
+        newMail={data.newMail}
+        openMail={unplacedOpen}
+        inboxes={inboxes}
+        placeOptions={placeOptions}
+        pageHref={pageHref}
+      />
       {data.rows.length ? (
         <ol aria-label="Applications" className="m-0 flex list-none flex-col gap-3 p-0">
           {data.rows.map((row) => {
@@ -121,29 +146,21 @@ export function ApplicationsTab({
           </Link>
         </p>
       )}
-      {(data.newMail.days.length > 0 || data.unplaced.length > 0) && (
-        <section id="unplaced" aria-labelledby="unplaced-title" className="scroll-mt-24 space-y-3">
-          <div>
-            <h2 id="unplaced-title" className="m-0 text-base font-semibold">
-              {companyName}, not on an application
-            </h2>
-            <p className="m-0 mt-0.5 text-sm text-muted-foreground">
-              Company mail that is not linked to any application.
-            </p>
-          </div>
-          {data.newMail.days.length > 0 && (
-            <CompanyTimeline
-              days={data.newMail.days}
-              handling={data.newMail.handling}
-              roles={[]}
-              allRolesHref=""
-              role={null}
-              openMail={unplacedOpen}
-              olderHref={null}
-              inboxes={inboxes}
+      {(data.unplaced.length > 0 || data.unplacedOlderHref) && (
+        <details
+          id="unplaced"
+          open={holdsUnplaced || undefined}
+          className="group scroll-mt-24 rounded-3xl bg-card ring-1 ring-border"
+        >
+          <summary className="flex min-h-12 cursor-pointer list-none items-center gap-2 px-5 py-3 text-sm font-semibold marker:hidden [&::-webkit-details-marker]:hidden">
+            <ChevronRight
+              aria-hidden
+              size={16}
+              className="shrink-0 text-muted-foreground transition-transform group-open:rotate-90"
             />
-          )}
-          {(data.unplaced.length > 0 || data.unplacedOlderHref) && (
+            Other company mail · {handled}
+          </summary>
+          <div className="px-3 pb-3 sm:px-4 sm:pb-4">
             <CompanyTimeline
               days={data.unplaced}
               handling={data.unplacedHandling}
@@ -154,8 +171,8 @@ export function ApplicationsTab({
               olderHref={data.unplacedOlderHref}
               inboxes={inboxes}
             />
-          )}
-        </section>
+          </div>
+        </details>
       )}
       {data.search && (
         <RulePanel data={data.search} companyKey={companyKey} companyName={companyName} />

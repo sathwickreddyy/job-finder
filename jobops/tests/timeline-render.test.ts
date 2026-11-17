@@ -11,6 +11,7 @@ vi.mock("@/features/applications/record-actions", () => ({
   recordAsSent: vi.fn(),
 }));
 vi.mock("@/features/applications/outcomes", () => ({ recordOutcome: vi.fn() }));
+vi.mock("@/features/mail/triage-actions", () => ({ linkMailOnly: vi.fn(), unlinkMail: vi.fn() }));
 vi.mock("@/features/mail/workspace-actions", () => ({
   handleMailAction: vi.fn(),
   reopenMailAction: vi.fn(),
@@ -22,6 +23,7 @@ vi.mock("@/features/mail/workspace-actions", () => ({
 type RoundRow = typeof applicationRounds.$inferSelect;
 const { CompanyTimeline } = await import("@/features/timeline/timeline");
 const { isShown } = await import("@/features/timeline/timeline");
+const { HandlingBar } = await import("@/features/timeline/handling");
 const { RoundCard, notesSummary } = await import("@/features/timeline/round-card");
 
 const item = (id: string, patch: Partial<MailItem> = {}): MailItem => ({
@@ -575,5 +577,43 @@ describe("CompanyTimeline", () => {
     it("hides a round without card data", () => {
       expect(one({ roundCards: {} })).not.toContain("round-r1");
     });
+  });
+});
+
+describe("HandlingBar link without an outcome", () => {
+  const renderBar = (patch: Partial<Handling>, linkWhenNoOutcome?: { returnTo: string }) =>
+    renderToStaticMarkup(
+      createElement(HandlingBar, {
+        item: item("m9", { kind: "Application received", tag: "application" }),
+        handling: { ...handling, ...patch },
+        linkWhenNoOutcome,
+      }),
+    );
+  const ack = {
+    suggested: "info" as const,
+    reason: "Nothing to record from this email.",
+  };
+
+  it("makes Link to this application the main button, with Just info beside it", () => {
+    const html = renderBar(ack, { returnTo: "/companies/northstar" });
+    expect(html).toContain("Link to this application");
+    expect(html).toContain('name="link"');
+    expect(html).toContain('name="mailId" value="m9"');
+    expect(html).toContain('name="recordId" value="a"');
+    expect(html).toContain('name="returnTo" value="/companies/northstar?open=a"');
+    expect(html).toContain('name="justInfo"');
+    expect(html).toContain("Just info");
+  });
+
+  it("keeps the suggested outcome as the main button when one is allowed", () => {
+    const html = renderBar({}, { returnTo: "/companies/northstar" });
+    expect(html).toContain("Record round scheduled");
+    expect(html).not.toContain("Link to this application");
+  });
+
+  it("is unchanged without the prop", () => {
+    const html = renderBar(ack);
+    expect(html).not.toContain("Link to this application");
+    expect(html).not.toContain('name="link"');
   });
 });
