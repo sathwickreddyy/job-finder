@@ -7,7 +7,6 @@ import { namedStepsOf } from "@/features/applications/named-steps";
 import { availableOutcomes, recordStateFrom, type OutcomeId } from "@/features/applications/phase";
 import type { ApplicationRecord } from "@/features/applications/read";
 import type { CompanyApplicationRow, CompanyApplications } from "@/features/companies/applications";
-import type { CompanySummary } from "@/features/companies/summary";
 import type { MailItem } from "@/features/mail/mail-item";
 import type { TimelineDay } from "@/features/timeline/entries";
 import { at, event, record, round, uid } from "./lane-fixtures";
@@ -37,7 +36,8 @@ vi.mock("@/features/mail/workspace-actions", () => ({
   includeDroppedMail: vi.fn(),
 }));
 const { ApplicationsTab } = await import("@/features/companies/views/applications-tab");
-const { DetailHeader, detailTabs, tabAliases } = await import("@/features/companies/detail");
+const { detailTabs, tabAliases } = await import("@/features/companies/detail");
+const { CompanyHeader } = await import("@/features/companies/views/company-header");
 const { MinimalCompanyPage } = await import("@/features/companies/views/minimal-company");
 const { companyPageHref } = await import("@/features/applications/navigation");
 
@@ -156,6 +156,31 @@ function data(rows: CompanyApplicationRow[], patch: Partial<CompanyApplications>
   } satisfies CompanyApplications;
 }
 
+function headerStatus(label: string): NonNullable<CompanyApplications["status"]> {
+  return { tone: "interviewing", label, detail: "", previous: null };
+}
+
+function headerHtml(patch: Partial<CompanyApplications> = {}, props: Record<string, unknown> = {}) {
+  const closed = rowFor(application({ phase: "Closed", status: "REJECTED" }));
+  return renderToStaticMarkup(
+    createElement(CompanyHeader, {
+      name: "Oracle",
+      companyKey: "oracle",
+      focus: "Enterprise workflows & AI",
+      cities: ["Bengaluru", "Hyderabad"],
+      workModes: [],
+      careersUrl: "https://example.com/careers",
+      stage: "Interviewing",
+      data: data([closed, rowFor(application())], {
+        status: headerStatus("Interviewing"),
+        ...patch,
+      }),
+      action: { label: "Record application", href: "/applications/new" },
+      ...props,
+    } as never),
+  );
+}
+
 function render(
   value: CompanyApplications,
   props: { openId?: string | null; requested?: string; mailIntent?: string } = {},
@@ -258,24 +283,56 @@ describe("company page applications", () => {
     const html = render(data(rows));
     expect(html).not.toContain("Your applications");
     expect(html).not.toContain('aria-label="Company facts"');
-    const header = renderToStaticMarkup(
-      createElement(DetailHeader, {
-        company: {
-          id: "oracle",
-          name: "Oracle",
-          aliases: [],
-          cities: ["Hyderabad"],
-          focus: "",
-          careersUrl: "https://example.com/careers",
-          locationSource: "",
-          portalNote: "",
-        },
-        summary: { stage: "Interviewing" } as CompanySummary,
-      }),
-    );
+    const header = headerHtml();
     expect(header).not.toContain("Practise questions");
     expect(header).not.toContain("View application");
     expect(header).toContain("Company mail");
+  });
+
+  describe("company header", () => {
+    it("shows exactly one status pill and the focus and cities as one meta line", () => {
+      const html = headerHtml();
+      expect(html.match(/Interviewing/g)).toHaveLength(1);
+      expect(html).toContain("Enterprise workflows &amp; AI · Bengaluru, Hyderabad");
+    });
+
+    it("falls back to the stage chip when the company has no status", () => {
+      const html = headerHtml({ status: null }, { stage: "Applied" });
+      expect(html).toContain("Applied");
+    });
+
+    it("counts applications, last activity and the next step", () => {
+      const html = headerHtml({
+        lastActivity: { at: "2026-11-16T04:00:00.000Z", kind: "Round" },
+        next: { text: "DSA result", due: { label: "overdue", tone: "late" } },
+      });
+      for (const text of ["Status", "Applications", "Last activity", "Next"])
+        expect(html).toContain(text);
+      expect(html).toContain("2");
+      expect(html).toContain("1 active · 1 closed");
+      expect(html).toContain("16 Nov");
+      expect(html).toContain("Round");
+      expect(html).toContain("DSA result");
+      expect(html).toContain("overdue");
+      expect(html).toContain("text-warning");
+    });
+
+    it("says so when there is nothing yet", () => {
+      const html = headerHtml({ status: null, lastActivity: null, next: null });
+      for (const text of ["No activity yet", "Nothing due"]) expect(html).toContain(text);
+      const empty = headerHtml({ rows: [], status: null });
+      expect(empty).toContain("0 active · 0 closed");
+    });
+
+    it("keeps careers and the previous job in the menu, not as top-level controls", () => {
+      const html = headerHtml();
+      expect(html).not.toContain(">Open careers<");
+      expect(html).not.toContain("<summary");
+      expect(html).toContain('aria-label="More company actions"');
+      expect(html).toContain('aria-expanded="false"');
+      expect(html).toContain("Company mail");
+      expect(html).toContain("Record application");
+    });
   });
 
   it("names the tabs and keeps the old timeline and progress links working", () => {

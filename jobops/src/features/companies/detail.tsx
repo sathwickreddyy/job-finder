@@ -1,14 +1,12 @@
-import Link from "next/link";
 import { ArrowUpRight, ChevronDown } from "lucide-react";
 import { normalizeCompany } from "@/features/applications/lanes";
 import { displayDate, type DisplayPreferences } from "@/features/candidate/preferences";
-import { mailHref } from "@/features/timeline/query";
 import { cn } from "@/lib/utils";
 import type { Company } from "./catalog";
 import { DetailTabs, QuestionBank } from "./detail-client";
 import type { CompanyApplications } from "./applications";
 import { familyFill, money, payRange, reports as reportCount, stockLabel } from "./format";
-import { LoopStepper, MixBar, Monogram, RangeBar, StageChip } from "./marks";
+import { LoopStepper, MixBar, RangeBar } from "./marks";
 import {
   lpa,
   roundFamily,
@@ -20,10 +18,9 @@ import type { CompaniesData } from "./read";
 import { CompanyResearch } from "./research";
 import { compensationAmount, publicationYear, type ResearchFact } from "./research-data";
 import { CompanyResumeReference } from "./resume-reference";
-import { PreviousJobForm } from "./previous-job-form";
-import { PreviousBadge, StatusPill } from "./status-pill";
 import type { CompanySummary } from "./summary";
 import { ApplicationsTab } from "./views/applications-tab";
+import { CompanyHeader } from "./views/company-header";
 
 export type DetailProps = {
   company: Company;
@@ -69,94 +66,6 @@ function nextAction(summary: CompanySummary) {
   return summary.stage === "Not started"
     ? { label: "Save an opening", href: "/jobs/new" }
     : { label: "Record application", href: "/applications/new" };
-}
-
-const dueTone = {
-  now: "text-link font-medium",
-  late: "text-warning font-medium",
-  calm: "text-muted-foreground",
-};
-
-export function DetailHeader({
-  company,
-  summary,
-  next,
-  status,
-}: Pick<DetailProps, "company" | "summary"> & {
-  next?: CompanyApplications["next"];
-  status?: CompanyApplications["status"];
-}) {
-  const action = nextAction(summary);
-  const modes = [...new Set(company.locations?.flatMap((row) => row.workModes) ?? [])];
-  return (
-    <header className="space-y-5">
-      <Link href="/companies" className="text-sm text-link">
-        All companies
-      </Link>
-      <div className="flex flex-wrap items-start justify-between gap-5">
-        <div className="flex min-w-0 items-center gap-4">
-          <Monogram name={company.name} large />
-          <div className="min-w-0">
-            <h1 className="text-3xl font-semibold tracking-tight">{company.name}</h1>
-            <p className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
-              <StageChip stage={summary.stage} />
-              {status && <StatusPill status={status} />}
-              {status?.previous && <PreviousBadge joined={status.previous.joined} />}
-              <span>{company.cities.join(", ") || "Location not recorded"}</span>
-              {!!modes.length && (
-                <span className="capitalize">
-                  {modes.map((mode) => mode.toLowerCase()).join(", ")}
-                </span>
-              )}
-            </p>
-          </div>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {company.careersUrl && (
-            <a
-              href={company.careersUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex min-h-10 items-center gap-1.5 rounded-full border border-input px-4 text-sm font-medium text-link hover:no-underline"
-            >
-              Open careers
-              <ArrowUpRight size={15} aria-hidden />
-            </a>
-          )}
-          <Link
-            href={action.href}
-            className="flex min-h-10 items-center rounded-full bg-primary px-5 text-sm font-medium text-primary-foreground hover:bg-primary-hover hover:no-underline"
-          >
-            {action.label}
-          </Link>
-          <Link
-            href={mailHref({ company: normalizeCompany(company.name) })}
-            className="flex min-h-10 items-center rounded-full border border-input px-5 text-sm font-medium hover:bg-muted hover:no-underline"
-          >
-            Company mail
-          </Link>
-        </div>
-      </div>
-      {company.focus && <p className="max-w-3xl text-sm text-muted-foreground">{company.focus}</p>}
-      {next && (
-        <p className="m-0 text-sm">
-          <span className="text-muted-foreground">Next: </span>
-          {next.text}
-          {next.due && (
-            <span className={cn("ml-2 text-xs", dueTone[next.due.tone])}>{next.due.label}</span>
-          )}
-        </p>
-      )}
-      <details className="group max-w-md">
-        <summary className="inline-flex cursor-pointer list-none items-center gap-1 text-sm font-medium text-link [&::-webkit-details-marker]:hidden">
-          Add previous job
-        </summary>
-        <div className="mt-3 rounded-card border border-border bg-card p-4">
-          <PreviousJobForm company={{ key: normalizeCompany(company.name), name: company.name }} />
-        </div>
-      </details>
-    </header>
-  );
 }
 
 export function MetricTiles({ summary }: Pick<DetailProps, "summary">) {
@@ -726,7 +635,17 @@ export function CompanyDetail(
   const { applications } = props;
   return (
     <div className="space-y-8">
-      <DetailHeader {...props} next={applications.next} status={applications.status} />
+      <CompanyHeader
+        name={props.company.name}
+        companyKey={normalizeCompany(props.company.name)}
+        focus={props.company.focus}
+        cities={props.company.cities}
+        workModes={[...new Set(props.company.locations?.flatMap((row) => row.workModes) ?? [])]}
+        careersUrl={props.company.careersUrl}
+        stage={props.summary.stage}
+        data={applications}
+        action={nextAction(props.summary)}
+      />
       <DetailTabs
         key={props.tab}
         initial={props.tab}

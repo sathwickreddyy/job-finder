@@ -1,7 +1,7 @@
-import Link from "next/link";
 import { cn } from "@/lib/utils";
 import type { CompanyApplications } from "../applications";
 import { ApplicationsTab } from "./applications-tab";
+import { CompanyHeader } from "./company-header";
 
 const research = ["Compensation", "Interview loop", "About & sources"];
 
@@ -30,18 +30,19 @@ export function MinimalCompanyPage({
 }) {
   return (
     <div className="space-y-8">
-      <header className="space-y-5">
-        <Link href="/companies" className="text-sm text-link">
-          All companies
-        </Link>
-        <h1 className="min-w-0 truncate text-3xl font-semibold tracking-tight" title={name}>
-          {name}
-        </h1>
-        <p className="rounded-xl border border-border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
-          Not in your Companies list yet. Ask Claude Code or Codex to add it; pay, interview loop
-          and sources appear then.
-        </p>
-      </header>
+      <CompanyHeader
+        name={name}
+        companyKey={companyKey}
+        cities={[]}
+        workModes={[]}
+        stage={null}
+        data={data}
+        action={{ label: "Record application", href: "/applications/new" }}
+      />
+      <p className="rounded-xl border border-border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
+        Not in your Companies list yet. Ask Claude Code or Codex to add it; pay, interview loop and
+        sources appear then.
+      </p>
       <div>
         <div
           role="tablist"

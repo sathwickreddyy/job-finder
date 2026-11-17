@@ -171,10 +171,22 @@ test("company search and separate city sections work on mobile", async ({ page }
     path: test.info().outputPath("company-detail-mobile.png"),
     fullPage: true,
   });
-  await expect(page.getByRole("link", { name: "Open careers", exact: true })).toHaveAttribute(
+  await page.getByRole("button", { name: "More company actions" }).click();
+  await expect(page.getByRole("link", { name: "Open careers site", exact: true })).toHaveAttribute(
     "href",
     "https://www.atlassian.com/company/careers/all-jobs",
   );
+  await expect(page.getByRole("link", { name: "Mail search settings" })).toHaveAttribute(
+    "href",
+    /\?tab=applications#mail-search$/,
+  );
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("button", { name: "More company actions" })).toBeFocused();
+  await page.getByRole("button", { name: "More company actions" }).click();
+  await page.getByRole("button", { name: "Add previous job" }).click();
+  await expect(page.getByRole("dialog", { name: "Add previous job" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).toBeHidden();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
     true,
   );
