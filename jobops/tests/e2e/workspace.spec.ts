@@ -110,13 +110,15 @@ test("linking imported mail appends history without changing the application pha
   await expect.poll(() => captureImportedMail(`e2e-mail-${suffix}`)).toBeTruthy();
   // A wide screen names the company Mail opens on in the URL.
   await expect(page).toHaveURL(/\/mail(\?(?:company=[^&]+|view=all))?$/);
-  await page.goto(`/mail/${(await captureImportedMail(`e2e-mail-${suffix}`)).id}`);
+  const imported = (await captureImportedMail(`e2e-mail-${suffix}`)).id;
+  await page.goto(`/mail/${imported}`);
   await expect(page.getByRole("heading", { level: 2, name: "Needs a home" })).toBeVisible();
-  await page.getByText("Place at…").click();
-  await page
+  const row = page.getByRole("dialog");
+  await row.getByLabel("This email is about").selectOption({ label: "A different company…" });
+  await row
     .getByLabel("Company or application")
     .selectOption({ value: `application:${applicationId}` });
-  await page.getByRole("button", { name: "Place", exact: true }).click();
+  await row.getByRole("button", { name: "Move it", exact: true }).click();
   await expect(page.getByRole("button", { name: new RegExp(subject) })).toHaveCount(0);
   await page.goto(`/applications/${applicationId}`);
   await expect(page.getByTestId("phase-label")).toHaveText(previousPhase);

@@ -36,6 +36,30 @@ export function safeRowReturnTo(value: string | null | undefined): string | null
   return `${url.pathname}?open=${open}`;
 }
 
+/**
+ * The Mail page or a company page (`/mail?…`, `/companies/<key>?…`), so adding an email from
+ * either returns to the same view. Any other path or origin is refused.
+ */
+export function safePageReturnTo(value: string | null | undefined): string | null {
+  if (!value || !value.startsWith("/") || value.startsWith("//") || value.includes("\\"))
+    return null;
+  let url: URL;
+  try {
+    url = new URL(value, BASE);
+  } catch {
+    return null;
+  }
+  if (url.origin !== BASE || url.pathname.includes("..")) return null;
+  const company = url.pathname.split("/");
+  if (
+    url.pathname !== "/mail" &&
+    !(company.length === 3 && company[1] === "companies" && company[2])
+  )
+    return null;
+  url.searchParams.delete("notice");
+  return `${url.pathname}${url.search}`;
+}
+
 export function withNotice(path: string, notice: string) {
   const url = new URL(path, BASE);
   url.searchParams.set("notice", notice);

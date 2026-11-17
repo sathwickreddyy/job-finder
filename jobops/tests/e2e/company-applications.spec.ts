@@ -316,8 +316,8 @@ test("new mail waits in a tray until a role is picked and confirmed", async ({ p
   await expect(line).toContainText("Role: Platform Engineer");
   await expect(tray.getByRole("img", { name: "New" })).toHaveCount(2);
   await expect(page.locator(`#application-${platform}`)).not.toContainText(named);
-  // An acknowledgement suggests no outcome, so the button links it.
-  await line.getByRole("button", { name: "Link to this application" }).click();
+  // An acknowledgement has nothing to record, so the one button adds it to the role.
+  await line.getByRole("button", { name: "Add to Platform Engineer" }).click();
   await expect(
     page.getByRole("status").filter({ hasText: "Message linked to your record." }),
   ).toBeVisible();

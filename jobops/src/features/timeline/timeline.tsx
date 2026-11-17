@@ -18,7 +18,8 @@ import { EditTag } from "./edit-tag";
 import type { TimelineDay, TimelineMail, TimelineStep } from "./entries";
 import { isShown, jumpTarget, type TimelineFilter } from "./jump";
 import { RoundCard, type RoundCardData } from "./round-card";
-import { HandledLine, HandlingBar, type PlaceOptions } from "./handling";
+import { HandledLine, type PlaceOptions } from "./handling";
+import { HandlingBar } from "./handling-bar";
 import { RoleFilter } from "./role-filter";
 import type { Handling } from "./suggest";
 
