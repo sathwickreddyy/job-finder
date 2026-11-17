@@ -2,6 +2,28 @@ import { describe, expect, it } from "vitest";
 import { inboxLabels, previewLine } from "@/features/mail/row-text";
 
 describe("previewLine", () => {
+  it("drops links from the preview line", () => {
+    expect(
+      previewLine(
+        "[Amazon.jobs]<https://g3s6.r.us-west-2.awstrack.me/L0/x>\nThanks for applying for Sr SDE",
+      ),
+    ).toBe("Thanks for applying for Sr SDE");
+    expect(previewLine("See https://a.example/x?y=1 for details")).toBe("See for details");
+    expect(previewLine("[Open portal]<https://p.example>")).toBe("Open portal");
+    expect(previewLine("https://only.example/link\n<https://another.example>")).toBe("");
+    expect(previewLine("")).toBe("");
+  });
+
+  it("drops cid and mailto tokens from the preview line", () => {
+    expect(previewLine("[cid:image001.png@01DD7394.90AFFE70]\nOffer letter attached")).toBe(
+      "Offer letter attached",
+    );
+    expect(previewLine("Priya Rao<mailto:priya@example.com> sent the slots")).toBe(
+      "Priya Rao sent the slots",
+    );
+    expect(previewLine("<mailto:a@b.example>\nSecond line")).toBe("Second line");
+  });
+
   it("skips greetings to the first line that says something", () => {
     expect(previewLine("Hi Sathwick,\n\nYour round is confirmed for Tue.")).toBe(
       "Your round is confirmed for Tue.",

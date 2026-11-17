@@ -180,10 +180,17 @@ describe.skipIf(!dbTests)("company applications", () => {
     expect(newer.steps[0]).toMatchObject({ label: "Applied" });
   });
 
-  it("keeps company mail linked to no application apart", async () => {
-    const { unplaced } = await readCompanyApplications(key, {}, now);
-    expect(mailIds(unplaced)).toEqual([made.loose]);
+  it("keeps open and handled company mail on no application apart", async () => {
+    const handled = await email({ subject: `Done ${prefix}`, attentionState: "DONE" });
+    const { newMail, unplaced, lastActivity } = await readCompanyApplications(key, {}, now);
+    expect(mailIds(newMail.days)).toEqual([made.loose]);
+    expect(newMail.more).toBe(false);
+    expect(mailIds(unplaced)).toEqual([handled]);
     expect(entries(unplaced).every((entry) => entry.type === "mail")).toBe(true);
+    // The handled email (counter order) is the newest past entry of all.
+    expect(lastActivity?.kind).toBe("Email");
+    expect(lastActivity?.at).toBe(entries(unplaced).find((entry) => entry.type === "mail")?.at);
+    await db.delete(mailMessages).where(inArray(mailMessages.id, [handled]));
   });
 
   it("shows scores only when the submitted file targets the same job", async () => {
@@ -193,12 +200,10 @@ describe.skipIf(!dbTests)("company applications", () => {
     expect(older.scores).toBeNull();
   });
 
-  it("offers a round's result only on the booked round", async () => {
+  it("gives each round card its questions and today's date", async () => {
     const { rows } = await readCompanyApplications(key, {}, now);
     const { roundCards } = rows[0];
     expect(Object.keys(roundCards).sort()).toEqual([made.round1, made.round2].sort());
-    expect(roundCards[made.round2].outcomes).toEqual(["passed", "failed", "rescheduled"]);
-    expect(roundCards[made.round1].outcomes).toEqual([]);
     expect(roundCards[made.round2]).toMatchObject({ recordId: made.newer, today: "2026-11-16" });
   });
 
@@ -223,9 +228,43 @@ describe.skipIf(!dbTests)("company applications", () => {
         linkedApplicationId: made.newer,
       })),
     );
-    const { unplaced, unplacedOlderHref } = await readCompanyApplications(key, {}, now);
-    expect(mailIds(unplaced)).toEqual([made.loose, old]);
+    await db
+      .update(mailMessages)
+      .set({ attentionState: "DONE" })
+      .where(inArray(mailMessages.id, [old]));
+    const { unplaced, unplacedOlderHref, newMail } = await readCompanyApplications(key, {}, now);
+    expect(mailIds(newMail.days)).toEqual([made.loose]);
+    expect(mailIds(unplaced)).toEqual([old]);
     expect(unplacedOlderHref).toBeNull();
+  });
+
+  it("keeps last activity the same on older pages of a row and of handled mail", async () => {
+    await db.insert(mailMessages).values(
+      Array.from({ length: 52 }, (_, index) => ({
+        externalId: `${prefix}-done-${index}`,
+        provider: "GMAIL" as const,
+        accountEmail: account,
+        sender: "talent@fixture.invalid",
+        subject: `Done ${index}`,
+        receivedAt: new Date(Date.UTC(2026, 10, 13, 0, index)),
+        classification: "FOLLOW_UP" as const,
+        companyKey: key,
+        attentionState: "DONE" as const,
+      })),
+    );
+    const first = await readCompanyApplications(key, {}, now);
+    const rowHref = first.rows.find((row) => row.record.id === made.newer)?.olderHref;
+    expect(rowHref).toBeTruthy();
+    expect(first.unplacedOlderHref).toBeTruthy();
+    const rowCursor = new URLSearchParams(rowHref!.split("#")[0]).get("cursor")!;
+    const unplacedCursor = new URLSearchParams(first.unplacedOlderHref!.split("#")[0]).get(
+      "unplacedCursor",
+    )!;
+    expect(first.lastActivity).not.toBeNull();
+    const paged = await readCompanyApplications(key, { open: made.newer, cursor: rowCursor }, now);
+    expect(paged.lastActivity).toEqual(first.lastActivity);
+    const older = await readCompanyApplications(key, { unplacedCursor }, now);
+    expect(older.lastActivity).toEqual(first.lastActivity);
   });
 
   describe("company page slug", () => {

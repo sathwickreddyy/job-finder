@@ -8,6 +8,7 @@ import { namedStepsOf, type NamedStep } from "@/features/applications/named-step
 import { availableOutcomes, recordStateFrom, type OutcomeId } from "@/features/applications/phase";
 import { readApplications, type ApplicationRecord } from "@/features/applications/read";
 import { listRoundQuestions } from "@/features/interviews/questions";
+import { lastActivityOf, type LastActivity } from "@/features/companies/last-activity";
 import { PREVIOUS_JOB } from "@/features/companies/previous-job";
 import type { CompanyStatus } from "@/features/companies/status";
 import { readCompanySearch } from "@/features/mail/company-search";
@@ -15,6 +16,7 @@ import type { TimelineDay } from "@/features/timeline/entries";
 import type { RailDue } from "@/features/timeline/index-rows";
 import { mailCursor } from "@/features/timeline/query";
 import { readOpenMail } from "@/features/mail/read";
+import { loadMailContext } from "@/features/mail/context";
 import { listMail } from "@/features/mail/mail-list";
 import { timelineEntries } from "@/features/timeline/entries";
 import {
@@ -41,6 +43,9 @@ export type CompanyApplicationRow = {
 };
 export type CompanyApplications = {
   rows: CompanyApplicationRow[];
+  /** Open mail on no application, newest first; `more` when the Mail page holds further pages. */
+  newMail: { days: TimelineDay[]; handling: Record<string, Handling>; more: boolean };
+  /** Handled mail on no application. */
   unplaced: TimelineDay[];
   unplacedHandling: Record<string, Handling>;
   /** Shows the next page of mail that is on no application. */
@@ -48,6 +53,8 @@ export type CompanyApplications = {
   next: { text: string; due: RailDue | null } | null;
   status: CompanyStatus | null;
   search: Awaited<ReturnType<typeof readCompanySearch>> | null;
+  /** The newest thing that has already happened for this company. */
+  lastActivity: LastActivity;
   /** The résumé files an unsent application can still be pointed at. */
   versions: { id: string; label: string }[];
   /** The email an outcome link names for the open row: its summary, or why it cannot be used. */
@@ -74,9 +81,6 @@ async function sourceOf(
     };
   }
 }
-
-/** A round's result chips; only the round the outcome service settles may offer them. */
-const roundResults: OutcomeId[] = ["passed", "failed", "rescheduled"];
 
 const handlingOf = (days: TimelineDay[], roles: Parameters<typeof suggestHandling>[1]) =>
   Object.fromEntries(
@@ -115,22 +119,17 @@ async function questionsOf(id: string) {
 function roundCardsOf(
   record: ApplicationRecord,
   questions: Awaited<ReturnType<typeof listRoundQuestions>>,
-  outcomes: OutcomeId[],
   now: Date,
 ) {
-  const rounds = [...record.rounds].sort((a, b) => a.position - b.position);
-  // The outcome service settles the first booked round by position; no other card may offer it.
-  const booked = rounds.find((round) => round.outcome === "SCHEDULED");
   return Object.fromEntries(
-    rounds
+    [...record.rounds]
+      .sort((a, b) => a.position - b.position)
       .filter((round) => round.outcome !== "CANCELLED")
       .map((round): [string, RoundCardData] => [
         round.id,
         {
           recordId: record.id,
           questions: questions.find((item) => item.id === round.id)?.questions ?? [],
-          outcomes:
-            round.id === booked?.id ? roundResults.filter((id) => outcomes.includes(id)) : [],
           today: indiaDate(now),
         },
       ]),
@@ -178,7 +177,10 @@ export async function readCompanyApplications(
         (b.sentAt?.getTime() ?? Infinity) - (a.sentAt?.getTime() ?? Infinity) ||
         a.id.localeCompare(b.id),
     );
-  const [rows, loose, index, search, versions] = await Promise.all([
+  const noApplication = [isNull(mailMessages.linkedApplicationId)];
+  // One mail context serves the tray, the handled page and the first-page re-read below.
+  const mailContext = await loadMailContext();
+  const [rows, fresh, loose, index, search, versions] = await Promise.all([
     Promise.all(
       own.map(async (record): Promise<CompanyApplicationRow> => {
         const [timeline, questions, scores] = await Promise.all([
@@ -205,21 +207,23 @@ export async function readCompanyApplications(
           olderHref: timeline.nextCursor
             ? `?${new URLSearchParams({ open: record.id, cursor: timeline.nextCursor })}#application-${record.id}`
             : null,
-          roundCards: roundCardsOf(record, questions, outcomes, now),
+          roundCards: roundCardsOf(record, questions, now),
           scores,
           outcomes,
         };
       }),
     ),
-    // Mail on no application is paged on its own, so older mail is never cut off.
+    // Open mail on no application is the new-mail tray: its first page only.
+    listMail({ company: companyKey, attention: "open" }, mailContext, noApplication),
+    // Handled mail on no application is paged on its own, so older mail is never cut off.
     listMail(
       {
         company: companyKey,
-        attention: "all",
+        attention: "handled",
         ...(unplacedCursor ? { cursor: unplacedCursor } : {}),
       },
-      undefined,
-      [isNull(mailMessages.linkedApplicationId)],
+      mailContext,
+      noApplication,
     ),
     readCompanyIndex({}, now),
     readCompanySearch(companyKey).catch((error: unknown) => {
@@ -228,24 +232,49 @@ export async function readCompanyApplications(
     }),
     versionChoices(),
   ]);
-  const unplaced = await markSavedOpenings(
-    timelineEntries({
-      mail: loose.items,
-      events: [],
-      rounds: [],
-      complete: loose.nextCursor === null,
-      filtered: false,
-      now,
-    }),
-  );
+  const placeLoose = (page: typeof loose) =>
+    markSavedOpenings(
+      timelineEntries({
+        mail: page.items,
+        events: [],
+        rounds: [],
+        complete: page.nextCursor === null,
+        filtered: false,
+        now,
+      }),
+    );
+  const [newDays, unplaced] = await Promise.all([placeLoose(fresh), placeLoose(loose)]);
+  const roles = own.map(timelineRole);
+  // Last activity never depends on the page being read: a cursor swaps in the first page.
+  const [firstRow, firstUnplaced] = await Promise.all([
+    cursor && open && own.some((record) => record.id === open)
+      ? readCompanyTimeline(companyKey, { application: open }, now).then((item) => item.days)
+      : null,
+    unplacedCursor
+      ? listMail({ company: companyKey, attention: "handled" }, mailContext, noApplication).then(
+          placeLoose,
+        )
+      : null,
+  ]);
+  const activityDays = [
+    ...rows.map((item) => (firstRow && item.record.id === open ? firstRow : item.days)),
+    newDays,
+    firstUnplaced ?? unplaced,
+  ];
   const row = index.rows.find((item) => item.key === companyKey);
   return {
     rows,
+    newMail: {
+      days: newDays,
+      handling: handlingOf(newDays, roles),
+      more: fresh.nextCursor !== null,
+    },
     unplaced,
-    unplacedHandling: handlingOf(unplaced, own.map(timelineRole)),
+    unplacedHandling: handlingOf(unplaced, roles),
     unplacedOlderHref: loose.nextCursor
       ? `?${new URLSearchParams({ unplacedCursor: loose.nextCursor })}#unplaced`
       : null,
+    lastActivity: lastActivityOf(activityDays, now),
     next: row?.next ? { text: row.next, due: row.due } : null,
     status: index.statuses[companyKey] ?? null,
     search,

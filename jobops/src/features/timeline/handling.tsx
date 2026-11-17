@@ -9,11 +9,12 @@ import {
   type ReactNode,
 } from "react";
 import Link from "next/link";
-import { Check, ChevronDown, Star, Undo2 } from "lucide-react";
+import { Check, ChevronDown, Link2, Star, Undo2 } from "lucide-react";
 import { useLoadingTask } from "@/components/loading/overlay";
 import { outcomeMeta, type OutcomeId } from "@/features/applications/phase";
 import { roundKindLabel } from "@/features/companies/metrics";
 import type { MailItem } from "@/features/mail/mail-item";
+import { linkMailOnly } from "@/features/mail/triage-actions";
 import {
   handleMailAction,
   placeMailAction,
@@ -116,13 +117,21 @@ function OutcomeFields({ outcome, onCancel }: { outcome: OutcomeId; onCancel: ()
 }
 
 /** "Place at…": Needs a home mail, or mail that matched the wrong company. */
-function PlaceAt({ item, options }: { item: MailItem; options: PlaceOptions }) {
+export function PlaceAt({
+  item,
+  options,
+  defaultOpen,
+}: {
+  item: MailItem;
+  options: PlaceOptions;
+  defaultOpen?: boolean;
+}) {
   const id = useId();
   const { state, pending, submit } = useSubmit(placeMailAction);
   const [target, setTarget] = useState("");
   const [kind, value] = target.split(":");
   return (
-    <details className="mt-2">
+    <details className="mt-2" open={defaultOpen}>
       <summary className="inline-flex h-9 cursor-pointer items-center rounded-full px-3 text-sm font-medium text-link hover:bg-muted">
         Place at…
       </summary>
@@ -176,13 +185,28 @@ export function HandlingBar({
   handling,
   placeOptions,
   infoLabel = "Just info",
+  linkWhenNoOutcome,
 }: {
   item: MailItem;
   handling: Handling;
   placeOptions?: PlaceOptions;
   infoLabel?: string;
+  /**
+   * When the chosen role has no outcome to suggest, the main button links the email to it
+   * instead of marking it just info. `returnTo` is the company page path; the chosen
+   * application's row is opened on return.
+   */
+  linkWhenNoOutcome?: { returnTo: string };
 }) {
-  const { state, pending, submit } = useSubmit(handleMailAction);
+  const handle = useSubmit(handleMailAction);
+  const link = useSubmit(linkMailOnly);
+  const { pending } = handle;
+  // The Link button submits the same form; its name routes the submit to the link action.
+  const submit = (event: FormEvent<HTMLFormElement>) =>
+    (event.nativeEvent as SubmitEvent).submitter?.getAttribute("name") === "link"
+      ? link.submit(event)
+      : handle.submit(event);
+  const state = link.state.error ? link.state : handle.state;
   const [chosen, setChosen] = useState(handling.chosen);
   const [more, setMore] = useState(false);
   const [form, setForm] = useState<OutcomeId | null>(null);
@@ -209,9 +233,20 @@ export function HandlingBar({
     );
   return (
     <div className="border-t border-border pt-3">
-      <form onSubmit={submit} aria-busy={pending}>
+      <form onSubmit={submit} aria-busy={pending || link.pending}>
         <input type="hidden" name="id" value={item.id} />
         {app && <input type="hidden" name="applicationId" value={app.id} />}
+        {app && linkWhenNoOutcome && (
+          <>
+            <input type="hidden" name="mailId" value={item.id} />
+            <input type="hidden" name="recordId" value={app.id} />
+            <input
+              type="hidden"
+              name="returnTo"
+              value={`${linkWhenNoOutcome.returnTo}?open=${app.id}`}
+            />
+          </>
+        )}
         {asking && (
           <div role="radiogroup" aria-label="Which role?" className="mb-3">
             <p className="m-0 mb-2 text-sm font-medium text-muted-foreground">Which role?</p>
@@ -246,6 +281,16 @@ export function HandlingBar({
                 Record {outcomeMeta[suggested].label.toLowerCase()}
               </>,
             )
+          ) : app && linkWhenNoOutcome ? (
+            <button
+              type="submit"
+              name="link"
+              value="1"
+              className="morph pressable inline-flex h-11 items-center gap-2 bg-primary px-5 text-sm font-medium text-primary-foreground hover:bg-primary-hover"
+            >
+              <Link2 aria-hidden size={14} />
+              Link to this application
+            </button>
           ) : (
             <button
               type="submit"
@@ -271,7 +316,7 @@ export function HandlingBar({
               />
             </button>
           )}
-          {suggested && (
+          {(suggested || (app && linkWhenNoOutcome)) && (
             <button
               type="submit"
               name="justInfo"

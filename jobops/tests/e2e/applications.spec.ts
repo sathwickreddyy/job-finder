@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { closeDatabase } from "../../src/db";
 import { stubExternalSites } from "./helpers/external-sites";
-import { hydrated } from "./helpers/hydration";
+import { hydrated, openDetails } from "./helpers/hydration";
 import { cleanupRecords, istDay, seedRecord } from "./helpers/records";
 import {
   captureSavedJob,
@@ -46,10 +46,9 @@ test("recording outcomes walks an application from OA to an accepted offer", asy
     await chip.click();
   };
   const rounds = row.locator('li[id^="round-"]');
-  const roundResult = async (card: ReturnType<typeof rounds.filter>, name: string) => {
-    if ((await card.getByRole("button", { expanded: true }).count()) === 0)
-      await card.getByRole("button").first().click();
-    await card.getByRole("button", { name, exact: true }).click();
+  // The booked round's result is recorded from the current-step box, not the round's card.
+  const roundResult = async (name: string) => {
+    await row.getByTestId("current-step").getByRole("button", { name, exact: true }).click();
     await save();
   };
   await expect(phase).toHaveText("Applied");
@@ -77,7 +76,7 @@ test("recording outcomes walks an application from OA to an accepted offer", asy
   await expect(page.getByLabel("Complete by (India time)")).toHaveCount(0);
   await expect(phase).toContainText("OA");
 
-  await roundResult(rounds.filter({ hasText: "OA" }), "Cleared the round");
+  await roundResult("Cleared the round");
   await expect(row).toContainText("Cleared the OA round");
 
   await addStep("Round scheduled");
@@ -99,9 +98,10 @@ test("recording outcomes walks an application from OA to an accepted offer", asy
   await happened.fill(istDay());
   await save();
   await expect(row).toContainText("LLD round scheduled");
-  const lld = rounds.filter({ hasText: "LLD" });
-  await lld.getByRole("button").first().click();
-  await lld.getByRole("button", { name: "Rescheduled", exact: true }).click();
+  await row
+    .getByTestId("current-step")
+    .getByRole("button", { name: "Rescheduled", exact: true })
+    .click();
   await expect(page.getByLabel("Date (India time)")).toHaveValue(istDay(5));
   await expect(page.getByLabel("Time", { exact: true })).toHaveValue("11:00");
   await page.getByLabel("Date (India time)").fill(istDay(6));
@@ -123,13 +123,18 @@ test("recording outcomes walks an application from OA to an accepted offer", asy
   await page.reload();
   await expect(rounds.filter({ hasText: "LLD" })).toBeVisible();
   // Notes are written in the Notes fold as Markdown; Edit details holds the record's fields.
+  await openDetails(row);
   const notes = row.getByRole("region", { name: "Notes", exact: true });
-  await notes.getByRole("button", { name: /^Notes/ }).click();
-  await notes.getByRole("button", { name: "Write notes", exact: true }).click();
+  await hydrated(notes.getByRole("button", { name: "Open notes", exact: true }));
+  await notes.getByRole("button", { name: "Open notes", exact: true }).click();
+  const notesDialog = page.getByRole("dialog", { name: "Notes", exact: true });
+  await notesDialog.getByRole("button", { name: "Write notes", exact: true }).click();
   await page.getByRole("textbox", { name: "Notes, Markdown" }).click();
   await page.keyboard.type("Ask about on-call");
   await page.getByRole("button", { name: "Save notes", exact: true }).click();
-  await expect(notes.getByRole("button", { name: "Edit notes", exact: true })).toBeVisible();
+  await expect(notesDialog.getByRole("button", { name: "Edit notes", exact: true })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(notesDialog).toHaveCount(0);
   await row.getByRole("button", { name: "Edit details", exact: true }).click();
   await page.getByLabel("Application page URL").fill("https://example.invalid/application/123");
   await page.getByRole("button", { name: "Save details", exact: true }).click();
@@ -140,14 +145,15 @@ test("recording outcomes walks an application from OA to an accepted offer", asy
   // The saving overlay keeps the page inert for a moment after Edit details; typing into an
   // inert field is silently dropped, so wait for it to lift.
   await page.waitForFunction(() => !document.querySelector("[inert]"));
-  await hydrated(row.getByRole("button", { name: "Add note", exact: true }));
-  await row.getByLabel("Add to history").fill("Discussed system design preparation");
-  await row.getByRole("button", { name: "Add note", exact: true }).click();
+  const composer = row.getByRole("textbox", { name: "Add a note to this application's history…" });
+  await hydrated(row.getByRole("button", { name: "Add", exact: true }));
+  await composer.fill("Discussed system design preparation");
+  await row.getByRole("button", { name: "Add", exact: true }).click();
   await expect(page.getByRole("status").filter({ hasText: "Timeline note added." })).toBeVisible();
   await expect(row).toContainText("Discussed system design preparation");
   await expect(row.getByRole("button", { name: "Got an offer", exact: true })).toHaveCount(0);
 
-  await roundResult(rounds.filter({ hasText: "LLD" }), "Cleared the round");
+  await roundResult("Cleared the round");
   await addStep("Got an offer");
   await save();
   await expect(phase).toHaveText("Offer");
@@ -394,16 +400,18 @@ test("record history uses readable India-time dates and long notes render in ful
   const row = page.locator(`#application-${applicationId}`);
   await expect(row).toContainText(/\d{1,2}:\d{2} (am|pm)/);
   await expect(row).not.toContainText("Asia/Kolkata");
+  await openDetails(row);
   const notes = row.getByRole("region", { name: "Notes", exact: true });
   await hydrated(notes.getByRole("button").first());
-  await notes.getByRole("button", { name: /^Notes/ }).click();
-  await notes.getByRole("button", { name: "Write notes", exact: true }).click();
+  await notes.getByRole("button", { name: "Open notes", exact: true }).click();
+  const notesDialog = page.getByRole("dialog", { name: "Notes", exact: true });
+  await notesDialog.getByRole("button", { name: "Write notes", exact: true }).click();
   await page.getByRole("textbox", { name: "Notes, Markdown" }).click();
   await page.keyboard.type(Array.from({ length: 10 }, (_, i) => `Note line ${i + 1}`).join("\n\n"));
   await page.getByRole("button", { name: "Save notes", exact: true }).click();
-  await expect(notes.getByRole("button", { name: "Edit notes", exact: true })).toBeVisible();
-  await expect(notes.getByText("Note line 1", { exact: true })).toBeVisible();
-  await expect(notes.getByText("Note line 10", { exact: true })).toBeVisible();
+  await expect(notesDialog.getByRole("button", { name: "Edit notes", exact: true })).toBeVisible();
+  await expect(notesDialog.getByText("Note line 1", { exact: true })).toBeVisible();
+  await expect(notesDialog.getByText("Note line 10", { exact: true })).toBeVisible();
 });
 
 test("an application row links to its open row and an old outcome link keeps its outcome", async ({

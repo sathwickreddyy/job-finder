@@ -11,7 +11,14 @@ export const savedText = (linked: number) =>
  * Add previous job (on a company page) or Add a previous employer (on Companies, which also
  * asks for the company). Role and joined month are required; nothing is pre-filled.
  */
-export function PreviousJobForm({ company }: { company?: { key: string; name: string } }) {
+export function PreviousJobForm({
+  company,
+  onSaved,
+}: {
+  company?: { key: string; name: string };
+  /** Called after a save, so a dialog hosting the form can close instead of inviting a second save. */
+  onSaved?: () => void;
+}) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [message, setMessage] = useState<{ text: string; error: boolean } | null>(null);
@@ -35,6 +42,7 @@ export function PreviousJobForm({ company }: { company?: { key: string; name: st
           else {
             setMessage({ text: savedText(result.linked ?? 0), error: false });
             router.refresh();
+            onSaved?.();
           }
         });
       }}

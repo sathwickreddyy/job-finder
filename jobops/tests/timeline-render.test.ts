@@ -11,6 +11,7 @@ vi.mock("@/features/applications/record-actions", () => ({
   recordAsSent: vi.fn(),
 }));
 vi.mock("@/features/applications/outcomes", () => ({ recordOutcome: vi.fn() }));
+vi.mock("@/features/mail/triage-actions", () => ({ linkMailOnly: vi.fn(), unlinkMail: vi.fn() }));
 vi.mock("@/features/mail/workspace-actions", () => ({
   handleMailAction: vi.fn(),
   reopenMailAction: vi.fn(),
@@ -22,6 +23,7 @@ vi.mock("@/features/mail/workspace-actions", () => ({
 type RoundRow = typeof applicationRounds.$inferSelect;
 const { CompanyTimeline } = await import("@/features/timeline/timeline");
 const { isShown } = await import("@/features/timeline/timeline");
+const { HandlingBar } = await import("@/features/timeline/handling");
 const { RoundCard, notesSummary } = await import("@/features/timeline/round-card");
 
 const item = (id: string, patch: Partial<MailItem> = {}): MailItem => ({
@@ -53,7 +55,9 @@ const stamp = (weekday: string, day: number, month: string, year = 2026) => ({
 });
 const today = stamp("Sat", 31, "Oct");
 const handling: Handling = {
-  applications: [{ id: "a", role: "Backend", outcomes: ["heard", "scheduled", "rejected"] }],
+  applications: [
+    { id: "a", role: "Backend", requisition: null, outcomes: ["heard", "scheduled", "rejected"] },
+  ],
   chosen: "a",
   suggested: "scheduled",
   reason: "Suggested for an interview email.",
@@ -423,7 +427,6 @@ describe("CompanyTimeline", () => {
     const data = {
       recordId: "a",
       questions: [question],
-      outcomes: ["passed" as const, "failed" as const, "rescheduled" as const, "rejected" as const],
       today: "2026-10-31",
     };
     const stepDay: TimelineDay = {
@@ -458,6 +461,59 @@ describe("CompanyTimeline", () => {
       expect(html).toMatch(/aria-label="Filter timeline"[\s\S]*>All<[\s\S]*>Stages<[\s\S]*>Mail</);
     });
 
+    it("marks the filter pressed state and puts New on open mail only", () => {
+      const html = one({
+        days: [
+          {
+            ...mailDay,
+            entries: [
+              ...mailDay.entries,
+              {
+                type: "mail",
+                at: "2026-10-31T03:00:00.000Z",
+                item: item("m2", { attention: "handled" }),
+                recorded: null,
+              },
+            ],
+          },
+          stepDay,
+        ],
+      });
+      expect(html).toMatch(/aria-label="Filter timeline"[\s\S]*aria-pressed="true"[^>]*>All</);
+      expect(html.match(/aria-label="New"/g)).toHaveLength(1);
+      expect(html.indexOf('aria-label="New"')).toBeLessThan(html.indexOf('id="mail-m2"'));
+    });
+
+    it("leaves the New dot off the all-mail feed, which has no per-application timeline", () => {
+      const html = one({
+        requisition: undefined,
+        days: [
+          {
+            ...mailDay,
+            entries: [
+              {
+                type: "mail",
+                at: "2026-10-31T03:00:00.000Z",
+                item: item("m9", { attention: "open" }),
+                recorded: null,
+              },
+            ],
+          },
+        ],
+      });
+      expect(html).not.toContain('aria-label="New"');
+    });
+
+    it("renders the toolbar and composer slots around the feed", () => {
+      const html = one({
+        toolbarEnd: createElement("i", { id: "tb" }),
+        children: createElement("i", { id: "cmp" }),
+      });
+      expect(html.indexOf('id="tb"')).toBeGreaterThan(html.indexOf("Filter timeline"));
+      expect(html.indexOf('id="cmp"')).toBeGreaterThan(html.indexOf('id="tb"'));
+      expect(html.indexOf('id="cmp"')).toBeLessThan(html.indexOf('id="mail-m1"'));
+    });
+
     it("shows steps with Recorded once, the time under it, and the requisition", () => {
       const html = one();
       expect(html).toContain('id="entry-e2"');
@@ -485,7 +541,7 @@ describe("CompanyTimeline", () => {
       expect(html).toContain("Interviewer not recorded");
     });
 
-    it("opened, lists the questions and the round notes with only round outcomes", () => {
+    it("opened, lists the questions and the round notes with no result buttons", () => {
       const html = renderToStaticMarkup(
         createElement(RoundCard, { entry: entry(), data, defaultOpen: true, requisition: null }),
       );
@@ -495,9 +551,8 @@ describe("CompanyTimeline", () => {
       expect(html).toContain("Round notes");
       expect(html).toContain("Edit round");
       expect(html).toContain("No requisition");
-      for (const label of ["Cleared the round", "Didn&#x27;t clear it", "Rescheduled"])
-        expect(html.replace(/&#39;/g, "&#x27;")).toContain(label);
-      expect(html).not.toContain("Rejected");
+      for (const label of ["Cleared the round", "Didn&#x27;t clear it", "Rescheduled", "Rejected"])
+        expect(html.replace(/&#39;/g, "&#x27;")).not.toContain(label);
     });
 
     it("labels results Booked, Cleared and Didn't clear", () => {
@@ -542,5 +597,43 @@ describe("CompanyTimeline", () => {
     it("hides a round without card data", () => {
       expect(one({ roundCards: {} })).not.toContain("round-r1");
     });
+  });
+});
+
+describe("HandlingBar link without an outcome", () => {
+  const renderBar = (patch: Partial<Handling>, linkWhenNoOutcome?: { returnTo: string }) =>
+    renderToStaticMarkup(
+      createElement(HandlingBar, {
+        item: item("m9", { kind: "Application received", tag: "application" }),
+        handling: { ...handling, ...patch },
+        linkWhenNoOutcome,
+      }),
+    );
+  const ack = {
+    suggested: "info" as const,
+    reason: "Nothing to record from this email.",
+  };
+
+  it("makes Link to this application the main button, with Just info beside it", () => {
+    const html = renderBar(ack, { returnTo: "/companies/northstar" });
+    expect(html).toContain("Link to this application");
+    expect(html).toContain('name="link"');
+    expect(html).toContain('name="mailId" value="m9"');
+    expect(html).toContain('name="recordId" value="a"');
+    expect(html).toContain('name="returnTo" value="/companies/northstar?open=a"');
+    expect(html).toContain('name="justInfo"');
+    expect(html).toContain("Just info");
+  });
+
+  it("keeps the suggested outcome as the main button when one is allowed", () => {
+    const html = renderBar({}, { returnTo: "/companies/northstar" });
+    expect(html).toContain("Record round scheduled");
+    expect(html).not.toContain("Link to this application");
+  });
+
+  it("is unchanged without the prop", () => {
+    const html = renderBar(ack);
+    expect(html).not.toContain("Link to this application");
+    expect(html).not.toContain('name="link"');
   });
 });

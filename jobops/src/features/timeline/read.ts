@@ -30,6 +30,7 @@ import { mailHref } from "./query";
 export type TimelineRole = {
   id: string;
   role: string;
+  requisition: string | null;
   source: string;
   phase: Phase;
   state: RecordState;
@@ -48,6 +49,7 @@ export function timelineRole(record: ApplicationRecord): TimelineRole {
   return {
     id: record.id,
     role: record.role,
+    requisition: record.requisition,
     source: record.source,
     phase: record.phase,
     state: recordStateFrom(

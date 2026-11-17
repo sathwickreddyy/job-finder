@@ -9,7 +9,7 @@ import { kindLabel, type MailClassification } from "@/features/mail/tags";
 import { suggestedOutcome } from "@/features/mail/triage";
 
 export type Handling = {
-  applications: { id: string; role: string; outcomes: OutcomeId[] }[];
+  applications: { id: string; role: string; requisition: string | null; outcomes: OutcomeId[] }[];
   /** The application an outcome goes to; null asks "Which role?" first. */
   chosen: string | null;
   suggested: OutcomeId | "info";
@@ -31,12 +31,17 @@ const classificationOf = new Map(
  */
 export function suggestHandling(
   item: MailItem,
-  roles: { id: string; role: string; state: RecordState }[],
+  roles: { id: string; role: string; requisition: string | null; state: RecordState }[],
 ): Handling {
   const linked = item.application?.id;
   const applications = roles
     .filter((role) => role.id === linked || phaseOf(role.state) !== "Closed")
-    .map((role) => ({ id: role.id, role: role.role, outcomes: availableOutcomes(role.state) }));
+    .map((role) => ({
+      id: role.id,
+      role: role.role,
+      requisition: role.requisition,
+      outcomes: availableOutcomes(role.state),
+    }));
   const chosen =
     (linked && applications.some((app) => app.id === linked) ? linked : null) ??
     (applications.length === 1 ? applications[0].id : null);

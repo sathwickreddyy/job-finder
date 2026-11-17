@@ -47,12 +47,38 @@ const data: SearchData = {
   dropped: [],
 };
 
-it("shows each rule with its last-search count", () => {
+it("collapses to one summary line until Edit opens the editor", () => {
   const html = renderToStaticMarkup(
     createElement(RulePanel, { data, companyKey: "northstar", companyName: "Northstar" }),
   );
   for (const text of [
-    "How we find Northstar&#x27;s mail",
+    'id="mail-search"',
+    "Mail search",
+    "last run 31 Oct, 6 kept",
+    "northstar.example",
+    "talent@northstar.example",
+    "Northstar Labs",
+    "Northstar Talent",
+    "2 inboxes",
+    'aria-expanded="false"',
+    "Edit",
+    "Search now",
+  ])
+    expect(html).toContain(text);
+  for (const text of ["Addresses", "Never include", "Time frame", "Show the exact search sent"])
+    expect(html).not.toContain(text);
+});
+
+it("shows each rule with its last-search count once opened", () => {
+  const html = renderToStaticMarkup(
+    createElement(RulePanel, {
+      data,
+      companyKey: "northstar",
+      companyName: "Northstar",
+      defaultOpen: true,
+    }),
+  );
+  for (const text of [
     "Last search 31 Oct, last 90 days: 6 kept, 6 dropped",
     "Addresses",
     "talent@northstar.example",

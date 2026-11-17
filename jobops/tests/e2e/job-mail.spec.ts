@@ -150,8 +150,10 @@ test('company panel edits a keyword, refuses "interview", and runs a search with
   const record = await company(name);
   const own = await connection();
   await page.goto(`/companies/${record.slug}?tab=timeline`);
-  const panel = page.getByRole("region", { name: `How we find ${name}'s mail` });
+  const panel = page.getByRole("region", { name: "Mail search" });
   await expect(panel).toBeVisible();
+  await expect(panel.getByText("Addresses")).toHaveCount(0);
+  await panel.getByRole("button", { name: "Edit" }).click();
   await panel.getByRole("button", { name: "Add keyword" }).click();
   await panel.getByLabel("New keyword").fill("interview");
   await panel.getByRole("button", { name: "Add", exact: true }).click();
@@ -161,7 +163,7 @@ test('company panel edits a keyword, refuses "interview", and runs a search with
   await expect(panel.getByText("Saved. Fetches and searches use it from now on.")).toBeVisible();
   await panel.getByText("Show the exact search sent to each inbox").click();
   await expect(panel.getByText(`"${name} Talent"`).first()).toBeVisible();
-  await panel.getByRole("button", { name: `Search ${name}'s mail` }).click();
+  await panel.getByRole("button", { name: "Search now" }).click();
   const lane = panel
     .getByRole("region", { name: own.email })
     .or(panel.locator("section").filter({ hasText: own.email }));
@@ -169,7 +171,26 @@ test('company panel edits a keyword, refuses "interview", and runs a search with
   await expect(panel.getByText(/needs reconnecting in Inboxes/)).toBeVisible();
 });
 
-test("the How we find panel sits on the Applications tab and no sticky aside covers it", async ({
+test("Search now from the collapsed Mail search line opens the editor and starts the search", async ({
+  page,
+}) => {
+  const record = await company(unique(`Collapsed ${prefix}`));
+  await connection();
+  await page.goto(`/companies/${record.slug}?tab=applications`);
+  const panel = page.getByRole("region", { name: "Mail search" });
+  const edit = panel.getByRole("button", { name: "Edit", exact: true });
+  await expect(edit).toHaveAttribute("aria-expanded", "false");
+  await panel.getByRole("button", { name: "Search now" }).click();
+  await expect(edit).toHaveAttribute("aria-expanded", "true");
+  await expect(panel.getByText("Show the exact search sent to each inbox")).toBeVisible();
+  await expect(
+    panel.getByText(/Couldn't search|needs reconnecting|Searching|No (matching )?mail/i).first(),
+  ).toBeVisible({
+    timeout: 30_000,
+  });
+});
+
+test("the Mail search line sits on the Applications tab and no sticky aside covers it", async ({
   page,
 }) => {
   const name = unique(`Sticky ${prefix}`);
@@ -184,7 +205,7 @@ test("the How we find panel sits on the Applications tab and no sticky aside cov
     });
   await page.setViewportSize({ width: 1024, height: 700 });
   await page.goto(`/companies/${record.slug}?tab=timeline`);
-  const panel = page.getByRole("region", { name: `How we find ${name}'s mail` });
+  const panel = page.getByRole("region", { name: "Mail search" });
   await expect(panel).toBeVisible();
   // The old sticky facts column is gone, so nothing stays pinned over the panel while scrolling.
   await expect(page.locator('aside[aria-label="Company facts"]')).toHaveCount(0);

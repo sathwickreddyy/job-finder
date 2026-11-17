@@ -5,8 +5,8 @@ read-only. Every route answers JSON with `cache-control: private, no-store`; err
 `{ "error": "<sentence>" }` with a 4xx status, or `"Invalid request."` with `issues` for a
 malformed body.
 
-The same services back the Mail page (Fetch new mail), the company page ("How we find
-<Company>'s mail") and these routes, so a run started here shows up there.
+The same services back the Mail page (Fetch new mail), the company page ("Mail search" line,
+opened with Edit or Search now) and these routes, so a run started here shows up there.
 
 ## Fetch new mail
 

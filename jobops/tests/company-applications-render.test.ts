@@ -7,7 +7,6 @@ import { namedStepsOf } from "@/features/applications/named-steps";
 import { availableOutcomes, recordStateFrom, type OutcomeId } from "@/features/applications/phase";
 import type { ApplicationRecord } from "@/features/applications/read";
 import type { CompanyApplicationRow, CompanyApplications } from "@/features/companies/applications";
-import type { CompanySummary } from "@/features/companies/summary";
 import type { MailItem } from "@/features/mail/mail-item";
 import type { TimelineDay } from "@/features/timeline/entries";
 import { at, event, record, round, uid } from "./lane-fixtures";
@@ -27,6 +26,7 @@ vi.mock("@/features/applications/outcomes", () => ({ recordOutcome: vi.fn() }));
 vi.mock("@/features/mail/triage-actions", () => ({ linkMailOnly: vi.fn(), unlinkMail: vi.fn() }));
 vi.mock("@/features/mail/workspace-actions", () => ({
   handleMailAction: vi.fn(),
+  markAllJustInfoAction: vi.fn(),
   reopenMailAction: vi.fn(),
   placeMailAction: vi.fn(),
   retagMail: vi.fn(),
@@ -37,7 +37,9 @@ vi.mock("@/features/mail/workspace-actions", () => ({
   includeDroppedMail: vi.fn(),
 }));
 const { ApplicationsTab } = await import("@/features/companies/views/applications-tab");
-const { DetailHeader, detailTabs, tabAliases } = await import("@/features/companies/detail");
+const { detailTabs, tabAliases } = await import("@/features/companies/detail");
+const { StepProgress } = await import("@/features/companies/views/step-progress");
+const { CompanyHeader } = await import("@/features/companies/views/company-header");
 const { MinimalCompanyPage } = await import("@/features/companies/views/minimal-company");
 const { companyPageHref } = await import("@/features/applications/navigation");
 
@@ -143,6 +145,8 @@ const mailDay = (item: MailItem): TimelineDay[] => [
 function data(rows: CompanyApplicationRow[], patch: Partial<CompanyApplications> = {}) {
   return {
     rows,
+    newMail: { days: [], handling: {}, more: false },
+    lastActivity: null,
     unplaced: [],
     unplacedHandling: {},
     unplacedOlderHref: null,
@@ -152,6 +156,31 @@ function data(rows: CompanyApplicationRow[], patch: Partial<CompanyApplications>
     versions: [{ id: resume.id, label: "Family / v3 / cv.pdf" }],
     ...patch,
   } satisfies CompanyApplications;
+}
+
+function headerStatus(label: string): NonNullable<CompanyApplications["status"]> {
+  return { tone: "interviewing", label, detail: "", previous: null };
+}
+
+function headerHtml(patch: Partial<CompanyApplications> = {}, props: Record<string, unknown> = {}) {
+  const closed = rowFor(application({ phase: "Closed", status: "REJECTED" }));
+  return renderToStaticMarkup(
+    createElement(CompanyHeader, {
+      name: "Oracle",
+      companyKey: "oracle",
+      focus: "Enterprise workflows & AI",
+      cities: ["Bengaluru", "Hyderabad"],
+      workModes: [],
+      careersUrl: "https://example.com/careers",
+      stage: "Interviewing",
+      data: data([closed, rowFor(application())], {
+        status: headerStatus("Interviewing"),
+        ...patch,
+      }),
+      action: { label: "Record application", href: "/applications/new" },
+      ...props,
+    } as never),
+  );
 }
 
 function render(
@@ -189,22 +218,82 @@ describe("company page applications", () => {
     const html = render(data(rows));
     expect(html).toContain(`id="application-${newer.id}"`);
     expect(html).toContain(`id="application-${older.id}"`);
-    expect(html).toContain("4 Nov 2026");
-    expect(html).toContain("2 Oct 2026");
-    expect(html).toContain("REQ-0001");
-    expect(html).toContain("No requisition");
-    expect(html).toContain("Staff Engineer · Hyderabad");
-    expect(html).toContain("Senior Engineer · Pune");
-    expect(html.indexOf("Staff Engineer · Hyderabad")).toBeLessThan(
-      html.indexOf("Senior Engineer · Pune"),
-    );
+    expect(html).toContain("Applied 4 Nov 2026 · REQ-0001 · Hyderabad");
+    expect(html).toContain("Applied 2 Oct 2026 · No requisition · Pune");
+    expect(html.indexOf("Staff Engineer")).toBeLessThan(html.indexOf("Senior Engineer"));
+  });
+
+  describe("closed row cards", () => {
+    const step = (state: string, tone = "interviewing") =>
+      ({ key: state, label: state, detail: "", state, tone, target: null }) as never;
+    const buttonOf = (html: string, id: string) => {
+      const from = html.indexOf(`id="application-${id}"`);
+      return html.slice(from, html.indexOf("</button>", from));
+    };
+
+    it("starts the row button with the role and puts the meta line under it", () => {
+      const html = render(data(rows));
+      const button = buttonOf(html, older.id);
+      const text = button.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
+      expect(text).toMatch(/Senior Engineer Applied 2 Oct 2026 · No requisition · Pune/);
+      expect(button.indexOf("Senior Engineer")).toBeLessThan(button.indexOf("Applied 2 Oct"));
+    });
+
+    it("draws one segment per step labelled n of total counting done and current", () => {
+      const html = renderToStaticMarkup(
+        createElement(StepProgress, {
+          steps: [step("done"), step("done"), step("done"), step("current"), step("ahead")],
+        }),
+      );
+      expect(html).toContain('aria-label="4 of 5 steps"');
+      expect(html.match(/data-state=/g)).toHaveLength(5);
+      expect(html).toContain("bg-primary");
+      expect(html).toContain("bg-review");
+    });
+
+    it("colours a stopped step as danger", () => {
+      const html = renderToStaticMarkup(
+        createElement(StepProgress, { steps: [step("done"), step("stopped", "bad")] }),
+      );
+      expect(html).toContain("bg-destructive");
+      expect(html).toContain('aria-label="1 of 2 steps"');
+    });
+
+    it("tints the rail by tone and shows the pill with its detail beneath", () => {
+      const html = render(data(rows));
+      const rail = (id: string) =>
+        buttonOf(html, id)
+          .match(/<span[^>]*data-rail="(\w+)"[^>]*class="([^"]*)"/)
+          ?.slice(1);
+      expect(rail(newer.id)?.[0]).toBe("interviewing");
+      expect(rail(newer.id)?.[1]).toContain("bg-review");
+      expect(rail(older.id)?.[0]).toBe("applied");
+      expect(rail(older.id)?.[1]).toContain("bg-primary");
+      expect(rail(older.id)?.[1]).toContain("w-1 ");
+      expect(buttonOf(html, newer.id)).toContain("Booked 20 Nov");
+    });
+
+    it("counts open mail as new and shows nothing for none", () => {
+      const open = { ...mailItem("m-new", "Update", newer.id), attention: "open" as const };
+      const handled = mailItem("m-old", "Old", older.id);
+      const days = [...mailDay(open), ...mailDay({ ...open, id: "m-new2" })];
+      const html = render(data([rowFor(newer, days), rowFor(older, mailDay(handled))]));
+      expect(buttonOf(html, newer.id)).toContain("2 new");
+      expect(buttonOf(html, older.id)).not.toContain(" new");
+    });
+
+    it("truncates a long role and keeps it in the title", () => {
+      const long = application({ role: "Principal Staff Engineer, Distributed Systems" });
+      const html = render(data([rowFor(long)]));
+      expect(html).toContain('title="Principal Staff Engineer, Distributed Systems"');
+      expect(buttonOf(html, long.id)).toContain("truncate");
+    });
   });
 
   it("opens the newest active application when no link names one", () => {
     const html = render(data(rows));
     expect(html).toContain('aria-expanded="true"');
     expect(html.match(/aria-expanded="true"/g)).toHaveLength(1);
-    expect(html).toContain("Where it stands");
     expect(html).toContain("Applied for Staff Engineer");
   });
 
@@ -213,12 +302,11 @@ describe("company page applications", () => {
     const body = html.slice(html.indexOf(`id="application-${older.id}"`));
     for (const text of [
       "Opening",
-      "Applied on",
+      "Applied",
       "Résumé used",
-      "Where it stands",
       "Notes",
       "Application page",
-      "not saved",
+      "Add link",
       "Edit details",
       "+ Add step",
       "Set a follow-up",
@@ -242,7 +330,7 @@ describe("company page applications", () => {
     const facts = (value: ApplicationRecord) => {
       const html = render(data([rowFor(value)]), { openId: value.id });
       const body = html.slice(html.indexOf(`id="application-${value.id}"`));
-      return body.slice(body.indexOf("Résumé used"), body.indexOf("Where it stands"));
+      return body.slice(body.indexOf("Résumé used"), body.indexOf("Notes"));
     };
     const withResume = facts(sent);
     expect(withResume).toContain("ServiceNow tailored");
@@ -256,24 +344,66 @@ describe("company page applications", () => {
     const html = render(data(rows));
     expect(html).not.toContain("Your applications");
     expect(html).not.toContain('aria-label="Company facts"');
-    const header = renderToStaticMarkup(
-      createElement(DetailHeader, {
-        company: {
-          id: "oracle",
-          name: "Oracle",
-          aliases: [],
-          cities: ["Hyderabad"],
-          focus: "",
-          careersUrl: "https://example.com/careers",
-          locationSource: "",
-          portalNote: "",
-        },
-        summary: { stage: "Interviewing" } as CompanySummary,
-      }),
-    );
+    const header = headerHtml();
     expect(header).not.toContain("Practise questions");
     expect(header).not.toContain("View application");
     expect(header).toContain("Company mail");
+  });
+
+  describe("company header", () => {
+    it("shows exactly one status pill and the focus and cities as one meta line", () => {
+      const html = headerHtml();
+      expect(html.match(/Interviewing/g)).toHaveLength(1);
+      expect(html).toContain("Enterprise workflows &amp; AI · Bengaluru, Hyderabad");
+    });
+
+    it("falls back to the stage chip when the company has no status", () => {
+      const html = headerHtml({ status: null }, { stage: "Applied" });
+      expect(html).toContain("Applied");
+    });
+
+    it("counts applications, last activity and the next step", () => {
+      const html = headerHtml({
+        lastActivity: { at: "2026-11-16T04:00:00.000Z", kind: "Round" },
+        next: { text: "DSA result", due: { label: "overdue", tone: "late" } },
+      });
+      for (const text of ["Status", "Applications", "Last activity", "Next"])
+        expect(html).toContain(text);
+      expect(html).toContain("2");
+      expect(html).toContain("1 active · 1 closed");
+      expect(html).toContain("16 Nov");
+      expect(html).toContain("Round");
+      expect(html).toContain("DSA result");
+      expect(html).toContain("overdue");
+      expect(html).toContain("text-warning");
+    });
+
+    it("tones the next cell by how due it is", () => {
+      const toneOf = (tone: "now" | "late" | "calm") =>
+        headerHtml({ next: { text: "Reply", due: { label: "soon", tone } } }).match(
+          /data-tone="(\w+)"/,
+        )?.[1];
+      expect(toneOf("late")).toBe("warning");
+      expect(toneOf("now")).toBe("link");
+      expect(toneOf("calm")).toBeUndefined();
+    });
+
+    it("says so when there is nothing yet", () => {
+      const html = headerHtml({ status: null, lastActivity: null, next: null });
+      for (const text of ["No activity yet", "Nothing due"]) expect(html).toContain(text);
+      const empty = headerHtml({ rows: [], status: null });
+      expect(empty).toContain("0 active · 0 closed");
+    });
+
+    it("keeps careers and the previous job in the menu, not as top-level controls", () => {
+      const html = headerHtml();
+      expect(html).not.toContain(">Open careers<");
+      expect(html).not.toContain("<summary");
+      expect(html).toContain('aria-label="More company actions"');
+      expect(html).toContain('aria-expanded="false"');
+      expect(html).toContain("Company mail");
+      expect(html).toContain("Record application");
+    });
   });
 
   it("names the tabs and keeps the old timeline and progress links working", () => {
@@ -292,11 +422,183 @@ describe("company page applications", () => {
     expect(html).toContain(`name="mailId" value="${mailId}"`);
   });
 
-  it("leaves a round's result to its card, not the add-step chips", () => {
+  it("leaves a round's result to the current step, not the add-step chips", () => {
     const html = render(data(rows), { openId: newer.id, requested: "rejected" });
     expect(html).toContain("Rejected");
-    for (const label of ["Cleared the round", "Didn&#x27;t clear it", "Rescheduled"])
-      expect(html).not.toContain(label);
+    expect(html.match(/Cleared the round/g)).toHaveLength(1);
+    expect(html.indexOf('data-testid="current-step"')).toBeLessThan(
+      html.indexOf("Cleared the round"),
+    );
+  });
+
+  describe("current step", () => {
+    const booked = (when: Date | null) =>
+      application({ rounds: [round("a", { scheduledAt: when })] });
+    const open = (full: ApplicationRecord) => render(data([rowFor(full)]), { openId: full.id });
+
+    it("says a past round was on its day, with each result button once on the page", () => {
+      const html = open(booked(at("2026-11-16T09:00:00")));
+      expect(html).toContain("Round 1 · DSA was on 16 Nov");
+      expect(html).toContain("How did it go? Recording it moves the tracker on.");
+      for (const label of ["Cleared the round", "Didn&#x27;t clear it", "Rescheduled"])
+        expect(html.match(new RegExp(`>${label}<`, "g"))).toHaveLength(1);
+      expect(html.indexOf("was on 16 Nov")).toBeLessThan(html.indexOf("Cleared the round"));
+      expect(html.indexOf('data-testid="row-aside"')).toBeLessThan(html.indexOf("was on"));
+    });
+
+    it("says a future round is on its day, and a round without a time has no date", () => {
+      const future = open(booked(at("2026-11-20T11:00:00")));
+      expect(future).toContain("Round 1 · DSA is on 20 Nov");
+      expect(future).toContain("Record the result after the round.");
+      expect(future).not.toContain("How did it go?");
+      const undated = open(booked(null));
+      expect(undated).toContain("Round 1 · DSA · Date not set");
+      expect(undated).not.toContain("How did it go?");
+      expect(undated).not.toContain("Record the result after the round.");
+    });
+
+    it("shows nothing when no round is booked", () => {
+      const html = open(application({ rounds: [round("a", { outcome: "PASSED" })] }));
+      expect(html).not.toContain("was on");
+      expect(html).not.toContain("Cleared the round");
+    });
+
+    const unsent = (source?: string) =>
+      application({
+        phase: "Preparing",
+        status: "PREPARING",
+        sentAt: null,
+        events: [],
+        resume: null,
+        resumeVersionId: null,
+        ...(source ? { source } : {}),
+      } as Partial<ApplicationRecord>);
+
+    it("leads an unsent record with Not sent yet, Record as sent and Not applying", () => {
+      const html = open(unsent());
+      for (const text of ["Not sent yet", "Record as sent", "Not applying"])
+        expect(html).toContain(text);
+      expect(html).not.toContain("Open outreach prompt");
+    });
+
+    it("adds the outreach links to an unsent outreach record", () => {
+      const html = open(unsent("REFERRAL"));
+      expect(html).toContain("Open outreach prompt");
+      expect(html).toContain("Record a direct application");
+    });
+
+    it("offers Reopen inside the box for a record closed as not applying", () => {
+      const closed = application({
+        phase: "Closed",
+        status: "CLOSED",
+        closedReason: "WITHDREW",
+        sentAt: null,
+        events: [],
+      } as Partial<ApplicationRecord>);
+      const html = open(closed);
+      expect(html.indexOf("Reopen")).toBeGreaterThan(html.indexOf('data-testid="current-step"'));
+    });
+  });
+
+  describe("details aside and note composer", () => {
+    const scores = {
+      "jobops-lexical": { score: 100, baseScore: null, delta: null, breakdown: [] },
+      "resume-ats-optimizer": { score: 74, baseScore: null, delta: null, breakdown: [] },
+      resumenext: { score: 91, baseScore: null, delta: null, breakdown: [] },
+    };
+    const open = (full: ApplicationRecord, patch: Partial<CompanyApplicationRow> = {}) =>
+      render(data([rowFor(full, [], patch)]), { openId: full.id });
+    const asideOf = (html: string) =>
+      html.slice(html.indexOf('data-testid="row-aside"'), html.indexOf("Add a note to this"));
+
+    it("lists the opening, applied date and method, follow-up, page and résumé in the aside", () => {
+      const aside = asideOf(open(application({ applicationUrl: "https://apply.example/1" })));
+      expect(aside).toMatch(/<a[^>]*href="https:\/\/example.com\/job"[^>]*target="_blank"[^>]*>/);
+      expect(aside).toContain("REQ-0001");
+      expect(aside).toContain("Applied");
+      expect(aside).toContain("4 Nov 2026");
+      expect(aside).toContain("Set a follow-up");
+      expect(aside).toContain('href="https://apply.example/1"');
+      expect(aside).not.toContain("Add link");
+      expect(aside).toContain("Edit details");
+      expect(aside).toContain("Résumé used");
+      expect(aside).toContain("v3");
+      expect(aside).toContain("cv.pdf");
+    });
+
+    it("offers Add link when no application page is saved", () => {
+      const aside = asideOf(open(application()));
+      expect(aside).toContain("Add link");
+      expect(aside).not.toContain("not saved");
+    });
+
+    it("shows the three score values only when scores are stored", () => {
+      const withScores = asideOf(open(application(), { scores }));
+      for (const value of ["100", "74", "91"]) expect(withScores).toContain(`>${value}<`);
+      for (const name of ["Keyword check", "ResumeNext"]) expect(withScores).toContain(name);
+      expect(asideOf(open(application()))).not.toContain("Keyword check");
+    });
+
+    it("shows the note sections and an Open notes button in the aside", () => {
+      const notes = "## Summary\nWhy.\n\n## On the form\nNotice.\n\n## Proof\nDone.";
+      const aside = asideOf(open(application({ notes } as Partial<ApplicationRecord>)));
+      expect(aside).toContain("Summary · On the form · Proof");
+      expect(aside).toContain("Open notes");
+      expect(aside).not.toContain('aria-expanded="true"');
+    });
+
+    it("leads a narrow row with a compact facts row and a Details toggle, keeping the aside", () => {
+      const html = open(application());
+      const compact = html.indexOf("Applied 4 Nov 2026");
+      expect(compact).toBeGreaterThan(-1);
+      expect(compact).toBeLessThan(html.indexOf('data-testid="current-step"'));
+      expect(html).toMatch(
+        /<button[^>]*aria-expanded="false"[^>]*aria-controls="[^"]+"[^>]*>Details/,
+      );
+      expect(html).toContain("@3xl:hidden");
+      // Opened on a narrow row, Details reveals the aside straight after the facts row.
+      const asideAt = html.indexOf('data-testid="row-aside"');
+      expect(asideAt).toBeGreaterThan(compact);
+      expect(asideAt).toBeLessThan(html.indexOf('data-testid="current-step"'));
+      // The wide layout still gets the whole aside.
+      const aside = asideOf(html);
+      for (const text of ["Set a follow-up", "Résumé used", "Edit details"])
+        expect(aside).toContain(text);
+    });
+
+    it("replaces Add to history with a one-row composer", () => {
+      const html = open(application());
+      expect(html).not.toContain("Add to history");
+      expect(html).toMatch(
+        /<textarea[^>]*rows="1"[^>]*>|<textarea[^>]*aria-label="Add a note to this application&#x27;s history…"/,
+      );
+      expect(html).toContain('placeholder="Add a note to this application&#x27;s history…"');
+      expect(html).toContain('aria-label="Add a note to this application&#x27;s history…"');
+      expect(html).toContain('name="summary"');
+      expect(html).toContain('maxLength="20000"');
+    });
+
+    it("puts the follow-up chip in the activity toolbar after the filter", () => {
+      const html = open(application());
+      const group = html.indexOf('aria-label="Filter timeline"');
+      expect(html.indexOf("Sent a follow-up")).toBeGreaterThan(group);
+      expect(html.indexOf("Sent a follow-up")).toBeLessThan(html.indexOf("Add a note to this"));
+    });
+  });
+
+  describe("current step with several rounds", () => {
+    it("belongs to the first scheduled round when an earlier one is passed", () => {
+      const full = application({
+        rounds: [
+          round("a", { position: 1, kind: "DSA", outcome: "PASSED" }),
+          round("a", { position: 2, kind: "LLD", scheduledAt: at("2026-11-20T11:00:00") }),
+        ],
+      });
+      const html = render(data([rowFor(full)]), { openId: full.id });
+      expect(html).toContain("Round 2 · LLD is on 20 Nov");
+      expect(html).not.toContain("Round 1 · DSA is on");
+      expect(html.match(/>Cleared the round</g)).toHaveLength(1);
+    });
   });
 
   it("opens the row holding the email a link names, and nothing else", () => {
@@ -451,12 +753,162 @@ describe("company page applications", () => {
     expect(html).toMatch(/<pre>[\s\S]*a{400}[\s\S]*<\/pre>/);
   });
 
-  it("keeps company mail on no application in its own section, hidden when empty", () => {
-    const loose = mailItem("00000000-0000-4000-8000-0000000000dd", "Loose hello", null);
-    const html = render(data(rows, { unplaced: mailDay(loose) }));
-    expect(html).toContain("Oracle, not on an application");
-    expect(html).toContain("Loose hello");
-    expect(render(data(rows))).not.toContain("not on an application");
+  describe("new-mail tray and the Other company mail fold", () => {
+    const openMail = (id: string, subject: string, patch: Partial<MailItem> = {}): MailItem => ({
+      ...mailItem(id, subject, null),
+      attention: "open",
+      ...patch,
+    });
+    const app = (id: string, role: string, requisition: string | null = null) => ({
+      id,
+      role,
+      requisition,
+      outcomes: ["heard", "scheduled", "oa"] as OutcomeId[],
+    });
+    const two = [app("a1", "SDE II, 3P Pricing", "REQ-77"), app("a2", "SDE, CS ARIA")];
+    const handlingOf = (
+      applications: ReturnType<typeof app>[],
+      patch: Record<string, unknown> = {},
+    ) => ({
+      applications,
+      chosen: applications.length === 1 ? applications[0].id : null,
+      suggested: "info" as const,
+      reason: "Nothing to record from this email.",
+      ...patch,
+    });
+    const tray = (items: [MailItem, ReturnType<typeof handlingOf>][], more = false) => ({
+      newMail: {
+        days: mailDay(items[0][0]).map((day) => ({
+          ...day,
+          entries: items.map(([item]) => ({
+            type: "mail" as const,
+            at: item.receivedAt,
+            item,
+            recorded: null,
+          })),
+        })),
+        handling: Object.fromEntries(items.map(([item, handling]) => [item.id, handling])),
+        more,
+      },
+    });
+    const ids = [1, 2, 3].map((n) => `00000000-0000-4000-8000-00000000f00${n}`);
+
+    it("heads the tray with the count and 'need a role' when two or more applications are open", () => {
+      const items = ids.map(
+        (id) => [openMail(id, "Thank you for applying"), handlingOf(two)] as [MailItem, never],
+      );
+      const html = render(data(rows, tray(items)));
+      expect(html).toContain("3 new emails need a role");
+      expect(html).toContain("arrived 5 Nov, 9:00 am");
+      expect(html).toContain("Mark all just info");
+      expect(html.match(/aria-label="New"/g)).toHaveLength(3);
+      expect(html).toContain("Choose role");
+    });
+
+    it("says 'need a look' with fewer than two open applications", () => {
+      const html = render(
+        data(rows, tray([[openMail(ids[0], "Hello"), handlingOf([app("a1", "SDE")])]])),
+      );
+      expect(html).toContain("1 new email needs a look");
+    });
+
+    it("names the role found in the email, else the sender and a link-free preview", () => {
+      const hit = openMail(ids[0], "Thank you for applying", {
+        text: "Your application for REQ-77 was received.",
+      });
+      const miss = openMail(ids[1], "Thank you for applying", {
+        text: "Hello\nWe got it [Apply]<https://x.test/track?a=1> now",
+      });
+      const bare = openMail(ids[2], "Thank you for applying", { text: "" });
+      const html = render(
+        data(rows, tray([hit, miss, bare].map((i) => [i, handlingOf(two)]) as never)),
+      );
+      expect(html).toMatch(/Role in the email:[\s\S]*?SDE II, 3P Pricing/);
+      expect(html).toContain("talent@example.com · We got it Apply now");
+      expect(html).not.toContain("x.test/track");
+      expect(html).toMatch(/>talent@example\.com<\/p>/);
+    });
+
+    it("confirms an acknowledgement with Link to this application, an interview with its outcome", () => {
+      const ack = openMail(ids[0], "Thank you for applying");
+      const interview = openMail(ids[1], "Interview invite", { kind: "Interview" });
+      const one = [app("a1", "SDE")];
+      const html = render(
+        data(
+          rows,
+          tray([
+            [ack, handlingOf(one)],
+            [
+              interview,
+              handlingOf(one, {
+                suggested: "scheduled",
+                reason: "Suggested for an interview email.",
+              }),
+            ],
+          ]),
+        ),
+      );
+      expect(html).toContain("Link to this application");
+      expect(html).toContain("Record round scheduled");
+      expect(html).toContain('name="returnTo" value="/companies/oracle?open=a1"');
+    });
+
+    it("renders a link to Mail when more new emails exist", () => {
+      const html = render(data(rows, tray([[openMail(ids[0], "Hello"), handlingOf(two)]], true)));
+      expect(html).toContain('href="/mail?company=oracle"');
+      expect(
+        render(data(rows, tray([[openMail(ids[0], "Hello"), handlingOf(two)]]))),
+      ).not.toContain("/mail?company=oracle");
+    });
+
+    it("orders the notice, tray, rows, fold and rules line, and hides the empty ones", () => {
+      const done = mailItem("00000000-0000-4000-8000-0000000000d2", "Done hello", null);
+      const html = render(
+        data(rows, {
+          ...tray([[openMail(ids[0], "Fresh hello"), handlingOf(two)]]),
+          unplaced: mailDay(done),
+          search: {
+            inboxes: [],
+            rule: { aliases: [], domains: [], senders: [], keywords: [], excludedTerms: [] },
+          } as never,
+        }),
+      );
+      const at = (text: string) => html.indexOf(text);
+      expect(at("1 new email")).toBeGreaterThan(-1);
+      expect(at("1 new email")).toBeLessThan(at('aria-label="Applications"'));
+      expect(at('aria-label="Applications"')).toBeLessThan(at("Other company mail · 1"));
+      expect(html).toMatch(/<details[^>]*id="unplaced"(?![^>]* open)/);
+      expect(html).not.toContain("not on an application");
+      const bare = render(data(rows));
+      expect(bare).not.toContain("new email");
+      expect(bare).not.toContain("Other company mail");
+    });
+
+    it("counts the fold's mail as N+ while older pages remain", () => {
+      const done = mailItem("00000000-0000-4000-8000-0000000000d2", "Done hello", null);
+      const paged = render(
+        data(rows, { unplaced: mailDay(done), unplacedOlderHref: "?unplaced=x#unplaced" }),
+      );
+      expect(paged).toContain("Other company mail · 1+");
+      expect(render(data(rows, { unplaced: mailDay(done) }))).toContain("Other company mail · 1<");
+    });
+
+    it("keeps the fold shut until a ?mail= link targets one of its emails", () => {
+      const done = mailItem("00000000-0000-4000-8000-0000000000d2", "Done hello", null);
+      const value = data(rows, { unplaced: mailDay(done) });
+      expect(render(value)).not.toMatch(/<details[^>]*id="unplaced"[^>]* open/);
+      const html = render(value, { mailIntent: done.id });
+      expect(html).toMatch(/<details[^>]*id="unplaced"[^>]* open/);
+      expect(html).toContain("<dialog");
+    });
+
+    it("opens the tray email's dialog for a ?mail= link and leaves the fold shut", () => {
+      const html = render(data(rows, tray([[openMail(ids[0], "Fresh hello"), handlingOf(two)]])), {
+        mailIntent: ids[0],
+      });
+      expect(html).toContain("<dialog");
+      expect(html).not.toMatch(/<details[^>]*id="unplaced"/);
+    });
   });
 
   it("explains an empty company", () => {

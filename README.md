@@ -42,8 +42,8 @@ Start with the highlighted box. JobOps keeps the exact job description and résu
 
 ![Companies → sourced compensation and interview research → verified contacts → choose direct or referral.](jobops/docs/diagrams/03-companies.svg)
 
-1. In **Companies**, open **Compare** or choose the company directly. Use its **Compensation** and **Interviews** tabs to show the evidence behind each fact.
-2. Check its careers link and **Timeline** for the relevant role and any prior activity. If a referral makes sense, open **Contacts** and verify the person and employer's referral process.
+1. In **Companies**, open **Compare** or choose the company directly. Use its **Compensation** and **Interview loop** tabs to show the evidence behind each fact.
+2. Check its careers link (the **⋯** menu, **Open careers site**) and **Applications** for the relevant role and any prior activity. If a referral makes sense, open **Contacts** and verify the person and employer's referral process.
 
 ### 4. Prepare and score the résumé
 
@@ -72,9 +72,9 @@ Start with the highlighted box. JobOps keeps the exact job description and résu
 
 ![Company page → application row → round card → question library.](jobops/docs/diagrams/07-interviews.svg)
 
-1. Open the company from **Companies** or any application link (they all land on the company page). Its first tab, **Applications**, has one row per application: date, requisition, role and city, and where it stands. The tracker shows only what happened: **Applied**, **Acknowledged**, **Interview scheduled**, **Round 1 · DSA** and so on, then **Offer** or **Rejected**. Companies that are not in your list get a minimal page with a banner.
-2. Open the row. Under it, record an assessment or scheduled round with its date and time under **+ Add step**; record a round's result or a reschedule on its round card. **Add to history** adds a free-text note. Mail filed under the wrong application is fixed with the email's link and unlink actions.
-3. The row shows the opening and requisition, when you applied, the **Résumé used** and where it stands, with Notes, follow-ups and a timeline of every email, recorded step and round. Every email opens in a reading popup.
+1. Open the company from **Companies** or any application link (they all land on the company page). The header is the company name and a four-stat strip; its **⋯** menu holds **Open careers site**, **Add previous job** and **Mail search settings**. The first tab, **Applications**, has one card per application: role first, with a progress bar and an "N new" badge for unread mail. The tracker shows only what happened: **Applied**, **Acknowledged**, **Interview scheduled**, **Round 1 · DSA** and so on, then **Offer** or **Rejected**. Companies that are not in your list get a minimal page with a banner.
+2. Open the card. It leads with a current-step box: record a booked round's result or a reschedule there, and record an assessment or scheduled round with its date and time under **+ Add step**. A one-line note box adds a free-text note to the history. The history filters between **All**, **Stages** and **Mail**, and a dot marks what is new. Mail filed under the wrong application is fixed with the email's link and unlink actions.
+3. A details sidebar (a facts row with a **Details** toggle on narrow screens) shows the opening and requisition, when you applied, the **Résumé used** and where it stands, with Notes and follow-ups. The history lists every email, recorded step and round. Every email opens in a reading popup; the previews leave out raw links.
 4. In the round card, choose **Questions**, then **Add a question**. Write what they asked, how you answered and what the interviewer said in Markdown, with code blocks and tables, and mark how it went. Save with **Save question** or ⌘S. Keep longer prep notes in the application's **Notes** or the round's **Round notes**.
 5. Before the next round, open **Question library** from Applications to search and sort every question across companies. An agent can add a review to a question through the [interview questions API](jobops/docs/api/interview-questions.md); it shows with its source and never replaces your answer.
 

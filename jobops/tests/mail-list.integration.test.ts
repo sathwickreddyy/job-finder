@@ -155,4 +155,19 @@ describe.skipIf(!dbTests)("shared mail list", () => {
     await db.delete(mailMessages).where(eq(mailMessages.id, mail.id));
     await db.delete(applications).where(eq(applications.id, app.id));
   });
+
+  it("lists only handled or only open mail for a company", async () => {
+    const company = `${prefix}-handled`;
+    const open = await message({ companyKey: company });
+    const handled = await message({
+      companyKey: company,
+      attentionState: "DONE",
+      processedAt: new Date(),
+    });
+    const ids = async (attention: "open" | "handled") =>
+      (await listMail({ company, attention })).items.map((i) => i.id);
+    expect(await ids("handled")).toEqual([handled.id]);
+    expect(await ids("open")).toEqual([open.id]);
+    await db.delete(mailMessages).where(inArray(mailMessages.id, [open.id, handled.id]));
+  });
 });

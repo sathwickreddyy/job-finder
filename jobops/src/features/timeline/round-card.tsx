@@ -7,8 +7,6 @@ import { MarkdownView } from "@/components/markdown/markdown-view";
 import { Button } from "@/components/ui";
 import { indiaDate, istClock, formatTime } from "@/features/applications/dates";
 import { updateRound } from "@/features/applications/record-actions";
-import type { OutcomeId } from "@/features/applications/phase";
-import { OutcomeChips } from "@/features/applications/views/outcome-chips";
 import type { InterviewQuestion } from "@/features/interviews/types";
 import { RoundQuestions } from "@/features/interviews/views/round-questions";
 import { cn } from "@/lib/utils";
@@ -17,12 +15,8 @@ import type { TimelineRound } from "./entries";
 export type RoundCardData = {
   recordId: string;
   questions: InterviewQuestion[];
-  outcomes: OutcomeId[];
   today: string;
 };
-
-/** Only these outcomes belong on a round card; the rest are recorded from the tracker. */
-const roundOutcomes: OutcomeId[] = ["passed", "failed", "rescheduled"];
 
 function resultOf(round: TimelineRound["round"], now: Date) {
   if (round.outcome === "PASSED") return { text: "Cleared", tone: "bg-success-soft text-success" };
@@ -98,7 +92,8 @@ function EditRound({ round, onSaved }: { round: TimelineRound["round"]; onSaved:
 
 /**
  * A round in the timeline: who interviewed, how many questions, and the result. Opening it
- * shows the questions, the round notes and the outcomes that can still be recorded.
+ * shows the questions and the round notes; its result is recorded from the application's
+ * current step.
  */
 export function RoundCard({
   entry,
@@ -130,7 +125,6 @@ export function RoundCard({
   const count = data.questions.length;
   const summary = notesSummary(round.notes);
   const counted = `${count} ${count === 1 ? "question" : "questions"}`;
-  const outcomes = data.outcomes.filter((id) => roundOutcomes.includes(id));
   const tabs = [
     { id: "questions", label: `Questions · ${count}` },
     { id: "notes", label: "Round notes" },
@@ -250,13 +244,6 @@ export function RoundCard({
               Edit round
             </Button>
           )}
-          <OutcomeChips
-            recordId={data.recordId}
-            outcomes={outcomes}
-            initial={null}
-            today={data.today}
-            booked={{ name: round.name, scheduledAt: round.scheduledAt }}
-          />
         </div>
       )}
     </li>

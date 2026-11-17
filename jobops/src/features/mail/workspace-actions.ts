@@ -177,6 +177,27 @@ export async function handleMailAction(
   }
 }
 
+/** Just info for every email in the company page's new-mail tray, in one request (first 50). */
+export async function markAllJustInfoAction(
+  _previous: ActionState,
+  form: FormData,
+): Promise<ActionState> {
+  try {
+    const ids = z.array(z.uuid()).min(1).max(50).parse(form.getAll("ids").map(String));
+    try {
+      for (const id of ids) await handleMail(id, { justInfo: true });
+    } finally {
+      // A failure part-way leaves some emails handled; the tray must stop showing them.
+      invalidate();
+    }
+    return {
+      success: `Marked ${ids.length} ${ids.length === 1 ? "email" : "emails"} as just info.`,
+    };
+  } catch (error) {
+    return actionError(error);
+  }
+}
+
 /** Undo Just info: the email needs attention again. */
 export async function reopenMailAction(
   _previous: ActionState,
