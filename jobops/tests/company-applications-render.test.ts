@@ -55,7 +55,7 @@ function application(patch: Partial<ApplicationRecord> = {}) {
   const full = {
     ...base,
     companyHref: "/companies/oracle",
-    requisition: "JB0076231",
+    requisition: "REQ-0001",
     appliedAt: base.sentAt,
     applicationUrl: null,
     notes: "",
@@ -191,7 +191,7 @@ describe("company page applications", () => {
     expect(html).toContain(`id="application-${older.id}"`);
     expect(html).toContain("4 Nov 2026");
     expect(html).toContain("2 Oct 2026");
-    expect(html).toContain("JB0076231");
+    expect(html).toContain("REQ-0001");
     expect(html).toContain("No requisition");
     expect(html).toContain("Staff Engineer · Hyderabad");
     expect(html).toContain("Senior Engineer · Pune");
@@ -234,7 +234,7 @@ describe("company page applications", () => {
     const sent = application({
       resume: {
         id: resume.id,
-        filename: "servicenow-jb0076231_2026-11-03.pdf",
+        filename: "example-resume_2026-11-03.pdf",
         label: "ServiceNow tailored",
       },
     } as Partial<ApplicationRecord>);
@@ -246,10 +246,8 @@ describe("company page applications", () => {
     };
     const withResume = facts(sent);
     expect(withResume).toContain("ServiceNow tailored");
-    expect(withResume).toContain("servicenow-jb0076231_2026-11-03.pdf");
-    expect(withResume).toContain(
-      'title="ServiceNow tailored · servicenow-jb0076231_2026-11-03.pdf"',
-    );
+    expect(withResume).toContain("example-resume_2026-11-03.pdf");
+    expect(withResume).toContain('title="ServiceNow tailored · example-resume_2026-11-03.pdf"');
     expect(withResume).not.toContain("None recorded");
     expect(facts(bare)).toContain("None recorded");
   });
@@ -311,6 +309,55 @@ describe("company page applications", () => {
     expect(html.match(/aria-expanded="true"/g)?.length).toBeGreaterThanOrEqual(1);
     expect(html).toContain("Interview invite");
     expect(html).toContain("<dialog");
+  });
+
+  it("opens the unplaced mail popup when the requested outcome no longer applies", () => {
+    const mailId = "00000000-0000-4000-8000-0000000000ef";
+    const value = data(rows, {
+      unplaced: mailDay(mailItem(mailId, "Loose hello", null)),
+      source: { recordId: newer.id, id: mailId, subject: "Loose hello" },
+    });
+    // The round is booked, so "scheduled" cannot be added.
+    const html = render(value, { openId: newer.id, requested: "scheduled", mailIntent: mailId });
+    expect(html).toContain("<dialog");
+    expect(html).toContain("That outcome no longer applies");
+  });
+
+  describe("a mail link on the open row", () => {
+    const mailId = "00000000-0000-4000-8000-0000000000dd";
+    const sourceFor = (recordId: string) => ({ recordId, id: mailId, subject: "Interview invite" });
+
+    it("says so, offers link-only and opens the email when the outcome no longer applies", () => {
+      // A round is booked, so "scheduled" cannot be added again.
+      const booked = rowFor(newer, mailDay(mailItem(mailId, "Interview invite", newer.id)));
+      const html = render(data([booked], { source: sourceFor(newer.id) }), {
+        openId: newer.id,
+        requested: "scheduled",
+        mailIntent: mailId,
+      });
+      expect(html).toContain("From this email:");
+      expect(html).toContain("Interview invite");
+      expect(html).toContain("That outcome no longer applies");
+      expect(html).toContain("Link without recording an outcome");
+      expect(html).toContain(`name="mailId" value="${mailId}"`);
+      expect(html).toContain(`name="recordId" value="${newer.id}"`);
+      expect(html).toContain(`value="/companies/oracle?open=${newer.id}"`);
+      expect(html).toContain("<dialog");
+    });
+
+    it("shows the source beside the add-step panel, with link-only, when the outcome applies", () => {
+      const sent = rowFor(older, mailDay(mailItem(mailId, "Interview invite", older.id)));
+      const html = render(data([sent], { source: sourceFor(older.id) }), {
+        openId: older.id,
+        requested: "scheduled",
+        mailIntent: mailId,
+      });
+      expect(html.match(/From this email:/g)).toHaveLength(1);
+      expect(html).toContain('name="outcome" value="scheduled"');
+      expect(html).toContain("Link without recording an outcome");
+      expect(html).not.toContain("no longer applies");
+      expect(html).not.toContain("<dialog");
+    });
   });
 
   it("shows an unsent record with Record as sent in place of Add step", () => {

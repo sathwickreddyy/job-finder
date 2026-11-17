@@ -5,6 +5,9 @@ import { ChevronRight } from "lucide-react";
 import { initialOutcome, type OutcomeId } from "@/features/applications/phase";
 import type { NamedStep } from "@/features/applications/named-steps";
 import { NamedSteps } from "@/features/applications/views/named-steps";
+import { ActionForm } from "@/components/action-form";
+import { Button } from "@/components/ui";
+import { linkMailOnly } from "@/features/mail/triage-actions";
 import { MailDialogButton } from "@/features/mail/mail-dialog";
 import { OutcomeChips } from "@/features/applications/views/outcome-chips";
 import { cn } from "@/lib/utils";
@@ -134,6 +137,7 @@ export function Tracker({
   today,
   booked,
   returnTo,
+  rowHref,
   source,
 }: {
   steps: NamedStep[];
@@ -148,6 +152,8 @@ export function Tracker({
   booked?: { name: string; scheduledAt: Date | null };
   /** Where a saved outcome returns to, so an email or outcome query leaves the URL. */
   returnTo?: string;
+  /** This application's open row; where linking an email without an outcome returns to. */
+  rowHref?: string;
   /** The email the outcome link came from, or why it cannot be used. */
   source?: { id?: string; subject?: string; error?: string };
 }) {
@@ -162,6 +168,8 @@ export function Tracker({
     if (initial !== null) setAdding(true);
   }
   const panel = useId();
+  // The email is named on the row whenever a link brings one; the outcome may no longer apply.
+  const notApplicable = requested !== undefined && initial === null && !source?.error;
   const toggle = addable.length > 0 && (
     <button
       type="button"
@@ -178,23 +186,38 @@ export function Tracker({
     <div className="min-w-0 space-y-4">
       <NamedSteps steps={steps} size="page" add={inline ? toggle : undefined} />
       {!inline && toggle}
+      {source?.id && (
+        <div className="space-y-2 text-sm">
+          <p className="m-0 [overflow-wrap:anywhere]">
+            From this email:{" "}
+            <MailDialogButton
+              mailId={source.id}
+              className="text-left font-medium underline decoration-current/40 underline-offset-2 hover:decoration-current"
+            >
+              {source.subject || "(no subject)"}
+            </MailDialogButton>
+          </p>
+          {notApplicable && (
+            <p role="status" className="m-0 text-muted-foreground">
+              That outcome no longer applies to this application. You can still link the email.
+            </p>
+          )}
+          <ActionForm action={linkMailOnly} feedback="inverse" pendingLabel="Linking">
+            <input type="hidden" name="mailId" value={source.id} />
+            <input type="hidden" name="recordId" value={recordId} />
+            {rowHref && <input type="hidden" name="returnTo" value={rowHref} />}
+            <Button variant="outline" size="sm" className="rounded-full">
+              Link without recording an outcome
+            </Button>
+          </ActionForm>
+        </div>
+      )}
       {/* Stays mounted after a save so the chips can restore focus; the box hides itself. */}
       {adding && (
         <div
           id={panel}
           className="rounded-2xl p-4 ring-1 ring-border has-[>[hidden]:only-child]:hidden"
         >
-          {source?.id && (
-            <p className="m-0 mb-3 text-sm [overflow-wrap:anywhere]">
-              From this email:{" "}
-              <MailDialogButton
-                mailId={source.id}
-                className="text-left font-medium underline decoration-current/40 underline-offset-2 hover:decoration-current"
-              >
-                {source.subject || "(no subject)"}
-              </MailDialogButton>
-            </p>
-          )}
           <OutcomeChips
             key={`add-${recordId}`}
             recordId={recordId}

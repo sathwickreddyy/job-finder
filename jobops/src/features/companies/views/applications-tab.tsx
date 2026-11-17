@@ -92,6 +92,17 @@ function Facts({ row }: { row: CompanyApplicationRow }) {
   );
 }
 
+const addableOf = (row: CompanyApplicationRow) =>
+  row.outcomes.filter((id) => !notAdded.includes(id));
+/** Whether a requested outcome opens + Add step (so the email popup stays shut) for this row. */
+const panelOpensFor = (
+  row: CompanyApplicationRow,
+  requested: string | undefined,
+  source: CompanyApplications["source"] | undefined,
+) =>
+  requested !== undefined &&
+  (initialOutcome(addableOf(row), requested) !== null || !!source?.error);
+
 function RowBody({
   row,
   data,
@@ -120,9 +131,13 @@ function RowBody({
     .sort((a, b) => a.position - b.position)
     .find((round) => round.outcome === "SCHEDULED");
   // A selection carried in the URL (an email, an outcome link) is dropped once it is saved.
-  const returnTo = requested
-    ? `${companyPageHref(record)}?${new URLSearchParams({ open: record.id })}`
-    : undefined;
+  const addable = addableOf(row);
+  const rowHref = `${companyPageHref(record)}?${new URLSearchParams({ open: record.id })}`;
+  const returnTo = requested ? rowHref : undefined;
+  const source = data.source?.recordId === record.id ? data.source : undefined;
+  // The email popup stands in for the panel only when the requested outcome cannot be recorded.
+  const panelOpen =
+    requested !== undefined && (initialOutcome(addable, requested) !== null || !!source?.error);
   const followUpChip: OutcomeId[] = row.outcomes.includes("followup") ? ["followup"] : [];
   const recorded = autoOutcomeOf(record);
   // Only an outcome asked for in the URL carries the email it came from.
@@ -192,13 +207,14 @@ function RowBody({
           key={`tracker-${record.id}`}
           steps={row.steps}
           recordId={record.id}
-          addable={row.outcomes.filter((id) => !notAdded.includes(id))}
+          addable={addable}
           requested={requested}
           mailId={sourceMail}
           today={today}
           booked={booked}
           returnTo={returnTo}
-          source={data.source?.recordId === record.id ? data.source : undefined}
+          rowHref={rowHref}
+          source={source}
         />
         {editable && isOutreach(record.source) && (
           <p className="m-0 text-sm text-muted-foreground">
@@ -272,7 +288,7 @@ function RowBody({
         roles={[]}
         allRolesHref=""
         role={null}
-        openMail={requested ? null : (mailIntent ?? null)}
+        openMail={panelOpen ? null : (mailIntent ?? null)}
         olderHref={row.olderHref}
         inboxes={inboxes}
         requisition={record.requisition}
@@ -315,6 +331,12 @@ export function ApplicationsTab({
       day.entries.some((entry) => entry.type === "mail" && entry.item.id === mailIntent),
     );
   const mailRow = data.rows.find(holdsMail)?.record.id ?? null;
+  // The unplaced popup stays shut only while the targeted row's own panel takes the request.
+  const targetRow = data.rows.find((row) => row.record.id === target);
+  const unplacedOpen =
+    targetRow && panelOpensFor(targetRow, requested, data.source ?? undefined)
+      ? null
+      : (mailIntent ?? null);
   const first =
     target ?? mailRow ?? data.rows.find((row) => row.record.phase !== "Closed")?.record.id;
   return (
@@ -379,7 +401,7 @@ export function ApplicationsTab({
             roles={[]}
             allRolesHref=""
             role={null}
-            openMail={requested ? null : (mailIntent ?? null)}
+            openMail={unplacedOpen}
             olderHref={data.unplacedOlderHref}
             inboxes={inboxes}
           />

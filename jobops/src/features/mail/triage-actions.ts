@@ -50,13 +50,16 @@ export async function linkMailOnly(_state: ActionState, form: FormData): Promise
       ? "Message linked to your record."
       : "Message already linked to this record.";
     const returnTo = formString(form, "returnTo");
+    const row = safeRowReturnTo(returnTo);
     const back = safeReturnTo(returnTo);
     destination =
       returnTo === "record"
         ? `/applications/${recordId}?notice=${encodeURIComponent(notice)}`
-        : back
-          ? withNotice(back, notice)
-          : emailsNotice(notice);
+        : row
+          ? withNotice(row, notice)
+          : back
+            ? withNotice(back, notice)
+            : emailsNotice(notice);
   } catch (error) {
     return actionError(error);
   }
