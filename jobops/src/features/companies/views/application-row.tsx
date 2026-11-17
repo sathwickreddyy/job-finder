@@ -21,7 +21,7 @@ const tones = {
   muted: "bg-muted text-muted-foreground",
 } satisfies Record<NamedStep["tone"], string>;
 const rails = {
-  applied: "bg-selected-foreground",
+  applied: "bg-primary",
   interviewing: "bg-review",
   offer: "bg-success",
   bad: "bg-destructive",
@@ -101,17 +101,16 @@ export function ApplicationRow({
         onClick={() => setOpen(!open)}
         className="relative flex w-full min-w-0 flex-wrap items-center gap-x-4 gap-y-2 py-3.5 pr-4 pl-5 text-left hover:bg-muted/40 sm:pr-5 sm:pl-6"
       >
-        <span aria-hidden className={cn("absolute inset-y-0 left-0 w-1.5", rails[tone])} />
+        <span
+          aria-hidden
+          data-rail={tone}
+          className={cn("absolute inset-y-3 left-0 w-1 rounded-r-full", rails[tone])}
+        />
         <span className="min-w-0 basis-48 flex-1">
           <span className="flex min-w-0 items-center gap-2">
             <span className="min-w-0 truncate text-sm font-semibold" title={role}>
               {role}
             </span>
-            {newCount > 0 && (
-              <span className="shrink-0 rounded-full bg-primary px-2 py-0.5 text-xs font-medium text-primary-foreground">
-                {newCount} new
-              </span>
-            )}
           </span>
           <span className="block truncate text-xs text-muted-foreground" title={meta}>
             {meta}
@@ -119,14 +118,18 @@ export function ApplicationRow({
         </span>
         <StepProgress steps={steps} />
         <span className="flex min-w-0 max-w-full flex-col items-start gap-0.5 sm:items-end">
-          <span
-            className={cn(
-              "max-w-full min-w-0 truncate rounded-full px-2.5 py-0.5 text-xs",
-              tones[tone],
+          <span className="flex max-w-full min-w-0 items-center gap-2">
+            {newCount > 0 && (
+              <span className="shrink-0 rounded-full bg-primary px-2 py-0.5 text-xs font-medium text-primary-foreground">
+                {newCount} new
+              </span>
             )}
-            title={pill}
-          >
-            {pill}
+            <span
+              className={cn("min-w-0 truncate rounded-full px-2.5 py-0.5 text-xs", tones[tone])}
+              title={pill}
+            >
+              {pill}
+            </span>
           </span>
           {detail && (
             <small className={cn("text-xs", due ? "text-warning" : "text-muted-foreground")}>

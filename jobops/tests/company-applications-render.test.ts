@@ -260,7 +260,15 @@ describe("company page applications", () => {
 
     it("tints the rail by tone and shows the pill with its detail beneath", () => {
       const html = render(data(rows));
-      expect(buttonOf(html, newer.id)).toContain("bg-review");
+      const rail = (id: string) =>
+        buttonOf(html, id)
+          .match(/<span[^>]*data-rail="(\w+)"[^>]*class="([^"]*)"/)
+          ?.slice(1);
+      expect(rail(newer.id)?.[0]).toBe("interviewing");
+      expect(rail(newer.id)?.[1]).toContain("bg-review");
+      expect(rail(older.id)?.[0]).toBe("applied");
+      expect(rail(older.id)?.[1]).toContain("bg-primary");
+      expect(rail(older.id)?.[1]).toContain("w-1 ");
       expect(buttonOf(html, newer.id)).toContain("Booked 20 Nov");
     });
 
