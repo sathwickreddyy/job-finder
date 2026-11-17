@@ -48,7 +48,6 @@ export function HeaderMenu({
         ref={trigger}
         type="button"
         aria-label="More company actions"
-        aria-haspopup="true"
         aria-expanded={open}
         aria-controls={menuId}
         onClick={() => setOpen((value) => !value)}
@@ -115,7 +114,7 @@ export function HeaderMenu({
             </button>
           </header>
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-5 sm:px-6">
-            <PreviousJobForm company={company} />
+            <PreviousJobForm company={company} onSaved={() => setDialog(false)} />
           </div>
         </Modal>
       )}

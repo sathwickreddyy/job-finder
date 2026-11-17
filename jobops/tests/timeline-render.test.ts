@@ -484,6 +484,26 @@ describe("CompanyTimeline", () => {
       expect(html.indexOf('aria-label="New"')).toBeLessThan(html.indexOf('id="mail-m2"'));
     });
 
+    it("leaves the New dot off the all-mail feed, which has no per-application timeline", () => {
+      const html = one({
+        requisition: undefined,
+        days: [
+          {
+            ...mailDay,
+            entries: [
+              {
+                type: "mail",
+                at: "2026-10-31T03:00:00.000Z",
+                item: item("m9", { attention: "open" }),
+                recorded: null,
+              },
+            ],
+          },
+        ],
+      });
+      expect(html).not.toContain('aria-label="New"');
+    });
+
     it("renders the toolbar and composer slots around the feed", () => {
       const html = one({
         toolbarEnd: createElement("i", { id: "tb" }),

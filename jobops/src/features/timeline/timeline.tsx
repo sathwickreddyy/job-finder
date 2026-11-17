@@ -187,7 +187,7 @@ function MailRow({
             <span aria-hidden className="flex">
               <TagPill tag={item.tag} />
             </span>
-            {needs && (
+            {needs && requisition !== undefined && (
               <span
                 role="img"
                 aria-label="New"

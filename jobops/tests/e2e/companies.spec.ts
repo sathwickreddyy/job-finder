@@ -191,8 +191,12 @@ test("company search and separate city sections work on mobile", async ({ page }
   await expect(page.getByRole("button", { name: "More company actions" })).toBeFocused();
   await page.getByRole("button", { name: "More company actions" }).click();
   await page.getByRole("button", { name: "Add previous job" }).click();
-  await expect(page.getByRole("dialog", { name: "Add previous job" })).toBeVisible();
-  await page.keyboard.press("Escape");
+  const previous = page.getByRole("dialog", { name: "Add previous job" });
+  await expect(previous).toBeVisible();
+  // Saving closes the dialog, so a second click cannot save the same job twice.
+  await previous.getByLabel("Role title").fill("SDE I");
+  await previous.getByLabel("Joined").fill("2022-04");
+  await previous.getByRole("button", { name: "Add previous job" }).click();
   await expect(page.getByRole("dialog")).toBeHidden();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
     true,

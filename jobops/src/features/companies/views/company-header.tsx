@@ -95,10 +95,11 @@ export function CompanyHeader({
         <div className="flex flex-wrap items-center gap-2">
           <Link
             href={mailHref({ company: normalizeCompany(name) })}
-            className="flex min-h-10 items-center rounded-full border border-input px-4 text-sm font-medium hover:bg-muted hover:no-underline"
+            aria-label="Company mail"
+            className="flex size-10 shrink-0 items-center justify-center rounded-full border border-input text-sm font-medium hover:bg-muted hover:no-underline sm:size-auto sm:min-h-10 sm:px-4"
           >
-            <Mail aria-hidden size={16} className="mr-1.5 shrink-0" />
-            Company mail
+            <Mail aria-hidden size={16} className="shrink-0 sm:mr-1.5" />
+            <span className="hidden sm:inline">Company mail</span>
           </Link>
           <Link
             href={action.href}

@@ -159,6 +159,7 @@ export function ApplicationsTab({
               className="shrink-0 text-muted-foreground transition-transform group-open:rotate-90"
             />
             Other company mail · {handled}
+            {data.unplacedOlderHref ? "+" : ""}
           </summary>
           <div className="px-3 pb-3 sm:px-4 sm:pb-4">
             <CompanyTimeline

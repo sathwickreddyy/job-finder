@@ -16,6 +16,7 @@ import type { TimelineDay } from "@/features/timeline/entries";
 import type { RailDue } from "@/features/timeline/index-rows";
 import { mailCursor } from "@/features/timeline/query";
 import { readOpenMail } from "@/features/mail/read";
+import { loadMailContext } from "@/features/mail/context";
 import { listMail } from "@/features/mail/mail-list";
 import { timelineEntries } from "@/features/timeline/entries";
 import {
@@ -177,6 +178,8 @@ export async function readCompanyApplications(
         a.id.localeCompare(b.id),
     );
   const noApplication = [isNull(mailMessages.linkedApplicationId)];
+  // One mail context serves the tray, the handled page and the first-page re-read below.
+  const mailContext = await loadMailContext();
   const [rows, fresh, loose, index, search, versions] = await Promise.all([
     Promise.all(
       own.map(async (record): Promise<CompanyApplicationRow> => {
@@ -211,7 +214,7 @@ export async function readCompanyApplications(
       }),
     ),
     // Open mail on no application is the new-mail tray: its first page only.
-    listMail({ company: companyKey, attention: "open" }, undefined, noApplication),
+    listMail({ company: companyKey, attention: "open" }, mailContext, noApplication),
     // Handled mail on no application is paged on its own, so older mail is never cut off.
     listMail(
       {
@@ -219,7 +222,7 @@ export async function readCompanyApplications(
         attention: "handled",
         ...(unplacedCursor ? { cursor: unplacedCursor } : {}),
       },
-      undefined,
+      mailContext,
       noApplication,
     ),
     readCompanyIndex({}, now),
@@ -248,7 +251,7 @@ export async function readCompanyApplications(
       ? readCompanyTimeline(companyKey, { application: open }, now).then((item) => item.days)
       : null,
     unplacedCursor
-      ? listMail({ company: companyKey, attention: "handled" }, undefined, noApplication).then(
+      ? listMail({ company: companyKey, attention: "handled" }, mailContext, noApplication).then(
           placeLoose,
         )
       : null,

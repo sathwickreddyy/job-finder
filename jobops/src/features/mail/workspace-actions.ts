@@ -184,8 +184,12 @@ export async function markAllJustInfoAction(
 ): Promise<ActionState> {
   try {
     const ids = z.array(z.uuid()).min(1).max(50).parse(form.getAll("ids").map(String));
-    for (const id of ids) await handleMail(id, { justInfo: true });
-    invalidate();
+    try {
+      for (const id of ids) await handleMail(id, { justInfo: true });
+    } finally {
+      // A failure part-way leaves some emails handled; the tray must stop showing them.
+      invalidate();
+    }
     return {
       success: `Marked ${ids.length} ${ids.length === 1 ? "email" : "emails"} as just info.`,
     };
