@@ -43,11 +43,51 @@ describe("namedStepsOf", () => {
     expect(steps[1]).toMatchObject({ key: "acknowledged", target: `mail-${mailId}` });
   });
 
-  it("targets the acknowledgement event when it has no mail", () => {
+  it("has no target for an acknowledgement with no mail, since the timeline draws no card for it", () => {
     const id = uid();
     const ack = event(id, "ACKNOWLEDGEMENT_RECEIVED", at("2026-10-03T09:00:00"));
     const steps = namedStepsOf(record({ id, events: [ack] }), NOW);
-    expect(steps[1].target).toBe(`entry-${ack.id}`);
+    expect(steps[1].target).toBeNull();
+  });
+
+  it("targets the email an outcome was recorded from, not an entry the timeline folds away", () => {
+    const id = uid();
+    const r1 = round(id, { kind: "DSA", position: 1, scheduledAt: at("2026-11-16T12:00:00") });
+    const mailIds = [uid(), uid(), uid()];
+    const scheduled = event(id, "INTERVIEW_SCHEDULED", at("2026-11-11T17:39:00"), {
+      payload: { roundId: r1.id, mailMessageId: mailIds[0] },
+    });
+    const offer = event(id, "OFFER_RECEIVED", at("2026-11-20T10:00:00"), {
+      payload: { mailMessageId: mailIds[1] },
+    });
+    const steps = namedStepsOf(
+      record({
+        id,
+        status: "OFFER",
+        phase: "Interviewing",
+        events: [scheduled, offer],
+        rounds: [{ ...r1, outcome: "PASSED" }],
+      }),
+      NOW,
+    );
+    expect(steps.find((step) => step.key === `scheduled-${r1.id}`)?.target).toBe(
+      `mail-${mailIds[0]}`,
+    );
+    expect(steps.find((step) => step.key === "final")?.target).toBe(`mail-${mailIds[1]}`);
+    const rejection = event(id, "REJECTION_RECEIVED", at("2026-11-22T10:00:00"), {
+      payload: { mailMessageId: mailIds[2] },
+    });
+    const closed = namedStepsOf(
+      record({
+        id,
+        status: "REJECTED",
+        phase: "Closed",
+        closedReason: "REJECTED",
+        events: [rejection],
+      }),
+      NOW,
+    );
+    expect(closed.at(-1)?.target).toBe(`mail-${mailIds[2]}`);
   });
 
   it("adds Interview scheduled before each round and never predicts", () => {

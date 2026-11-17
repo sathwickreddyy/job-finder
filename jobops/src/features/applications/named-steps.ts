@@ -15,6 +15,18 @@ export type NamedStep = {
 export type StepSource = JourneySource;
 type EventRow = JourneySource["events"][number];
 
+/**
+ * What a step links to. The timeline folds an event recorded from an email into that email's row
+ * (and drops mail-only events), so those point at `mail-<id>`; no `entry-` card exists for them.
+ */
+const MAIL_ONLY = new Set(["MAIL_LINKED", "MAIL_UNLINKED", "ACKNOWLEDGEMENT_RECEIVED"]);
+function targetOf(event: EventRow | null | undefined): string | null {
+  if (!event) return null;
+  const mailId = event.payload.mailMessageId;
+  if (typeof mailId === "string") return `mail-${mailId}`;
+  return MAIL_ONLY.has(event.eventType) ? null : `entry-${event.id}`;
+}
+
 const day = (value: Date | null) => (value ? formatDay(value) : "");
 const join = (...parts: string[]) => parts.filter(Boolean).join(" · ");
 const earliestEvent = (events: EventRow[]) =>
@@ -95,12 +107,7 @@ export function namedStepsOf(record: StepSource, now: Date): NamedStep[] {
   const ackMail = record.linkedMail
     .filter((mail) => mail.classification === "APPLICATION_ACKNOWLEDGEMENT")
     .sort((a, b) => a.receivedAt.getTime() - b.receivedAt.getTime())[0];
-  const ackMailId =
-    typeof ackEvent?.payload.mailMessageId === "string"
-      ? ackEvent.payload.mailMessageId
-      : ackEvent
-        ? null
-        : (ackMail?.id ?? null);
+  const ackTarget = targetOf(ackEvent) ?? (ackMail ? `mail-${ackMail.id}` : null);
 
   const steps: NamedStep[] = [
     {
@@ -109,7 +116,7 @@ export function namedStepsOf(record: StepSource, now: Date): NamedStep[] {
       detail: day(sent.at),
       state: reached(sent) ? "done" : "ahead",
       tone: "applied",
-      target: submitted ? `entry-${submitted.id}` : null,
+      target: targetOf(submitted),
     },
   ];
   if (reached(acknowledged))
@@ -119,7 +126,7 @@ export function namedStepsOf(record: StepSource, now: Date): NamedStep[] {
       detail: day(acknowledged.at),
       state: "done",
       tone: "applied",
-      target: ackMailId ? `mail-${ackMailId}` : ackEvent ? `entry-${ackEvent.id}` : null,
+      target: ackTarget,
     });
 
   const rounds = record.rounds
@@ -142,7 +149,7 @@ export function namedStepsOf(record: StepSource, now: Date): NamedStep[] {
         : day(received),
       state: "done",
       tone: "interviewing",
-      target: announced ? `entry-${announced.id}` : null,
+      target: targetOf(announced),
     });
     const label = labels[index];
     const { detail, due } = roundDetail(round, now);
@@ -189,7 +196,7 @@ export function namedStepsOf(record: StepSource, now: Date): NamedStep[] {
       detail: join(settled, day(offer.at)),
       state: "done",
       tone: settled === "Accepted" ? "offer" : "muted",
-      target: offerEvent ? `entry-${offerEvent.id}` : null,
+      target: targetOf(offerEvent),
     };
   else if (closed) {
     const withdrew = record.closedReason === "WITHDREW" || record.status === "WITHDRAWN";
@@ -199,7 +206,7 @@ export function namedStepsOf(record: StepSource, now: Date): NamedStep[] {
       detail: day(stopped?.at ?? closeEvent?.occurredAt ?? null),
       state: "stopped",
       tone: rejected ? "bad" : "muted",
-      target: closeEvent ? `entry-${closeEvent.id}` : null,
+      target: targetOf(closeEvent),
     };
   } else if (reached(offer))
     final = {
@@ -208,7 +215,7 @@ export function namedStepsOf(record: StepSource, now: Date): NamedStep[] {
       detail: day(offer.at),
       state: "done",
       tone: "offer",
-      target: offerEvent ? `entry-${offerEvent.id}` : null,
+      target: targetOf(offerEvent),
     };
   else
     final = {
