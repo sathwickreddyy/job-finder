@@ -8,3 +8,4 @@
 - [Confirmed work skills](confirmed-work-skills.md) — MongoDB, Spark used at work; Kotlin, Micronaut not (2026-11-03)
 - [Fill forms without asking](fill-forms-without-asking.md) — fill from résumé + JobOps profile; ask only for facts stored nowhere
 - [Pane file-attach workaround](pane-file-attach-workaround.md) — historical browser pane attachment behavior and the current upload instructions
+- [UI fixes: gallery before code](ui-fix-gallery-before-code.md) — mark issues on current UI, then before/after gallery of chosen items, then code; small cohesive files
