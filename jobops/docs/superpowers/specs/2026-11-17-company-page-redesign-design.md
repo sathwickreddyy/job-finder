@@ -1,6 +1,6 @@
 # Company page redesign
 
-Status: draft for approval · 2026-11-17 · builds on
+Status: approved · implemented on company-page-redesign · 2026-11-17 · builds on
 [company application tracking](2026-11-16-company-application-tracking-design.md)
 
 ## Why
