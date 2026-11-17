@@ -81,9 +81,6 @@ async function sourceOf(
   }
 }
 
-/** A round's result chips; only the round the outcome service settles may offer them. */
-const roundResults: OutcomeId[] = ["passed", "failed", "rescheduled"];
-
 const handlingOf = (days: TimelineDay[], roles: Parameters<typeof suggestHandling>[1]) =>
   Object.fromEntries(
     days.flatMap((day) =>
@@ -121,22 +118,17 @@ async function questionsOf(id: string) {
 function roundCardsOf(
   record: ApplicationRecord,
   questions: Awaited<ReturnType<typeof listRoundQuestions>>,
-  outcomes: OutcomeId[],
   now: Date,
 ) {
-  const rounds = [...record.rounds].sort((a, b) => a.position - b.position);
-  // The outcome service settles the first booked round by position; no other card may offer it.
-  const booked = rounds.find((round) => round.outcome === "SCHEDULED");
   return Object.fromEntries(
-    rounds
+    [...record.rounds]
+      .sort((a, b) => a.position - b.position)
       .filter((round) => round.outcome !== "CANCELLED")
       .map((round): [string, RoundCardData] => [
         round.id,
         {
           recordId: record.id,
           questions: questions.find((item) => item.id === round.id)?.questions ?? [],
-          outcomes:
-            round.id === booked?.id ? roundResults.filter((id) => outcomes.includes(id)) : [],
           today: indiaDate(now),
         },
       ]),
@@ -212,7 +204,7 @@ export async function readCompanyApplications(
           olderHref: timeline.nextCursor
             ? `?${new URLSearchParams({ open: record.id, cursor: timeline.nextCursor })}#application-${record.id}`
             : null,
-          roundCards: roundCardsOf(record, questions, outcomes, now),
+          roundCards: roundCardsOf(record, questions, now),
           scores,
           outcomes,
         };

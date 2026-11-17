@@ -200,12 +200,10 @@ describe.skipIf(!dbTests)("company applications", () => {
     expect(older.scores).toBeNull();
   });
 
-  it("offers a round's result only on the booked round", async () => {
+  it("gives each round card its questions and today's date", async () => {
     const { rows } = await readCompanyApplications(key, {}, now);
     const { roundCards } = rows[0];
     expect(Object.keys(roundCards).sort()).toEqual([made.round1, made.round2].sort());
-    expect(roundCards[made.round2].outcomes).toEqual(["passed", "failed", "rescheduled"]);
-    expect(roundCards[made.round1].outcomes).toEqual([]);
     expect(roundCards[made.round2]).toMatchObject({ recordId: made.newer, today: "2026-11-16" });
   });
 

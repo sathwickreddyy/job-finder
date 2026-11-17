@@ -71,6 +71,24 @@ test("the tracker's round step scrolls to the round card and opens its questions
   await expect(card).toBeInViewport();
 });
 
+test("a booked round's result is recorded from the current-step box, once", async ({ page }) => {
+  const { applicationId, roundId } = await seedWithRound();
+  await page.goto(`/applications/${applicationId}`);
+  const row = page.locator(`#application-${applicationId}`);
+  const box = row.getByTestId("current-step");
+  await expect(box).toContainText("Round 1 · DSA was on");
+  await expect(row.getByRole("button", { name: "Cleared the round" })).toHaveCount(1);
+  await expect(box.getByRole("button", { name: "Cleared the round" })).toBeVisible();
+  await expect(
+    page.locator(`#round-${roundId}`).getByRole("button", { name: "Rescheduled" }),
+  ).toHaveCount(0);
+  await hydrated(box.getByRole("button", { name: "Cleared the round" }));
+  await box.getByRole("button", { name: "Cleared the round" }).click();
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(page.locator(`#round-${roundId}`)).toContainText("Cleared");
+  await expect(row.getByRole("button", { name: "Cleared the round" })).toHaveCount(0);
+});
+
 test("notes, details and the résumé preview open from the row", async ({ page }) => {
   const { applicationId } = await seedWithRound();
   const slug = `e2e-${Date.now()}`;

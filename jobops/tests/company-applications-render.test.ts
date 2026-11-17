@@ -423,11 +423,75 @@ describe("company page applications", () => {
     expect(html).toContain(`name="mailId" value="${mailId}"`);
   });
 
-  it("leaves a round's result to its card, not the add-step chips", () => {
+  it("leaves a round's result to the current step, not the add-step chips", () => {
     const html = render(data(rows), { openId: newer.id, requested: "rejected" });
     expect(html).toContain("Rejected");
-    for (const label of ["Cleared the round", "Didn&#x27;t clear it", "Rescheduled"])
-      expect(html).not.toContain(label);
+    expect(html.match(/Cleared the round/g)).toHaveLength(1);
+    expect(html.indexOf('data-testid="current-step"')).toBeLessThan(
+      html.indexOf("Cleared the round"),
+    );
+  });
+
+  describe("current step", () => {
+    const booked = (when: Date | null) =>
+      application({ rounds: [round("a", { scheduledAt: when })] });
+    const open = (full: ApplicationRecord) => render(data([rowFor(full)]), { openId: full.id });
+
+    it("says a past round was on its day, with each result button once on the page", () => {
+      const html = open(booked(at("2026-11-16T09:00:00")));
+      expect(html).toContain("Round 1 · DSA was on 16 Nov");
+      for (const label of ["Cleared the round", "Didn&#x27;t clear it", "Rescheduled"])
+        expect(html.match(new RegExp(`>${label}<`, "g"))).toHaveLength(1);
+      expect(html.indexOf("was on 16 Nov")).toBeLessThan(html.indexOf("Cleared the round"));
+      expect(html.indexOf('data-testid="row-aside"')).toBeGreaterThan(html.indexOf("was on"));
+    });
+
+    it("says a future round is on its day, and a round without a time has no date", () => {
+      expect(open(booked(at("2026-11-20T11:00:00")))).toContain("Round 1 · DSA is on 20 Nov");
+      expect(open(booked(null))).toContain("Round 1 · DSA · Date not set");
+    });
+
+    it("shows nothing when no round is booked", () => {
+      const html = open(application({ rounds: [round("a", { outcome: "PASSED" })] }));
+      expect(html).not.toContain("was on");
+      expect(html).not.toContain("Cleared the round");
+    });
+
+    const unsent = (source?: string) =>
+      application({
+        phase: "Preparing",
+        status: "PREPARING",
+        sentAt: null,
+        events: [],
+        resume: null,
+        resumeVersionId: null,
+        ...(source ? { source } : {}),
+      } as Partial<ApplicationRecord>);
+
+    it("leads an unsent record with Not sent yet, Record as sent and Not applying", () => {
+      const html = open(unsent());
+      for (const text of ["Not sent yet", "Record as sent", "Not applying"])
+        expect(html).toContain(text);
+      expect(html).not.toContain("Open outreach prompt");
+    });
+
+    it("adds the outreach links to an unsent outreach record", () => {
+      const html = open(unsent("REFERRAL"));
+      expect(html).toContain("Open outreach prompt");
+      expect(html).toContain("Record a direct application");
+    });
+
+    it("offers Reopen inside the box for a record closed as not applying", () => {
+      const closed = application({
+        phase: "Closed",
+        status: "CLOSED",
+        closedReason: "WITHDREW",
+        sentAt: null,
+        events: [],
+      } as Partial<ApplicationRecord>);
+      const html = open(closed);
+      expect(html.indexOf("Reopen")).toBeGreaterThan(html.indexOf('data-testid="current-step"'));
+    });
   });
 
   it("opens the row holding the email a link names, and nothing else", () => {

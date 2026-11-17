@@ -425,7 +425,6 @@ describe("CompanyTimeline", () => {
     const data = {
       recordId: "a",
       questions: [question],
-      outcomes: ["passed" as const, "failed" as const, "rescheduled" as const, "rejected" as const],
       today: "2026-10-31",
     };
     const stepDay: TimelineDay = {
@@ -487,7 +486,7 @@ describe("CompanyTimeline", () => {
       expect(html).toContain("Interviewer not recorded");
     });
 
-    it("opened, lists the questions and the round notes with only round outcomes", () => {
+    it("opened, lists the questions and the round notes with no result buttons", () => {
       const html = renderToStaticMarkup(
         createElement(RoundCard, { entry: entry(), data, defaultOpen: true, requisition: null }),
       );
@@ -497,9 +496,8 @@ describe("CompanyTimeline", () => {
       expect(html).toContain("Round notes");
       expect(html).toContain("Edit round");
       expect(html).toContain("No requisition");
-      for (const label of ["Cleared the round", "Didn&#x27;t clear it", "Rescheduled"])
-        expect(html.replace(/&#39;/g, "&#x27;")).toContain(label);
-      expect(html).not.toContain("Rejected");
+      for (const label of ["Cleared the round", "Didn&#x27;t clear it", "Rescheduled", "Rejected"])
+        expect(html.replace(/&#39;/g, "&#x27;")).not.toContain(label);
     });
 
     it("labels results Booked, Cleared and Didn't clear", () => {

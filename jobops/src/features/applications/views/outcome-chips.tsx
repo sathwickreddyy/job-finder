@@ -54,6 +54,7 @@ export function OutcomeChips({
   mailError,
   selectionKey,
   returnTo,
+  compact,
 }: {
   recordId: string;
   outcomes: OutcomeId[];
@@ -63,6 +64,8 @@ export function OutcomeChips({
   mailError?: string;
   selectionKey?: string;
   returnTo?: string;
+  /** Leave out the "What happened?" heading when the surrounding box already asks. */
+  compact?: boolean;
   today: string;
   booked?: { name: string; scheduledAt: Date | null };
 }) {
@@ -116,7 +119,7 @@ export function OutcomeChips({
   return (
     <div ref={container} data-outcome-chips>
       {confirmation && <Confirmation message={confirmation} />}
-      {outcomes.length > 0 && (
+      {outcomes.length > 0 && !compact && (
         <h3 className="m-0 mb-2.5 text-base font-semibold">What happened?</h3>
       )}
       <div className="flex flex-wrap gap-2">

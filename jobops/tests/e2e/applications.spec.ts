@@ -46,10 +46,9 @@ test("recording outcomes walks an application from OA to an accepted offer", asy
     await chip.click();
   };
   const rounds = row.locator('li[id^="round-"]');
-  const roundResult = async (card: ReturnType<typeof rounds.filter>, name: string) => {
-    if ((await card.getByRole("button", { expanded: true }).count()) === 0)
-      await card.getByRole("button").first().click();
-    await card.getByRole("button", { name, exact: true }).click();
+  // The booked round's result is recorded from the current-step box, not the round's card.
+  const roundResult = async (name: string) => {
+    await row.getByTestId("current-step").getByRole("button", { name, exact: true }).click();
     await save();
   };
   await expect(phase).toHaveText("Applied");
@@ -77,7 +76,7 @@ test("recording outcomes walks an application from OA to an accepted offer", asy
   await expect(page.getByLabel("Complete by (India time)")).toHaveCount(0);
   await expect(phase).toContainText("OA");
 
-  await roundResult(rounds.filter({ hasText: "OA" }), "Cleared the round");
+  await roundResult("Cleared the round");
   await expect(row).toContainText("Cleared the OA round");
 
   await addStep("Round scheduled");
@@ -99,9 +98,10 @@ test("recording outcomes walks an application from OA to an accepted offer", asy
   await happened.fill(istDay());
   await save();
   await expect(row).toContainText("LLD round scheduled");
-  const lld = rounds.filter({ hasText: "LLD" });
-  await lld.getByRole("button").first().click();
-  await lld.getByRole("button", { name: "Rescheduled", exact: true }).click();
+  await row
+    .getByTestId("current-step")
+    .getByRole("button", { name: "Rescheduled", exact: true })
+    .click();
   await expect(page.getByLabel("Date (India time)")).toHaveValue(istDay(5));
   await expect(page.getByLabel("Time", { exact: true })).toHaveValue("11:00");
   await page.getByLabel("Date (India time)").fill(istDay(6));
@@ -147,7 +147,7 @@ test("recording outcomes walks an application from OA to an accepted offer", asy
   await expect(row).toContainText("Discussed system design preparation");
   await expect(row.getByRole("button", { name: "Got an offer", exact: true })).toHaveCount(0);
 
-  await roundResult(rounds.filter({ hasText: "LLD" }), "Cleared the round");
+  await roundResult("Cleared the round");
   await addStep("Got an offer");
   await save();
   await expect(phase).toHaveText("Offer");
