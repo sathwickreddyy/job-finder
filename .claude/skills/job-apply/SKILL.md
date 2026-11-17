@@ -40,6 +40,8 @@ Use [referral deadlines and handoffs](references/referrals-and-handoff.md). Sche
 
 Fetch the explicit master and its **current DOCX revision through JobOps**, not the newest filename. Read applied PDFs/fits as examples; the current master and confirmed corrections govern facts.
 
+Use the complete confirmed background, including separately labelled project evidence. An older tailored PDF does not define the user's specialty or exhaust their skills. Follow the current career-positioning preference in `AGENTS.md` and the evidence rules in [résumés and answers](references/resumes-and-answers.md).
+
 Reuse a suitable current PDF or create a truthful tailored DOCX from the master and export a text-based PDF. Ask only about unresolved experience gaps. Save confirmed additions/corrections in dated master revisions; keep excluded claims excluded. Follow [résumés and answers](references/resumes-and-answers.md).
 
 ## 5. Score and decide

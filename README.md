@@ -50,6 +50,7 @@ Start with the highlighted box. JobOps keeps the exact job description and résu
 ![Confirmed DOCX master → tailored PDF → checks against the exact job description → selected attachment.](jobops/docs/diagrams/04-resumes.svg)
 
 1. Start from the current DOCX master. Select relevant, confirmed experience and export a text-based PDF. Keep new drafts locally while you compare them.
+   Consider the complete background and separately labelled project evidence, including AI-assisted work. An older tailored file does not define your specialty; project experience does not establish professional years in a skill. Discovery, résumé, application and outreach prompts, and the recorded revision brief carry the same source/provenance rules.
 2. For a stored PDF, use **Score against a job** with the saved opening and reviewed terms. **Score a description** runs checks against pasted text without saving the result in JobOps. For a local draft, run the checks with your assistant and the scoring tools.
 3. Compare the evidence and gaps for the exact job and version. These scores are tool diagnostics. Verify the PDF you intend to attach. After submitting, save the exact used PDF in **Resumes** with its label and change notes if it is missing.
 

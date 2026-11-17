@@ -1,12 +1,18 @@
 # Résumés and confirmed answers
 
-Read current JobOps preferences and the source master. Recorded preferences include Bengaluru/Hyderabad backend/platform roles, sourced pay above ₹32 LPA preferred (unknown stays unknown), exclusions for QA/SDET, front-end, mobile, Staff+ and management, and no personal/side projects in application copies. Experience, current employer, compensation and notice period come from current records, not frozen skill text.
+Read current JobOps preferences, the current DOCX master and the latest explicit corrections in ignored `jobops/data/job-apply/confirmed-facts.json`. Use the career-positioning preference in `AGENTS.md`; do not freeze an older backend/platform label or exclusions into the user's professional identity. Experience, current employer, compensation, notice period and desired roles come from current records. Keep sourced pay and location preferences and explicit company/role exclusions; unknown pay stays unknown.
+
+Evaluate actual responsibilities and seniority, including software engineer, software developer, backend, cloud and suitable full-stack titles. Recognize MTS/SMTS/LMTS/PMTS and their expanded names; “Member of Technical Staff” is not automatically a Staff+ level. Do not discard mixed frontend/backend roles by a frontend substring alone. A platform or data role may fit, but those specializations are not mandatory.
 
 ## Choose from confirmed source
 
 Fetch the explicit master id/current DOCX revision through [JobOps operations](jobops-api.md). Read previous applied examples and fit briefs, reconciling their claims with current corrections/keep-out reasons. Also read ignored `jobops/data/job-apply/confirmed-facts.json` if present: explicit facts need source/date/scope and may await master/profile reconciliation. Agent guesses and unreviewed drafts are not confirmed evidence.
 
 Reuse an existing PDF only if its exact contents remain current/appropriate. Otherwise select/re-weight from the master, preserving submitted bytes. Save local DOCX/PDF drafts under ignored `jobops/data/resume-exports/tailored/` with company/requisition/date and `Resume` in the filename. Use available DOCX/PDF authoring tools, inspect layout/text extraction, and retain editable DOCX. Application copies follow the approved single-column style; the complete source master has no page limit.
+
+An earlier tailored résumé is a selection for one opening, not a complete inventory or a new default specialization. Match the exact JD against the complete source and current corrections before selecting evidence. Keep broad cloud experience, confirmed frontend project work and supporting data exposure at their established depth; do not claim equal expertise or total-career years in every skill.
+
+Confirmed personal/GitHub projects, including AI-assisted work, can demonstrate React/Next.js and other skills without an employer example. Label project provenance and do not convert it into professional tenure, employer attribution or production scale. An explicit requirement for professional frontend years remains a separate fit question. Respect the user's presentation preference: do not automatically add a Projects section to application copies. Omitting that section is not permission to ignore project evidence when matching or selecting supported skills.
 
 Ask about unresolved gaps in one batch. A confirmed skill without employer/project details permits a skills-line mention, not an invented bullet or metric. Negative answers become keep-out reasons. Save confirmed additions/corrections as dated master revisions, retaining removals and excluding incorrect claims. Application-only omissions do not remove source material. Reconcile assistant-only confirmed facts into the master/profile before relying on them; a private shared fact record can preserve provenance while a write is pending.
 

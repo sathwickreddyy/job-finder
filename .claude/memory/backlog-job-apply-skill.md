@@ -10,7 +10,9 @@ metadata:
 
 User asked (2026-11-01) to build a skill for applying to jobs "by keeping all instructions handy", as backlog for **2026-11-02**. Raise it at the start of the next session.
 
-Rules the skill should encode (all learned/confirmed 2026-11-01):
+Historical notes from 1 November 2026 (not current operating rules). Use the live master, current `AGENTS.md` career-positioning preference and the canonical skill; the historical role exclusions, freshness arithmetic, years ceiling and parallel-agent instruction below must not override them:
+
+Rules recorded at the time:
 - Scope: Bengaluru/Hyderabad only; companies with sourced pay > ₹32 LPA ([[pay-preference-32-lpa]]); exclude QA/SDET/front-end/mobile/Staff+/managers.
 - Discovery: read official ATS feeds (Greenhouse `first_published`, Lever, Ashby, Workday cxs, amazon.jobs search.json, Oracle HCM REST, Eightfold) for companies in the JobOps Companies portal; LinkedIn dates were refreshes in 13 of 18 checked openings, so never trust them for the 14-day freshness window.
 - Gates before prep: official posting date ≥ today−13 (Asia/Kolkata), min years ≤ ~6 (candidate ~5.3 yrs), not already applied (`GET /api/v1/applications?company=`).

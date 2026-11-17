@@ -1,15 +1,19 @@
 ---
 name: resume-no-personal-projects
-description: "Keep résumés to professional experience — no personal/side projects (JobOps, portfolio) on any version"
+description: "Project skills count as evidence; distinguish professional tenure and keep the résumé presentation preference"
 metadata:
   node_type: memory
   type: feedback
   originSessionId: db689d72-4e6d-4357-8452-a68d1115b7ba
-  modified: 2026-11-01T21:42:46.429Z
+  modified: 2026-11-17
 ---
 
-Do not add a Projects section or personal/side projects (e.g. the JobOps job-finder repo, the portfolio site) to any résumé, master or tailored.
+## Current clarification — 17 November 2026
 
-**Why:** on 2026-11-02 the user said listing such projects reads as childish and not mature enough for a Senior Software Engineer.
+The user confirmed React/Next.js frontend work through GitHub projects and explicitly asked to repair the master and JobOps so role matching and new résumés do not narrow their background. Project evidence, including AI-assisted work, is valid skill evidence and does not require employer attribution. Keep professional tenure, project work and production scale separate. Follow the current career-positioning preference in `AGENTS.md` and the live master through the API.
 
-**How to apply:** evidence comes only from employment, education and the existing volunteering line. Keep React/TypeScript in the skills line as in the approved versions; don't build a section to back it up. The current default master is "Master · professional experience only · 2 Nov 2026"; its editable DOCX is `jobops/data/resume-exports/Sathwick_Reddy_Yalla_Backend_Platform_Resume_2026-11-02.docx` (build script kept in the session scratchpad, so regenerate edits from the DOCX). Related: [[backlog-job-apply-skill]].
+Keep the existing presentation preference: do not automatically add a Projects section to application copies. That preference must not erase confirmed frontend/project skills from the source, summary, profile or matching decisions. No employer-specific frontend years were established by the project evidence.
+
+## Historical preference — superseded in scope
+
+On 2 November the user asked to avoid personal/side-project sections in application résumés. Earlier wording incorrectly generalized that presentation preference into “evidence comes only from employment” and a frozen master filename. Those assumptions are superseded by the 17 November clarification; earlier submitted files remain unchanged.

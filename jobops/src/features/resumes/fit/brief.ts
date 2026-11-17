@@ -1,10 +1,15 @@
+import { CAREER_EVIDENCE_RULES } from "@/features/candidate/career-evidence";
 import { splitIssues } from "./issues";
 import { mustHaveRows } from "./must-haves";
 import type { FitGroup } from "./service";
 import type { LexicalDetails, OptimizerDetails, ResumeNextDetails } from "./tools";
 
 // What an agent reads when it opens a résumé: assembled from recorded checks, never scored here.
-export type FileRef = { versionId: string; label: string; docxPath: string | null };
+export type FileRef = {
+  versionId: string;
+  label: string;
+  docxPath: string | null;
+};
 type Importance = "required" | "preferred";
 type BriefTerm = { term: string; importance: Importance; jdQuote: string };
 type Pair = { revised: number | null; current: number | null };
@@ -12,7 +17,12 @@ type Pair = { revised: number | null; current: number | null };
 export type Brief = {
   job: {
     snapshotId: string;
-    target: { url: string; company: string; title: string; description: string };
+    target: {
+      url: string;
+      company: string;
+      title: string;
+      description: string;
+    };
   };
   startFrom: FileRef;
   revision: FileRef | null;
@@ -32,11 +42,12 @@ export type Brief = {
 export const BRIEF_RULES = [
   "Ask the user about every askUserFirst term in the chat, one at a time, before writing. Use only what they confirm, in their words.",
   "Truthful re-weighting only: never add skills, metrics or keywords the user hasn't confirmed.",
-  "Edit a copy of the DOCX at startFrom.docxPath. If it is null, ask the user where it is and record it with PATCH /api/v1/resumes/{startFrom.versionId} { docxPath }. Keep the changes the revision already made (its DOCX is at revision.docxPath when set), keep the layout, and list every change you make. Save the result as a new DOCX; never overwrite the original.",
+  "Read the current DOCX master through GET /api/v1/resumes and GET /api/v1/resumes/{masterId}/master before revising. Reconcile its latest revision and confirmed corrections with the comparison baseline at startFrom.docxPath; that baseline may be an older tailored selection. If its path is null, ask the user where it is and record it with PATCH /api/v1/resumes/{startFrom.versionId} { docxPath }. Keep the changes the revision already made (its DOCX is at revision.docxPath when set), keep the layout, and list every change you make. Build the new application copy from the current source, record its master revision id, and never overwrite the original.",
   "Export a text-based PDF and upload it as a new version on the Résumés page.",
   "Link the new version with POST /api/v1/resumes/{newVersionId}/fit: send job.target unchanged with snapshotId = job.snapshotId, baseVersionId = startFrom.versionId, docxPath = the new DOCX and no assessments. Then run POST /api/v1/resumes/{newVersionId}/score with { snapshotId: job.snapshotId, tool } for each of jobops-lexical, resumenext and resume-ats-optimizer.",
   "keepOut and keepAsIs reasons carry over to the new version when /score runs, so the user isn't asked again. If you record assessments yourself, include those reasons.",
   "Scores are tool diagnostics, not an employer's ATS.",
+  ...CAREER_EVIDENCE_RULES,
 ];
 
 const lower = (s: string) => s.toLocaleLowerCase();
@@ -101,7 +112,11 @@ export function buildBrief(
     addExperienceBullet: mustHaveRows(group)
       .filter((r) => r.state === "add-bullet")
       .map((r) => r.term),
-    fixIssues: issues.fix.map((i) => ({ label: i.label, hint: i.hint, severity: i.severity })),
+    fixIssues: issues.fix.map((i) => ({
+      label: i.label,
+      hint: i.hint,
+      severity: i.severity,
+    })),
     keepAsIs: issues.keep.map((i) => ({ label: i.label, reason: i.reason })),
     rules: BRIEF_RULES,
   };

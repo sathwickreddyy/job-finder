@@ -133,6 +133,14 @@ PDF bytes and returns results without writing JobOps records. See the
 [résumé storage contract](../operator-reference.md#resume-storage-and-backup) and
 [application workflow reference](../../../.claude/skills/job-apply/references/jobops-api.md).
 
+The revision brief's `startFrom` file is the comparison baseline, which may be an older tailored
+selection. Read the family's current master and latest confirmed corrections before selecting
+new content. Copied prompts and brief rules consider professional and project evidence, including
+AI-assisted work, with separate provenance; project work does not establish professional tenure.
+Select evidence for the exact JD rather than inferring a specialty from repeated wording in an
+older application. The brief and prompt remain instructions for an external assistant, not
+automatic matching or résumé rewriting inside JobOps.
+
 ### Naukri and protected reads
 
 | Method and path | Use |

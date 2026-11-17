@@ -2,7 +2,7 @@
 - [Pay preference above 32 LPA](pay-preference-32-lpa.md) — rank openings by sourced pay > ₹32 LPA; unknown stays unknown
 - [Record résumé at submit](record-resume-at-submit.md) — ask which résumé before recording; JobOps locks it after
 - [job-apply skill](backlog-job-apply-skill.md) — at .claude/skills/job-apply (committed 2026-11-03); upload only after submit
-- [No personal projects on résumé](resume-no-personal-projects.md) — professional experience only; current master DOCX path inside
+- [Project evidence and résumé presentation](resume-no-personal-projects.md) — 17 Nov clarification: project skills count; distinguish professional tenure; no automatic Projects section
 - [Résumé rewrite checks rule](resume-rewrite-checks-rule.md) — score every rewrite with local scorer + ResumeNext + resume-ats-optimizer vs exact JD
 - [Résumé revisions by agent](resume-revisions-by-agent.md) — Claude Code/Codex revise via JobOps API; ask gaps in agent chat, not portal; say current vs revised
 - [Confirmed work skills](confirmed-work-skills.md) — MongoDB, Spark used at work; Kotlin, Micronaut not (2026-11-03)

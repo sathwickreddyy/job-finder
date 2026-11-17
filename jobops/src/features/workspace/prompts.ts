@@ -1,3 +1,4 @@
+import { careerEvidenceGuidance } from "@/features/candidate/career-evidence";
 export function searchPrompt(role: string, location: string, context: string) {
   return `Help me find 5 current job openings in India that fit ${role.trim() || "my developer background and career preferences from our conversation"}.
 
@@ -5,6 +6,8 @@ Location: ${location.trim() || "India"}. Include remote roles only when candidat
 
 Use the skills, experience and preferences you already know about me from this conversation. Do not guess missing qualifications. Ask me one short question if a missing detail materially affects the search.
 ${context.trim() ? `\nMy saved context:\n${context.trim()}\n` : ""}
+${careerEvidenceGuidance}
+
 For each verified opening, give me:
 • Company, exact role, location and work mode.
 • Direct job link, source site, date checked and posting date if available.
@@ -29,6 +32,8 @@ export function resumePrompt(
 
 ${resumeLabel ? `Resume file I will attach: ${resumeLabel}.\n` : ""}Use my actual resume and what you already know about my work. Ask me about missing evidence; never invent skills, employment, achievements or numbers.
 ${context.trim() ? `\nMy preferences:\n${context.trim()}\n` : ""}
+${careerEvidenceGuidance}
+
 Job description:
 ${description.trim() || "I will paste the full job description here before you start. Ask for it if it is missing."}
 
@@ -48,7 +53,7 @@ export function applicationPrompt(
   url: string,
   context: string,
 ) {
-  return `Help me apply for ${role} at ${company}, for an India-based opening.\n\nOriginal listing: ${url}\n\nJob description:\n${description || "Ask me for the full description before starting."}\n${context ? `\nMy preferences:\n${context}\n` : ""}\nUse my real resume and confirmed background from this conversation. Ask me to select and attach the final resume file. Check that the role is still open and that India-based candidates are eligible. Walk through application questions with me; ask about missing facts instead of inventing answers.\n\nIf computer use is available, fill the application with the details we agree on. Show me the completed form and the exact attached file, then ask me before clicking the final submit button. If you cannot access the site, give me a step-by-step checklist for applying manually.\n\nAfter an actual submission, return the confirmation, application link, date, company, role and exact resume filename so I can record it in JobOps. Do not claim it was submitted without confirmation.`;
+  return `Help me apply for ${role} at ${company}, for an India-based opening.\n\nOriginal listing: ${url}\n\nJob description:\n${description || "Ask me for the full description before starting."}\n${context ? `\nMy preferences:\n${context}\n` : ""}\n${careerEvidenceGuidance}\n\nUse my real resume and confirmed background from this conversation. Ask me to select and attach the final resume file. Check that the role is still open and that India-based candidates are eligible. Walk through application questions with me; ask about missing facts instead of inventing answers.\n\nIf computer use is available, fill the application with the details we agree on. Show me the completed form and the exact attached file, then ask me before clicking the final submit button. If you cannot access the site, give me a step-by-step checklist for applying manually.\n\nAfter an actual submission, return the confirmation, application link, date, company, role and exact resume filename so I can record it in JobOps. Do not claim it was submitted without confirmation.`;
 }
 
 export function outreachPrompt(
@@ -65,7 +70,7 @@ export function outreachPrompt(
       : method === "COLD_EMAIL"
         ? "write a cold email"
         : "write a LinkedIn message";
-  return `Help me ${request} for ${role} at ${company}, an India-based opening.\n\nJob link: ${url}\n\nJob description:\n${description || "Ask me for the full description."}\n${context ? `\nMy preferences:\n${context}\n` : ""}\nUse what you already know about my actual work. Help me choose a relevant person using their verified public profile or the contact I provide. Do not invent email addresses, personal details or a relationship.\n\nDraft a concise, specific message: why I am interested, the relevant evidence from my background and one clear request. For a referral, include the job link and ask whether they are comfortable referring me. Keep it personal and respectful. Suggest which resume or portfolio evidence to share and work through wording with me.\n\nShow me the final recipient and message. Ask me before sending through computer use; otherwise give me the text to send myself. After sending, return the channel, recipient, date, exact resume filename if attached, and follow-up suggestion so I can record the outreach. Do not claim that messaging someone is a submitted job application.`;
+  return `Help me ${request} for ${role} at ${company}, an India-based opening.\n\nJob link: ${url}\n\nJob description:\n${description || "Ask me for the full description."}\n${context ? `\nMy preferences:\n${context}\n` : ""}\n${careerEvidenceGuidance}\n\nUse what you already know about my actual work. Help me choose a relevant person using their verified public profile or the contact I provide. Do not invent email addresses, personal details or a relationship.\n\nDraft a concise, specific message: why I am interested, the relevant evidence from my background and one clear request. For a referral, include the job link and ask whether they are comfortable referring me. Keep it personal and respectful. Suggest which resume or portfolio evidence to share and work through wording with me.\n\nShow me the final recipient and message. Ask me before sending through computer use; otherwise give me the text to send myself. After sending, return the channel, recipient, date, exact resume filename if attached, and follow-up suggestion so I can record the outreach. Do not claim that messaging someone is a submitted job application.`;
 }
 
 export function jobPreferencesContext(value: Record<string, unknown>) {
