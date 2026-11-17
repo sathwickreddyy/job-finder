@@ -41,4 +41,13 @@ describe("lastActivityOf", () => {
       kind: "Round",
     });
   });
+
+  it("counts a date-only step recorded today before noon India time", () => {
+    // 09:30 IST on 17 Nov; a date-only step lands at 12:00 IST that day.
+    const morning = new Date("2026-11-17T04:00:00Z");
+    expect(lastActivityOf([[day(step("2026-11-17T06:30:00.000Z"))]], morning)).toEqual({
+      at: "2026-11-17T06:30:00.000Z",
+      kind: "Recorded",
+    });
+  });
 });

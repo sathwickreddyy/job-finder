@@ -6,6 +6,8 @@ const greeting =
 /** Links add noise to a one-line preview: keep a link's words, drop the address and any bare-domain label. */
 function withoutLinks(line: string) {
   return line
+    .replace(/\[cid:[^\]]*\]/gi, "")
+    .replace(/<mailto:[^>]*>/gi, "")
     .replace(/\[([^\]]*)\]<https?:[^>]*>/g, (_, label: string) =>
       /^\S+\.\S+$/.test(label.trim()) ? "" : label,
     )

@@ -14,6 +14,16 @@ describe("previewLine", () => {
     expect(previewLine("")).toBe("");
   });
 
+  it("drops cid and mailto tokens from the preview line", () => {
+    expect(previewLine("[cid:image001.png@01DD7394.90AFFE70]\nOffer letter attached")).toBe(
+      "Offer letter attached",
+    );
+    expect(previewLine("Priya Rao<mailto:priya@example.com> sent the slots")).toBe(
+      "Priya Rao sent the slots",
+    );
+    expect(previewLine("<mailto:a@b.example>\nSecond line")).toBe("Second line");
+  });
+
   it("skips greetings to the first line that says something", () => {
     expect(previewLine("Hi Sathwick,\n\nYour round is confirmed for Tue.")).toBe(
       "Your round is confirmed for Tue.",
