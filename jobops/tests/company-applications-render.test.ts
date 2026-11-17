@@ -143,6 +143,8 @@ const mailDay = (item: MailItem): TimelineDay[] => [
 function data(rows: CompanyApplicationRow[], patch: Partial<CompanyApplications> = {}) {
   return {
     rows,
+    newMail: { days: [], handling: {}, more: false },
+    lastActivity: null,
     unplaced: [],
     unplacedHandling: {},
     unplacedOlderHref: null,
@@ -457,6 +459,24 @@ describe("company page applications", () => {
     expect(html).toContain("Oracle, not on an application");
     expect(html).toContain("Loose hello");
     expect(render(data(rows))).not.toContain("not on an application");
+  });
+
+  it("shows new mail on no application above the handled mail", () => {
+    const fresh = mailItem("00000000-0000-4000-8000-0000000000d1", "Fresh hello", null);
+    const done = mailItem("00000000-0000-4000-8000-0000000000d2", "Done hello", null);
+    const html = render(
+      data(rows, {
+        newMail: { days: mailDay(fresh), handling: {}, more: false },
+        unplaced: mailDay(done),
+      }),
+    );
+    expect(html).toContain("Oracle, not on an application");
+    expect(html.indexOf("Fresh hello")).toBeGreaterThan(-1);
+    expect(html.indexOf("Fresh hello")).toBeLessThan(html.indexOf("Done hello"));
+    const only = render(
+      data(rows, { newMail: { days: mailDay(fresh), handling: {}, more: false } }),
+    );
+    expect(only).toContain("Fresh hello");
   });
 
   it("explains an empty company", () => {

@@ -385,7 +385,7 @@ export function ApplicationsTab({
           </Link>
         </p>
       )}
-      {data.unplaced.length > 0 && (
+      {(data.newMail.days.length > 0 || data.unplaced.length > 0) && (
         <section id="unplaced" aria-labelledby="unplaced-title" className="scroll-mt-24 space-y-3">
           <div>
             <h2 id="unplaced-title" className="m-0 text-base font-semibold">
@@ -395,6 +395,18 @@ export function ApplicationsTab({
               Company mail that is not linked to any application.
             </p>
           </div>
+          {data.newMail.days.length > 0 && (
+            <CompanyTimeline
+              days={data.newMail.days}
+              handling={data.newMail.handling}
+              roles={[]}
+              allRolesHref=""
+              role={null}
+              openMail={unplacedOpen}
+              olderHref={null}
+              inboxes={inboxes}
+            />
+          )}
           <CompanyTimeline
             days={data.unplaced}
             handling={data.unplacedHandling}

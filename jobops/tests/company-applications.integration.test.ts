@@ -180,10 +180,17 @@ describe.skipIf(!dbTests)("company applications", () => {
     expect(newer.steps[0]).toMatchObject({ label: "Applied" });
   });
 
-  it("keeps company mail linked to no application apart", async () => {
-    const { unplaced } = await readCompanyApplications(key, {}, now);
-    expect(mailIds(unplaced)).toEqual([made.loose]);
+  it("keeps open and handled company mail on no application apart", async () => {
+    const handled = await email({ subject: `Done ${prefix}`, attentionState: "DONE" });
+    const { newMail, unplaced, lastActivity } = await readCompanyApplications(key, {}, now);
+    expect(mailIds(newMail.days)).toEqual([made.loose]);
+    expect(newMail.more).toBe(false);
+    expect(mailIds(unplaced)).toEqual([handled]);
     expect(entries(unplaced).every((entry) => entry.type === "mail")).toBe(true);
+    // The handled email (counter order) is the newest past entry of all.
+    expect(lastActivity?.kind).toBe("Email");
+    expect(lastActivity?.at).toBe(entries(unplaced).find((entry) => entry.type === "mail")?.at);
+    await db.delete(mailMessages).where(inArray(mailMessages.id, [handled]));
   });
 
   it("shows scores only when the submitted file targets the same job", async () => {
@@ -223,8 +230,13 @@ describe.skipIf(!dbTests)("company applications", () => {
         linkedApplicationId: made.newer,
       })),
     );
-    const { unplaced, unplacedOlderHref } = await readCompanyApplications(key, {}, now);
-    expect(mailIds(unplaced)).toEqual([made.loose, old]);
+    await db
+      .update(mailMessages)
+      .set({ attentionState: "DONE" })
+      .where(inArray(mailMessages.id, [old]));
+    const { unplaced, unplacedOlderHref, newMail } = await readCompanyApplications(key, {}, now);
+    expect(mailIds(newMail.days)).toEqual([made.loose]);
+    expect(mailIds(unplaced)).toEqual([old]);
     expect(unplacedOlderHref).toBeNull();
   });
 
