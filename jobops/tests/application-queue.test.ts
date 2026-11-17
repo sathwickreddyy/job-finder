@@ -285,11 +285,11 @@ describe("queue", () => {
       title: "Flipkart has been quiet",
       primary: {
         label: "Record follow-up",
-        href: `/applications/${quiet.id}?outcome=followup#what-happened`,
+        href: `/applications/${quiet.id}?outcome=followup#application-${quiet.id}`,
       },
       secondary: {
         label: "Close as no reply",
-        href: `/applications/${quiet.id}?outcome=ghosted#what-happened`,
+        href: `/applications/${quiet.id}?outcome=ghosted#application-${quiet.id}`,
       },
     });
     expect(item.dueAt).toEqual(at("2026-09-27T00:00:00"));

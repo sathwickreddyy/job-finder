@@ -150,8 +150,14 @@ export function buildQueue(input: {
           ? `No reply from ${record.contact || record.company}`
           : `${record.company} has been quiet`,
         detail: `${outreach ? `${record.company} ${methodLabel[record.source]?.toLowerCase() ?? "outreach"}` : record.role} · ${clock.days} days quiet, follow up after ${clock.threshold}`,
-        primary: { label: "Record follow-up", href: `${href}?outcome=followup#what-happened` },
-        secondary: { label: "Close as no reply", href: `${href}?outcome=ghosted#what-happened` },
+        primary: {
+          label: "Record follow-up",
+          href: `${href}?outcome=followup#application-${record.id}`,
+        },
+        secondary: {
+          label: "Close as no reply",
+          href: `${href}?outcome=ghosted#application-${record.id}`,
+        },
       });
     }
     for (const round of record.rounds) {
@@ -172,7 +178,7 @@ export function buildQueue(input: {
             : `${record.company} ${label} round`,
         detail: `${round.name || label} · ${formatDayTime(round.scheduledAt)}`,
         primary: past
-          ? { label: "Record result", href: `${href}#what-happened` }
+          ? { label: "Record result", href: `${href}#application-${record.id}` }
           : { label: "Open record", href },
       });
     }

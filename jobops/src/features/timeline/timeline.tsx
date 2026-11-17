@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { PenLine } from "lucide-react";
 import { ActionForm } from "@/components/action-form";
@@ -16,6 +16,7 @@ import { SourceChip } from "./source-chip";
 import { cn } from "@/lib/utils";
 import { EditTag } from "./edit-tag";
 import type { TimelineDay, TimelineMail, TimelineStep } from "./entries";
+import { isShown, jumpTarget, type TimelineFilter } from "./jump";
 import { RoundCard, type RoundCardData } from "./round-card";
 import { HandledLine, HandlingBar, type PlaceOptions } from "./handling";
 import type { Handling } from "./suggest";
@@ -48,7 +49,7 @@ function StepRow({
       <span className="grid min-w-0 justify-items-start gap-0.5">
         <span className="inline-flex h-6 items-center gap-1 rounded-full bg-muted px-2 text-muted-foreground">
           <PenLine aria-hidden size={14} strokeWidth={2} />
-          <span className="hidden text-xs font-medium @xl:inline">Recorded</span>
+          <span className="sr-only text-xs font-medium @xl:not-sr-only @xl:inline">Recorded</span>
         </span>
         <span className="text-xs whitespace-nowrap text-muted-foreground tabular-nums">
           {clock(step.at)}
@@ -70,7 +71,10 @@ function StepRow({
   const grid =
     "grid w-full grid-cols-[3.5rem_minmax(0,1fr)_auto] items-center gap-3 px-4 py-2.5 @xl:grid-cols-[9rem_minmax(0,1fr)_auto] @xl:gap-x-4 @4xl:grid-cols-[9.5rem_minmax(0,1fr)_auto]";
   return (
-    <li id={`entry-${step.id}`} className="scroll-mt-24">
+    <li
+      id={`entry-${step.id}`}
+      className="scroll-mt-24 transition-shadow duration-500 data-[lit]:ring-2 data-[lit]:ring-inset data-[lit]:ring-primary"
+    >
       {long ? (
         <button
           type="button"
@@ -133,7 +137,10 @@ function MailRow({
     <HandlingBar item={item} handling={handling} placeOptions={placeOptions} />
   );
   return (
-    <li id={`mail-${item.id}`} className="relative scroll-mt-24">
+    <li
+      id={`mail-${item.id}`}
+      className="relative scroll-mt-24 transition-shadow duration-500 data-[lit]:ring-2 data-[lit]:ring-inset data-[lit]:ring-primary"
+    >
       {needs && (
         <span aria-hidden className="absolute inset-y-3 left-0 w-[3px] rounded-r-full bg-primary" />
       )}
@@ -283,16 +290,7 @@ function DateStamp({ day }: { day: TimelineDay }) {
   );
 }
 
-export type TimelineFilter = "all" | "stages" | "mail";
-/** Stages shows steps and round cards, Mail shows emails; a round without card data is hidden. */
-export function isShown(
-  entry: TimelineDay["entries"][number],
-  filter: TimelineFilter,
-  hasCard: boolean,
-) {
-  if (entry.type === "round") return hasCard && filter !== "mail";
-  return filter === "all" || (filter === "mail") === (entry.type === "mail");
-}
+export { isShown, type TimelineFilter };
 
 /**
  * Mail feed layout B, a ledger with a date column: one company's emails and steps (or all
@@ -337,6 +335,37 @@ export function CompanyTimeline({
 }) {
   const [filter, setFilter] = useState<TimelineFilter>("all");
   const perApplication = requisition !== undefined;
+  // A link to one of this application's cards (a tracker step) shows it, scrolls to it and rings it.
+  const [jump, setJump] = useState<{ id: string; n: number } | null>(null);
+  const latest = useRef({ days, filter, roundCards });
+  useEffect(() => {
+    latest.current = { days, filter, roundCards };
+  });
+  useEffect(() => {
+    if (!perApplication) return;
+    const sync = () => {
+      const now = latest.current;
+      const target = jumpTarget(window.location.hash, now.days, now.filter, now.roundCards);
+      if (!target) return;
+      if (target.resetFilter) setFilter("all");
+      setJump({ id: target.id, n: Date.now() });
+    };
+    sync();
+    window.addEventListener("hashchange", sync);
+    return () => window.removeEventListener("hashchange", sync);
+  }, [perApplication]);
+  useEffect(() => {
+    if (!jump) return;
+    const card = document.getElementById(jump.id);
+    if (!card) return;
+    card.scrollIntoView({ block: "start" });
+    card.setAttribute("data-lit", "");
+    const timer = setTimeout(() => card.removeAttribute("data-lit"), 1500);
+    return () => {
+      clearTimeout(timer);
+      card.removeAttribute("data-lit");
+    };
+  }, [jump]);
   const shown = (entry: TimelineDay["entries"][number]) =>
     isShown(
       entry,

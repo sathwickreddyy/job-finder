@@ -58,9 +58,14 @@ test("the tracker's round step scrolls to the round card and opens its questions
   await page.goto(`/applications/${applicationId}`);
   const row = page.locator(`#application-${applicationId}`);
   await hydrated(row.getByRole("button", { name: "+ Add step" }));
+  // The Mail filter hides round cards; a step click shows All again before it scrolls.
+  await row.getByRole("button", { name: "Mail", exact: true }).click();
+  await expect(page.locator(`#round-${roundId}`)).toHaveCount(0);
   await row.locator('a[href^="#round-"]').first().click();
   await expect(page).toHaveURL(new RegExp(`#round-${roundId}$`));
   const card = page.locator(`#round-${roundId}`);
+  await expect(card).toHaveAttribute("data-lit", "");
+  await expect(card).not.toHaveAttribute("data-lit", "", { timeout: 4000 });
   await expect(card.getByRole("button", { expanded: true }).first()).toBeVisible();
   await expect(card.getByRole("tab", { name: /Questions/ })).toBeVisible();
   await expect(card).toBeInViewport();

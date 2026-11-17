@@ -136,7 +136,10 @@ export function RoundCard({
     { id: "notes", label: "Round notes" },
   ] as const;
   return (
-    <li id={domId} className="scroll-mt-24">
+    <li
+      id={domId}
+      className="scroll-mt-24 transition-shadow duration-500 data-[lit]:ring-2 data-[lit]:ring-inset data-[lit]:ring-primary"
+    >
       <button
         type="button"
         aria-expanded={open}
