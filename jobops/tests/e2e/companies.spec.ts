@@ -28,7 +28,6 @@ test("city cards follow current resumes while applications preserve the submitte
   const originalId = new URL(page.url()).searchParams.get("file")!;
   const familyId = (await page.locator("[data-resume-id]").getAttribute("data-resume-id"))!;
   const familyPath = `/resumes?resume=${familyId}`;
-  const submittedPath = `/resumes?file=${originalId}`;
 
   await page.goto("/jobs/new");
   await page.getByLabel("Company", { exact: true }).fill("Amazon India");
@@ -69,7 +68,7 @@ test("city cards follow current resumes while applications preserve the submitte
   await expect(page).toHaveURL(/view=grid&q=Amazon/);
   await bengaluru.click({ position: { x: 20, y: 20 } });
   await expect(page).toHaveURL(/\/companies\/amazon\?city=Bengaluru$/);
-  await expect(page.getByRole("tab", { name: "Timeline", exact: true })).toHaveAttribute(
+  await expect(page.getByRole("tab", { name: /^Applications\b/ })).toHaveAttribute(
     "aria-selected",
     "true",
   );
@@ -80,19 +79,18 @@ test("city cards follow current resumes while applications preserve the submitte
   await expect(page).toHaveURL(/tab=pay$/);
   await page.keyboard.press("ArrowLeft");
   await page.reload();
-  await expect(page.getByRole("tab", { name: "Timeline", exact: true })).toHaveAttribute(
+  await expect(page.getByRole("tab", { name: /^Applications\b/ })).toHaveAttribute(
     "aria-selected",
     "true",
   );
-  const applications = page.locator("#applications");
+  const opening = page.getByRole("button", { name: new RegExp(role) });
+  // The newest application opens by itself, so its details are already showing.
+  await expect(opening).toHaveAttribute("aria-expanded", "true");
+  const submittedFile = page.getByRole("heading", { name: "Résumé used" }).locator("..");
+  await expect(submittedFile).toContainText("company-original.pdf");
+  await page.goto("/companies/amazon?city=Bengaluru&tab=about");
   const bengaluruResume = page.locator("#resume-bengaluru");
   const hyderabadResume = page.locator("#resume-hyderabad");
-  await expect(
-    applications.locator('a[href^="/applications/"]').filter({ hasText: role }),
-  ).toBeVisible();
-  await expect(applications.locator(`a[href="${submittedPath}"]`)).toHaveText(
-    "Submitted: company-original.pdf (Original)",
-  );
   await bengaluruResume.getByLabel("Resume for Amazon in Bengaluru").selectOption(familyId);
   await bengaluruResume.getByRole("button", { name: "Save resume reference" }).click();
   await expect(bengaluruResume.getByRole("status")).toContainText("Resume linked");
@@ -105,17 +103,18 @@ test("city cards follow current resumes while applications preserve the submitte
   await page
     .getByLabel("PDF file", { exact: true })
     .setInputFiles({ name: "company-revised.pdf", mimeType: "application/pdf", buffer: bytes });
-  await page.getByText("Bullet changes and default setting", { exact: true }).click();
+  await page.getByText("Bullet changes, DOCX and default", { exact: true }).click();
   await page.getByLabel("Use this as my default file").check();
   await page.getByRole("button", { name: "Upload PDF", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Company revision", exact: true })).toBeVisible();
-  await page.goto("/companies/amazon?city=Bengaluru&tab=timeline");
+  await page.goto("/companies/amazon?city=Bengaluru&tab=about");
   await expect(
     bengaluruResume.getByRole("link", { name: "Current resume: Company revision", exact: true }),
   ).toHaveAttribute("href", familyPath);
-  await expect(applications.locator(`a[href="${submittedPath}"]`)).toHaveText(
-    "Submitted: company-original.pdf (Original)",
-  );
+  await page.goto("/companies/amazon?city=Bengaluru&tab=applications");
+  await expect(opening).toHaveAttribute("aria-expanded", "true");
+  await expect(submittedFile).toContainText("company-original.pdf");
+  await page.goto("/companies/amazon?city=Bengaluru&tab=about");
   await bengaluruResume.getByLabel("Resume for Amazon in Bengaluru").selectOption("");
   await bengaluruResume.getByRole("button", { name: "Save resume reference" }).click();
   await expect(bengaluruResume.getByRole("status")).toContainText("Resume reference cleared");
@@ -182,7 +181,11 @@ test("company search and separate city sections work on mobile", async ({ page }
   );
   await page.getByRole("link", { name: "Mail search settings" }).click();
   await expect(page).toHaveURL(/\?tab=applications#mail-search$/);
-  await expect(page.getByRole("button", { name: "Edit" })).toHaveAttribute("aria-expanded", "true");
+  await expect(
+    page
+      .getByRole("region", { name: "Mail search" })
+      .getByRole("button", { name: "Edit", exact: true }),
+  ).toHaveAttribute("aria-expanded", "true");
   await page.getByRole("button", { name: "More company actions" }).click();
   await page.keyboard.press("Escape");
   await expect(page.getByRole("button", { name: "More company actions" })).toBeFocused();

@@ -171,6 +171,25 @@ test('company panel edits a keyword, refuses "interview", and runs a search with
   await expect(panel.getByText(/needs reconnecting in Inboxes/)).toBeVisible();
 });
 
+test("Search now from the collapsed Mail search line opens the editor and starts the search", async ({
+  page,
+}) => {
+  const record = await company(unique(`Collapsed ${prefix}`));
+  await connection();
+  await page.goto(`/companies/${record.slug}?tab=applications`);
+  const panel = page.getByRole("region", { name: "Mail search" });
+  const edit = panel.getByRole("button", { name: "Edit", exact: true });
+  await expect(edit).toHaveAttribute("aria-expanded", "false");
+  await panel.getByRole("button", { name: "Search now" }).click();
+  await expect(edit).toHaveAttribute("aria-expanded", "true");
+  await expect(panel.getByText("Show the exact search sent to each inbox")).toBeVisible();
+  await expect(
+    panel.getByText(/Couldn't search|needs reconnecting|Searching|No (matching )?mail/i).first(),
+  ).toBeVisible({
+    timeout: 30_000,
+  });
+});
+
 test("the Mail search line sits on the Applications tab and no sticky aside covers it", async ({
   page,
 }) => {
