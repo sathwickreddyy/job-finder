@@ -446,7 +446,7 @@ describe("CompanyTimeline", () => {
     const one = (props: Partial<Parameters<typeof CompanyTimeline>[0]> = {}) =>
       render({
         days: [mailDay, stepDay],
-        requisition: "JB0076231",
+        requisition: "REQ-0001",
         roundCards: { r1: data },
         roles: [],
         ...props,
@@ -463,7 +463,7 @@ describe("CompanyTimeline", () => {
       expect(html).toContain('id="entry-e2"');
       expect(html.match(/>Recorded</g)).toHaveLength(1);
       expect(html).toMatch(/>Recorded<\/span><\/span><span[^>]*>12:00 pm</);
-      expect(html).toContain(">JB0076231<");
+      expect(html).toContain(">REQ-0001<");
     });
 
     it("shows a round card with interviewer, question count and result", () => {
@@ -509,7 +509,7 @@ describe("CompanyTimeline", () => {
     });
 
     it("tags emails, steps and rounds with the requisition, or No requisition", () => {
-      expect(one().match(/>JB0076231</g)).toHaveLength(3);
+      expect(one().match(/>REQ-0001</g)).toHaveLength(3);
       expect(one({ requisition: null }).match(/>No requisition</g)).toHaveLength(3);
       expect(render()).not.toContain("No requisition");
     });

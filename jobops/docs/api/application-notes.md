@@ -46,7 +46,7 @@ scores into the note.
 ```md
 ## Summary
 
-Applied to **ServiceNow** on **3 Nov 2026** through the careers portal, requisition **JB0076231**.
+Applied to **ServiceNow** on **3 Nov 2026** through the careers portal, requisition **REQ-0001**.
 
 ## On the form
 
@@ -57,5 +57,5 @@ Applied to **ServiceNow** on **3 Nov 2026** through the careers portal, requisit
 ## Proof
 
 - Résumé SHA-256: `546558fd0a1b2c3d4e5f60718293a4b5c6d7e8f9a0b1c2d3e4f5a6b7ebf21600`
-- Confirmation screenshot: `/Users/me/jobops/data/job-apply/servicenow/submitted.jpg`
+- Confirmation screenshot: `/home/user/jobops/data/job-apply/example/submitted.jpg`
 ```

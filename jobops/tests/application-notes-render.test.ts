@@ -12,10 +12,10 @@ const { NotesFold } = await import("@/features/applications/views/notes/notes-fo
 const { ScoreDials } = await import("@/features/resumes/fit/score-dials");
 
 const HASH = "546558fd0a1b2c3d4e5f60718293a4b5c6d7e8f9a0b1c2d3e4f5a6b7ebf21600";
-const PATH = "/Users/sathwick/Downloads/proof/submitted.jpg";
+const PATH = "/home/user/proof/submitted.jpg";
 const SERVICENOW = `## Summary
 
-Applied to **ServiceNow** on 3 Nov through the careers portal, requisition **JB0076231**.
+Applied to **ServiceNow** on 3 Nov through the careers portal, requisition **REQ-0001**.
 
 ## On the form
 
@@ -114,7 +114,9 @@ describe("NotesView", () => {
 describe("NotesFold", () => {
   it("shows section names for a template note and the first line for a free note", () => {
     const props = { recordId: "11111111-1111-4111-8111-111111111111", scores: null };
-    const template = renderToStaticMarkup(createElement(NotesFold, { ...props, notes: SERVICENOW }));
+    const template = renderToStaticMarkup(
+      createElement(NotesFold, { ...props, notes: SERVICENOW }),
+    );
     expect(template).toContain("Summary · On the form · Proof");
     expect(template).toContain('aria-expanded="false"');
     expect(template).not.toContain("546558fd");
