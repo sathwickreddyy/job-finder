@@ -384,6 +384,8 @@ export const outlook: MailProvider = {
     const resource = "/v1.0/me/messages";
     const query = outlookSearchQuery(request);
     // $search cannot be combined with $orderby; results come newest first by relevance.
+    // Graph answers $search with regular REST ids even under IdType="ImmutableId", so these
+    // ids differ from scanMail's for the same email; ingest matches them by Message-ID.
     const url = request.next
       ? safeScanLink(request.next, resource)
       : `${graphOrigin}${resource}?${new URLSearchParams({ $search: query, $top: "25", $select: messageFields })}`;

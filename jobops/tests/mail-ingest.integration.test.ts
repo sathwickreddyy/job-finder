@@ -218,6 +218,38 @@ describe.skipIf(!dbTests)("one mail ingest path", () => {
     expect(stored[0]).toMatchObject({ attentionState: "DONE", folders: ["Archive"] });
   });
 
+  // Graph honours IdType="ImmutableId" for a $filter check but returns regular REST ids to a
+  // $search, so company search re-reads mail it already stored under another id.
+  it.each([
+    ["an immutable id, then a regular one", "AAkALg", "AQMkAD"],
+    ["a regular id, then an immutable one", "AQMkAD", "AAkALg"],
+  ])("stores an Outlook email once when read under %s", async (_, first, second) => {
+    const own = await connection();
+    const sameEmail = { internetMessageId: `<${prefix}-${first}@mail.invalid>` };
+    await ingest(own, [mail(`${first}-ack`, sameEmail)]);
+    const { counts, items } = await ingest(own, [mail(`${second}-ack`, sameEmail)], {
+      preferCompany: "oracle",
+    });
+    expect(counts).toEqual({ fetched: 1, alreadyHere: 1, kept: 0, dropped: 0, newAttention: 0 });
+    expect(items).toEqual([]);
+    expect(await messages(own.email)).toHaveLength(1);
+    const rows = await ledger(own.email);
+    expect(rows.map((row) => row.providerMessageId)).toEqual([`${prefix}-${first}-ack`]);
+  });
+
+  it("follows the kept row when an email was already stored under both ids", async () => {
+    const own = await connection();
+    const sameEmail = { internetMessageId: `<${prefix}-both@mail.invalid>` };
+    const promo = { sender: "news@example.invalid", subject: "Weekend reading", bodyText: "" };
+    // The regular id was dropped by an older rule; the immutable id was kept.
+    await ingest(own, [mail("AQMkAD-both", { ...sameEmail, ...promo })]);
+    await ingest(own, [mail("AAkALg-both", sameEmail)]);
+    expect(await messages(own.email)).toHaveLength(1);
+    const { counts } = await ingest(own, [mail("AQMkAD-both", sameEmail)]);
+    expect(counts).toMatchObject({ alreadyHere: 1, kept: 0 });
+    expect(await messages(own.email)).toHaveLength(1);
+  });
+
   it("recovered mail before the previous last fetch enters handled", async () => {
     const own = await connection();
     const { counts } = await ingest(own, [mail("old")], {
