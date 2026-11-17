@@ -41,6 +41,9 @@ const earliest = (dates: Date[]) =>
 const latest = (dates: Date[]) =>
   dates.length ? new Date(Math.max(...dates.map((date) => date.getTime()))) : null;
 
+/** Linked mail dates steps after sending; it never shows an unsent record as sent. */
+const linkedWhenSent = (record: JourneySource, sent: boolean) => (sent ? record.linkedMail : []);
+
 function applicationStops(record: JourneySource, sent: boolean): Stop[] {
   const when = (types: Set<string> | string[]) =>
     valid(
@@ -57,7 +60,7 @@ function applicationStops(record: JourneySource, sent: boolean): Stop[] {
       evidence: [
         ...when(["ACKNOWLEDGEMENT_RECEIVED"]),
         ...valid(
-          record.linkedMail
+          linkedWhenSent(record, sent)
             .filter((mail) => mail.classification === "APPLICATION_ACKNOWLEDGEMENT")
             .map((mail) => mail.receivedAt),
         ),
@@ -96,7 +99,9 @@ function outreachStops(record: JourneySource, sent: boolean, replied: boolean): 
         ...record.events
           .filter((event) => inboundEvents.has(event.eventType))
           .map((event) => event.occurredAt),
-        ...record.linkedMail.filter(isLinkedReply).map((mail) => mail.receivedAt),
+        ...linkedWhenSent(record, sent)
+          .filter(isLinkedReply)
+          .map((mail) => mail.receivedAt),
       ]),
       implied: replied,
     },

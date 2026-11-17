@@ -5,6 +5,12 @@ Then call `GET /api/v1/applications/{id}/transitions` for its status, phase, whe
 was sent, and its available actions and outcomes. The portal and API use the same
 workflow rules. The outcome list includes any required round or timing details.
 
+`sent` comes from recorded evidence only: a sent date, a recorded submission or outreach,
+a follow-up, a recorded response, or a submitted or later stage. Linking an email never
+marks a record as sent, because portals also email about unfinished drafts. An unsent
+record keeps `recordSent` and `notApplying` even when mail is linked to it. Its linked
+replies count once you record the send.
+
 Send one action to `POST /api/v1/applications/{id}/transitions` as JSON. Generate a
 UUID for each new action. For example, record a scheduled technical interview with:
 
