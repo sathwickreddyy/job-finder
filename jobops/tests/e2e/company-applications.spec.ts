@@ -3,7 +3,7 @@ import { eq, inArray } from "drizzle-orm";
 import { closeDatabase, db } from "../../src/db";
 import { applicationRounds, applications, resumes, resumeVersions } from "../../src/db/schema";
 import { stubExternalSites } from "./helpers/external-sites";
-import { hydrated } from "./helpers/hydration";
+import { hydrated, openDetails } from "./helpers/hydration";
 import { cleanupRecords, seedRecord } from "./helpers/records";
 
 test.beforeEach(async ({ page }) => stubExternalSites(page));
@@ -115,6 +115,7 @@ test("notes, details and the résumé preview open from the row", async ({ page 
     .where(eq(applications.id, applicationId));
   await page.goto(`/applications/${applicationId}`);
   const row = page.locator(`#application-${applicationId}`);
+  await openDetails(row);
   const notes = row.getByRole("region", { name: "Notes", exact: true });
   await hydrated(notes.getByRole("button").first());
   await expect(notes).toContainText("Summary · On the form · Proof");
@@ -186,11 +187,15 @@ test("on a phone the row does not scroll sideways and its facts stack", async ({
   const row = page.locator(`#application-${applicationId}`);
   await expect(row.getByTestId("phase-label")).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  const facts = row.locator("dl > div");
-  const first = await facts.nth(0).boundingBox();
-  const last = await facts.nth(3).boundingBox();
-  // Two columns on a phone: the fourth fact sits below the first.
-  expect(last!.y).toBeGreaterThan(first!.y + first!.height - 1);
+  // Below the wide layout the facts collapse into one line; Details reveals the rest.
+  const toggle = row.getByRole("button", { name: "Details", exact: true });
+  await hydrated(toggle);
+  const details = row.getByRole("region", { name: "Details", exact: true });
+  await expect(details).toBeHidden();
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
+  await expect(details).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 
 test("the header fits a 375 px screen without sideways scroll", async ({ page }) => {

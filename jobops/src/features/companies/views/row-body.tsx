@@ -17,6 +17,7 @@ import type { CompanyApplicationRow, CompanyApplications } from "../applications
 import { Tracker } from "./application-row";
 import { CurrentStep } from "./current-step";
 import { DetailsAside } from "./details-aside";
+import { AsideSlot, CompactFacts, DetailsProvider } from "./details-toggle";
 import { NoteComposer } from "./note-composer";
 
 export const withYear = (date: Date) => `${formatDay(date)} ${indiaDate(date).slice(0, 4)}`;
@@ -68,90 +69,98 @@ export function RowBody({
     record.phase === "Closed" && record.closedReason === "WITHDREW" && !record.sentAt;
   return (
     <div className="@container">
-      <div className="grid gap-6 @3xl:grid-cols-[minmax(0,1fr)_290px] @3xl:items-start">
-        <div className="min-w-0 space-y-4 @3xl:col-start-1 @3xl:row-start-1">
-          {/* Focus lands here when a saved step removes the control that held it. */}
-          <section aria-label="Progress" tabIndex={-1} className="min-w-0 space-y-5 outline-none">
-            <CurrentStep
-              record={record}
-              booked={booked}
-              outcomes={row.outcomes}
-              today={today}
-              returnTo={returnTo}
-              editable={editable}
-              notApplyingClosed={notApplyingClosed}
-              now={now}
-            />
-            <Tracker
-              key={`tracker-${record.id}`}
-              steps={row.steps}
-              recordId={record.id}
-              addable={addable}
-              requested={requested}
-              mailId={sourceMail}
-              today={today}
-              booked={booked}
-              returnTo={returnTo}
-              rowHref={rowHref}
-              source={source}
-            />
-          </section>
-          {recorded && (
-            <ActionForm
-              action={undoAutoOutcomeAction}
-              feedback="inverse"
-              pendingLabel="Undoing"
-              className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground"
-            >
-              <span>
-                Recorded from an email:{" "}
-                {outcomeMeta[recorded.outcome as OutcomeId]?.label ?? recorded.outcome}
-              </span>
-              <input type="hidden" name="id" value={recorded.mailMessageId} />
-              <button
-                type="submit"
-                className="pressable inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium text-link hover:bg-selected"
-              >
-                <Undo2 aria-hidden size={13} />
-                Undo
-              </button>
-            </ActionForm>
-          )}
-        </div>
-        <div className="min-w-0 @3xl:col-start-2 @3xl:row-span-2 @3xl:row-start-1">
-          <DetailsAside row={row} versions={data.versions} editable={editable} />
-        </div>
-        <div className="min-w-0 @3xl:col-start-1 @3xl:row-start-2">
-          <CompanyTimeline
-            unlinkFrom={companyPageHref(record)}
-            days={row.days}
-            handling={row.handling}
-            roles={[]}
-            allRolesHref=""
-            role={null}
-            openMail={panelOpen ? null : (mailIntent ?? null)}
-            olderHref={row.olderHref}
-            inboxes={inboxes}
-            requisition={record.requisition}
-            roundCards={row.roundCards}
-            toolbarEnd={
-              <OutcomeChips
-                key={`follow-chip-${record.id}`}
-                recordId={record.id}
-                outcomes={followUpChip}
-                initial={initialOutcome(followUpChip, requested)}
-                requested={requested}
-                mailId={sourceMail}
-                selectionKey={sourceMail}
+      <DetailsProvider>
+        <div className="grid gap-6 @3xl:grid-cols-[minmax(0,1fr)_290px] @3xl:items-start">
+          <CompactFacts
+            applied={record.sentAt ? `Applied ${withYear(record.sentAt)}` : "Not sent"}
+            opening={record.requisition ?? "No requisition"}
+            openingHref={record.jobUrl}
+            resume={record.resume?.label ?? null}
+          />
+          <div className="min-w-0 space-y-4 @3xl:col-start-1 @3xl:row-start-2">
+            {/* Focus lands here when a saved step removes the control that held it. */}
+            <section aria-label="Progress" tabIndex={-1} className="min-w-0 space-y-5 outline-none">
+              <CurrentStep
+                record={record}
+                booked={booked}
+                outcomes={row.outcomes}
                 today={today}
                 returnTo={returnTo}
+                editable={editable}
+                notApplyingClosed={notApplyingClosed}
+                now={now}
               />
-            }
-          >
-            <NoteComposer recordId={record.id} />
-          </CompanyTimeline>
+              <Tracker
+                key={`tracker-${record.id}`}
+                steps={row.steps}
+                recordId={record.id}
+                addable={addable}
+                requested={requested}
+                mailId={sourceMail}
+                today={today}
+                booked={booked}
+                returnTo={returnTo}
+                rowHref={rowHref}
+                source={source}
+              />
+            </section>
+            {recorded && (
+              <ActionForm
+                action={undoAutoOutcomeAction}
+                feedback="inverse"
+                pendingLabel="Undoing"
+                className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground"
+              >
+                <span>
+                  Recorded from an email:{" "}
+                  {outcomeMeta[recorded.outcome as OutcomeId]?.label ?? recorded.outcome}
+                </span>
+                <input type="hidden" name="id" value={recorded.mailMessageId} />
+                <button
+                  type="submit"
+                  className="pressable inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium text-link hover:bg-selected"
+                >
+                  <Undo2 aria-hidden size={13} />
+                  Undo
+                </button>
+              </ActionForm>
+            )}
+          </div>
+          <AsideSlot>
+            <DetailsAside row={row} versions={data.versions} editable={editable} />
+          </AsideSlot>
+          <div className="min-w-0 @3xl:col-start-1 @3xl:row-start-3">
+            <CompanyTimeline
+              unlinkFrom={companyPageHref(record)}
+              days={row.days}
+              handling={row.handling}
+              roles={[]}
+              allRolesHref=""
+              role={null}
+              openMail={panelOpen ? null : (mailIntent ?? null)}
+              olderHref={row.olderHref}
+              inboxes={inboxes}
+              requisition={record.requisition}
+              roundCards={row.roundCards}
+              toolbarEnd={
+                <OutcomeChips
+                  key={`follow-chip-${record.id}`}
+                  recordId={record.id}
+                  outcomes={followUpChip}
+                  initial={initialOutcome(followUpChip, requested)}
+                  requested={requested}
+                  mailId={sourceMail}
+                  selectionKey={sourceMail}
+                  today={today}
+                  returnTo={returnTo}
+                />
+              }
+            >
+              <NoteComposer recordId={record.id} />
+            </CompanyTimeline>
+          </div>
         </div>
-      </div>
+      </DetailsProvider>
     </div>
   );
 }

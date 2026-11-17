@@ -546,6 +546,21 @@ describe("company page applications", () => {
       expect(aside).not.toContain('aria-expanded="true"');
     });
 
+    it("leads a narrow row with a compact facts row and a Details toggle, keeping the aside", () => {
+      const html = open(application());
+      const compact = html.indexOf("Applied 4 Nov 2026");
+      expect(compact).toBeGreaterThan(-1);
+      expect(compact).toBeLessThan(html.indexOf('data-testid="current-step"'));
+      expect(html).toMatch(
+        /<button[^>]*aria-expanded="false"[^>]*aria-controls="[^"]+"[^>]*>Details/,
+      );
+      expect(html).toContain("@3xl:hidden");
+      // The wide layout still gets the whole aside.
+      const aside = asideOf(html);
+      for (const text of ["Set a follow-up", "Résumé used", "Edit details"])
+        expect(aside).toContain(text);
+    });
+
     it("replaces Add to history with a one-row composer", () => {
       const html = open(application());
       expect(html).not.toContain("Add to history");

@@ -125,7 +125,7 @@ export function ApplicationRow({
               </span>
             )}
             <span
-              data-testid="phase-label"
+              data-testid={open ? "phase-label" : undefined}
               className={cn("min-w-0 truncate rounded-full px-2.5 py-0.5 text-xs", tones[tone])}
               title={pill}
             >

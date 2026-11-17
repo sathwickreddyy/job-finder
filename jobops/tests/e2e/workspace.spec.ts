@@ -1,7 +1,7 @@
 import { stubExternalSites } from "./helpers/external-sites";
 import { expect, test } from "@playwright/test";
 import { closeDatabase } from "../../src/db";
-import { hydrated } from "./helpers/hydration";
+import { hydrated, openDetails } from "./helpers/hydration";
 import { cleanupRecords, seedRecord } from "./helpers/records";
 import { captureImportedMail, cleanupMailFixtures, guardMailFixtures } from "./helpers/task13-mail";
 test.beforeEach(guardMailFixtures);
@@ -145,6 +145,7 @@ test("a note added from the composer with Enter appears in the timeline, and not
   await expect(composer).toHaveValue("");
   await expect(row).toContainText("Spoke with the recruiter");
 
+  await openDetails(row);
   const notes = row.getByRole("region", { name: "Notes", exact: true });
   await hydrated(notes.getByRole("button", { name: "Open notes", exact: true }));
   await notes.getByRole("button", { name: "Open notes", exact: true }).click();

@@ -15,3 +15,11 @@ export async function hydrated(locator: Locator) {
       }),
   );
 }
+
+/** Opens an application row's details when its container is narrow enough to collapse them. */
+export async function openDetails(row: Locator) {
+  const toggle = row.getByRole("button", { name: "Details", exact: true });
+  if (!(await toggle.isVisible())) return;
+  await hydrated(toggle);
+  if ((await toggle.getAttribute("aria-expanded")) === "false") await toggle.click();
+}

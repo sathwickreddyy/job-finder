@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { closeDatabase } from "../../src/db";
 import { stubExternalSites } from "./helpers/external-sites";
-import { hydrated } from "./helpers/hydration";
+import { hydrated, openDetails } from "./helpers/hydration";
 import { cleanupRecords, istDay, seedRecord } from "./helpers/records";
 import {
   captureSavedJob,
@@ -123,6 +123,7 @@ test("recording outcomes walks an application from OA to an accepted offer", asy
   await page.reload();
   await expect(rounds.filter({ hasText: "LLD" })).toBeVisible();
   // Notes are written in the Notes fold as Markdown; Edit details holds the record's fields.
+  await openDetails(row);
   const notes = row.getByRole("region", { name: "Notes", exact: true });
   await hydrated(notes.getByRole("button", { name: "Open notes", exact: true }));
   await notes.getByRole("button", { name: "Open notes", exact: true }).click();
@@ -399,6 +400,7 @@ test("record history uses readable India-time dates and long notes render in ful
   const row = page.locator(`#application-${applicationId}`);
   await expect(row).toContainText(/\d{1,2}:\d{2} (am|pm)/);
   await expect(row).not.toContainText("Asia/Kolkata");
+  await openDetails(row);
   const notes = row.getByRole("region", { name: "Notes", exact: true });
   await hydrated(notes.getByRole("button").first());
   await notes.getByRole("button", { name: "Open notes", exact: true }).click();
