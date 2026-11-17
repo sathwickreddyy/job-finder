@@ -81,6 +81,7 @@ export async function applyOutcome(
         kind: z.enum(roundKinds).optional(),
         at: z.date().optional(),
         name: z.string().trim().max(200),
+        interviewer: z.string().trim().max(200),
         note: z.string().trim().max(2000),
         happenedAt: z
           .date()
@@ -119,6 +120,7 @@ export async function applyOutcome(
         applicationId: app.id,
         kind: plan.round.kind,
         name: plan.round.name,
+        interviewer: plan.round.interviewer,
         scheduledAt: plan.round.scheduledAt,
         position: Math.max(0, ...rounds.map((round) => round.position)) + 1,
       })
@@ -160,6 +162,7 @@ export async function applyOutcome(
         detail: {
           kind: data.detail.kind ?? null,
           name: data.detail.name,
+          interviewer: data.detail.interviewer,
           at: data.detail.at?.toISOString() ?? null,
           happenedAt: data.detail.happenedAt.toISOString(),
           note: data.detail.note,
@@ -318,7 +321,14 @@ export async function updateRecordDetails(
 
 export async function updateRecordRound(
   tx: Tx,
-  data: { id: string; name: string; day: string; time: string; notes: string },
+  data: {
+    id: string;
+    name: string;
+    day: string;
+    time: string;
+    notes: string;
+    interviewer: string;
+  },
   now: Date,
 ) {
   // Find only the parent first, then re-read the round after locking that parent.
@@ -346,6 +356,7 @@ export async function updateRecordRound(
       name: data.name,
       scheduledAt,
       notes: data.notes,
+      interviewer: data.interviewer,
       updatedAt: now,
     })
     .where(eq(applicationRounds.id, round.id));

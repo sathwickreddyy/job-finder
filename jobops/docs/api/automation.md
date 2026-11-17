@@ -58,6 +58,7 @@ for field formats. Get user authorization before archiving or restoring companie
 | --- | --- |
 | `GET /api/v1/applications` | Look up records with exactly one of `?url=` or `?company=`. Check whether the specific opening was submitted. |
 | `POST /api/v1/applications` | Record a confirmed application or sent outreach with `humanConfirmed: true`. Supply the exact used PDF version when a PDF was sent. The request can save its opening alongside the record. |
+| `PUT /api/v1/applications/{id}/notes` | Replace the application's Markdown notes with `{ "notes": "…" }` and read back the saved text. Write the three-section template at submit; see the [notes contract](application-notes.md). |
 | `GET /api/v1/applications/{id}/transitions` | Read current state, available actions and outcome requirements. |
 | `POST /api/v1/applications/{id}/transitions` | Record `recordSent`, `notApplying`, `reopen` or `recordOutcome` when the state allows it. Covers replies, follow-ups, assessments, rounds, referrals, offers, rejections and closure. |
 

@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { expect, test, type Page } from "@playwright/test";
-import { closeDatabase } from "../../src/db";
+import { eq } from "drizzle-orm";
+import { closeDatabase, db } from "../../src/db";
+import { mailMessages } from "../../src/db/schema";
 import { stubExternalSites } from "./helpers/external-sites";
 import { hydrated } from "./helpers/hydration";
 import { cleanupRecords, seedRecord } from "./helpers/records";
@@ -78,4 +80,35 @@ test("a ?mail= link opens that email over the page", async ({ page }) => {
   await hydrated(dialog.getByRole("button", { name: "Close" }));
   await dialog.getByRole("button", { name: "Close" }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
+});
+
+test("Unlink is offered on a company row's email popup, not on the Mail page", async ({ page }) => {
+  const tag = randomUUID().slice(0, 8);
+  const company = `Unlink Co ${tag}`;
+  const { applicationId } = await seedRecord({ company, source: "DIRECT", sentDaysAgo: 3 });
+  const subject = `Linked ${tag}`;
+  const id = await seedMail({
+    subject,
+    classification: "INTERVIEW",
+    attentionState: "DONE",
+    companyKey: company.toLowerCase(),
+  });
+  await db
+    .update(mailMessages)
+    .set({ linkedApplicationId: applicationId })
+    .where(eq(mailMessages.id, id));
+  const unlink = (scope: Page) =>
+    scope.getByRole("dialog").getByRole("button", { name: "Unlink from this application" });
+  await page.goto(`/mail?${new URLSearchParams({ company, mail: id })}`);
+  await expect(page.getByRole("dialog", { name: subject })).toBeVisible();
+  await expect(unlink(page)).toHaveCount(0);
+
+  await page.goto(`/applications/${applicationId}?mail=${id}`);
+  await expect(page.getByRole("dialog", { name: subject })).toBeVisible();
+  await hydrated(unlink(page));
+  await unlink(page).click();
+  await expect(page).toHaveURL(new RegExp(`/companies/[^?#]+\\?open=${applicationId}&notice=`));
+  await expect(
+    page.getByRole("status").filter({ hasText: "Recorded outcomes and history were kept." }),
+  ).toBeVisible();
 });

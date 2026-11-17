@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { applicationEvents, applicationRounds } from "@/db/schema";
 import type { MailItem } from "@/features/mail/mail-item";
+import { noonIfDateOnly } from "@/features/applications/dates";
 import { timelineEntries, type TimelineDay } from "@/features/timeline/entries";
 
 type EventRow = typeof applicationEvents.$inferSelect;
@@ -51,6 +52,7 @@ const round = (id: string, scheduledAt: string, extra: Partial<RoundRow> = {}): 
   outcome: "SCHEDULED",
   position: 1,
   notes: "",
+  interviewer: "",
   createdAt: now,
   updatedAt: now,
   ...extra,
@@ -66,6 +68,17 @@ const build = (input: Partial<Parameters<typeof timelineEntries>[0]>) =>
     ...input,
   });
 const flat = (days: TimelineDay[]) => days.flatMap((day) => day.entries);
+
+describe("noonIfDateOnly", () => {
+  it("treats only India midnight as a date without a time", () => {
+    expect(noonIfDateOnly(new Date("2026-11-03T18:30:00Z")).toISOString()).toBe(
+      "2026-11-04T06:30:00.000Z",
+    );
+    expect(noonIfDateOnly(new Date("2026-11-04T00:00:00Z")).toISOString()).toBe(
+      "2026-11-04T00:00:00.000Z",
+    );
+  });
+});
 
 describe("timelineEntries", () => {
   it("drops mail-driven events and annotates the email", () => {
@@ -123,7 +136,7 @@ describe("timelineEntries", () => {
     expect(steps[1]).toMatchObject({ applicationId: "app-1", eventType: "APPLICATION_SUBMITTED" });
   });
 
-  it("orders newest first with Coming up above Today", () => {
+  it("orders newest first with no Coming up day", () => {
     const days = build({
       mail: [
         mail("m1", "2026-10-31T09:00:00+05:30"),
@@ -135,9 +148,9 @@ describe("timelineEntries", () => {
         round("r2", "2026-10-29T15:00:00+05:30", { outcome: "PASSED" }),
       ],
     });
-    expect(days.map((day) => day.label)).toEqual(["Coming up", "Today", "Yesterday"]);
+    expect(days.map((day) => day.label)).toEqual(["Sun 1 Nov", "Today", "Yesterday", "Thu 29 Oct"]);
     expect(days[0].entries).toEqual([
-      expect.objectContaining({ type: "step", upcoming: true, text: "DSA round" }),
+      expect.objectContaining({ type: "round", label: "Round 1 · DSA" }),
     ]);
     expect(days[1].entries.map((entry) => (entry.type === "mail" ? entry.item.id : ""))).toEqual([
       "m2",
@@ -145,11 +158,51 @@ describe("timelineEntries", () => {
     ]);
   });
 
-  it("labels an upcoming assessment as its closing time", () => {
-    const days = build({
-      rounds: [round("r1", "2026-11-02T23:59:00+05:30", { kind: "ONLINE_ASSESSMENT" })],
-    });
-    expect(days[0].entries[0]).toMatchObject({ text: "OA closes", upcoming: true });
+  it("places every round as a card, at its time or its creation", () => {
+    const entries = flat(
+      build({
+        rounds: [
+          round("past", "2026-10-29T15:00:00+05:30", { outcome: "PASSED", position: 1 }),
+          round("future", "2026-11-02T10:00:00+05:30", { position: 2 }),
+          round("undated", "2026-10-30T10:00:00+05:30", {
+            scheduledAt: null,
+            position: 3,
+            createdAt: new Date("2026-10-28T11:00:00+05:30"),
+          }),
+          round("gone", "2026-10-30T10:00:00+05:30", { outcome: "CANCELLED", position: 4 }),
+        ],
+      }),
+    );
+    expect(entries.map((entry) => entry.type)).toEqual(["round", "round", "round"]);
+    expect(entries.map((entry) => (entry.type === "round" ? entry.round.id : ""))).toEqual([
+      "future",
+      "past",
+      "undated",
+    ]);
+    expect(entries.map((entry) => entry.at)).toEqual([
+      new Date("2026-11-02T10:00:00+05:30").toISOString(),
+      new Date("2026-10-29T15:00:00+05:30").toISOString(),
+      new Date("2026-10-28T11:00:00+05:30").toISOString(),
+    ]);
+  });
+
+  it("sorts a date-only step as noon", () => {
+    const entries = flat(
+      build({
+        mail: [
+          mail("late", "2026-11-03T14:32:00+05:30"),
+          mail("early", "2026-11-03T08:47:00+05:30"),
+        ],
+        events: [event("e1", "APPLICATION_SUBMITTED", "2026-11-02T18:30:00Z")],
+        now: new Date("2026-11-03T20:00:00+05:30"),
+      }),
+    );
+    expect(entries.map((entry) => (entry.type === "mail" ? entry.item.id : entry.type))).toEqual([
+      "late",
+      "step",
+      "early",
+    ]);
+    expect(entries[1].at).toBe("2026-11-03T06:30:00.000Z");
   });
 
   it("groups by India date at 23:30 IST", () => {
@@ -177,7 +230,10 @@ describe("timelineEntries", () => {
       rounds: [round("r1", "2026-11-01T15:00:00+05:30")],
     });
     expect(days.map((day) => [day.label, day.stamp])).toEqual([
-      ["Coming up", null],
+      [
+        "Sun 1 Nov",
+        { weekday: "Sun", day: 1, month: "Nov", year: 2026, thisYear: true, today: false },
+      ],
       ["Today", { weekday: "Sat", day: 31, month: "Oct", year: 2026, thisYear: true, today: true }],
       [
         "Tue 1 Sep",
@@ -202,7 +258,7 @@ describe("timelineEntries", () => {
     ]);
   });
 
-  it("hides steps while filtered", () => {
+  it("hides steps and rounds while filtered", () => {
     const days = build({
       filtered: true,
       mail: [mail("m1", "2026-10-30T09:00:00+05:30")],

@@ -4,6 +4,15 @@ const DAY = 86_400_000;
 const zone = "Asia/Kolkata";
 export { indiaDate };
 
+const IST_OFFSET = 19_800_000;
+/**
+ * A time stored at exactly 00:00:00.000 India time is a date saved without a time. It shows
+ * and sorts as 12:00 pm that day; the stored value never changes.
+ */
+export function noonIfDateOnly(value: Date) {
+  return (value.getTime() + IST_OFFSET) % DAY === 0 ? new Date(value.getTime() + DAY / 2) : value;
+}
+
 /** Start of the IST calendar day that contains `value`. */
 export function istDayStart(value: Date) {
   return indiaDayBoundary(indiaDate(value))!;

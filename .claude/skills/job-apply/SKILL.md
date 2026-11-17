@@ -60,7 +60,7 @@ Uncertain submission → inspect confirmation/history before retrying. Never sub
 
 ## 7. Record, refresh and finish
 
-After real submission, confirm which PDF was attached. Upload only the used revision if missing; preserve its DOCX/master lineage and checks. Record the exact `resumeVersionId`, India date and confirmation. [JobOps operations](references/jobops-api.md) explains supported uploads and distinguishes referral outreach from submission.
+After real submission, confirm which PDF was attached. Upload only the used revision if missing; preserve its DOCX/master lineage and checks. Record the exact `resumeVersionId`, India date and confirmation. [JobOps operations](references/jobops-api.md) explains supported uploads and distinguishes referral outreach from submission. Then write the application's notes with `PUT …/notes` using the [notes template](references/jobops-api.md#write-the-application-notes).
 
 Refresh mail again, complete pagination, report account errors and refine company rules from real acknowledgement evidence. No acknowledgement yet → report pending; never infer submission failure or poll indefinitely.
 

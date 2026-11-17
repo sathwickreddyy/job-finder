@@ -119,5 +119,6 @@ test("linking imported mail appends history without changing the application pha
   await expect(page.getByRole("button", { name: new RegExp(subject) })).toHaveCount(0);
   await page.goto(`/applications/${applicationId}`);
   await expect(page.getByTestId("phase-label")).toHaveText(previousPhase);
-  await expect(page.getByRole("region", { name: "History" })).toContainText(subject);
+  // The placed message shows on the application's own timeline on its company-page row.
+  await expect(page.locator(`#application-${applicationId}`)).toContainText(subject);
 });

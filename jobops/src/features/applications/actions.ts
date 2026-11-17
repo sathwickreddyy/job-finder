@@ -24,6 +24,7 @@ export async function addApplicationNote(
       });
     });
     revalidatePath(`/applications/${data.id}`);
+    revalidatePath("/companies/[slug]", "page");
     return { success: "Timeline note added." };
   } catch (e) {
     return actionError(e);

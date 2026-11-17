@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useSyncExternalStore, type ReactNode } from "react";
-import { ChevronDown } from "lucide-react";
+import { useSyncExternalStore } from "react";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import { ActionForm } from "@/components/action-form";
 import { StatusPill } from "@/features/companies/status-pill";
 import { cn } from "@/lib/utils";
@@ -94,15 +94,11 @@ function Row({
   lane,
   journey,
   steps,
-  open,
-  detail,
   mobile = false,
 }: {
   lane: Lane;
   journey: Journey | undefined;
   steps: NamedStep[] | undefined;
-  open: boolean;
-  detail: ReactNode;
   mobile?: boolean;
 }) {
   const role = lane.roles[0];
@@ -110,7 +106,7 @@ function Row({
     <li
       className={cn(
         "overflow-hidden rounded-3xl ring-1 ring-border",
-        lane.group === "closed" && !open ? "bg-transparent" : "bg-card",
+        lane.group === "closed" ? "bg-transparent" : "bg-card",
       )}
     >
       <div
@@ -119,13 +115,10 @@ function Row({
         className={cn(
           "relative grid gap-4 px-4 py-4 transition-colors hover:bg-muted/40",
           !mobile && "md:grid-cols-[minmax(0,1fr)_minmax(0,1.35fr)_minmax(0,1fr)] md:items-center",
-          open && "bg-muted/30",
         )}
       >
         <Link
-          href={open ? "/applications" : laneHref(lane.leadId)}
-          scroll={false}
-          aria-expanded={open}
+          href={laneHref(lane.leadId)}
           className="flex min-w-0 items-center gap-3 text-foreground after:absolute after:inset-0 after:rounded-3xl hover:no-underline focus-visible:outline-none focus-visible:after:outline-2 focus-visible:after:outline-offset-[-2px] focus-visible:after:outline-primary"
         >
           <Monogram name={lane.company} />
@@ -150,13 +143,10 @@ function Row({
               )}
             </span>
           </span>
-          <ChevronDown
+          <ChevronRight
             aria-hidden
             size={18}
-            className={cn(
-              "shrink-0 text-muted-foreground transition-transform md:hidden",
-              open && "rotate-180",
-            )}
+            className="shrink-0 text-muted-foreground md:hidden"
           />
         </Link>
         {steps ? (
@@ -174,39 +164,19 @@ function Row({
           <NextStep next={lane.next} returnTo="/applications" />
         </div>
       </div>
-      {open && detail}
     </li>
   );
 }
 
-type Pin = { id: string; group: LaneGroup };
 type ListProps = {
   lanes: Lane[];
   journeys: Record<string, Journey>;
   /** Named steps for applications; outreach rows keep their journey track. */
   namedSteps?: Record<string, NamedStep[]>;
-  openId: string | null;
-  detail: ReactNode;
 };
 
-/** The focused row keeps its place while outcomes change, and every record stays visible. */
-export function MobileApplicationList({
-  lanes,
-  journeys,
-  namedSteps = {},
-  openId,
-  detail,
-}: ListProps) {
-  const [anchor, setAnchor] = useState(() => ({
-    id: openId,
-    index: lanes.findIndex((lane) => lane.leadId === openId),
-  }));
-  if (anchor.id !== openId)
-    setAnchor({ id: openId, index: lanes.findIndex((lane) => lane.leadId === openId) });
-  const open = lanes.find((lane) => lane.leadId === openId);
-  const rows = open && anchor.id === openId ? lanes.filter((lane) => lane !== open) : [...lanes];
-  if (open && anchor.id === openId)
-    rows.splice(Math.max(0, Math.min(anchor.index, rows.length)), 0, open);
+/** Every record stays visible in one list, next actions first. */
+export function MobileApplicationList({ lanes, journeys, namedSteps = {} }: ListProps) {
   return (
     <div className="space-y-4" data-testid="mobile-applications">
       <p className="m-0 flex justify-between gap-3 px-1 text-xs text-muted-foreground">
@@ -214,14 +184,12 @@ export function MobileApplicationList({
         <span>Next actions first</span>
       </p>
       <ul className="m-0 grid list-none gap-3 p-0">
-        {rows.map((lane) => (
+        {lanes.map((lane) => (
           <Row
             key={lane.key}
             lane={lane}
             journey={journeys[lane.leadId]}
             steps={namedSteps[lane.leadId]}
-            open={lane.leadId === openId}
-            detail={detail}
             mobile
           />
         ))}
@@ -238,41 +206,17 @@ function subscribePhone(callback: () => void) {
 const isPhone = () => window.matchMedia("(max-width: 767px)").matches;
 
 /**
- * The open row stays in the group it opened in, so recording from it never moves it out from
- * under the reader (or remounts its forms mid-save); it takes its new group once it closes.
- */
-export function pinOpenRow(lanes: Lane[], pin: Pin | null): Lane[] {
-  if (!pin) return lanes;
-  return lanes.map((lane) => (lane.leadId === pin.id ? { ...lane, group: pin.group } : lane));
-}
-
-/**
  * Applications as journeys (spec §4), one row per application in Needs you, Waiting on them
- * and Closed. The open row (`?open=<id>`) expands in place beneath itself (spec §5).
+ * and Closed. A row links to its application on the company page.
  */
-export function ApplicationList({ lanes, journeys, namedSteps = {}, openId, detail }: ListProps) {
-  const pinFor = (id: string | null): Pin | null => {
-    const group = id ? lanes.find((lane) => lane.leadId === id)?.group : undefined;
-    return id && group ? { id, group } : null;
-  };
-  const [pin, setPin] = useState(() => pinFor(openId));
-  if ((pin?.id ?? null) !== openId) setPin(pinFor(openId));
-  const placed = pinOpenRow(lanes, pin?.id === openId ? pin : null);
+export function ApplicationList({ lanes, journeys, namedSteps = {} }: ListProps) {
   const phone = useSyncExternalStore(subscribePhone, isPhone, () => false);
   if (phone)
-    return (
-      <MobileApplicationList
-        lanes={placed}
-        journeys={journeys}
-        namedSteps={namedSteps}
-        openId={openId}
-        detail={detail}
-      />
-    );
+    return <MobileApplicationList lanes={lanes} journeys={journeys} namedSteps={namedSteps} />;
   return (
     <div className="flex flex-col gap-8">
       {groups.map((group) => {
-        const rows = placed.filter((lane) => lane.group === group.id);
+        const rows = lanes.filter((lane) => lane.group === group.id);
         if (!rows.length) return null;
         const heading = (
           <span className="flex items-baseline gap-2 text-sm font-semibold">
@@ -288,8 +232,6 @@ export function ApplicationList({ lanes, journeys, namedSteps = {}, openId, deta
                 lane={lane}
                 journey={journeys[lane.leadId]}
                 steps={namedSteps[lane.leadId]}
-                open={lane.leadId === openId}
-                detail={detail}
               />
             ))}
           </ul>
@@ -298,10 +240,7 @@ export function ApplicationList({ lanes, journeys, namedSteps = {}, openId, deta
         return (
           <section key={group.id} aria-label={group.label} className="flex flex-col gap-3">
             {folded ? (
-              <details
-                open={rows.some((lane) => lane.leadId === openId) || undefined}
-                className="group flex flex-col gap-3"
-              >
+              <details className="group flex flex-col gap-3">
                 <summary className="flex cursor-pointer list-none items-center gap-1.5 px-1 [&::-webkit-details-marker]:hidden">
                   <h2 className="m-0">{heading}</h2>
                   <ChevronDown

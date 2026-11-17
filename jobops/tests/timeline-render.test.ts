@@ -2,9 +2,15 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import type { MailItem } from "@/features/mail/mail-item";
-import type { TimelineDay } from "@/features/timeline/entries";
+import type { applicationRounds } from "@/db/schema";
+import type { TimelineDay, TimelineRound } from "@/features/timeline/entries";
 import type { Handling } from "@/features/timeline/suggest";
 
+vi.mock("@/features/applications/record-actions", () => ({
+  updateRound: vi.fn(),
+  recordAsSent: vi.fn(),
+}));
+vi.mock("@/features/applications/outcomes", () => ({ recordOutcome: vi.fn() }));
 vi.mock("@/features/mail/workspace-actions", () => ({
   handleMailAction: vi.fn(),
   reopenMailAction: vi.fn(),
@@ -13,7 +19,10 @@ vi.mock("@/features/mail/workspace-actions", () => ({
   restoreMailKind: vi.fn(),
   undoAutoOutcomeAction: vi.fn(),
 }));
+type RoundRow = typeof applicationRounds.$inferSelect;
 const { CompanyTimeline } = await import("@/features/timeline/timeline");
+const { isShown } = await import("@/features/timeline/timeline");
+const { RoundCard, notesSummary } = await import("@/features/timeline/round-card");
 
 const item = (id: string, patch: Partial<MailItem> = {}): MailItem => ({
   id,
@@ -51,22 +60,6 @@ const handling: Handling = {
 };
 const days: TimelineDay[] = [
   {
-    key: "upcoming",
-    label: "Coming up",
-    stamp: null,
-    entries: [
-      {
-        type: "step",
-        id: "round:1",
-        at: "2026-11-03T09:30:00.000Z",
-        applicationId: "a",
-        eventType: "ROUND_BOOKED",
-        text: "DSA round",
-        upcoming: true,
-      },
-    ],
-  },
-  {
     key: "2026-10-31",
     label: "Today",
     stamp: today,
@@ -84,7 +77,6 @@ const days: TimelineDay[] = [
         applicationId: "a",
         eventType: "APPLICATION_SUBMITTED",
         text: "Applied for Backend",
-        upcoming: false,
       },
     ],
   },
@@ -107,7 +99,7 @@ const render = (props: Partial<Parameters<typeof CompanyTimeline>[0]> = {}) =>
 describe("CompanyTimeline", () => {
   it("renders day headings and rows", () => {
     const html = render();
-    for (const heading of ["Coming up", "Today", "Fri 30 Oct"]) expect(html).toContain(heading);
+    for (const heading of ["Today", "Fri 30 Oct"]) expect(html).toContain(heading);
     // Open mail reads bold with a blue edge; screen readers hear that it needs you.
     expect(html).toContain(", needs you");
     expect(html).toContain("w-[3px]");
@@ -185,9 +177,11 @@ describe("CompanyTimeline", () => {
 
   it("labels steps in the tag column so they read apart from emails", () => {
     const html = render();
-    expect(html).toMatch(/>DSA round</);
-    expect(html).toMatch(/>Booked<\/span>/);
+    expect(html).not.toContain("Coming up");
+    expect(html.match(/>Recorded</g)).toHaveLength(1);
     expect(html).toMatch(/>Recorded<\/span>[\s\S]*?Applied for Backend/);
+    expect(html).toContain('id="entry-e1"');
+    expect(html).toContain('id="mail-m1"');
   });
 
   it("role chips only with two roles", () => {
@@ -379,7 +373,6 @@ describe("CompanyTimeline", () => {
               applicationId: "a",
               eventType: "APPLICATION_SUBMITTED",
               text: long,
-              upcoming: false,
             },
           ],
         },
@@ -388,5 +381,166 @@ describe("CompanyTimeline", () => {
     expect(html).toContain("line-clamp-2");
     expect(html).toMatch(/<button[^>]*aria-expanded="false"[^>]*>[\s\S]*Posting date checked/);
     expect(render()).not.toContain("line-clamp-2");
+  });
+
+  describe("one application", () => {
+    const entry = (patch: Partial<RoundRow> = {}): TimelineRound => ({
+      type: "round",
+      at: "2026-10-30T08:30:00.000Z",
+      label: "Round 1 · DSA",
+      round: {
+        id: "r1",
+        applicationId: "a",
+        kind: "DSA",
+        name: "",
+        scheduledAt: new Date("2026-10-30T08:30:00.000Z"),
+        outcome: "SCHEDULED",
+        position: 1,
+        notes: "Panel liked the **graph** answer",
+        interviewer: "Asha Rao",
+        createdAt: new Date("2026-10-20T00:00:00.000Z"),
+        updatedAt: new Date("2026-10-20T00:00:00.000Z"),
+        ...patch,
+      },
+    });
+    const question = {
+      id: "q1",
+      roundId: "r1",
+      position: 1,
+      title: "Merge intervals",
+      patterns: [],
+      prompt: "",
+      answer: "",
+      outcome: null,
+      time: "",
+      space: "",
+      interviewer: "",
+      review: "",
+      reviewSource: null,
+      reviewedAt: null,
+      updatedAt: "2026-10-30T09:00:00.000Z",
+    };
+    const data = {
+      recordId: "a",
+      questions: [question],
+      outcomes: ["passed" as const, "failed" as const, "rescheduled" as const, "rejected" as const],
+      today: "2026-10-31",
+    };
+    const stepDay: TimelineDay = {
+      key: "2026-10-30",
+      label: "Fri 30 Oct",
+      stamp: stamp("Fri", 30, "Oct"),
+      entries: [
+        entry(),
+        {
+          type: "step",
+          id: "e2",
+          at: "2026-10-30T06:30:00.000Z",
+          applicationId: "a",
+          eventType: "APPLICATION_SUBMITTED",
+          text: "Applied",
+        },
+      ],
+    };
+    const mailDay = days[0];
+    const one = (props: Partial<Parameters<typeof CompanyTimeline>[0]> = {}) =>
+      render({
+        days: [mailDay, stepDay],
+        requisition: "REQ-0001",
+        roundCards: { r1: data },
+        roles: [],
+        ...props,
+      });
+
+    it("replaces role chips with All, Stages and Mail", () => {
+      const html = one({ roles: [role("a", "Backend"), role("b", "Platform")] });
+      expect(html).not.toContain('aria-label="Filter by role"');
+      expect(html).toMatch(/aria-label="Filter timeline"[\s\S]*>All<[\s\S]*>Stages<[\s\S]*>Mail</);
+    });
+
+    it("shows steps with Recorded once, the time under it, and the requisition", () => {
+      const html = one();
+      expect(html).toContain('id="entry-e2"');
+      expect(html.match(/>Recorded</g)).toHaveLength(1);
+      expect(html).toMatch(/>Recorded<\/span><\/span><span[^>]*>12:00 pm</);
+      expect(html).toContain(">REQ-0001<");
+    });
+
+    it("shows a round card with interviewer, question count and result", () => {
+      const html = one();
+      expect(html).toContain('id="round-r1"');
+      for (const text of ["Asha Rao", "Round 1 · DSA", "1 question", "Result due"])
+        expect(html).toContain(text);
+      expect(html).not.toContain("Merge intervals");
+    });
+
+    it("says when no interviewer was recorded", () => {
+      expect(one({ roundCards: { r1: data } })).toContain("Asha Rao");
+      const html = renderToStaticMarkup(
+        createElement(RoundCard, {
+          entry: entry({ interviewer: "" }),
+          data,
+        }),
+      );
+      expect(html).toContain("Interviewer not recorded");
+    });
+
+    it("opened, lists the questions and the round notes with only round outcomes", () => {
+      const html = renderToStaticMarkup(
+        createElement(RoundCard, { entry: entry(), data, defaultOpen: true, requisition: null }),
+      );
+      expect(html).toContain("Merge intervals");
+      expect(html).toContain("<strong>graph</strong>");
+      expect(html).toContain("Questions · 1");
+      expect(html).toContain("Round notes");
+      expect(html).toContain("Edit round");
+      expect(html).toContain("No requisition");
+      for (const label of ["Cleared the round", "Didn&#x27;t clear it", "Rescheduled"])
+        expect(html.replace(/&#39;/g, "&#x27;")).toContain(label);
+      expect(html).not.toContain("Rejected");
+    });
+
+    it("labels results Booked, Cleared and Didn't clear", () => {
+      const text = (patch: Partial<RoundRow>) =>
+        renderToStaticMarkup(createElement(RoundCard, { entry: entry(patch), data }));
+      expect(text({ scheduledAt: new Date("2999-01-01T00:00:00Z") })).toContain(">Booked<");
+      expect(text({ outcome: "PASSED" })).toContain(">Cleared<");
+      expect(text({ outcome: "FAILED" })).toContain("Didn&#x27;t clear");
+    });
+
+    it("tags emails, steps and rounds with the requisition, or No requisition", () => {
+      expect(one().match(/>REQ-0001</g)).toHaveLength(3);
+      expect(one({ requisition: null }).match(/>No requisition</g)).toHaveLength(3);
+      expect(render()).not.toContain("No requisition");
+    });
+
+    it("filters: Stages keeps steps and rounds, Mail keeps emails only", () => {
+      const m = days[0].entries[0];
+      const step = stepDay.entries[1];
+      const r = stepDay.entries[0];
+      const result = (filter: "all" | "stages" | "mail") =>
+        [m, step, r].map((entry) => isShown(entry, filter, true));
+      expect(result("all")).toEqual([true, true, true]);
+      expect(result("stages")).toEqual([false, true, true]);
+      expect(result("mail")).toEqual([true, false, false]);
+      expect(isShown(r, "all", false)).toBe(false);
+    });
+
+    it("shows the first line of the round notes as a summary", () => {
+      expect(notesSummary("\n## **Went** well with [graphs](http://x)\nmore")).toBe(
+        "Went well with graphs",
+      );
+      const html = renderToStaticMarkup(createElement(RoundCard, { entry: entry(), data }));
+      expect(html).toContain("Panel liked the graph answer");
+      const none = renderToStaticMarkup(
+        createElement(RoundCard, { entry: entry({ notes: "" }), data }),
+      );
+      expect(none).not.toContain("Panel liked");
+      expect(none).not.toMatch(/1 question<\/span><span/);
+    });
+
+    it("hides a round without card data", () => {
+      expect(one({ roundCards: {} })).not.toContain("round-r1");
+    });
   });
 });

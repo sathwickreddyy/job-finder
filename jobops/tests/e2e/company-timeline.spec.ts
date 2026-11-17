@@ -27,10 +27,10 @@ async function companyWithMail(
   label = "Timeline Co",
 ) {
   const company = unique(label);
-  await seedRecord({ company, source: "DIRECT", sentDaysAgo: 2 });
+  const { applicationId } = await seedRecord({ company, source: "DIRECT", sentDaysAgo: 2 });
   const subject = unique("Email");
   const id = await seedMail({ subject, classification, companyKey: keyOf(company) });
-  return { company, subject, id };
+  return { company, subject, id, applicationId };
 }
 
 test("opens All job mail, then a Needs you company from the rail", async ({ page }) => {
@@ -51,7 +51,7 @@ test("opens All job mail, then a Needs you company from the rail", async ({ page
 });
 
 test("records the suggested outcome with a time", async ({ page }) => {
-  const { company } = await companyWithMail("INTERVIEW");
+  const { company, applicationId } = await companyWithMail("INTERVIEW");
   await openCompany(page, company);
   await page.getByRole("button", { name: "Record round scheduled" }).click();
   await page.getByLabel("Day", { exact: true }).fill(istDay(3));
@@ -59,7 +59,9 @@ test("records the suggested outcome with a time", async ({ page }) => {
   await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.getByText(/^Recorded: DSA round scheduled for/)).toBeVisible();
   await expect(railRow(page, company)).not.toContainText("New:");
-  await expect(page.getByText("DSA round", { exact: true })).toBeVisible();
+  // The round now lives on the application's row on its company page.
+  await page.goto(`/applications/${applicationId}`);
+  await expect(page.locator('li[id^="round-"]').filter({ hasText: "Round 1 · DSA" })).toBeVisible();
 });
 
 test("Just info and Undo", async ({ page }) => {
@@ -273,9 +275,9 @@ test("company page opens on Timeline with the aside", async ({ page }) => {
   await expect(mailRow(page, subject)).not.toContainText("needs you");
 });
 
-test("progress tab opens Timeline", async ({ page }) => {
+test("progress tab opens Applications", async ({ page }) => {
   await page.goto("/companies/atlassian?tab=progress");
-  await expect(page.getByRole("tab", { name: "Timeline", exact: true })).toHaveAttribute(
+  await expect(page.getByRole("tab", { name: /^Applications/ })).toHaveAttribute(
     "aria-selected",
     "true",
   );
@@ -390,14 +392,12 @@ test("landing on Mail names All job mail on a wide screen only", async ({ page }
   await expect(page).toHaveURL(/\/mail$/);
 });
 
-test("company page facts sit in two columns on a phone", async ({ page }) => {
+test("company page metric tiles sit in two columns on a phone", async ({ page }) => {
   await page.setViewportSize({ width: 375, height: 812 });
-  await page.goto("/companies/atlassian");
-  const aside = page.getByRole("complementary", { name: "Company facts" });
-  const pay = await aside.getByRole("heading", { name: "Pay", exact: true }).boundingBox();
-  const loop = await aside
-    .getByRole("heading", { name: "Interview loop", exact: true })
-    .boundingBox();
+  await page.goto("/companies/atlassian?tab=pay");
+  const tiles = page.getByRole("tabpanel", { name: "Compensation" });
+  const pay = await tiles.getByText("Fixed pay", { exact: true }).boundingBox();
+  const loop = await tiles.getByText("Total pay", { exact: true }).boundingBox();
   expect(Math.abs(pay!.y - loop!.y)).toBeLessThan(4);
   expect(loop!.x).toBeGreaterThan(pay!.x);
   expect(await fitsWidth(page)).toBe(true);

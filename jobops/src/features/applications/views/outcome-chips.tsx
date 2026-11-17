@@ -96,7 +96,7 @@ export function OutcomeChips({
   // Keep the submitted panel mounted through revalidation so success/focus can finish.
   if (mailError && !open && !confirmation)
     return (
-      <div id="what-happened" className="scroll-mt-24 space-y-3">
+      <div data-outcome-chips className="space-y-3">
         <p role="alert" className="rounded-2xl bg-danger-soft p-3 text-sm text-destructive">
           {mailError}
         </p>
@@ -104,16 +104,17 @@ export function OutcomeChips({
           <Link href="/mail" className="text-link">
             Back to Mail
           </Link>
-          <Link href={`/applications/${recordId}#what-happened`} className="text-link">
+          <Link href={`/applications/${recordId}#application-${recordId}`} className="text-link">
             Record an outcome manually
           </Link>
         </div>
       </div>
     );
-  if (!outcomes.length && !confirmation && !open) return null;
+  // An empty element keeps the container ref, so focus can still return to the Progress region.
+  if (!outcomes.length && !confirmation && !open) return <div ref={container} hidden />;
   const needs = open ? outcomeMeta[open].needs : undefined;
   return (
-    <div ref={container} id="what-happened" className="scroll-mt-24">
+    <div ref={container} data-outcome-chips>
       {confirmation && <Confirmation message={confirmation} />}
       {outcomes.length > 0 && (
         <h3 className="m-0 mb-2.5 text-base font-semibold">What happened?</h3>
@@ -240,6 +241,12 @@ export function OutcomeChips({
                 />
               </label>
             )}
+            {needs === "round" && (
+              <label className="max-w-full w-56 text-sm">
+                Interviewer (optional)
+                <input className="mt-1" name="interviewer" maxLength={200} />
+              </label>
+            )}
             <label className="max-w-full w-44 text-sm">
               When it happened
               <input
@@ -283,7 +290,7 @@ export function focusAfterClose(target: HTMLElement | null) {
     // feedback rather than moving to the top of the route or preserving an empty position.
     const feedback =
       target!
-        .closest("#what-happened, section[aria-label='Progress']")
+        .closest("[data-outcome-chips], section[aria-label='Progress']")
         ?.querySelector<HTMLElement>("[role='status']") ?? target!;
     const box = feedback.getBoundingClientRect();
     if (box.top < 0 || box.bottom > window.innerHeight)

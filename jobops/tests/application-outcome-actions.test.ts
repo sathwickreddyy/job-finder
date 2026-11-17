@@ -33,13 +33,21 @@ it("records a simple outcome when optional controls submit empty strings", async
     {},
     form({ id, outcome: "heard", kind: "", day: "", time: "", happenedOn: "" }),
   );
-  expect(result).toEqual({ success: "Saved: Heard back.", redirect: `/applications/${id}` });
+  // With no return path the company page the action ran on stays mounted.
+  expect(result).toEqual({ success: "Saved: Heard back." });
   expect(mocks.applyOutcome).toHaveBeenCalledWith(
     {},
     {
       applicationId: id,
       outcome: "heard",
-      detail: { kind: undefined, at: undefined, name: "", note: "", happenedAt: new Date() },
+      detail: {
+        kind: undefined,
+        at: undefined,
+        name: "",
+        interviewer: "",
+        note: "",
+        happenedAt: new Date(),
+      },
     },
     new Date(),
   );
@@ -105,5 +113,5 @@ it("returns to a lane for a safe Applications path and ignores anything else", a
   });
   expect(
     await recordOutcome({}, form({ id, outcome: "heard", returnTo: "https://evil.example" })),
-  ).toEqual({ success: "Saved: Heard back.", redirect: `/applications/${id}` });
+  ).toEqual({ success: "Saved: Heard back." });
 });

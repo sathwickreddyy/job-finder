@@ -18,14 +18,18 @@ test("adds, edits and deletes an interview question on a round", async ({ page }
     sentDaysAgo: 5,
     status: "TECHNICAL_INTERVIEW",
   });
-  await db.insert(applicationRounds).values({
-    applicationId,
-    kind: "DSA",
-    position: 1,
-    scheduledAt: new Date(Date.now() - 3_600_000),
-  });
-  await page.goto(`/applications/${applicationId}`);
-  await expect(page.getByRole("heading", { name: "Round 1 · DSA" })).toBeVisible();
+  const [round] = await db
+    .insert(applicationRounds)
+    .values({
+      applicationId,
+      kind: "DSA",
+      position: 1,
+      scheduledAt: new Date(Date.now() - 3_600_000),
+    })
+    .returning();
+  // A round link opens that round's card on the application's company-page row.
+  await page.goto(`/applications/${applicationId}?round=${round.id}`);
+  await expect(page.locator(`#round-${round.id}`)).toContainText("Round 1 · DSA");
 
   const add = page.getByRole("button", { name: "Add a question" });
   await hydrated(add);
@@ -71,8 +75,11 @@ test("the question editor stacks its panes on a phone", async ({ page }) => {
     sentDaysAgo: 5,
     status: "TECHNICAL_INTERVIEW",
   });
-  await db.insert(applicationRounds).values({ applicationId, kind: "LLD", position: 1 });
-  await page.goto(`/applications/${applicationId}`);
+  const [round] = await db
+    .insert(applicationRounds)
+    .values({ applicationId, kind: "LLD", position: 1 })
+    .returning();
+  await page.goto(`/applications/${applicationId}?round=${round.id}`);
   const add = page.getByRole("button", { name: "Add a question" });
   await hydrated(add);
   await add.click();
@@ -138,7 +145,7 @@ test("the question library sorts, searches and opens a question in a sheet", asy
   await expect(sheet).toContainText(`Answer for Beta question ${tag}`);
   await expect(sheet.getByRole("link", { name: "Open application" })).toHaveAttribute(
     "href",
-    /\/applications\/[0-9a-f-]+#round-[0-9a-f-]+/,
+    /\/applications\/[0-9a-f-]+\?round=[0-9a-f-]+/,
   );
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog")).toHaveCount(0);
@@ -157,8 +164,11 @@ test("unsaved question edits ask before in-app navigation, and a double save add
     sentDaysAgo: 5,
     status: "TECHNICAL_INTERVIEW",
   });
-  await db.insert(applicationRounds).values({ applicationId, kind: "DSA", position: 1 });
-  await page.goto(`/applications/${applicationId}`);
+  const [round] = await db
+    .insert(applicationRounds)
+    .values({ applicationId, kind: "DSA", position: 1 })
+    .returning();
+  await page.goto(`/applications/${applicationId}?round=${round.id}`);
   const add = page.getByRole("button", { name: "Add a question" });
   await hydrated(add);
   await add.click();
@@ -169,9 +179,9 @@ test("unsaved question edits ask before in-app navigation, and a double save add
     asked += 1;
     await dialog.dismiss();
   });
-  await page.getByRole("link", { name: "Back to Applications" }).click();
+  await page.getByRole("link", { name: "All companies" }).click();
   await expect.poll(() => asked).toBe(1);
-  await expect(page).toHaveURL(new RegExp(`/applications/${applicationId}$`));
+  await expect(page).toHaveURL(new RegExp(`/companies/[^?#]+\\?open=${applicationId}`));
   await expect(page.getByRole("textbox", { name: "Question title" })).toHaveValue("Unsaved title");
 
   await page.getByRole("button", { name: "Save question" }).dblclick();

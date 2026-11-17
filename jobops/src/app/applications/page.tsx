@@ -1,18 +1,15 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { z } from "zod";
 import { Button, EmptyState, PageHeader } from "@/components/ui";
 import { journeyOf } from "@/features/applications/journey";
 import { namedStepsOf } from "@/features/applications/named-steps";
 import { isOutreach } from "@/features/applications/phase";
 import { buildLanes, pendingMailFrom } from "@/features/applications/lanes";
-import { resolveLanesView } from "@/features/applications/navigation";
+import { laneHref, resolveLanesView } from "@/features/applications/navigation";
 import { buildQueue } from "@/features/applications/queue";
 import { readApplications } from "@/features/applications/read";
-import { readApplicationStory } from "@/features/applications/story";
-import { ApplicationExpanded } from "@/features/applications/views/application-detail";
 import { ApplicationList } from "@/features/applications/views/application-list";
-import { readMailTriage, readOpenMail } from "@/features/mail/read";
+import { readMailTriage } from "@/features/mail/read";
 import { queueMailFrom } from "@/features/mail/triage";
 import { PREVIOUS_JOB, previousJobs } from "@/features/companies/previous-job";
 import { monthLabel } from "@/features/companies/status";
@@ -37,6 +34,8 @@ export default async function Applications({
       `/mail${query.notice ? `?notice=${encodeURIComponent(query.notice.slice(0, 300))}` : ""}`,
     );
   const view = resolveLanesView(query);
+  // Old `?open=<id>` links go to the application's own page.
+  if (view.open) redirect(laneHref(view.open, { mail: view.mail, outcome: view.outcome }));
   const now = new Date();
   const [{ records: all, snoozes }, previous] = await Promise.all([
     readApplications(),
@@ -59,30 +58,7 @@ export default async function Applications({
       .filter((record) => !isOutreach(record.source))
       .map((record) => [record.id, namedStepsOf(record, now)]),
   );
-  const openRecord = view.open ? records.find((record) => record.id === view.open) : undefined;
-  const openLane = openRecord ? lanes.find((lane) => lane.key === openRecord.id) : undefined;
   const companyName = new Map(all.map((record) => [record.id, record.companyName]));
-  let mail = null;
-  let mailError: string | undefined;
-  if (openRecord && view.mail !== null) {
-    if (!z.uuid().safeParse(view.mail).success)
-      mailError = "The source message link is invalid. Open Mail to choose a message.";
-    else {
-      try {
-        mail = await readOpenMail(view.mail, openRecord.id);
-      } catch (error) {
-        mailError =
-          error instanceof Error ? error.message : "The source message could not be loaded.";
-      }
-    }
-  }
-  const story =
-    openRecord &&
-    (await readApplicationStory(
-      openRecord,
-      records.filter((record) => record.companyKey === openRecord.companyKey),
-      now,
-    ));
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between gap-3 md:hidden">
@@ -122,28 +98,7 @@ export default async function Applications({
         </p>
       )}
       {records.length ? (
-        <ApplicationList
-          lanes={lanes}
-          journeys={journeys}
-          namedSteps={namedSteps}
-          openId={openLane ? openRecord!.id : null}
-          detail={
-            openLane && openRecord && story ? (
-              <ApplicationExpanded
-                record={openRecord}
-                lane={openLane}
-                journey={journeys[openRecord.id]}
-                steps={namedSteps[openRecord.id]}
-                story={story}
-                now={now}
-                requested={view.outcome}
-                mail={mail}
-                mailIntent={view.mail ?? undefined}
-                mailError={mailError}
-              />
-            ) : null
-          }
-        />
+        <ApplicationList lanes={lanes} journeys={journeys} namedSteps={namedSteps} />
       ) : (
         <EmptyState
           title="No applications yet"

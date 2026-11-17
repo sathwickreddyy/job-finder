@@ -2,8 +2,20 @@ import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { and, eq, inArray } from "drizzle-orm";
 import { closeDatabase, db } from "@/db";
-import { activityLogs, applicationEvents, applications, jobs } from "@/db/schema";
-import { closeUnsentRecord, reopenUnsentRecord } from "@/features/applications/outcome-service";
+import {
+  activityLogs,
+  applicationEvents,
+  applicationRounds,
+  applications,
+  jobs,
+} from "@/db/schema";
+import {
+  applyOutcome,
+  closeUnsentRecord,
+  reopenUnsentRecord,
+  updateRecordRound,
+} from "@/features/applications/outcome-service";
+import { readOutcomeDetails } from "@/features/applications/outcome-input";
 import { GET, POST } from "@/app/api/v1/applications/[id]/transitions/route";
 import { assertE2eDatabase, dbTests } from "./helpers/e2e-db";
 
@@ -189,5 +201,47 @@ describe.skipIf(!dbTests)("Not applying", () => {
       .from(applicationEvents)
       .where(eq(applicationEvents.applicationId, app.id));
     expect(events.filter((event) => event.eventType === "FOLLOW_UP_SENT")).toHaveLength(1);
+  });
+
+  it("stores the interviewer on a scheduled round and clears it on edit", async () => {
+    const app = await saved({ status: "APPLIED", appliedAt: new Date("2026-10-20T05:00:00Z") });
+    await db.transaction((tx) =>
+      applyOutcome(
+        tx,
+        {
+          applicationId: app.id,
+          outcome: "scheduled",
+          detail: readOutcomeDetails(
+            { kind: "DSA", at: "2026-11-20T14:30:00+05:30", interviewer: "Mohammad Zabi" },
+            NOW,
+          ),
+        },
+        NOW,
+      ),
+    );
+    const [round] = await db
+      .select()
+      .from(applicationRounds)
+      .where(eq(applicationRounds.applicationId, app.id));
+    expect(round.interviewer).toBe("Mohammad Zabi");
+    await db.transaction((tx) =>
+      updateRecordRound(
+        tx,
+        {
+          id: round.id,
+          name: round.name,
+          day: "2026-11-20",
+          time: "14:30",
+          notes: "",
+          interviewer: "",
+        },
+        NOW,
+      ),
+    );
+    const [cleared] = await db
+      .select()
+      .from(applicationRounds)
+      .where(eq(applicationRounds.id, round.id));
+    expect(cleared.interviewer).toBe("");
   });
 });

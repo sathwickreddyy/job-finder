@@ -141,8 +141,45 @@ const outcome = (applicationId: string, mailMessageId: string) => ({
     at: new Date(Date.now() + 86400000),
     happenedAt: new Date(),
     name: "Interview",
+    interviewer: "",
     note: "Confirmed",
   },
+});
+
+test("a mail link whose outcome no longer applies still shows the email and can link it", async ({
+  page,
+}) => {
+  const app = await record();
+  await guard();
+  await db
+    .update(applications)
+    .set({ status: "TECHNICAL_INTERVIEW" })
+    .where(eq(applications.id, app.id));
+  await guard();
+  await db.insert(applicationRounds).values({
+    applicationId: app.id,
+    kind: "DSA",
+    position: 1,
+    scheduledAt: new Date(Date.now() + 86400000),
+  });
+  const [job] = await db.select().from(jobs).where(eq(jobs.id, app.jobId));
+  const mail = await message({
+    classification: "INTERVIEW",
+    companyKey: job.company.toLowerCase(),
+  });
+  // A round is booked, so "scheduled" cannot be added; the email is still shown.
+  await page.goto(`/applications/${app.id}?mail=${mail.id}&outcome=scheduled`);
+  const row = page.locator(`#application-${app.id}`);
+  await expect(row.getByText(`From this email: ${mail.subject}`)).toBeVisible();
+  await expect(row.getByText(/That outcome no longer applies/)).toBeVisible();
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await hydrated(row.getByRole("button", { name: "Link without recording an outcome" }));
+  await row.getByRole("button", { name: "Link without recording an outcome" }).click();
+  await expect(page).toHaveURL(new RegExp(`/companies/[^?#]+\\?open=${app.id}&notice=`));
+  await expect
+    .poll(async () => (await state(app.id, mail.id)).mail.linkedApplicationId)
+    .toBe(app.id);
 });
 
 test("mail outcome and all related writes roll back together; stale mail cannot schedule", async () => {
@@ -301,7 +338,7 @@ test("linked inbound drives outreach state and unlink preserves later outcomes",
       {
         applicationId: app.id,
         outcome: "referred",
-        detail: { happenedAt: new Date(), name: "", note: "" },
+        detail: { happenedAt: new Date(), name: "", interviewer: "", note: "" },
       },
       new Date(),
     ),
@@ -382,16 +419,19 @@ test("mail outcome keeps success and focus after resolution; unlink reopens mail
 }) => {
   const app = await record("REFERRAL");
   const mail = await message({ classification: "FOLLOW_UP" }, app.id);
-  const row = `/applications\\?open=${app.id}`;
-  // An old record link opens the row in place with the form ready.
-  await page.goto(`/applications/${app.id}?mail=${mail.id}&outcome=heard#what-happened`);
+  const row = `/companies/[^?#]+\\?open=${app.id}`;
+  // An old record link opens the application's row on its company page with the form ready.
+  await page.goto(`/applications/${app.id}?mail=${mail.id}&outcome=heard#application-${app.id}`);
   await expect(page).toHaveURL(new RegExp(`${row}&mail=${mail.id}&outcome=heard`));
-  await expect(page.locator('#what-happened input[name="outcome"]')).toHaveValue("replied");
+  await expect(page.locator(`#application-${app.id} input[name="outcome"]`)).toHaveValue("replied");
+  await expect(page.getByText(`From this email: ${mail.subject}`)).toBeVisible();
   await hydrated(page.getByRole("button", { name: "Save", exact: true }));
   await page.getByRole("button", { name: "Save", exact: true }).click();
   // Assert after the successful operation's actual cleanup navigation, not transient feedback.
   await expect(page).toHaveURL(new RegExp(`${row}$`));
-  await expect(page.locator('#what-happened input[name="mailId"]')).toHaveCount(0);
+  await expect(
+    page.locator(`#application-${app.id} [data-outcome-chips] input[name="mailId"]`),
+  ).toHaveCount(0);
   await expect(page.getByRole("status").filter({ hasText: "Saved: Replied." })).toBeVisible();
   await expect(page.getByRole("region", { name: "Progress", exact: true })).toBeFocused();
   await expect(page.getByText(`From this email: ${mail.subject}`, { exact: true })).toHaveCount(0);
@@ -401,13 +441,13 @@ test("mail outcome keeps success and focus after resolution; unlink reopens mail
     page.getByRole("alert").filter({ hasText: "source message has already been handled" }),
   ).toBeVisible();
   await expect(page.getByRole("status").filter({ hasText: "Saved: Replied." })).toHaveCount(0);
-  await expect(page.locator('#what-happened input[name="outcome"]')).toHaveCount(0);
+  await expect(page.locator(`#application-${app.id} input[name="outcome"]`)).toHaveCount(0);
   await page.goForward();
   await expect(page).toHaveURL(new RegExp(`${row}$`));
   await expect(page.getByRole("status").filter({ hasText: "Saved: Replied." })).toHaveCount(0);
-  // Unlinking stays on the record's own page.
+  // Unlinking returns to the application's row on its company page.
   await page.goto(`/applications/${app.id}`);
-  // The linked email opens in its popup from the rail; Unlink is in the popup's footer.
+  // The linked email opens in its popup from the timeline; Unlink is in the popup's footer.
   const opener = page.getByRole("button", { name: new RegExp(mail.subject) });
   await hydrated(opener);
   await opener.click();
@@ -415,6 +455,7 @@ test("mail outcome keeps success and focus after resolution; unlink reopens mail
     .getByRole("dialog")
     .getByRole("button", { name: "Unlink from this application", exact: true })
     .click();
+  await expect(page).toHaveURL(new RegExp(`${row}&notice=`));
   await expect(
     page.getByRole("status").filter({ hasText: "Recorded outcomes and history were kept." }),
   ).toBeVisible();
@@ -435,12 +476,14 @@ test("mail placed at another company cannot become record progress", async ({ pa
     db.transaction((tx) => applyOutcome(tx, outcome(app.id, mail.id), new Date())),
   ).rejects.toThrow(/placed at another fixture company/);
   expect(await state(app.id, mail.id)).toEqual(before);
-  await page.goto(`/applications/${app.id}?mail=${mail.id}&outcome=scheduled#what-happened`);
-  expect(await page.locator('#what-happened input[name="outcome"]').count()).toBe(0);
+  await page.goto(
+    `/applications/${app.id}?mail=${mail.id}&outcome=scheduled#application-${app.id}`,
+  );
+  expect(await page.locator(`#application-${app.id} input[name="outcome"]`).count()).toBe(0);
   await expect(page.getByRole("alert").filter({ hasText: /placed at/ })).toBeVisible();
   await expect(
     page.getByRole("link", { name: "Record an outcome manually", exact: true }),
-  ).toHaveAttribute("href", `/applications/${app.id}#what-happened`);
+  ).toHaveAttribute("href", `/applications/${app.id}#application-${app.id}`);
   expect(await state(app.id, mail.id)).toEqual(before);
 });
 
@@ -476,13 +519,14 @@ for (const kind of ["malformed", "missing", "dismissed", "linked elsewhere"] as 
     const before = await state(app.id, mail.id);
     const otherBefore = await state(other.id, mail.id);
     await page.goto(
-      `/applications/${app.id}?mail=${requestedMail}&outcome=scheduled#what-happened`,
+      `/applications/${app.id}?mail=${requestedMail}&outcome=scheduled#application-${app.id}`,
     );
-    expect(await page.locator('#what-happened input[name="outcome"]').count()).toBe(0);
+    expect(await page.locator(`#application-${app.id} input[name="outcome"]`).count()).toBe(0);
     await expect(page.getByRole("alert").filter({ hasText: /source|message/ })).toBeVisible();
     await page.getByRole("link", { name: "Record an outcome manually", exact: true }).click();
-    await expect(page).toHaveURL(new RegExp(`/applications/${app.id}#what-happened$`));
-    await expect(page.getByRole("button", { name: "Round scheduled", exact: true })).toBeVisible();
+    await expect(page).toHaveURL(new RegExp(`/companies/[^?#]+\\?open=${app.id}`));
+    await expect(page.locator(`#application-${app.id}`)).toBeVisible();
+    await expect(page.getByRole("button", { name: "+ Add step", exact: true })).toBeVisible();
     expect(await state(app.id, mail.id)).toEqual(before);
     expect(await state(other.id, mail.id)).toEqual(otherBefore);
   });
@@ -493,22 +537,24 @@ test("mail handled while its outcome form is open keeps source and rejects all w
 }) => {
   const app = await record();
   const mail = await message({ classification: "FOLLOW_UP" });
-  await page.goto(`/applications?open=${app.id}&mail=${mail.id}&outcome=heard`);
-  await expect(page.locator('#what-happened input[name="mailId"]')).toHaveValue(mail.id);
+  await page.goto(`/applications/${app.id}?mail=${mail.id}&outcome=heard`);
+  await expect(
+    page.locator(`#application-${app.id} [data-outcome-chips] input[name="mailId"]`),
+  ).toHaveValue(mail.id);
   await hydrated(page.getByRole("button", { name: "Save", exact: true }));
   await guard();
   await db.transaction((tx) => dismissMessages(tx, { ids: [mail.id] }, new Date()));
   const before = await state(app.id, mail.id);
   await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.getByRole("alert").filter({ hasText: /already been handled/ })).toBeVisible();
-  await expect(page.locator('#what-happened input[name="mailId"]')).toHaveValue(mail.id);
+  await expect(
+    page.locator(`#application-${app.id} [data-outcome-chips] input[name="mailId"]`),
+  ).toHaveValue(mail.id);
   expect(await state(app.id, mail.id)).toEqual(before);
 });
 
 for (const status of ["PREPARING", "CLOSED", "APPLIED"] as const) {
-  test(`legitimate Updates can link to a chosen ${status} record without changing its status`, async ({
-    page,
-  }) => {
+  test(`legitimate Updates can link to a chosen ${status} record without changing its status`, async () => {
     const app = await record();
     const suggested = await record();
     await guard();
@@ -522,16 +568,12 @@ for (const status of ["PREPARING", "CLOSED", "APPLIED"] as const) {
       status === "APPLIED" ? suggested.id : undefined,
     );
     const before = await state(app.id, mail.id);
-    await page.goto(`/applications/${app.id}?mail=${mail.id}`);
-    await expect(
-      page.getByRole("button", { name: "Link without recording an outcome", exact: true }),
-    ).toBeVisible();
-    await page
-      .getByRole("button", { name: "Link without recording an outcome", exact: true })
-      .click();
-    await expect(
-      page.getByRole("status").filter({ hasText: "Message linked to your record." }),
-    ).toBeVisible();
+    // The company page has no link-only button; linking goes through the same service the mail
+    // popup and the mail API use.
+    await guard();
+    expect(await db.transaction((tx) => linkMailToRecord(tx, mail.id, app.id, new Date()))).toBe(
+      true,
+    );
     const after = await state(app.id, mail.id);
     expect(after.app).toEqual(before.app);
     expect(after.job).toEqual(before.job);
@@ -563,21 +605,25 @@ test("manual query outcome keeps confirmation and focus after cleanup navigation
   page,
 }) => {
   const app = await record();
-  const row = `/applications\\?open=${app.id}`;
-  await page.goto(`/applications/${app.id}?outcome=followup#what-happened`);
+  const row = `/companies/[^?#]+\\?open=${app.id}`;
+  await page.goto(`/applications/${app.id}?outcome=followup#application-${app.id}`);
   await expect(page).toHaveURL(new RegExp(`${row}&outcome=followup`));
-  await expect(page.locator('#what-happened input[name="outcome"]')).toHaveValue("followup");
+  await expect(page.locator(`#application-${app.id} input[name="outcome"]`)).toHaveValue(
+    "followup",
+  );
   await hydrated(page.getByRole("button", { name: "Save", exact: true }));
   await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`${row}$`));
-  await expect(page.locator('#what-happened input[name="outcome"]')).toHaveCount(0);
+  await expect(page.locator(`#application-${app.id} input[name="outcome"]`)).toHaveCount(0);
   await expect(
     page.getByRole("status").filter({ hasText: "Saved: Sent a follow-up." }),
   ).toBeVisible();
   await expect(page.getByRole("button", { name: "Sent a follow-up", exact: true })).toBeFocused();
   await page.goBack();
   await expect(page).toHaveURL(new RegExp(`${row}&outcome=followup`));
-  await expect(page.locator('#what-happened input[name="outcome"]')).toHaveValue("followup");
+  await expect(page.locator(`#application-${app.id} input[name="outcome"]`)).toHaveValue(
+    "followup",
+  );
   await expect(
     page.getByRole("status").filter({ hasText: "Saved: Sent a follow-up." }),
   ).toHaveCount(0);

@@ -20,18 +20,19 @@ UUID for each new action. For example, record a scheduled technical interview wi
 }
 ```
 
-| Action          | Fields in addition to `action` and `requestId`                                                         |
-| --------------- | ------------------------------------------------------------------------------------------------------ |
-| `recordSent`    | `sentDate` (`YYYY-MM-DD` in India time), `humanConfirmed: true`                                        |
-| `notApplying`   | None. Closes an unsent record.                                                                         |
-| `reopen`        | None. Reopens a record closed as Not applying.                                                         |
-| `recordOutcome` | `outcome` from the current list, plus optional `details` (`at`, `kind`, `name`, `note`, `happenedAt`). |
+| Action          | Fields in addition to `action` and `requestId`                                                                        |
+| --------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `recordSent`    | `sentDate` (`YYYY-MM-DD` in India time), `humanConfirmed: true`                                                       |
+| `notApplying`   | None. Closes an unsent record.                                                                                        |
+| `reopen`        | None. Reopens a record closed as Not applying.                                                                        |
+| `recordOutcome` | `outcome` from the current list, plus optional `details` (`at`, `kind`, `name`, `interviewer`, `note`, `happenedAt`). |
 
 The available outcomes cover replies, follow-ups, assessments, interview scheduling,
 rescheduling and results, offers, rejections, withdrawal, closure after no reply, and
 referral results. `details.at` is an ISO 8601 timestamp with a time zone for an OA
 deadline or round. Scheduling a round also requires its `kind` (`ONLINE_ASSESSMENT`,
-`DSA`, `LLD`, `HLD`, `BEHAVIORAL`, `HIRING_MANAGER`, `DOMAIN`, `OTHER`, or `HR`). `details.happenedAt`
+`DSA`, `LLD`, `HLD`, `BEHAVIORAL`, `HIRING_MANAGER`, `DOMAIN`, `OTHER`, or `HR`). `details.interviewer` (up to 200
+characters, optional) names who is interviewing and is stored on the new round. `details.happenedAt`
 defaults to the time the record was updated. Use it to record when an earlier outcome
 actually happened.
 

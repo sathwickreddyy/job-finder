@@ -6,6 +6,7 @@ import { db } from "@/db";
 import { applications } from "@/db/schema";
 import { actionError, formString, type ActionState } from "@/lib/actions";
 import { istDateTime } from "./dates";
+import { NOTES_MAX, writeApplicationNotes } from "./notes";
 import {
   closeUnsentRecord,
   markRecordSent,
@@ -25,7 +26,9 @@ const day = z.union([z.literal(""), z.string().regex(/^\d{4}-\d{2}-\d{2}$/)]);
 function refresh(id?: string) {
   revalidatePath("/applications");
   if (id) revalidatePath(`/applications/${id}`);
+  // The company page holds each application's notes, rounds and details.
   revalidatePath("/companies");
+  revalidatePath("/companies/[slug]", "page");
   revalidatePath("/");
 }
 
@@ -83,25 +86,15 @@ export async function updateApplicationDetails(
   }
 }
 
-/** Longest application note the Markdown editor saves. */
-const NOTES_MAX = 100_000;
-
 /** Saves the application's Markdown notes from the notes editor. */
 export async function saveApplicationNotes(
   _state: ActionState,
   form: FormData,
 ): Promise<ActionState> {
   try {
-    const data = z
-      .object({ id: z.uuid(), notes: z.string().max(NOTES_MAX, "Notes are too long to save.") })
-      .parse({ id: formString(form, "id"), notes: String(form.get("notes") ?? "") });
-    const saved = await db
-      .update(applications)
-      .set({ notes: data.notes, updatedAt: new Date() })
-      .where(eq(applications.id, data.id))
-      .returning({ id: applications.id });
-    if (!saved.length) throw new Error("This application no longer exists.");
-    refresh(data.id);
+    const id = z.uuid().parse(formString(form, "id"));
+    await writeApplicationNotes(id, String(form.get("notes") ?? ""));
+    refresh(id);
     return { success: "Notes saved." };
   } catch (error) {
     return actionError(error);
@@ -117,6 +110,7 @@ export async function updateRound(_state: ActionState, form: FormData): Promise<
         day,
         time: z.union([z.literal(""), z.string().regex(/^\d{2}:\d{2}$/)]),
         notes: z.string().trim().max(5000),
+        interviewer: z.string().trim().max(200),
       })
       .parse({
         id: formString(form, "id"),
@@ -124,6 +118,7 @@ export async function updateRound(_state: ActionState, form: FormData): Promise<
         day: formString(form, "day"),
         time: formString(form, "time"),
         notes: formString(form, "notes"),
+        interviewer: formString(form, "interviewer"),
       });
     const id = await db.transaction((tx) => updateRecordRound(tx, data, new Date()));
     refresh(id);
@@ -131,6 +126,12 @@ export async function updateRound(_state: ActionState, form: FormData): Promise<
   } catch (error) {
     return actionError(error);
   }
+}
+
+/** Only an explicit return path navigates; otherwise the company page the action ran on stays mounted. */
+function redirectTo(form: FormData) {
+  const returnTo = safeReturnTo(formString(form, "returnTo"));
+  return returnTo ? { redirect: returnTo } : {};
 }
 
 export async function recordAsSent(_state: ActionState, form: FormData): Promise<ActionState> {
@@ -144,7 +145,7 @@ export async function recordAsSent(_state: ActionState, form: FormData): Promise
     refresh(data.id);
     return {
       success: "Recorded as sent.",
-      redirect: safeReturnTo(formString(form, "returnTo")) ?? `/applications/${data.id}`,
+      ...redirectTo(form),
     };
   } catch (error) {
     return actionError(error);
@@ -158,7 +159,7 @@ export async function notApplying(_state: ActionState, form: FormData): Promise<
     refresh(data.id);
     return {
       success: "Closed as not applying.",
-      redirect: safeReturnTo(formString(form, "returnTo")) ?? `/applications?open=${data.id}`,
+      ...redirectTo(form),
     };
   } catch (error) {
     return actionError(error);
@@ -173,7 +174,7 @@ export async function reopenRecord(_state: ActionState, form: FormData): Promise
     refresh(data.id);
     return {
       success: "Reopened. It is back in Needs you.",
-      redirect: safeReturnTo(formString(form, "returnTo")) ?? `/applications?open=${data.id}`,
+      ...redirectTo(form),
     };
   } catch (error) {
     return actionError(error);

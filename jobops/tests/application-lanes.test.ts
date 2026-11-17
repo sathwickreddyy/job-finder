@@ -264,7 +264,7 @@ describe("next steps and groups", () => {
     expect(lanesFor([source], [mail])[0].next).toMatchObject({
       when: "New email",
       action: "Add to timeline",
-      href: `/applications?open=${source.id}&mail=${mail.id}`,
+      href: `/applications/${source.id}?mail=${mail.id}`,
     });
   });
 
@@ -334,19 +334,19 @@ describe("next steps and groups", () => {
       due: "overdue",
       when: "Overdue since 27 Sep",
       action: "I followed up",
-      href: `/applications?open=${quiet.id}&outcome=followup`,
+      href: `/applications/${quiet.id}?outcome=followup`,
     });
     expect(next.Razorpay).toMatchObject({
       due: "today",
       when: "Today, 4:00 pm",
       action: "Open",
-      href: `/applications?open=${id}`,
+      href: `/applications/${id}`,
     });
     expect(next.Zscaler).toMatchObject({
       due: "today",
       when: "New email",
       action: "Link it",
-      href: `/applications?open=${invited.id}&mail=${mail.id}&outcome=oa`,
+      href: `/applications/${invited.id}?mail=${mail.id}&outcome=oa`,
     });
     expect(lanes.map((lane) => [lane.company, lane.group])).toEqual([
       ["Flipkart", "needs"],

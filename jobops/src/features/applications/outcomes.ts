@@ -5,7 +5,7 @@ import { db } from "@/db";
 import { actionError, formString, type ActionState } from "@/lib/actions";
 import { applyOutcome } from "./outcome-service";
 import { outcomeDetail, outcomeMeta } from "./phase";
-import { safeReturnTo } from "./return-to";
+import { safeReturnTo, safeRowReturnTo } from "./return-to";
 
 export async function recordOutcome(_state: ActionState, form: FormData): Promise<ActionState> {
   try {
@@ -25,6 +25,7 @@ export async function recordOutcome(_state: ActionState, form: FormData): Promis
         day: optional("day"),
         time: optional("time"),
         name: formString(form, "name"),
+        interviewer: formString(form, "interviewer"),
         note: formString(form, "note"),
         happenedOn: optional("happenedOn"),
       },
@@ -39,9 +40,18 @@ export async function recordOutcome(_state: ActionState, form: FormData): Promis
     );
     for (const path of ["/applications", `/applications/${applicationId}`, "/companies", "/"])
       revalidatePath(path);
+    revalidatePath("/companies/[slug]", "page");
+    // An outcome recorded on the company page stays there, so its confirmation and open panel
+    // survive; one that came from an email redirects to drop the email from the URL.
+    const returnTo =
+      safeRowReturnTo(formString(form, "returnTo")) ?? safeReturnTo(formString(form, "returnTo"));
     return {
       success: `Saved: ${outcomeMeta[id].label}.`,
-      redirect: safeReturnTo(formString(form, "returnTo")) ?? `/applications/${applicationId}`,
+      ...(returnTo
+        ? { redirect: returnTo }
+        : mailMessageId
+          ? { redirect: `/applications/${applicationId}` }
+          : {}),
     };
   } catch (error) {
     return actionError(error);

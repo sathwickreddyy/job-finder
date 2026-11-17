@@ -1,11 +1,15 @@
 import { stubExternalSites } from "./helpers/external-sites";
 import { formatDay } from "../../src/features/applications/dates";
 import { istDay } from "./helpers/records";
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 test.beforeEach(async ({ page }) => {
   await stubExternalSites(page);
 });
+
+/** Saving a record lands on its open row on the company page; this is that row's application id. */
+const rowUrl = /\/companies\/[^?#]+\?open=[0-9a-f-]+/;
+const openedId = (page: Page) => new URL(page.url()).searchParams.get("open")!;
 
 test("a saved job supports resume prompts, referral records and a separate direct application", async ({
   page,
@@ -34,9 +38,9 @@ test("a saved job supports resume prompts, referral records and a separate direc
   await page.getByLabel("Resume file used").selectOption({ index: 1 });
   await page.getByLabel("What happened?").selectOption("sent");
   await page.getByRole("button", { name: "Save outreach record" }).click();
-  await expect(page).toHaveURL(/\/applications\/[0-9a-f-]+$/);
-  const referralPath = new URL(page.url()).pathname;
-  await expect(page.getByRole("region", { name: "History" })).toContainText(
+  await expect(page).toHaveURL(rowUrl);
+  const referralPath = `/applications/${openedId(page)}`;
+  await expect(page.locator(`#application-${openedId(page)}`)).toContainText(
     "Referral recorded as sent",
   );
   await expect(page.getByTestId("phase-label")).toHaveText("Sent");
@@ -48,17 +52,17 @@ test("a saved job supports resume prompts, referral records and a separate direc
   await page.getByLabel("Resume file used").selectOption({ index: 1 });
   await page.getByLabel("What happened?").selectOption("sent");
   await page.getByRole("button", { name: "Save application record" }).click();
-  await expect(page).toHaveURL(/\/applications\/[0-9a-f-]+$/);
-  await expect(page.getByRole("region", { name: "History" })).toContainText(
-    "Direct application recorded as sent",
-  );
+  await expect(page).toHaveURL(rowUrl);
+  const direct = page.locator(`#application-${openedId(page)}`);
+  await expect(direct).toContainText("Direct application recorded as sent");
   await expect(page.getByLabel("Resume version used")).toHaveCount(0);
+  await page.getByRole("button", { name: "+ Add step", exact: true }).click();
   await page.getByRole("button", { name: "Round scheduled", exact: true }).click();
   await page.getByLabel("Round", { exact: true }).selectOption("DSA");
   await page.getByLabel("Date (India time)").fill(istDay(5));
   await page.getByLabel("Time", { exact: true }).fill("11:00");
   await page.getByRole("button", { name: "Save", exact: true }).click();
-  await expect(page.getByRole("region", { name: "History" })).toContainText("DSA round scheduled");
+  await expect(direct).toContainText("DSA round scheduled");
   await expect(page.getByTestId("phase-label")).toHaveText("Round 1 · DSA");
   await page.goto("/applications");
   // The referral and the direct application each get their own lane.
@@ -88,8 +92,8 @@ test("a prepared action becomes sent in the same record with its actual date", a
   await page.goto(`/outreach?job=${jobId}`);
   await page.getByLabel("Resume file used").selectOption({ index: 1 });
   await page.getByRole("button", { name: "Save outreach record" }).click();
-  await expect(page).toHaveURL(/\/applications\/[a-f0-9-]+$/);
-  const plannedPath = new URL(page.url()).pathname;
+  await expect(page).toHaveURL(rowUrl, { timeout: 20_000 });
+  const plannedId = openedId(page);
   await page.getByRole("link", { name: "Open outreach prompt", exact: true }).click();
   await expect(page).toHaveURL(/record=[a-f0-9-]+/);
   await expect(page.getByLabel("Resume file used")).not.toHaveValue("");
@@ -97,9 +101,11 @@ test("a prepared action becomes sent in the same record with its actual date", a
   await page.locator("summary").filter({ hasText: "Date, destination and notes" }).click();
   await page.getByLabel("Date sent (India time)").fill(istDay(-3));
   await page.getByRole("button", { name: "Save outreach record" }).click();
-  await expect(page).toHaveURL(new RegExp(plannedPath + "$"));
+  await expect(page).toHaveURL(new RegExp(`/companies/[^?#]+\\?open=${plannedId}`), {
+    timeout: 20_000,
+  });
   await expect(page.getByTestId("phase-label")).toHaveText("Sent");
-  await expect(page.getByRole("region", { name: "History" })).toContainText(
+  await expect(page.locator(`#application-${plannedId}`)).toContainText(
     formatDay(new Date(`${istDay(-3)}T12:00:00+05:30`)),
   );
   await page.reload();
@@ -108,7 +114,7 @@ test("a prepared action becomes sent in the same record with its actual date", a
   await page.goto(`/applications/new?jobId=${jobId}`);
   await expect(page.getByRole("combobox", { name: "Opening", exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "Save application record" }).click();
-  await expect(page).toHaveURL(/\/applications\/[a-f0-9-]+$/);
+  await expect(page).toHaveURL(rowUrl, { timeout: 20_000 });
   await page.getByLabel("Date sent (India time)").fill(istDay(-3));
   await page
     .getByRole("checkbox", { name: "I confirm I already submitted or sent this myself." })

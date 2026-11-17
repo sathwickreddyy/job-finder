@@ -151,6 +151,7 @@ export async function handleMailAction(
         day: optional("day"),
         time: optional("time"),
         name: formString(form, "name"),
+        interviewer: formString(form, "interviewer"),
         note: formString(form, "note"),
         happenedOn,
       },
@@ -163,6 +164,7 @@ export async function handleMailAction(
         ...(detail.kind ? { kind: detail.kind } : {}),
         ...(detail.at ? { at: detail.at.toISOString() } : {}),
         ...(detail.name ? { name: detail.name } : {}),
+        ...(detail.interviewer ? { interviewer: detail.interviewer } : {}),
         ...(detail.note ? { note: detail.note } : {}),
         // Without a chosen day the outcome is dated by the email, not by this click.
         ...(happenedOn ? { happenedAt: detail.happenedAt.toISOString() } : {}),

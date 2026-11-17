@@ -12,7 +12,7 @@ test.afterAll(async () => {
   await closeDatabase();
 });
 
-test("iPhone essentials use real records, retain Undo and expand one flat application list", async ({
+test("iPhone essentials use real records, retain Undo and open an application from one flat list", async ({
   page,
 }) => {
   const suffix = randomUUID();
@@ -81,13 +81,13 @@ test("iPhone essentials use real records, retain Undo and expand one flat applic
     await expect(list).toBeVisible();
     const application = list.getByRole("group", { name: company, exact: true });
     await application.getByRole("link", { name: new RegExp(company) }).click();
-    await expect(application.getByRole("link", { name: new RegExp(company) })).toHaveAttribute(
-      "aria-expanded",
-      "true",
+    // A row is a link to its open row on the company page.
+    await expect(page).toHaveURL(
+      new RegExp(
+        `/companies/[^?#]+\\?open=${seeded.applicationId}#application-${seeded.applicationId}$`,
+      ),
     );
-    await expect(
-      list.locator("section[aria-label='Needs you'], section[aria-label='Closed']"),
-    ).toHaveCount(0);
+    await expect(page.locator(`#application-${seeded.applicationId}`)).toBeVisible();
     for (const width of [320, 375, 390, 430]) {
       await page.setViewportSize({ width, height: 844 });
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(

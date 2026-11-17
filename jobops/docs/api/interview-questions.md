@@ -3,8 +3,9 @@
 Each interview round can hold the questions that were asked in it. A question keeps the
 problem as asked, the user's own answer, how it went, time and space complexity, what the
 interviewer said, and an optional review written later by an agent. The text fields are
-Markdown. The application page and the question library at `/applications/questions` show
-the same records.
+Markdown. The round cards on the application's company page and the question library at
+`/applications/questions` show the same records. The library's "Open in context" link goes to
+`/companies/<slug>?open=<applicationId>#round-<roundId>`.
 
 ## Find the round
 

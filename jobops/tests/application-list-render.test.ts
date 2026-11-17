@@ -9,25 +9,22 @@ import { at, event, record, round, uid, type FixtureRecord } from "./lane-fixtur
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }) }));
 vi.mock("@/features/applications/record-actions", () => ({ notApplying: vi.fn() }));
-const { ApplicationList, pinOpenRow } =
-  await import("@/features/applications/views/application-list");
+const { ApplicationList } = await import("@/features/applications/views/application-list");
 
 const NOW = at("2026-10-31T10:30:00");
-function render(records: (LaneSource | FixtureRecord)[], openId: string | null = null) {
+function render(records: (LaneSource | FixtureRecord)[]) {
   const lanes = buildLanes({ records, items: [], pending: [], now: NOW, by: "application" });
   const journeys = Object.fromEntries(records.map((item) => [item.id, journeyOf(item)]));
   const namedSteps = Object.fromEntries(
     records
       .filter((item) => !isOutreach(item.source))
-      .map((item) => [item.id, namedStepsOf({ typicalLoop: [], ...item }, NOW)]),
+      .map((item) => [item.id, namedStepsOf(item, NOW)]),
   );
   return renderToStaticMarkup(
     createElement(ApplicationList, {
       lanes,
       journeys,
       namedSteps,
-      openId,
-      detail: createElement("p", { "data-testid": "detail" }, "The open row"),
     }),
   );
 }
@@ -64,14 +61,14 @@ describe("ApplicationList", () => {
         ...company("ServiceNow"),
         phase: "Interviewing",
         status: "TECHNICAL_INTERVIEW",
-        typicalLoop: ["DSA", "LLD"],
         rounds: [round(id, { kind: "DSA", scheduledAt: at("2026-11-02T12:00:00") })],
       }),
     ]);
     const stepper =
       html.match(/<ol[^>]*aria-label="Where this application stands"[\s\S]*?<\/ol>/)?.[0] ?? "";
+    expect(stepper).toContain("Interview scheduled");
     expect(stepper).toContain("Round 1 · DSA");
-    expect(stepper).toContain("Round 2 · LLD");
+    expect(stepper).not.toContain("Round 2 · LLD");
     expect(stepper).toContain('aria-current="step"');
     expect(stepper).not.toContain("Interviewing");
   });
@@ -96,24 +93,19 @@ describe("ApplicationList", () => {
 
   it("names each step, keeps its date in the title and shows one next step per row", () => {
     const html = render([northwind()]);
-    for (const text of ["Applied", "Acknowledged", "Rejected", "Offer"])
-      expect(html).toContain(text);
+    for (const text of ["Applied", "Acknowledged", "Rejected"]) expect(html).toContain(text);
     for (const title of ["Applied · 2 Oct", "Acknowledged · 3 Oct", "Rejected · 7 Oct"])
       expect(html).toContain(`title="${title}"`);
     expect(html).toContain("Nothing to do");
   });
 
-  it("opens the requested row in place", () => {
+  it("links each row to its application and never expands in place", () => {
     const open = waiting();
-    const html = render([northwind(), open, unsent(null)], open.id);
-    expect(html).toContain('aria-expanded="true"');
-    expect(html.match(/aria-expanded="true"/g)).toHaveLength(1);
-    // The open row links back to the closed page; the others open themselves.
-    expect(html).toContain('href="/applications"');
-    const row = html.indexOf("Brightline");
-    const detail = html.indexOf('data-testid="detail"');
-    expect(detail).toBeGreaterThan(row);
-    expect(detail).toBeLessThan(html.indexOf("Northwind"));
+    const other = unsent(null);
+    const html = render([northwind(), open, other]);
+    expect(html).toContain(`href="/applications/${open.id}"`);
+    expect(html).toContain(`href="/applications/${other.id}"`);
+    expect(html).not.toContain("aria-expanded");
   });
 
   it("shows Not applying for an unsent record past 14 days", () => {
@@ -126,25 +118,5 @@ describe("ApplicationList", () => {
     const html = render(Array.from({ length: 6 }, northwind));
     expect(html).toMatch(/<details[^>]*>\s*<summary/);
     expect(html).not.toMatch(/<details[^>]*open/);
-  });
-});
-
-describe("pinOpenRow", () => {
-  it("keeps the open row in the group it opened in until it closes", () => {
-    const quiet = waiting();
-    const lanes = buildLanes({
-      records: [quiet, northwind()],
-      items: [],
-      pending: [],
-      now: NOW,
-      by: "application",
-    });
-    expect(lanes.find((lane) => lane.leadId === quiet.id)?.group).toBe("active");
-    const pinned = pinOpenRow(lanes, { id: quiet.id, group: "needs" });
-    expect(pinned.find((lane) => lane.leadId === quiet.id)?.group).toBe("needs");
-    expect(pinned.filter((lane) => lane.leadId !== quiet.id)).toEqual(
-      lanes.filter((lane) => lane.leadId !== quiet.id),
-    );
-    expect(pinOpenRow(lanes, null)).toBe(lanes);
   });
 });

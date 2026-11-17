@@ -1,77 +1,39 @@
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
-import { eq } from "drizzle-orm";
 import { z } from "zod";
-import { db } from "@/db";
-import { resumes, resumeVersions } from "@/db/schema";
-import { laneHref } from "@/features/applications/navigation";
-import { currentNamedStep, namedStepsOf } from "@/features/applications/named-steps";
+import { applicationHref, companyPageHref } from "@/features/applications/navigation";
 import { readApplications } from "@/features/applications/read";
-import { ApiError } from "@/features/agent-api/http";
-import { listRoundQuestions } from "@/features/interviews/questions";
-import { ApplicationDetail } from "@/features/applications/views/detail";
+import { PREVIOUS_JOB } from "@/features/companies/previous-job";
 
 export const dynamic = "force-dynamic";
 
+const uuid = (value: string | undefined) => (z.uuid().safeParse(value).success ? value : null);
+
+/** An application has no page of its own: its link lands on its row on the company page. */
 export default async function ApplicationPage({
   params,
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ outcome?: string; mail?: string; notice?: string }>;
+  searchParams: Promise<{ outcome?: string; mail?: string; round?: string; notice?: string }>;
 }) {
   const { id } = await params;
   if (!z.uuid().safeParse(id).success) notFound();
   const query = await searchParams;
-  // Outcome and mail links open the row in place on Applications, with the form ready.
-  if (query.outcome !== undefined || query.mail !== undefined)
-    redirect(laneHref(id, { mail: query.mail, outcome: query.outcome }));
-  const [{ records }, versions, questionRounds] = await Promise.all([
-    readApplications(),
-    db
-      .select({ version: resumeVersions, family: resumes })
-      .from(resumeVersions)
-      .innerJoin(resumes, eq(resumeVersions.resumeId, resumes.id))
-      .where(eq(resumeVersions.isMaster, false)),
-    // An unknown id is a 404 below; any other failure should surface.
-    listRoundQuestions(id).catch((error: unknown) => {
-      if (error instanceof ApiError && error.status === 404) return [];
-      throw error;
-    }),
-  ]);
+  const { records } = await readApplications();
   const record = records.find((row) => row.id === id);
   if (!record) notFound();
-  const now = new Date();
-  const siblings = records
-    .filter((row) => row.companyKey === record.companyKey && row.source !== "PREVIOUS_JOB")
-    .sort((a, b) => (a.sentAt?.getTime() ?? Infinity) - (b.sentAt?.getTime() ?? Infinity))
-    .map((row) => ({
-      id: row.id,
-      requisition: row.requisition,
-      label: currentNamedStep(namedStepsOf(row, now)).label,
-    }));
-  return (
-    <div className="flex flex-col gap-4">
-      <Link
-        href={laneHref(record.id)}
-        className="inline-flex items-center gap-1.5 self-start text-sm font-medium text-link"
-      >
-        <ArrowLeft aria-hidden size={14} />
-        Back to Applications
-      </Link>
-      <ApplicationDetail
-        record={record}
-        linked={records.filter((row) => record.linkedIds.includes(row.id))}
-        siblings={siblings}
-        questionRounds={questionRounds}
-        versions={versions.map(({ version, family }) => ({
-          id: version.id,
-          label: `${family.name} / ${version.versionLabel} / ${version.originalFilename}`,
-        }))}
-        now={now}
-        notice={query.notice?.slice(0, 300)}
-      />
-    </div>
+  // A previous job is history, not an application: its company page has no row to open.
+  if (record.source === PREVIOUS_JOB) redirect(companyPageHref(record));
+  // A mail link that names no real message is kept, so the row can say so instead of opening a form.
+  const mail = query.mail?.slice(0, 80);
+  redirect(
+    applicationHref(record, {
+      mail,
+      outcome: query.outcome?.slice(0, 40),
+      round: uuid(query.round),
+      notice: query.notice?.slice(0, 200),
+    }),
   );
 }
+
+export const metadata = { title: "Application" };

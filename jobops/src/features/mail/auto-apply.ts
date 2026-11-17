@@ -132,7 +132,7 @@ export async function applyMailEffect(
       outcome: effect.outcome,
       mailMessageId: messageId,
       auto: true,
-      detail: { name: "", note: "", happenedAt },
+      detail: { name: "", interviewer: "", note: "", happenedAt },
     },
     now,
   );
