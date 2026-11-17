@@ -180,6 +180,10 @@ test("company search and separate city sections work on mobile", async ({ page }
     "href",
     /\?tab=applications#mail-search$/,
   );
+  await page.getByRole("link", { name: "Mail search settings" }).click();
+  await expect(page).toHaveURL(/\?tab=applications#mail-search$/);
+  await expect(page.getByRole("button", { name: "Edit" })).toHaveAttribute("aria-expanded", "true");
+  await page.getByRole("button", { name: "More company actions" }).click();
   await page.keyboard.press("Escape");
   await expect(page.getByRole("button", { name: "More company actions" })).toBeFocused();
   await page.getByRole("button", { name: "More company actions" }).click();
