@@ -110,14 +110,18 @@ export async function ingestPage(
   for (const raw of input.messages) {
     if (raw.contextOnly) continue;
     counts.fetched++;
+    // One email can reach the same inbox under two provider ids: Graph gives a $filter check
+    // immutable ids but a $search regular ones. Its Message-ID ties them; a kept row wins.
+    const same = prior.filter(
+      (row) =>
+        row.providerMessageId === raw.externalId ||
+        row.providerMessageId === `legacy:${raw.externalId}` ||
+        (raw.internetMessageId && row.internetMessageId === raw.internetMessageId),
+    );
     const previous =
-      prior.find((row) => row.providerMessageId === raw.externalId) ??
-      prior.find(
-        (row) =>
-          row.providerMessageId.startsWith("legacy:") &&
-          (row.providerMessageId === `legacy:${raw.externalId}` ||
-            (raw.internetMessageId && row.internetMessageId === raw.internetMessageId)),
-      );
+      same.find((row) => row.disposition === "kept") ??
+      same.find((row) => row.providerMessageId === raw.externalId) ??
+      same[0];
     // A kept identity only records where it lives now.
     if (previous?.disposition === "kept") {
       await tx
