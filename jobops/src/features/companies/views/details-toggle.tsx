@@ -73,7 +73,7 @@ export function AsideSlot({ children }: { children: React.ReactNode }) {
     <div
       id={state?.panel}
       className={cn(
-        "min-w-0 @3xl:col-start-2 @3xl:row-span-3 @3xl:row-start-1 @3xl:block",
+        "min-w-0 @3xl:col-start-2 @3xl:row-span-2 @3xl:row-start-1 @3xl:block",
         state?.open ? "block" : "hidden",
       )}
     >

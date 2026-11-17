@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useCallback, useId, useRef, useState } from "react";
 import { ChevronRight, X } from "lucide-react";
 import { Modal } from "@/components/ui/modal";
 import { saveApplicationNotes } from "@/features/applications/record-actions";
@@ -29,6 +29,8 @@ function closedLine(notes: string): string {
   return first ?? "No notes yet";
 }
 
+export const discardNotesPrompt = "Discard your unsaved changes to these notes?";
+
 /**
  * Notes closed to one line, opening to the readable note with Edit notes. The "dialog" variant
  * is a card with the section names and an Open notes button; the same note opens in a dialog.
@@ -48,12 +50,22 @@ export function NotesFold({
 }) {
   const [open, setOpen] = useState(false);
   const panel = useId();
+  const dirty = useRef(false);
+  const setDirty = useCallback((value: boolean) => {
+    dirty.current = value;
+  }, []);
+  // Escape, the scrim and the close button must not drop edits the editor's Cancel would ask about.
+  const close = () => {
+    if (dirty.current && !window.confirm(discardNotesPrompt)) return;
+    setOpen(false);
+  };
   const line = closedLine(notes);
   const editor = (
     <NotesEditor
       recordId={recordId}
       notes={notes}
       save={saveApplicationNotes}
+      onDirtyChange={setDirty}
       view={<NotesView notes={notes} scores={scores} resumesHref={resumesHref} />}
     />
   );
@@ -75,7 +87,7 @@ export function NotesFold({
           {line}
         </p>
         {open && (
-          <Modal open onClose={() => setOpen(false)} labelledBy={panel} size="lg">
+          <Modal open onClose={close} labelledBy={panel} size="lg">
             <header className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-5 py-3 sm:px-6">
               <h2 id={panel} className="m-0 text-base font-semibold">
                 Notes
@@ -83,7 +95,7 @@ export function NotesFold({
               <button
                 type="button"
                 aria-label="Close"
-                onClick={() => setOpen(false)}
+                onClick={close}
                 className="grid size-9 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-muted"
               >
                 <X aria-hidden size={18} />

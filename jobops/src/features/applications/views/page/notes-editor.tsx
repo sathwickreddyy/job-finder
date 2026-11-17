@@ -109,8 +109,11 @@ export function NotesEditor({
   notes,
   save,
   view,
+  onDirtyChange,
 }: {
   recordId: string;
+  /** Tells a host (such as a dialog) whether there are unsaved edits it must not discard. */
+  onDirtyChange?: (dirty: boolean) => void;
   notes: string;
   /** Replaces the plain Markdown rendering shown while not editing. */
   view?: ReactNode;
@@ -123,6 +126,10 @@ export function NotesEditor({
   const editButton = useRef<HTMLButtonElement>(null);
   const dirty = editing && draft !== notes;
   useLeaveGuard(dirty);
+  useEffect(() => {
+    onDirtyChange?.(dirty);
+    return () => onDirtyChange?.(false);
+  }, [dirty, onDirtyChange]);
 
   const submit = () => {
     if (saving || !dirty) return;

@@ -128,8 +128,23 @@ test("notes, details and the résumé preview open from the row", async ({ page 
   for (const name of ["On the form", "Proof"])
     await expect(notesDialog.getByRole("heading", { name })).toBeVisible();
   await notesDialog.getByRole("button", { name: "Edit notes", exact: true }).click();
-  await expect(notesDialog.getByRole("textbox", { name: "Notes, Markdown" })).toBeVisible();
+  const editor = notesDialog.getByRole("textbox", { name: "Notes, Markdown" });
+  await expect(editor).toBeVisible();
+  // Unsaved edits survive Escape until the discard prompt is accepted.
+  await editor.click();
+  await page.keyboard.type(" Extra unsaved words.");
+  const prompts: string[] = [];
+  let accept = false;
+  page.on("dialog", (prompt) => {
+    prompts.push(prompt.message());
+    return accept ? prompt.accept() : prompt.dismiss();
+  });
   await page.keyboard.press("Escape");
+  await expect(notesDialog).toBeVisible();
+  expect(prompts).toEqual(["Discard your unsaved changes to these notes?"]);
+  accept = true;
+  await page.keyboard.press("Escape");
+  await expect(notesDialog).toHaveCount(0);
 
   await row.getByRole("button", { name: /^Tracking tailored/ }).click();
   const preview = page.getByRole("dialog", { name: /Tracking tailored/ });
@@ -207,6 +222,26 @@ test("the header fits a 375 px screen without sideways scroll", async ({ page })
   await page.goto(`/applications/${applicationId}`);
   await expect(page.getByRole("link", { name: "Record application" })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375);
+  // The quiet menu stays on the line of the header's other actions.
+  const mail = await page.getByRole("link", { name: "Company mail" }).boundingBox();
+  const more = await page.getByRole("button", { name: "More company actions" }).boundingBox();
+  expect(Math.abs(more!.y - mail!.y)).toBeLessThan(4);
+});
+
+test("the note composer ignores Enter on whitespace", async ({ page }) => {
+  const { applicationId } = await seedWithRound();
+  await page.goto(`/applications/${applicationId}`);
+  const field = page.getByRole("textbox", { name: "Add a note to this application's history…" });
+  await hydrated(field);
+  const posts: string[] = [];
+  page.on("request", (request) => {
+    if (request.method() === "POST") posts.push(request.url());
+  });
+  await field.fill("   ");
+  await field.press("Enter");
+  await page.waitForTimeout(500);
+  expect(posts).toEqual([]);
+  await expect(field).toHaveValue("   ");
 });
 
 /** A company with two open applications and two open emails on no application. */

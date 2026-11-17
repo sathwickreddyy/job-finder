@@ -70,14 +70,17 @@ export function RowBody({
   return (
     <div className="@container">
       <DetailsProvider>
-        <div className="grid gap-6 @3xl:grid-cols-[minmax(0,1fr)_290px] @3xl:items-start">
+        <div className="grid gap-6 @3xl:grid-cols-[minmax(0,1fr)_290px] @3xl:grid-rows-[auto_1fr] @3xl:items-start">
           <CompactFacts
             applied={record.sentAt ? `Applied ${withYear(record.sentAt)}` : "Not sent"}
             opening={record.requisition ?? "No requisition"}
             openingHref={record.jobUrl}
             resume={record.resume?.label ?? null}
           />
-          <div className="min-w-0 space-y-4 @3xl:col-start-1 @3xl:row-start-2">
+          <AsideSlot>
+            <DetailsAside row={row} versions={data.versions} editable={editable} />
+          </AsideSlot>
+          <div className="min-w-0 space-y-4 @3xl:col-start-1 @3xl:row-start-1">
             {/* Focus lands here when a saved step removes the control that held it. */}
             <section aria-label="Progress" tabIndex={-1} className="min-w-0 space-y-5 outline-none">
               <CurrentStep
@@ -126,10 +129,7 @@ export function RowBody({
               </ActionForm>
             )}
           </div>
-          <AsideSlot>
-            <DetailsAside row={row} versions={data.versions} editable={editable} />
-          </AsideSlot>
-          <div className="min-w-0 @3xl:col-start-1 @3xl:row-start-3">
+          <div className="min-w-0 @3xl:col-start-1 @3xl:row-start-2">
             <CompanyTimeline
               unlinkFrom={companyPageHref(record)}
               days={row.days}

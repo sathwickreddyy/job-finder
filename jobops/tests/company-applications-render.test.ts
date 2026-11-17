@@ -443,7 +443,7 @@ describe("company page applications", () => {
       for (const label of ["Cleared the round", "Didn&#x27;t clear it", "Rescheduled"])
         expect(html.match(new RegExp(`>${label}<`, "g"))).toHaveLength(1);
       expect(html.indexOf("was on 16 Nov")).toBeLessThan(html.indexOf("Cleared the round"));
-      expect(html.indexOf('data-testid="row-aside"')).toBeGreaterThan(html.indexOf("was on"));
+      expect(html.indexOf('data-testid="row-aside"')).toBeLessThan(html.indexOf("was on"));
     });
 
     it("says a future round is on its day, and a round without a time has no date", () => {
@@ -556,6 +556,10 @@ describe("company page applications", () => {
         /<button[^>]*aria-expanded="false"[^>]*aria-controls="[^"]+"[^>]*>Details/,
       );
       expect(html).toContain("@3xl:hidden");
+      // Opened on a narrow row, Details reveals the aside straight after the facts row.
+      const asideAt = html.indexOf('data-testid="row-aside"');
+      expect(asideAt).toBeGreaterThan(compact);
+      expect(asideAt).toBeLessThan(html.indexOf('data-testid="current-step"'));
       // The wide layout still gets the whole aside.
       const aside = asideOf(html);
       for (const text of ["Set a follow-up", "Résumé used", "Edit details"])
@@ -878,6 +882,15 @@ describe("company page applications", () => {
       const bare = render(data(rows));
       expect(bare).not.toContain("new email");
       expect(bare).not.toContain("Other company mail");
+    });
+
+    it("counts the fold's mail as N+ while older pages remain", () => {
+      const done = mailItem("00000000-0000-4000-8000-0000000000d2", "Done hello", null);
+      const paged = render(
+        data(rows, { unplaced: mailDay(done), unplacedOlderHref: "?unplaced=x#unplaced" }),
+      );
+      expect(paged).toContain("Other company mail · 1+");
+      expect(render(data(rows, { unplaced: mailDay(done) }))).toContain("Other company mail · 1<");
     });
 
     it("keeps the fold shut until a ?mail= link targets one of its emails", () => {

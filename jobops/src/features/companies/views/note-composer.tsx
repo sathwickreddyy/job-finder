@@ -63,6 +63,8 @@ export function NoteComposer({ recordId }: { recordId: string }) {
             onKeyDown={(event) => {
               if (event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing) return;
               event.preventDefault();
+              // Whitespace alone would only come back as the server's error.
+              if (!event.currentTarget.value.trim()) return;
               event.currentTarget.form?.requestSubmit();
             }}
             className="!m-0 !min-h-9 max-h-40 min-w-0 flex-1 resize-none !border-0 !bg-transparent !px-0 !py-[7px] text-sm leading-snug outline-none focus:!border-0 focus-visible:outline-none"
