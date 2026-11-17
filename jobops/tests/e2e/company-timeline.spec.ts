@@ -46,17 +46,17 @@ test("opens All job mail, then a Needs you company from the rail", async ({ page
   await railRow(page, company).click();
   await expect(page.getByRole("heading", { level: 2, name: company })).toBeVisible();
   await expect(railRow(page, company)).toHaveAttribute("aria-current", "page");
-  await expect(page.getByRole("button", { name: "Record round scheduled" })).toBeVisible();
-  await expect(page.getByText("Suggested for an interview email.")).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Save round scheduled for/ })).toBeVisible();
+  await expect(page.getByText(/^Records round scheduled on /)).toBeVisible();
 });
 
 test("records the suggested outcome with a time", async ({ page }) => {
   const { company, applicationId } = await companyWithMail("INTERVIEW");
   await openCompany(page, company);
-  await page.getByRole("button", { name: "Record round scheduled" }).click();
+  // The round's fields sit under the menu; the one button saves them.
   await page.getByLabel("Day", { exact: true }).fill(istDay(3));
   await page.getByLabel("Time", { exact: true }).fill("15:00");
-  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await page.getByRole("button", { name: /^Save round scheduled for/ }).click();
   await expect(page.getByText(/^Recorded: DSA round scheduled for/)).toBeVisible();
   await expect(railRow(page, company)).not.toContainText("New:");
   // The round now lives on the application's row on its company page.
@@ -67,12 +67,13 @@ test("records the suggested outcome with a time", async ({ page }) => {
 test("Just info and Undo", async ({ page }) => {
   const { company, subject } = await companyWithMail("INTERVIEW");
   await openCompany(page, company);
-  await page.getByRole("button", { name: "Just info", exact: true }).click();
+  await page.getByLabel("This email is about").selectOption({ label: "Nothing, just info" });
+  await page.getByRole("button", { name: "Mark as just info", exact: true }).click();
   await expect(page.getByText("Marked as just info")).toBeVisible();
   await expect(mailRow(page, subject)).not.toContainText("needs you");
   await page.getByRole("button", { name: "Undo", exact: true }).click();
   await expect(mailRow(page, subject)).toContainText("needs you");
-  await expect(page.getByRole("button", { name: "Record round scheduled" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Save round scheduled for/ })).toBeVisible();
 });
 
 test("asks which role with two open applications", async ({ page }) => {
@@ -86,16 +87,17 @@ test("asks which role with two open applications", async ({ page }) => {
   });
   await openCompany(page, company);
   await expect(page.getByRole("group", { name: "Filter by role" })).toContainText("All roles");
-  const which = page.getByRole("radiogroup", { name: "Which role?" });
-  await expect(page.getByRole("button", { name: "Record heard back" })).toHaveCount(0);
-  await which.getByRole("radio", { name: "Platform Engineer" }).click();
-  await expect(which.getByRole("radio", { name: "Platform Engineer" })).toHaveAttribute(
-    "aria-checked",
-    "true",
-  );
-  await expect(page.getByRole("button", { name: "Record heard back" })).toBeVisible();
-  await page.getByRole("button", { name: "Something else" }).click();
+  // Neither role is named, so nothing is chosen and nothing can be saved yet.
+  const about = page.getByLabel("This email is about");
+  await expect(page.getByRole("button", { name: "Choose where it belongs" })).toBeDisabled();
+  await about.selectOption({ label: "Platform Engineer" });
+  await expect(
+    page.getByRole("button", { name: "Save heard back for Platform Engineer" }),
+  ).toBeVisible();
+  // A different update changes the one button's words, and that button saves it.
+  await page.getByRole("button", { name: "Different update" }).click();
   await page.getByRole("button", { name: "Sent a follow-up", exact: true }).click();
+  await page.getByRole("button", { name: "Save sent a follow-up for Platform Engineer" }).click();
   await expect(page.getByText("Recorded: Sent a follow-up")).toBeVisible();
 });
 
@@ -211,9 +213,11 @@ test("places a Needs a home email", async ({ page }) => {
   await expect(page.getByRole("heading", { level: 2, name: "Needs a home" })).toBeVisible();
   // The row previews the first line, and the opened email repeats it in full.
   await expect(page.getByText(`${subject} full message`).last()).toBeVisible();
-  await page.getByText("Place at…").click();
-  await page.getByLabel("Company or application").selectOption({ label: company });
-  await page.getByRole("button", { name: "Place", exact: true }).click();
+  // The opened email's popup carries its own handling bar.
+  const row = page.getByRole("dialog");
+  await row.getByLabel("This email is about").selectOption({ label: "A different company…" });
+  await row.getByLabel("Company or application").selectOption({ label: company });
+  await row.getByRole("button", { name: "Move it", exact: true }).click();
   await expect(mailRow(page, subject)).toHaveCount(0);
   await openCompany(page, company);
   await expect(mailRow(page, subject)).toBeVisible();
@@ -243,7 +247,7 @@ test("legacy handled mail stays handled despite a pending review event", async (
   await openCompany(page, company);
   await expect(mailRow(page, subject)).toBeVisible();
   await expect(mailRow(page, subject)).not.toContainText("needs you");
-  await expect(page.getByRole("button", { name: "Record round scheduled" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /^Save round scheduled for/ })).toHaveCount(0);
 });
 
 test("company page opens on Timeline with the aside", async ({ page }) => {
@@ -266,11 +270,12 @@ test("company page opens on Timeline with the aside", async ({ page }) => {
     await expect(aside.getByRole("heading", { name: heading, exact: true })).toBeVisible();
   await expect(aside.getByRole("link", { name: "Timeline Engineer" })).toBeVisible();
   await expect(mailRow(page, subject)).toBeVisible();
-  await expect(page.getByRole("button", { name: "Record round scheduled" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Save round scheduled for/ })).toBeVisible();
   await expect(
     page.getByText("Typical rounds", { exact: true }).filter({ visible: true }),
   ).toHaveCount(0);
-  await page.getByRole("button", { name: "Just info", exact: true }).click();
+  await page.getByLabel("This email is about").selectOption({ label: "Nothing, just info" });
+  await page.getByRole("button", { name: "Mark as just info", exact: true }).click();
   await expect(page.getByText("Marked as just info")).toBeVisible();
   await expect(mailRow(page, subject)).not.toContainText("needs you");
 });
@@ -318,7 +323,7 @@ test("long and empty fields keep the phone layout", async ({ page }) => {
   await expect(page.getByText("Please share your availability").first()).toBeVisible();
   expect(await fitsWidth(page)).toBe(true);
   await page.goto("/companies/atlassian");
-  await expect(page.getByRole("button", { name: "Record round scheduled" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Save round scheduled for/ })).toBeVisible();
   expect(await fitsWidth(page)).toBe(true);
 });
 
@@ -353,7 +358,7 @@ test("captures Mail and the company page", async ({ page }) => {
         ["company", "/companies/atlassian"],
       ]) {
         await page.goto(path);
-        await expect(page.getByRole("button", { name: "Record round scheduled" })).toBeVisible();
+        await expect(page.getByRole("button", { name: /^Save round scheduled for/ })).toBeVisible();
         expect(await fitsWidth(page)).toBe(true);
         await page.screenshot({
           path: `test-results/company-timeline/${name}-${theme}-${width}.png`,
@@ -376,7 +381,7 @@ test("long role names keep the phone layout", async ({ page }) => {
   });
   await page.setViewportSize({ width: 375, height: 812 });
   await openCompany(page, company);
-  await expect(page.getByRole("radiogroup", { name: "Which role?" })).toBeVisible();
+  await expect(page.getByLabel("This email is about")).toBeVisible();
   expect(await fitsWidth(page)).toBe(true);
 });
 

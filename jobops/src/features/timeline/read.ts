@@ -7,7 +7,6 @@ import { istDaysBetween } from "@/features/applications/dates";
 import { buildQueue, type QueueItem } from "@/features/applications/queue";
 import { PREVIOUS_JOB, previousJobs } from "@/features/companies/previous-job";
 import { companyStatus, monthLabel, type CompanyStatus } from "@/features/companies/status";
-import type { MailItem } from "@/features/mail/mail-item";
 import type { ComingUpItem } from "./coming-up";
 import { readApplications, type ApplicationRecord } from "@/features/applications/read";
 import { loadMailContext } from "@/features/mail/context";
@@ -234,12 +233,11 @@ function dueLabel(at: Date, now: Date) {
 }
 /**
  * Coming up: booked rounds, OA deadlines and follow-ups due within the queue's horizon,
- * soonest first, then up to 10 open emails that have no date.
+ * soonest first. Open emails without a date stay in the feed, not here.
  */
 export function comingUpFrom(input: {
   items: QueueItem[];
   records: { id: string; companyKey: string; companyName: string }[];
-  openMail: MailItem[];
   now: Date;
 }): ComingUpItem[] {
   const recordOf = new Map(input.records.map((record) => [record.id, record]));
@@ -256,24 +254,12 @@ export function comingUpFrom(input: {
               title: item.title,
               companyKey: record.companyKey,
               companyName: record.companyName,
-              tag: null,
-              mailId: null,
             },
           ]
         : [];
     })
     .sort((a, b) => a.at.localeCompare(b.at));
-  const undated = input.openMail.slice(0, 10).map((item) => ({
-    id: `mail:${item.id}`,
-    at: null,
-    label: "No date",
-    title: item.subject,
-    companyKey: item.company?.key ?? "",
-    companyName: item.company?.name ?? "Needs a home",
-    tag: item.tag,
-    mailId: item.id,
-  }));
-  return [...dated, ...undated];
+  return dated;
 }
 
 /** The Mail rail: Applications' lanes (the same needs-you signal) joined with visible mail. */
@@ -319,12 +305,11 @@ export async function readCompanyIndex(
       }),
     ]),
   );
-  const open = await listMail({ attention: "open" }, context);
   return {
     rows,
     home: { ...home, matches: matches ? (matches.get(null) ?? 0) : null },
     statuses,
-    comingUp: comingUpFrom({ items, records, openMail: open.items, now }),
+    comingUp: comingUpFrom({ items, records, now }),
   };
 }
 

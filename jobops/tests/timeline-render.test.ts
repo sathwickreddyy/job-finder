@@ -23,7 +23,7 @@ vi.mock("@/features/mail/workspace-actions", () => ({
 type RoundRow = typeof applicationRounds.$inferSelect;
 const { CompanyTimeline } = await import("@/features/timeline/timeline");
 const { isShown } = await import("@/features/timeline/timeline");
-const { HandlingBar } = await import("@/features/timeline/handling");
+const { HandlingBar } = await import("@/features/timeline/handling-bar");
 const { RoundCard, notesSummary } = await import("@/features/timeline/round-card");
 
 const item = (id: string, patch: Partial<MailItem> = {}): MailItem => ({
@@ -108,8 +108,8 @@ describe("CompanyTimeline", () => {
     expect(html).toContain(", needs you");
     expect(html).toContain("w-[3px]");
     expect(html).not.toContain("bg-selected/40");
-    expect(html).toContain("Record round scheduled");
-    expect(html).toContain("Suggested for an interview email.");
+    expect(html).toContain("Save round scheduled for Backend");
+    expect(html).toContain("Records round scheduled on Backend");
     expect(html).toContain("Applied for Backend");
   });
 
@@ -194,6 +194,15 @@ describe("CompanyTimeline", () => {
     expect(html).toContain('aria-label="Filter by role"');
     for (const label of ["All roles", "Backend", "Platform"]) expect(html).toContain(label);
     expect(html).toContain('href="/mail?role=b"');
+  });
+
+  it("folds more than three roles into one Role menu of the same links", () => {
+    const roles = ["Backend", "Platform", "Data", "Mobile"].map((name, i) => role(`r${i}`, name));
+    const html = render({ roles, role: "r1" });
+    expect(html).toContain('aria-label="Filter by role"');
+    expect(html).toMatch(/Role:<\/span>[\s\S]*?>Platform</);
+    for (const r of roles) expect(html).toContain(`href="${r.href}"`);
+    expect(html).not.toContain("bg-foreground text-background");
   });
 
   it("handled row shows what was recorded", () => {
@@ -600,40 +609,84 @@ describe("CompanyTimeline", () => {
   });
 });
 
-describe("HandlingBar link without an outcome", () => {
-  const renderBar = (patch: Partial<Handling>, linkWhenNoOutcome?: { returnTo: string }) =>
-    renderToStaticMarkup(
-      createElement(HandlingBar, {
-        item: item("m9", { kind: "Application received", tag: "application" }),
-        handling: { ...handling, ...patch },
-        linkWhenNoOutcome,
-      }),
-    );
-  const ack = {
-    suggested: "info" as const,
+describe("HandlingBar: one question, one button", () => {
+  const ack = (patch: Partial<MailItem> = {}) =>
+    item("m9", { kind: "Application received", tag: "application", ...patch });
+  const two: Handling = {
+    applications: [
+      { id: "a", role: "Backend", requisition: "R-100", outcomes: ["heard", "rejected"] },
+      { id: "b", role: "Platform", requisition: "R-200", outcomes: ["heard", "rejected"] },
+    ],
+    chosen: null,
+    suggested: "info",
     reason: "Nothing to record from this email.",
   };
+  const bar = (props: Partial<Parameters<typeof HandlingBar>[0]> = {}) =>
+    renderToStaticMarkup(createElement(HandlingBar, { item: ack(), handling, ...props }));
 
-  it("makes Link to this application the main button, with Just info beside it", () => {
-    const html = renderBar(ack, { returnTo: "/companies/northstar" });
-    expect(html).toContain("Link to this application");
+  it("asks where the email belongs, with the role it names first and preselected", () => {
+    const html = bar({ item: ack({ text: "Thanks for applying to R-200." }), handling: two });
+    expect(html).toContain("This email is about");
+    expect(html.indexOf("Platform · named in email")).toBeLessThan(html.indexOf(">Backend<"));
+    expect(html).toMatch(/<option value="role:b" selected="">/);
+    expect(html).toContain("Nothing, just info");
+    // Nothing to record, so the one button adds the email to the named role.
+    expect(html).toContain("Add to Platform");
     expect(html).toContain('name="link"');
-    expect(html).toContain('name="mailId" value="m9"');
-    expect(html).toContain('name="recordId" value="a"');
-    expect(html).toContain('name="returnTo" value="/companies/northstar?open=a"');
-    expect(html).toContain('name="justInfo"');
-    expect(html).toContain("Just info");
+    expect(html).toContain('name="recordId" value="b"');
+    expect(html).not.toContain("Choose the role this email is about.");
   });
 
-  it("keeps the suggested outcome as the main button when one is allowed", () => {
-    const html = renderBar({}, { returnTo: "/companies/northstar" });
-    expect(html).toContain("Record round scheduled");
-    expect(html).not.toContain("Link to this application");
-  });
-
-  it("is unchanged without the prop", () => {
-    const html = renderBar(ack);
-    expect(html).not.toContain("Link to this application");
+  it("waits for a choice when several roles fit and none is named", () => {
+    const html = bar({ handling: two });
+    expect(html).toContain("Choose…");
+    expect(html).toMatch(/<button type="button" disabled=""[^>]*>Choose where it belongs/);
     expect(html).not.toContain('name="link"');
+  });
+
+  it("saves the suggested outcome through the same one button", () => {
+    const html = bar({ item: item("m1") });
+    expect(html).toContain("Save round scheduled for Backend");
+    expect(html).toMatch(/<button type="submit" value="scheduled"[^>]*name="outcome"/);
+    expect(html).toContain('name="day"');
+    expect(html).toContain("Different update");
+  });
+
+  it("returns to the company row when the caller names its page", () => {
+    const html = bar({
+      handling: { ...two, chosen: "a" },
+      returnTo: "/companies/northstar",
+    });
+    expect(html).toContain('name="returnTo" value="/companies/northstar?open=a"');
+  });
+
+  it("only clears an email already on the chosen application", () => {
+    const html = bar({
+      item: ack({ application: { id: "a", role: "Backend" } }),
+      handling: { ...handling, suggested: "info" },
+      infoLabel: "Mark as handled",
+    });
+    expect(html).toContain("Mark as handled");
+    expect(html).toContain("already on Backend");
+    expect(html).not.toContain('name="link"');
+  });
+
+  it("skips the question where the caller already asked", () => {
+    const html = bar({ handling: { ...two, chosen: "a" }, ask: false });
+    expect(html).not.toContain("This email is about");
+    expect(html).toContain("Add to Backend");
+  });
+
+  it("offers a new opening and another company only when they apply", () => {
+    const opp = bar({
+      item: item("m3", { tag: "opportunity", company: null }),
+      handling: { applications: [], chosen: null, suggested: "info", reason: "" },
+      placeOptions: { companies: [{ key: "x", name: "X" }], applications: [] },
+    });
+    expect(opp).toContain("A new job to consider");
+    expect(opp).toContain("A different company…");
+    expect(opp).toContain("Mark as just info");
+    expect(bar()).not.toContain("A new job to consider");
+    expect(bar()).not.toContain("A different company…");
   });
 });

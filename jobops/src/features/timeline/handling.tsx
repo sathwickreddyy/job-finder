@@ -1,44 +1,26 @@
 "use client";
 
-import {
-  startTransition,
-  useActionState,
-  useId,
-  useState,
-  type FormEvent,
-  type ReactNode,
-} from "react";
-import Link from "next/link";
-import { Check, ChevronDown, Link2, Star, Undo2 } from "lucide-react";
+import { startTransition, useActionState, useId, useState, type FormEvent } from "react";
+import { Check, Undo2 } from "lucide-react";
 import { useLoadingTask } from "@/components/loading/overlay";
 import { outcomeMeta, type OutcomeId } from "@/features/applications/phase";
 import { roundKindLabel } from "@/features/companies/metrics";
 import type { MailItem } from "@/features/mail/mail-item";
-import { linkMailOnly } from "@/features/mail/triage-actions";
 import {
-  handleMailAction,
   placeMailAction,
   reopenMailAction,
   undoAutoOutcomeAction,
 } from "@/features/mail/workspace-actions";
 import type { ActionState } from "@/lib/actions";
 import { roundKinds } from "@/lib/round-kinds";
-import { cn } from "@/lib/utils";
-import { suggestionFor, type Handling } from "./suggest";
 
 export type PlaceOptions = {
   companies: { key: string; name: string }[];
   applications: { id: string; label: string }[];
 };
 
-const chip =
-  "pressable inline-flex h-9 max-w-full items-center gap-1.5 truncate rounded-full px-3.5 text-sm font-medium";
-const plainChip = "border border-border text-foreground hover:bg-muted";
-const quiet =
-  "pressable inline-flex h-11 items-center gap-1 rounded-full px-4 text-sm font-medium hover:bg-muted";
-
 /** Submits like ActionForm: typed values survive a refusal instead of React's form reset. */
-function useSubmit(action: (state: ActionState, data: FormData) => Promise<ActionState>) {
+export function useSubmit(action: (state: ActionState, data: FormData) => Promise<ActionState>) {
   const [state, dispatch, pending] = useActionState(action, {});
   useLoadingTask(pending, "Saving");
   const submit = (event: FormEvent<HTMLFormElement>) => {
@@ -49,7 +31,7 @@ function useSubmit(action: (state: ActionState, data: FormData) => Promise<Actio
   return { state, pending, submit };
 }
 
-function Refusal({ state }: { state: ActionState }) {
+export function Refusal({ state }: { state: ActionState }) {
   return state.error ? (
     <p role="alert" className="m-0 mt-2 text-sm text-destructive">
       {state.error}
@@ -57,14 +39,14 @@ function Refusal({ state }: { state: ActionState }) {
   ) : null;
 }
 
-/** Round, deadline or time for the outcomes that need one, in India time. */
-function OutcomeFields({ outcome, onCancel }: { outcome: OutcomeId; onCancel: () => void }) {
+/** Round, deadline or time for the outcomes that need one, in India time. The form's button saves. */
+export function OutcomeFields({ outcome }: { outcome: OutcomeId }) {
   const id = useId();
   const needs = outcomeMeta[outcome].needs;
   const field = "grid gap-1 text-xs text-muted-foreground";
+  if (!needs) return null;
   return (
-    <div className="reveal mt-3 flex flex-wrap items-end gap-2 rounded-2xl bg-secondary p-3">
-      <input type="hidden" name="outcome" value={outcome} />
+    <div className="reveal flex flex-wrap items-end gap-2">
       {needs === "round" && (
         <label className={field} htmlFor={`${id}-kind`}>
           Round
@@ -99,42 +81,31 @@ function OutcomeFields({ outcome, onCancel }: { outcome: OutcomeId; onCancel: ()
           />
         </label>
       )}
-      <button
-        type="submit"
-        className="morph pressable h-9 bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary-hover"
-      >
-        Save
-      </button>
-      <button
-        type="button"
-        onClick={onCancel}
-        className="pressable h-9 rounded-full px-3 text-sm text-muted-foreground hover:bg-muted"
-      >
-        Cancel
-      </button>
     </div>
   );
 }
 
-/** "Place at…": Needs a home mail, or mail that matched the wrong company. */
+/**
+ * "Place at…": Needs a home mail, or mail that matched the wrong company. `bare` drops the
+ * disclosure for the handling bar, which asks "A different company…" itself.
+ */
 export function PlaceAt({
   item,
   options,
   defaultOpen,
+  bare,
 }: {
   item: MailItem;
   options: PlaceOptions;
   defaultOpen?: boolean;
+  bare?: boolean;
 }) {
   const id = useId();
   const { state, pending, submit } = useSubmit(placeMailAction);
   const [target, setTarget] = useState("");
   const [kind, value] = target.split(":");
-  return (
-    <details className="mt-2" open={defaultOpen}>
-      <summary className="inline-flex h-9 cursor-pointer items-center rounded-full px-3 text-sm font-medium text-link hover:bg-muted">
-        Place at…
-      </summary>
+  const body = (
+    <>
       <form onSubmit={submit} aria-busy={pending} className="mt-2 flex flex-wrap items-end gap-2">
         <input type="hidden" name="id" value={item.id} />
         {kind && <input type="hidden" name={kind} value={value} />}
@@ -166,200 +137,26 @@ export function PlaceAt({
         </label>
         <button
           type="submit"
-          className="pressable h-9 rounded-full border border-border px-4 text-sm font-medium hover:bg-muted"
+          className={
+            bare
+              ? "morph pressable inline-flex h-10 items-center bg-primary px-5 text-sm font-medium text-primary-foreground hover:bg-primary-hover"
+              : "pressable h-9 rounded-full border border-border px-4 text-sm font-medium hover:bg-muted"
+          }
         >
-          Place
+          Move it
         </button>
       </form>
       <Refusal state={state} />
-    </details>
+    </>
   );
-}
-
-/**
- * Gallery handling B: one button for the suggested outcome, the others behind "Something
- * else", Just info beside them. With several open roles it asks "Which role?" first.
- */
-export function HandlingBar({
-  item,
-  handling,
-  placeOptions,
-  infoLabel = "Just info",
-  linkWhenNoOutcome,
-}: {
-  item: MailItem;
-  handling: Handling;
-  placeOptions?: PlaceOptions;
-  infoLabel?: string;
-  /**
-   * When the chosen role has no outcome to suggest, the main button links the email to it
-   * instead of marking it just info. `returnTo` is the company page path; the chosen
-   * application's row is opened on return.
-   */
-  linkWhenNoOutcome?: { returnTo: string };
-}) {
-  const handle = useSubmit(handleMailAction);
-  const link = useSubmit(linkMailOnly);
-  const { pending } = handle;
-  // The Link button submits the same form; its name routes the submit to the link action.
-  const submit = (event: FormEvent<HTMLFormElement>) =>
-    (event.nativeEvent as SubmitEvent).submitter?.getAttribute("name") === "link"
-      ? link.submit(event)
-      : handle.submit(event);
-  const state = link.state.error ? link.state : handle.state;
-  const [chosen, setChosen] = useState(handling.chosen);
-  const [more, setMore] = useState(false);
-  const [form, setForm] = useState<OutcomeId | null>(null);
-  const app = handling.applications.find((option) => option.id === chosen);
-  const { suggested, reason } = suggestionFor(handling, chosen);
-  const others = (app?.outcomes ?? []).filter((id) => id !== suggested);
-  // The choice stays in view once made, so a misclick is visible before anything is recorded.
-  const asking = handling.chosen === null && handling.applications.length > 1;
-  const outcomeButton = (id: OutcomeId, className: string, children: ReactNode) =>
-    outcomeMeta[id].needs ? (
-      <button
-        key={id}
-        type="button"
-        aria-expanded={form === id}
-        onClick={() => setForm(form === id ? null : id)}
-        className={className}
-      >
-        {children}
-      </button>
-    ) : (
-      <button key={id} type="submit" name="outcome" value={id} className={className}>
-        {children}
-      </button>
-    );
+  if (bare) return <div className="reveal">{body}</div>;
   return (
-    <div className="border-t border-border pt-3">
-      <form onSubmit={submit} aria-busy={pending || link.pending}>
-        <input type="hidden" name="id" value={item.id} />
-        {app && <input type="hidden" name="applicationId" value={app.id} />}
-        {app && linkWhenNoOutcome && (
-          <>
-            <input type="hidden" name="mailId" value={item.id} />
-            <input type="hidden" name="recordId" value={app.id} />
-            <input
-              type="hidden"
-              name="returnTo"
-              value={`${linkWhenNoOutcome.returnTo}?open=${app.id}`}
-            />
-          </>
-        )}
-        {asking && (
-          <div role="radiogroup" aria-label="Which role?" className="mb-3">
-            <p className="m-0 mb-2 text-sm font-medium text-muted-foreground">Which role?</p>
-            <div className="flex flex-wrap gap-2">
-              {handling.applications.map((option) => (
-                <button
-                  key={option.id}
-                  type="button"
-                  role="radio"
-                  aria-checked={chosen === option.id}
-                  onClick={() => setChosen(option.id)}
-                  className={cn(
-                    chip,
-                    chosen === option.id
-                      ? "bg-selected text-selected-foreground ring-1 ring-primary/35"
-                      : plainChip,
-                  )}
-                >
-                  <span className="truncate">{option.role}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-        <div className="flex flex-wrap items-center gap-2">
-          {suggested ? (
-            outcomeButton(
-              suggested,
-              "morph pressable inline-flex h-11 items-center gap-2 bg-primary px-5 text-sm font-medium text-primary-foreground hover:bg-primary-hover",
-              <>
-                <Star aria-hidden size={13} className="fill-current" />
-                Record {outcomeMeta[suggested].label.toLowerCase()}
-              </>,
-            )
-          ) : app && linkWhenNoOutcome ? (
-            <button
-              type="submit"
-              name="link"
-              value="1"
-              className="morph pressable inline-flex h-11 items-center gap-2 bg-primary px-5 text-sm font-medium text-primary-foreground hover:bg-primary-hover"
-            >
-              <Link2 aria-hidden size={14} />
-              Link to this application
-            </button>
-          ) : (
-            <button
-              type="submit"
-              name="justInfo"
-              value="1"
-              className="morph pressable inline-flex h-11 items-center gap-2 bg-primary px-5 text-sm font-medium text-primary-foreground hover:bg-primary-hover"
-            >
-              {infoLabel}
-            </button>
-          )}
-          {others.length > 0 && (
-            <button
-              type="button"
-              aria-expanded={more}
-              onClick={() => setMore(!more)}
-              className={cn(quiet, "text-foreground")}
-            >
-              Something else
-              <ChevronDown
-                aria-hidden
-                size={16}
-                className={cn("transition-transform", more && "rotate-180")}
-              />
-            </button>
-          )}
-          {(suggested || (app && linkWhenNoOutcome)) && (
-            <button
-              type="submit"
-              name="justInfo"
-              value="1"
-              className={cn(quiet, "font-normal text-muted-foreground")}
-            >
-              {infoLabel}
-            </button>
-          )}
-        </div>
-        <p className="m-0 mt-2 text-xs text-muted-foreground">
-          {asking && !app ? "Choose the role this email is about." : reason}
-        </p>
-        {more && (
-          <div className="reveal mt-3 flex flex-wrap gap-2">
-            {others.map((id) =>
-              outcomeButton(
-                id,
-                cn(chip, plainChip, form === id && "ring-2 ring-primary"),
-                outcomeMeta[id].label,
-              ),
-            )}
-          </div>
-        )}
-      </form>
-      {form && app && (
-        <form onSubmit={submit} aria-busy={pending}>
-          <input type="hidden" name="id" value={item.id} />
-          <input type="hidden" name="applicationId" value={app.id} />
-          <OutcomeFields key={form} outcome={form} onCancel={() => setForm(null)} />
-        </form>
-      )}
-      <Refusal state={state} />
-      {item.tag === "opportunity" && !item.application && (
-        <Link
-          href={`/jobs/new?fromMail=${item.id}`}
-          className="mt-2 inline-flex h-9 items-center rounded-full px-3 text-sm font-medium text-link hover:bg-muted hover:no-underline"
-        >
-          Save as opening
-        </Link>
-      )}
-      {placeOptions && <PlaceAt item={item} options={placeOptions} />}
-    </div>
+    <details className="mt-2" open={defaultOpen}>
+      <summary className="inline-flex h-9 cursor-pointer items-center rounded-full px-3 text-sm font-medium text-link hover:bg-muted">
+        Place at…
+      </summary>
+      {body}
+    </details>
   );
 }
 

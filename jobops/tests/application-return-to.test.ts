@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { safeReturnTo, safeRowReturnTo, withNotice } from "@/features/applications/return-to";
+import {
+  safePageReturnTo,
+  safeReturnTo,
+  safeRowReturnTo,
+  withNotice,
+} from "@/features/applications/return-to";
 
 describe("return paths", () => {
   it("keeps Applications paths with their query", () => {
@@ -21,6 +26,25 @@ describe("return paths", () => {
     "/applications/../settings",
   ])("rejects %j", (value) => {
     expect(safeReturnTo(value)).toBeNull();
+  });
+
+  it("keeps the Mail view or a company page, dropping an old notice", () => {
+    expect(safePageReturnTo("/mail?company=amazon&role=x")).toBe("/mail?company=amazon&role=x");
+    expect(safePageReturnTo("/mail?view=all&notice=Old")).toBe("/mail?view=all");
+    expect(safePageReturnTo("/companies/amazon?tab=applications")).toBe(
+      "/companies/amazon?tab=applications",
+    );
+    for (const value of [
+      "",
+      "//evil.example/mail",
+      "https://evil.example/mail",
+      "/mailbox",
+      "/companies",
+      "/companies/a/b",
+      "/companies/../settings",
+      "/settings",
+    ])
+      expect(safePageReturnTo(value)).toBeNull();
   });
 
   it("keeps only an application's open row on a company page", () => {

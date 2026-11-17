@@ -11,7 +11,8 @@ import { inboxLabels, previewLine } from "@/features/mail/row-text";
 import { TagPill } from "@/features/mail/tag-pill";
 import { markAllJustInfoAction } from "@/features/mail/workspace-actions";
 import type { TimelineMail } from "@/features/timeline/entries";
-import { HandlingBar, PlaceAt, type PlaceOptions } from "@/features/timeline/handling";
+import { PlaceAt, type PlaceOptions } from "@/features/timeline/handling";
+import { HandlingBar } from "@/features/timeline/handling-bar";
 import { matchingRoles } from "@/features/timeline/role-match";
 import type { Handling } from "@/features/timeline/suggest";
 import { cn } from "@/lib/utils";
@@ -234,7 +235,8 @@ function TrayEmail({
                       reason: "Nothing to record from this email.",
                     }
               }
-              linkWhenNoOutcome={{ returnTo }}
+              returnTo={returnTo}
+              ask={false}
             />
           )}
         </div>
@@ -373,7 +375,7 @@ export function NewMailTray({
                 item={opened.item}
                 handling={openedHandling}
                 placeOptions={placeOptions}
-                linkWhenNoOutcome={{ returnTo }}
+                returnTo={returnTo}
               />
             ) : null
           }

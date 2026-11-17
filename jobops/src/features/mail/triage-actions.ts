@@ -3,7 +3,12 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { db } from "@/db";
-import { safeReturnTo, safeRowReturnTo, withNotice } from "@/features/applications/return-to";
+import {
+  safePageReturnTo,
+  safeReturnTo,
+  safeRowReturnTo,
+  withNotice,
+} from "@/features/applications/return-to";
 import { actionError, formString, type ActionState } from "@/lib/actions";
 import { unlinkMailWithUndo } from "./auto-apply";
 import { dismissMessages, linkMailToRecord } from "./handling-service";
@@ -12,6 +17,7 @@ function refresh(recordId?: string) {
   for (const path of [
     "/applications",
     "/companies",
+    "/mail",
     "/",
     ...(recordId ? [`/applications/${recordId}`] : []),
   ])
@@ -51,7 +57,7 @@ export async function linkMailOnly(_state: ActionState, form: FormData): Promise
       : "Message already linked to this record.";
     const returnTo = formString(form, "returnTo");
     const row = safeRowReturnTo(returnTo);
-    const back = safeReturnTo(returnTo);
+    const back = safeReturnTo(returnTo) ?? safePageReturnTo(returnTo);
     destination =
       returnTo === "record"
         ? `/applications/${recordId}?notice=${encodeURIComponent(notice)}`

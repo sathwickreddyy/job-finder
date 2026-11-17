@@ -117,9 +117,8 @@ test("feed shows two-line rows and Coming up", async ({ page }) => {
   await expect(row).toContainText("Feed Talent");
   await expect(row).toContainText("Interview call");
   await expect(row).toContainText("Please share your availability this week.");
-  const comingUp = page.getByRole("region", { name: "Coming up" });
-  await expect(comingUp).toContainText(subject);
-  await expect(comingUp).toContainText("No date");
+  // An email with no date stays in the feed; Coming up holds only dated steps.
+  await expect(page.getByRole("region", { name: "Coming up" }).getByText(subject)).toHaveCount(0);
 });
 
 test("fetch last 30 days shows per-inbox progress and the dropped list", async ({ page }) => {

@@ -152,9 +152,12 @@ describe("MailView", () => {
 
   it("keeps the rail on a phone when the URL named no company", () => {
     const html = render(data({ query: { ...data().query, company: "lumen" }, pinned: false }));
-    expect(html).toMatch(/<div class="min-w-0"><nav aria-label="Companies"/);
+    // The rail's grid cell sticks while the mail scrolls on a wide screen.
+    expect(html).toMatch(/<div class="min-w-0 md:sticky md:top-4"><nav aria-label="Companies"/);
     const pinned = render(data({ query: { ...data().query, company: "lumen" }, pinned: true }));
-    expect(pinned).toMatch(/<div class="min-w-0 hidden md:block"><nav aria-label="Companies"/);
+    expect(pinned).toMatch(
+      /<div class="min-w-0 md:sticky md:top-4 hidden md:block"><nav aria-label="Companies"/,
+    );
   });
 
   it("counts open mail in Needs a home", () => {
@@ -189,7 +192,7 @@ describe("MailView", () => {
     expect(inbox).not.toContain("bg-warning-soft");
   });
 
-  it("renders Coming up soonest first with No date last", () => {
+  it("renders Coming up soonest first as short rows", () => {
     const html = render(
       data({
         pane: allPane([mail()]),
@@ -201,8 +204,6 @@ describe("MailView", () => {
             title: "Onsite loop",
             companyKey: "lumen",
             companyName: "Lumen",
-            tag: null,
-            mailId: null,
           },
           {
             id: "b",
@@ -211,29 +212,17 @@ describe("MailView", () => {
             title: "Online assessment due",
             companyKey: "orbit",
             companyName: "Orbit",
-            tag: "interviewCall",
-            mailId: null,
-          },
-          {
-            id: "c",
-            at: null,
-            label: "No date",
-            title: "Reply to recruiter",
-            companyKey: "quill",
-            companyName: "Quill",
-            tag: "opportunity",
-            mailId: "m9",
           },
         ],
       }),
     );
     expect(html).toContain("Coming up");
-    const order = ["Online assessment due", "Onsite loop", "Reply to recruiter"].map((title) =>
-      html.indexOf(title),
-    );
+    const order = ["Online assessment due", "Onsite loop"].map((title) => html.indexOf(title));
     expect(order.every((at) => at > 0)).toBe(true);
     expect(order).toEqual([...order].sort((a, b) => a - b));
-    expect(html.indexOf("No date")).toBeGreaterThan(html.indexOf("Mon 2 Nov"));
+    // Short rows, not a sideways strip of cards that runs off the edge.
+    expect(html).toMatch(/<ol[^>]*divide-y/);
+    expect(html).not.toContain("overflow-x-auto");
   });
 
   it("shows a status pill on rail rows and a collapsed Previous employers group", () => {

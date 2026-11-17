@@ -829,7 +829,7 @@ describe("company page applications", () => {
       expect(html).toMatch(/>talent@example\.com<\/p>/);
     });
 
-    it("confirms an acknowledgement with Link to this application, an interview with its outcome", () => {
+    it("confirms an acknowledgement by adding it to the role, an interview with its outcome", () => {
       const ack = openMail(ids[0], "Thank you for applying");
       const interview = openMail(ids[1], "Interview invite", { kind: "Interview" });
       const one = [app("a1", "SDE")];
@@ -848,8 +848,8 @@ describe("company page applications", () => {
           ]),
         ),
       );
-      expect(html).toContain("Link to this application");
-      expect(html).toContain("Record round scheduled");
+      expect(html).toContain("Add to SDE");
+      expect(html).toContain("Save round scheduled for SDE");
       expect(html).toContain('name="returnTo" value="/companies/oracle?open=a1"');
     });
 

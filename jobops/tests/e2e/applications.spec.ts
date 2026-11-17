@@ -379,7 +379,9 @@ test("a recruiter mail becomes a saved opening", async ({ page }) => {
   const subject = `SDE-3 role ${Date.now()}`;
   const id = await seedMail({ subject, classification: "RECRUITER_OUTREACH" });
   await page.goto(`/mail/${id}`);
-  await page.getByRole("link", { name: "Save as opening", exact: true }).click();
+  const row = page.getByRole("dialog");
+  await row.getByLabel("This email is about").selectOption({ label: "A new job to consider" });
+  await row.getByRole("link", { name: "Save as an opening", exact: true }).click();
   await expect(page.getByLabel("Job description")).toHaveValue(`${subject} full message`);
   await page.getByLabel("Company").fill(`Mail Role Co ${Date.now()}`);
   await page.getByLabel("Role / title").fill("SDE-3 Backend");
@@ -388,7 +390,7 @@ test("a recruiter mail becomes a saved opening", async ({ page }) => {
   await expect(page).toHaveURL(/\/jobs\/[0-9a-f-]+\?savedFromMail=1$/);
   await captureSavedJob(new URL(page.url()).pathname.split("/").at(-1)!);
   await page.goto(`/mail/${id}`);
-  await expect(page.getByRole("link", { name: "Save as opening", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("option", { name: "A new job to consider" })).toHaveCount(0);
 });
 
 test("record history uses readable India-time dates and long notes render in full", async ({

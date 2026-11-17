@@ -18,7 +18,9 @@ import { EditTag } from "./edit-tag";
 import type { TimelineDay, TimelineMail, TimelineStep } from "./entries";
 import { isShown, jumpTarget, type TimelineFilter } from "./jump";
 import { RoundCard, type RoundCardData } from "./round-card";
-import { HandledLine, HandlingBar, type PlaceOptions } from "./handling";
+import { HandledLine, type PlaceOptions } from "./handling";
+import { HandlingBar } from "./handling-bar";
+import { RoleFilter } from "./role-filter";
 import type { Handling } from "./suggest";
 
 const clock = (at: string) => formatTime(new Date(at));
@@ -452,24 +454,7 @@ export function CompanyTimeline({
         </>
       )}
       {several && !perApplication && (
-        <nav role="group" aria-label="Filter by role" className="mb-5 flex flex-wrap gap-2">
-          {[{ id: null, role: "All roles", href: allRolesHref }, ...roles].map((link) => (
-            <Link
-              key={link.id ?? "all"}
-              href={link.href}
-              scroll={false}
-              aria-current={role === link.id ? "page" : undefined}
-              className={cn(
-                "pressable inline-flex h-8 max-w-full items-center truncate rounded-full px-3 text-sm hover:no-underline",
-                role === link.id
-                  ? "bg-foreground text-background"
-                  : "text-muted-foreground ring-1 ring-border hover:text-foreground",
-              )}
-            >
-              {link.role}
-            </Link>
-          ))}
-        </nav>
+        <RoleFilter roles={roles} allRolesHref={allRolesHref} role={role} />
       )}
       {visible.length ? (
         <div className="min-w-0 overflow-hidden rounded-3xl bg-card ring-1 ring-border">
