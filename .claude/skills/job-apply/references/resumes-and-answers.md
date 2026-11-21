@@ -10,7 +10,27 @@ Fetch the explicit master id/current DOCX revision through [JobOps operations](j
 
 Reuse an existing PDF only if its exact contents remain current/appropriate. Otherwise select/re-weight from the master, preserving submitted bytes. Save local DOCX/PDF drafts under ignored `jobops/data/resume-exports/tailored/` with company/requisition/date and `Resume` in the filename. Use available DOCX/PDF authoring tools, inspect layout/text extraction, and retain editable DOCX. Application copies follow the approved single-column style; the complete source master has no page limit.
 
-The master is a source to select from, not a template to copy. Never export it whole as an application résumé. For each role, pick the bullets that serve the exact JD (usually 5–8 for the current and previous employer, fewer for older roles), merge or shorten where it helps, and keep the copy within two pages. Application copies must not name internal teams, fleets, programs, tools or scores (for example employer-internal acronyms) that a reader outside that employer would not recognize; describe the work in plain terms and keep the metric. The master's dated ledger can hold internal context that its bullets omit; that context is not reusable résumé wording.
+## Build a tailored copy
+
+The master holds everything confirmed; an application copy holds only what this JD rewards. Never export the master whole. Work in this order and save the result as `selection.json` in the job folder, then summarise it in the résumé's change notes.
+
+1. **Set the target.** From the exact JD: role family (backend, full-stack, cloud/platform, data, fintech), seniority, 5–8 must-haves and up to 5 nice-to-haves, each with a verbatim quote. This is the same requirement list the checks use.
+2. **Map evidence before writing.** For each must-have, name the master bullet or skills line that proves it, or mark it a gap. Ask about gaps in one batch or leave them unclaimed; never cover a gap with an adjacent claim.
+3. **Pick bullets within budget.** Default to one page: current employer 4–6 bullets, previous employer 4–6, older roles 1–2, volunteering only when it covers a must-have and fits. Choose in this order: bullets that prove a must-have, then metric-led bullets in the role family, then scope (scale, ownership, leadership). Drop bullets that cover nothing in the target, however strong. Keep at least one metric per employer and order bullets by relevance, not master order. Use two pages only when the must-haves cannot fit on one, and say why in the change notes.
+4. **Rewrite the summary for this JD.** Three or four lines: the JD's title family, 5+ years, the two or three strengths it asks for and one or two matching metrics. Leave out AI-assisted workflow, data exposure or frontend project work unless the JD values them.
+5. **Trim skills to the JD.** At most six lines, ordered by the JD. Drop categories it does not touch (for example Data Workflows for a pure backend role) and keep provenance labels such as "project experience" and "supporting experience". Include the Engineering Lifecycle line only when the JD asks for years of design or SDLC.
+6. **Tighten wording, never facts.** Shorten a bullet, merge two from the same employer, or use the JD's term when the master supports it. Do not change metrics, scale or ownership ("contributed" stays "contributed") or add tools a bullet did not use. Do not name internal teams, fleets, programs, tools or scores that a reader outside that employer would not recognize; describe the work plainly and keep the metric. Internal context in the master's ledger is not reusable wording.
+7. **Check the selection.** Run the three checks below on master and tailored copy. A must-have the master covers but the copy dropped is a selection error: restore it before accepting a lower score.
+
+Starting emphasis by role family, adjusted to each JD:
+
+| Role family | Lead with |
+| --- | --- |
+| Backend | Current-employer services, event-driven workflows and frameworks; Amazon throughput, latency and ledger services; reusable orchestration |
+| Cloud / platform / DevOps | Terraform and CI/CD, reusable AWS constructs and their savings, infrastructure cost reduction, health-check automation, runtime alarming |
+| Full-stack | Backend bullets plus the frontend skills line and a summary mention of React/Next.js project work (no Projects section) |
+| Data-leaning | Snowflake onboarding framework, Airflow ingestion, Databricks prototypes, SQL optimization |
+| Fintech / finance | Ledger reconciliation, forecasting integrations, financial-services team leadership |
 
 An earlier tailored résumé is a selection for one opening, not a complete inventory or a new default specialization. Match the exact JD against the complete source and current corrections before selecting evidence. Keep broad cloud experience, confirmed frontend project work and supporting data exposure at their established depth; do not claim equal expertise or total-career years in every skill.
 

@@ -42,7 +42,7 @@ Fetch the explicit master and its **current DOCX revision through JobOps**, not 
 
 Use the complete confirmed background, including separately labelled project evidence. An older tailored PDF does not define the user's specialty or exhaust their skills. Follow the current career-positioning preference in `AGENTS.md` and the evidence rules in [résumés and answers](references/resumes-and-answers.md).
 
-Reuse a suitable current PDF or create a truthful tailored DOCX from the master and export a text-based PDF. Ask only about unresolved experience gaps. Save confirmed additions/corrections in dated master revisions; keep excluded claims excluded. Follow [résumés and answers](references/resumes-and-answers.md).
+Reuse a suitable current PDF or create a truthful tailored DOCX from the master and export a text-based PDF. Select per JD with the [build a tailored copy](references/resumes-and-answers.md#build-a-tailored-copy) recipe: one page by default, a bullet budget per employer, no internal names; never copy the master whole. Ask only about unresolved experience gaps. Save confirmed additions/corrections in dated master revisions; keep excluded claims excluded. Follow [résumés and answers](references/resumes-and-answers.md).
 
 ## 5. Score and decide
 
