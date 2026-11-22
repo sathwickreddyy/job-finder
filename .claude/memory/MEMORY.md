@@ -5,6 +5,8 @@
 - [Project evidence and résumé presentation](resume-no-personal-projects.md) — 17 Nov clarification: project skills count; distinguish professional tenure; no automatic Projects section
 - [Résumé rewrite checks rule](resume-rewrite-checks-rule.md) — score every rewrite with local scorer + ResumeNext + resume-ats-optimizer vs exact JD
 - [Résumé revisions by agent](resume-revisions-by-agent.md) — Claude Code/Codex revise via JobOps API; ask gaps in agent chat, not portal; say current vs revised
+- [Master wording résumé-ready](master-wording-resume-ready.md) — no internal team/program names in master bullets; context only in revision reason
+- [Amazon excluded claims](amazon-excluded-claims.md) — never add RAG assistant or Search/Detail shopping assistant (155/200 ms)
 - [Confirmed work skills](confirmed-work-skills.md) — MongoDB, Spark used at work; Kotlin, Micronaut not (2026-11-03)
 - [Fill forms without asking](fill-forms-without-asking.md) — fill from résumé + JobOps profile; ask only for facts stored nowhere
 - [Pane file-attach workaround](pane-file-attach-workaround.md) — historical browser pane attachment behavior and the current upload instructions
